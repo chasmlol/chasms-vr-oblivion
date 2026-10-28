@@ -36,6 +36,7 @@ fn startup() {
     }
     tracing::info!("startup: the game's code is there after {:?}", t0.elapsed());
     render::install();
+    crate::combat::install();
     tracing::info!("startup: hooks installed");
 }
 

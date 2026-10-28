@@ -36,11 +36,36 @@ pub fn load_game(_name: &str) -> bool {
     false
 }
 
-/// Runs a console line: `LoadGame <save>` loads a save, anything else is compiled and run as a
-/// line of script. True if it ran.
+/// `LookupFormByID` (cdecl) and `PlayerCharacter::SetActiveSpell` (thiscall, a `MagicItem*`).
+const LOOKUP_FORM: usize = 0x0046_B250;
+const SET_ACTIVE_SPELL: usize = 0x0066_4700;
+
+/// Selects the spell with form id `id` as the player's (the game's own selection).
+#[cfg(target_arch = "x86")]
+pub fn select_spell(id: u32) -> bool {
+    type Lookup = unsafe extern "C" fn(u32) -> usize;
+    type Select = unsafe extern "thiscall" fn(usize, usize) -> u8;
+    let player = crate::engine::player();
+    let form = unsafe { std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(id) };
+    if player == 0 || form == 0 {
+        return false;
+    }
+    unsafe { std::mem::transmute::<usize, Select>(SET_ACTIVE_SPELL)(player, form + 0x18) != 0 }
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn select_spell(_id: u32) -> bool {
+    false
+}
+
+/// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <hex id>` selects a spell,
+/// anything else is compiled and run as a line of script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
+    }
+    if let Some(id) = line.strip_prefix("SelectSpell ") {
+        return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(select_spell);
     }
     run_script(line)
 }

@@ -19,6 +19,7 @@
 #![allow(linker_messages)]
 
 pub mod camera;
+pub mod combat;
 pub mod console;
 pub mod d3d9;
 pub mod engine;

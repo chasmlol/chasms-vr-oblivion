@@ -50,6 +50,7 @@ pub fn before_update() {
             tracing::info!("player: the runtime's move {mv:?}");
             *last = mv;
         }
+        log_movement_toggles();
         if let Some(view) = s.view {
             log_once(view.look_yaw);
             first_person();
@@ -58,6 +59,7 @@ pub fn before_update() {
     }
     #[cfg(windows)]
     input::set(v, vr || settings::get().background);
+    crate::combat::apply_pending();
 }
 
 /// In VR the view is always the player's own eyes: a third-person camera goes back to first.
@@ -83,4 +85,20 @@ pub fn first_person_node() -> usize {
 fn log_once(yaw: f32) {
     static DONE: std::sync::Once = std::sync::Once::new();
     DONE.call_once(|| tracing::info!("player: the game's rotation {:?}, the head's yaw {yaw}", rotation()));
+}
+
+/// The game's own movement toggles (a save can bring Auto Move back on: the player then walks
+/// until the stick pushes forward or back, as in the game).
+fn log_movement_toggles() {
+    static LAST: Mutex<Option<(u8, u8)>> = Mutex::new(None);
+    let p = engine::player();
+    if p == 0 {
+        return;
+    }
+    let now = (mem::at::<u8>(p + engine::pc::ALWAYS_RUN).unwrap_or(0), mem::at::<u8>(p + engine::pc::AUTO_MOVE).unwrap_or(0));
+    let mut last = LAST.lock().unwrap();
+    if *last != Some(now) {
+        tracing::info!("player: always run {}, auto move {}", now.0, now.1);
+        *last = Some(now);
+    }
 }

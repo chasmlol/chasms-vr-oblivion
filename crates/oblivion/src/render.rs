@@ -119,6 +119,7 @@ mod win {
         let snap = link::game_frame(&GameFrame { eye: Some(game.eye()), look_yaw: game.look_yaw(), menu: false, now, dt })?;
         snap.view?;
         log_camera_once(&game);
+        crate::combat::publish();
         Some((snap, game, cam))
     }
 

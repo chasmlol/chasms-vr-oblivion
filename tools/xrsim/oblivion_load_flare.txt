@@ -1,0 +1,2 @@
+20 LoadGame autosave
+25 SelectSpell 000A97DF

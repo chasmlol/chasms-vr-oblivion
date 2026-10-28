@@ -50,6 +50,10 @@ pub mod pc {
     pub const THIRD_PERSON: usize = 0x588;
     /// `NiNode* firstPersonNiNode`: the first-person arms and what they hold.
     pub const FIRST_PERSON_NODE: usize = 0x5D0;
+    /// `bool alwaysRun`, toggled by the Always Run control (0x0B).
+    pub const ALWAYS_RUN: usize = 0x58B;
+    /// `bool autoMove`, toggled by the Auto Move control (0x0C); Forward or Back held clears it.
+    pub const AUTO_MOVE: usize = 0x58C;
     /// `TogglePOV(this, firstPerson)` (thiscall).
     pub const TOGGLE_POV: usize = 0x0066_C580;
 }

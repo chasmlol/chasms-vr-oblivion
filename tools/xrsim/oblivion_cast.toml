@@ -1,0 +1,67 @@
+# A spell from the hand (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load_flare.txt): after the
+# save loads, the left hand comes up in front, its trigger charges the selected spell (held 1.2 s)
+# and lets go pointing ahead (spells fly from the shoulder through the palm, so the hand is at eye
+# height). A tap of the stick back first stops the save's Auto Move, as it does in the game. Times are
+# seconds from the runtime's start.
+duration = 60
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { pos = [-0.25, -0.55, 0.25], trigger = 0, stick = [0, 0] }
+
+[[key]]
+t = 30
+left = { stick = [0, 0] }
+
+[[key]]
+t = 30.1
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.4
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.5
+left = { stick = [0, 0] }
+
+[[key]]
+t = 34
+left = { pos = [-0.25, -0.55, 0.25], trigger = 0 }
+
+[[key]]
+t = 35
+left = { pos = [-0.12, -0.04, 0.45], pitch = 0, trigger = 0 }
+
+[[key]]
+t = 36
+left = { trigger = 0 }
+
+[[key]]
+t = 36.2
+left = { trigger = 1 }
+
+[[capture]]
+t = 37
+name = "charging"
+
+[[key]]
+t = 37.4
+left = { trigger = 1 }
+
+[[key]]
+t = 37.5
+left = { trigger = 0 }
+
+[[capture]]
+t = 37.7
+name = "cast"
+
+[[capture]]
+t = 37.9
+name = "flying"
+
+[[capture]]
+t = 39
+name = "landed"
