@@ -10,6 +10,8 @@
 //!   the headset's eye is and given that eye's field of view ([`camera`]).
 //! * **The link** ([`link`]): the runtime's frame, where tracking space is in Oblivion's world, and
 //!   what the game is doing.
+//! * **The player's body** ([`body`]): the race's skin and what's worn, as the parts of the
+//!   runtime's avatar (the game's own models).
 //! * **Combat** ([`combat`], [`weapons`]): the game's creatures and spells to the runtime, the
 //!   equipped weapon as the object in the hand (the game's own model), and what the hands did
 //!   (hits, casts) done by the game.
@@ -21,6 +23,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(linker_messages)]
 
+pub mod body;
 pub mod camera;
 pub mod combat;
 pub mod console;
@@ -34,6 +37,7 @@ pub mod hud;
 pub mod iat;
 pub mod input;
 pub mod launcher;
+pub mod lighting;
 pub mod link;
 pub mod log;
 pub mod mem;

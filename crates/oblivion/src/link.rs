@@ -83,6 +83,9 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     let mut gs: GameState = bytemuck::Zeroable::zeroed();
     gs.flags = GS_PLAYER_RIG | if view.is_some() { GS_IN_GAME } else { 0 } | if g.menu { GS_MENU } else { 0 };
     gs.game_zoom = 1.0;
+    if view.is_some() {
+        gs.light = crate::lighting::hint();
+    }
     adapter.write_state(&mut gs);
     let snap = Snapshot { frame, view };
     *LAST.lock().unwrap() = Some(snap);

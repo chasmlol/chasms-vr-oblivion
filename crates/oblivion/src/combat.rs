@@ -450,6 +450,9 @@ pub fn publish() {
     let spells_now = (k.frame % 10 == 1).then(spells);
     crate::link::with_adapter(|a| {
         crate::weapons::publish(a);
+        if k.frame % 30 == 3 {
+            crate::body::publish(a);
+        }
         a.write_actors(&table);
         if let Some((s, by_id)) = spells_now {
             let key: Vec<(u32, u32, u32)> = s.spells[..s.count as usize].iter().map(|x| (x.id, x.flags, x.cost as u32)).collect();

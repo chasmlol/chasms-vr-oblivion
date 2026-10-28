@@ -7,7 +7,8 @@
 //! `check` parses every model under the prefixes and reports which it can't read (a test of the
 //! model reader against the real files). `export` writes every model under the prefixes, and the
 //! textures they use, into the runtime's cache (`local_assets/oblivion`, see
-//! `oblivion_assets::export`). `preview` draws one converted model from three sides.
+//! `oblivion_assets::export`; a `textures/...` prefix brings every texture under it, e.g. the races'
+//! skins). `preview` draws one converted model from three sides.
 
 use anyhow::Result;
 use oblivion_assets::export::{self, Part};
@@ -90,7 +91,8 @@ impl Skeletons {
 }
 
 /// Converts every model under the prefixes (and the textures they use) into `local_assets/oblivion`
-/// (or `--out`), with an `index.toml` of what each key is.
+/// (or `--out`), with an `index.toml` of what each key is. A prefix under `textures\` brings every
+/// texture there.
 fn export(archives: &Archives, args: &[String]) -> Result<()> {
     use rustvr_asset::{Index, Item, ItemKind};
     let mut args = args.to_vec();
@@ -158,6 +160,8 @@ fn export(archives: &Archives, args: &[String]) -> Result<()> {
             models += 1;
         }
     }
+    // Textures asked for by folder (a race's skins, which no model names: the game swaps them in).
+    textures.extend(archives.names().filter(|n| n.ends_with(".dds") && prefixes.iter().any(|p| p.starts_with("textures\\") && n.starts_with(p.as_str()))).map(str::to_owned));
     let (mut wrote, mut missing) = (0, 0);
     for path in &textures {
         let key = export::texture_key(path);
