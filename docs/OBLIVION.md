@@ -17,13 +17,32 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | Input | The game's DirectInput keyboard and mouse read the runtime's actions, through the player's own `Oblivion.ini` bindings. While in VR the real keyboard and mouse don't reach the game. | `input.rs` |
 | The window | It's always "active", so the game never pauses for focus. In the test mode it's off-screen and never activated. | `window.rs` |
 | Settings | `Oblivion.ini` is windowed and skips the intro films while in VR. The player's values are kept and put back. | `game_settings.rs` |
-| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, or any line of script. | `console.rs` |
+| The body | The runtime draws the player's body from the game's own models: the race's skin where nothing is worn, the armour and clothes worn over it, on the game's skeleton, lit by the game's sun. | `body.rs`, `lighting.rs` |
+| Weapons | The equipped weapon (the game's model) hangs at the left hip, or on the back if two-handed, and the hand draws it. The equipped shield is taken from over the left shoulder. Edges, points, heads and guards are measured on each model. | `weapons.rs` |
+| Combat | Hits are the game's own hit with the equipped weapon (damage, skill, enchantments). A blow met by the weapon or shield is the game's block. Spells charge in the palm and go off as the game's own cast: target spells from the palm along the aim, touch spells into what the hand touches, self spells on the player. | `combat.rs` |
+| Menus | While a menu is open it's a panel; the game's cursor follows the laser and the trigger clicks. | `menus.rs` |
+| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <id>`, `PlaceInFront <ref> <metres>`, or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
 
-## Controls (so far)
+## Setting up
+
+The game's models are converted once into `local_assets/oblivion` (never committed):
+
+```
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/armor meshes/clothes textures/characters
+```
+
+Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
+
+## Controls
 
 | VR | Oblivion |
 |---|---|
-| Left stick | Forward / Back / Slide Left / Slide Right, where the head looks |
+| Left stick | Forward / Back / Slide Left / Slide Right, where the head looks (pushing it clears Auto Move) |
+| Grip at the left hip / over a shoulder | Draw the weapon / take the shield |
+| Swing | Attack (the game's hit; a fast committed swing is a power attack) |
+| Weapon or shield across a blow | Block |
+| Trigger, empty hand | Charge the selected spell; let go (or touch, for a touch spell) to cast |
+| Laser + trigger on a menu | The game's cursor and click |
 | Jump | Jump |
 | Use | Activate |
 | Crouch | Crouch/Sneak |
