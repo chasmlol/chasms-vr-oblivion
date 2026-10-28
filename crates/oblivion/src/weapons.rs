@@ -229,7 +229,7 @@ pub fn melee_from_model(model: &rustvr_asset::Model, kind: u32, id: u32, damage:
                 // The cutting edge, along the far side of the head.
                 let side = centre.signum();
                 let x = if side > 0.0 { x_hi } else { x_lo } * 0.85;
-                add(Damager { kind: DMG_SLASH, radius: 0.02, a: [x, 0.0, head_z], b: [x, 0.0, z_hi - 0.01], edge: [side, 0.0, 0.0], ..Default::default() });
+                add(Damager { kind: DMG_SLASH, flags: DMGF_AXE, radius: 0.02, a: [x, 0.0, head_z], b: [x, 0.0, z_hi - 0.01], edge: [side, 0.0, 0.0], ..Default::default() });
                 add(Damager { kind: DMG_BLUNT, radius: y_half.max(0.02), a: [0.0, 0.0, head_z], b: [0.0, 0.0, z_hi - 0.01], ..Default::default() });
             } else {
                 let r = ((x_hi - x_lo) * 0.5).max(y_half).max(0.025) * 0.9;

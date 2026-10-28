@@ -72,6 +72,14 @@ right = { pos = [0.25, 0.05, 0.3], pitch = 40, squeeze = 1 }
 t = 39.9
 right = { pos = [0.05, -0.4, 0.6], pitch = -40, squeeze = 1 }
 
+[[capture]]
+t = 39.78
+name = "cutting"
+
+[[capture]]
+t = 40.6
+name = "cut"
+
 [[key]]
 t = 41.2
 right = { pos = [0.25, 0.05, 0.3], pitch = 40, squeeze = 1 }

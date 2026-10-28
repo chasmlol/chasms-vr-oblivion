@@ -12,6 +12,7 @@ import argparse
 import os
 import shutil
 import sys
+import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_GAME = r"C:\Program Files (x86)\Steam\steamapps\common\Oblivion"
@@ -19,6 +20,18 @@ OURS = ["dinput8.dll", "dinput8.pdb", "rustvr-runtime.txt"]
 IN_THE_WAY = ["dinput8.dll", "dinput8.pdb"]
 BACKUP = "rustvr_backup"
 
+
+
+def copy(src, dst):
+    """Copies, waiting up to 15 s for a game that's closing to let go of the file."""
+    for attempt in range(60):
+        try:
+            shutil.copy2(src, dst)
+            return
+        except PermissionError:
+            if attempt == 59:
+                raise
+            time.sleep(0.25)
 
 def is_ours(path):
     try:
@@ -48,10 +61,10 @@ def install(game):
             sys.exit(f"{dest} already exists: look at {backup} before installing again")
         shutil.move(p, dest)
         print(f"moved {name} -> {BACKUP}\\{name}")
-    shutil.copy2(dll, os.path.join(game, "dinput8.dll"))
+    copy(dll, os.path.join(game, "dinput8.dll"))
     pdb = os.path.join(REPO, "target", "i686-pc-windows-msvc", "release", "dinput8.pdb")
     if os.path.exists(pdb):
-        shutil.copy2(pdb, os.path.join(game, "dinput8.pdb"))
+        copy(pdb, os.path.join(game, "dinput8.pdb"))
     with open(os.path.join(game, "rustvr-runtime.txt"), "w", encoding="utf-8") as f:
         f.write("# The RustVR runtime Oblivion starts in the background (tools/install_oblivion.py).\n")
         f.write(f'"{play}"\n')

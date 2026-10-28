@@ -82,6 +82,10 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     });
     let mut gs: GameState = bytemuck::Zeroable::zeroed();
     gs.flags = GS_PLAYER_RIG | if view.is_some() { GS_IN_GAME } else { 0 } | if g.menu { GS_MENU } else { 0 };
+    // (The runtime keeps its crouch in step with the game's sneaking.)
+    if view.is_some() && crate::player::sneaking() {
+        gs.flags |= GS_CROUCHED;
+    }
     gs.game_zoom = 1.0;
     if view.is_some() {
         gs.light = crate::lighting::hint();

@@ -9,6 +9,14 @@
 //! Which key is which action is Oblivion's own setting (`Oblivion.ini` `[Controls]`, each
 //! `00KKMMJJ`: keyboard key, mouse button, joystick button; 0xFF none), so a player's rebinding
 //! still works.
+//!
+//! Walking is analog, as Oblivion's own joystick walking is (the player's update, 0x671620): the
+//! stick is the first joystick's X and Y axes (-100..100, forward negative) in the game's input
+//! state (`OSInputGlobals` +0x30, `DIJOYSTATE`), written right after the game polls its devices
+//! each frame (0x4046A0). The game takes the speed from how far its axes are pushed: full speed at
+//! 50 of 100 (`|axis| · 0.02`, at most 1), and past 98 it presses Run, which with Always Run on means
+//! walking. So the stick's whole travel is 0..[`FULL_SPEED_AXIS`]: slow to full speed, at the pace
+//! Always Run (and the sprint button, the game's Run) sets.
 
 use rustvr_adapter::actions::{Presses, held, pressed};
 use rustvr_protocol::{Action, Intents};
@@ -53,16 +61,24 @@ pub fn default_controls() -> HashMap<String, Binding> {
 
 pub const DIK_ESCAPE: u8 = 0x01;
 
-/// What the game's keyboard and mouse read this frame.
+/// What the game's keyboard, mouse and joystick read this frame.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Virtual {
     pub keys: Vec<u8>,
     /// Mouse buttons held (bit per button).
     pub buttons: u8,
+    /// The joystick's X and Y axes (-100..100; Y negative forward): walking.
+    pub stick: [i32; 2],
 }
 
-/// The stick pushed past this (of its travel) presses a direction's key.
-const STICK_KEY: f32 = 0.35;
+/// The joystick axis the game walks (or runs) at full speed at.
+pub const FULL_SPEED_AXIS: f32 = 50.0;
+
+/// The joystick's axes for the runtime's move (x right, y forward; each -1..1).
+pub fn stick_axes(move_xy: [f32; 2]) -> [i32; 2] {
+    let axis = |v: f32| (v.clamp(-1.0, 1.0) * FULL_SPEED_AXIS).round() as i32;
+    [axis(move_xy[0]), -axis(move_xy[1])]
+}
 
 /// Turns the runtime's actions into Oblivion's keys and buttons.
 pub struct Bridge {
@@ -70,6 +86,15 @@ pub struct Bridge {
     presses: Presses,
     /// Keys held a little longer after a press (a game that polls mustn't miss a tap).
     pulses: Vec<(Binding, f64)>,
+    /// The runtime's held actions last frame (a long press acts once, as it starts).
+    last_held: u64,
+}
+
+/// The game's state the controls depend on.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GameControls {
+    /// Always Run is on: running is the game's pace already.
+    pub always_run: bool,
 }
 
 /// A press holds its key this long.
@@ -79,7 +104,7 @@ impl Bridge {
     pub fn new(controls: HashMap<String, Binding>) -> Bridge {
         let mut c = default_controls();
         c.extend(controls);
-        Bridge { controls: c, presses: Presses::default(), pulses: Vec::new() }
+        Bridge { controls: c, presses: Presses::default(), pulses: Vec::new(), last_held: 0 }
     }
 
     fn binding(&self, name: &str) -> Binding {
@@ -92,8 +117,19 @@ impl Bridge {
         self.pulses.push((self.binding(name), until));
     }
 
-    pub fn update(&mut self, it: &Intents, now: f64) -> Virtual {
+    /// This frame's keys, buttons and stick from the runtime's actions:
+    ///
+    /// * the move stick: the game's joystick (walking, at the speed it's pushed to);
+    /// * Jump, Use (Activate), the long Use (Rest), the menu button (Escape): taps of the game's own;
+    /// * Crouch: a tap of Crouch/Sneak (a toggle in the game, kept in step by the runtime);
+    /// * Sprint, held: Run, unless Always Run is on (then Run would walk);
+    /// * the off hand's B (the runtime's Flashlight): Menu Mode (the inventory, magic, map and
+    ///   journal); held long: the Quick Menu (the hotkeys); B on a menu: Escape (closes it).
+    pub fn update(&mut self, it: &Intents, game: GameControls, now: f64) -> Virtual {
         let counts = self.presses.update(it);
+        let started = |a: Action| it.held & a.bit() != 0 && self.last_held & a.bit() == 0;
+        let long_menu = started(Action::FlashlightHold);
+        self.last_held = it.held;
         let mut v = Virtual::default();
         let hold = |b: Binding, v: &mut Virtual| {
             if let Some(k) = b.key
@@ -105,30 +141,34 @@ impl Bridge {
                 v.buttons |= 1 << m.min(7);
             }
         };
-        // Walking: the stick as Oblivion's direction keys (the player faces where the head looks).
-        let (x, y) = (it.move_xy[0], it.move_xy[1]);
-        for (on, name) in [(y > STICK_KEY, "Forward"), (y < -STICK_KEY, "Back"), (x < -STICK_KEY, "Slide Left"), (x > STICK_KEY, "Slide Right")] {
-            if on {
-                hold(self.binding(name), &mut v);
-            }
-        }
-        // Held while the action is.
-        for (a, name) in [(Action::Crouch, "Crouch/Sneak"), (Action::Sprint, "Run")] {
-            if held(it, a) {
-                hold(self.binding(name), &mut v);
-            }
+        // Walking: the stick as Oblivion's joystick (the player faces where the head looks).
+        v.stick = stick_axes(it.move_xy);
+        if held(it, Action::Sprint) && !game.always_run {
+            hold(self.binding("Run"), &mut v);
         }
         // Pressed: a moment's tap.
-        for (a, name) in [(Action::Jump, "Jump"), (Action::Use, "Activate"), (Action::Inventory, "Menu Mode"), (Action::UseHold, "Rest")] {
+        for (a, name) in [
+            (Action::Jump, "Jump"),
+            (Action::Use, "Activate"),
+            (Action::Crouch, "Crouch/Sneak"),
+            (Action::Flashlight, "Menu Mode"),
+            (Action::Inventory, "Menu Mode"),
+            (Action::UseHold, "Rest"),
+        ] {
             if pressed(&counts, a) {
                 self.pulses.push((self.binding(name), now + PULSE));
             }
+        }
+        if long_menu {
+            self.pulses.push((self.binding("Quick Menu"), now + PULSE));
         }
         // The laser's trigger on the game's menus: the left mouse button.
         if it.flags & rustvr_protocol::INT_CURSOR_DOWN != 0 {
             v.buttons |= 1;
         }
-        if pressed(&counts, Action::Menu) {
+        // The menu button, and B on a menu (the runtime's "back"): Escape, which closes the game's
+        // menus.
+        if pressed(&counts, Action::Menu) || pressed(&counts, Action::MenuBack) {
             self.pulses.push((Binding { key: Some(DIK_ESCAPE), mouse: None }, now + PULSE));
         }
         self.pulses.retain(|&(_, until)| until > now);
@@ -171,15 +211,62 @@ mod win {
         told_buttons: u8,
         sequence: u32,
     }
-    static STATE: Mutex<State> = Mutex::new(State { v: super::Virtual { keys: Vec::new(), buttons: 0 }, told_keys: Vec::new(), told_buttons: 0, sequence: 0x4000_0000 });
+    static STATE: Mutex<State> = Mutex::new(State { v: super::Virtual { keys: Vec::new(), buttons: 0, stick: [0; 2] }, told_keys: Vec::new(), told_buttons: 0, sequence: 0x4000_0000 });
+
+    /// `OSGlobals*` (+0x20 its `OSInputGlobals*`), and the game's poll of its devices (thiscall on
+    /// the input globals); the first joystick's state in them.
+    #[cfg(target_arch = "x86")]
+    const OS_GLOBALS: usize = 0x00B3_3398;
+    #[cfg(target_arch = "x86")]
+    const OS_INPUT: usize = 0x20;
+    #[cfg(target_arch = "x86")]
+    const POLL: usize = 0x0040_46A0;
+    #[cfg(target_arch = "x86")]
+    const JOYSTICK_STATE: usize = 0x30;
+    #[cfg(target_arch = "x86")]
+    static REAL_POLL: AtomicUsize = AtomicUsize::new(0);
+    #[cfg(target_arch = "x86")]
+    type PollFn = unsafe extern "thiscall" fn(*mut c_void);
 
     pub fn set(v: super::Virtual, ours_only: bool) {
         OURS_ONLY.store(ours_only, Release);
         let mut s = STATE.lock().unwrap();
-        if s.v != v {
+        if s.v.keys != v.keys || s.v.buttons != v.buttons {
             tracing::info!("input: keys {:02x?}, mouse buttons {:#x}", v.keys, v.buttons);
-            s.v = v;
         }
+        s.v = v;
+    }
+
+    /// The game's poll of its devices hooked, once.
+    #[cfg(target_arch = "x86")]
+    fn install_poll() {
+        if REAL_POLL.load(Acquire) != 0 {
+            return;
+        }
+        if let Some(o) = install(POLL as *const (), poll as *const (), "OSInputGlobals::PollAndUpdateInputState") {
+            REAL_POLL.store(o as usize, Release);
+        }
+    }
+
+    /// After the game reads its devices: the runtime's stick is its first joystick's axes.
+    #[cfg(target_arch = "x86")]
+    unsafe extern "thiscall" fn poll(input: *mut c_void) {
+        unsafe { real::<PollFn>(&REAL_POLL)(input) };
+        guard("Poll", (), || {
+            if !OURS_ONLY.load(Acquire) {
+                return;
+            }
+            let globals = crate::mem::deref(OS_GLOBALS);
+            let state = if globals != 0 { crate::mem::deref(globals + OS_INPUT) } else { 0 };
+            if state == 0 || state != input as usize || !crate::mem::is_readable((state + JOYSTICK_STATE) as *const u8, 8) {
+                return;
+            }
+            let stick = STATE.lock().unwrap().v.stick;
+            unsafe {
+                ((state + JOYSTICK_STATE) as *mut i32).write(stick[0]);
+                ((state + JOYSTICK_STATE + 4) as *mut i32).write(stick[1]);
+            }
+        });
     }
 
     type CreateDeviceFn = unsafe extern "system" fn(*mut c_void, *const [u8; 16], *mut *mut c_void, *mut c_void) -> i32;
@@ -207,6 +294,8 @@ mod win {
         if di.is_null() || REAL_CREATE.load(Acquire) != 0 {
             return;
         }
+        #[cfg(target_arch = "x86")]
+        install_poll();
         if let Some(o) = install(method(di, 3), create_device as *const (), "IDirectInput8::CreateDevice") {
             REAL_CREATE.store(o as usize, Release);
         }
@@ -357,13 +446,43 @@ mod tests {
     #[test]
     fn the_stick_walks_and_a_press_taps() {
         let mut b = Bridge::new(HashMap::new());
+        let g = GameControls::default();
         let mut it: Intents = bytemuck::Zeroable::zeroed();
-        it.move_xy = [0.0, 0.8];
-        assert_eq!(b.update(&it, 0.0).keys, vec![0x11]);
+        it.move_xy = [0.3, 0.8];
+        let v = b.update(&it, g, 0.0);
+        assert!(v.keys.is_empty());
+        assert_eq!(v.stick, [15, -40]);
         it.move_xy = [0.0, 0.0];
         it.presses[Action::Jump as usize] = 1;
-        let v = b.update(&it, 0.1);
+        let v = b.update(&it, g, 0.1);
         assert_eq!(v.keys, vec![0x12]);
-        assert!(b.update(&it, 0.3).keys.is_empty());
+        assert!(b.update(&it, g, 0.3).keys.is_empty());
+    }
+
+    #[test]
+    fn crouch_taps_and_sprint_runs_unless_always_running() {
+        let mut b = Bridge::new(HashMap::new());
+        let mut it: Intents = bytemuck::Zeroable::zeroed();
+        b.update(&it, GameControls::default(), 0.0);
+        it.presses[Action::Crouch as usize] = 1;
+        assert_eq!(b.update(&it, GameControls::default(), 0.1).keys, vec![0x1D]);
+        assert!(b.update(&it, GameControls::default(), 0.3).keys.is_empty());
+        it.held = Action::Sprint.bit();
+        assert_eq!(b.update(&it, GameControls { always_run: false }, 0.4).keys, vec![0x2A]);
+        assert!(b.update(&it, GameControls { always_run: true }, 0.5).keys.is_empty());
+    }
+
+    #[test]
+    fn the_off_hands_b_opens_the_menus() {
+        let mut b = Bridge::new(HashMap::new());
+        let g = GameControls::default();
+        let mut it: Intents = bytemuck::Zeroable::zeroed();
+        b.update(&it, g, 0.0);
+        it.presses[Action::Flashlight as usize] = 1;
+        assert_eq!(b.update(&it, g, 0.1).keys, vec![0x0F]);
+        // Held long: the Quick Menu (F1), once.
+        it.held = Action::FlashlightHold.bit();
+        assert!(b.update(&it, g, 1.0).keys.contains(&0x3B));
+        assert!(b.update(&it, g, 1.5).keys.is_empty());
     }
 }

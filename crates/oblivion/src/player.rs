@@ -41,7 +41,7 @@ pub fn before_update() {
     let mut v = input::Virtual::default();
     if let Some(s) = snap {
         if let Some(b) = bridge().as_mut() {
-            v = b.update(&s.frame.intents, link::now());
+            v = b.update(&s.frame.intents, game_controls(), link::now());
         }
         static LAST_MOVE: Mutex<[f32; 2]> = Mutex::new([0.0; 2]);
         let mv = s.frame.intents.move_xy;
@@ -51,6 +51,7 @@ pub fn before_update() {
             *last = mv;
         }
         log_movement_toggles();
+        trace_movement(mv);
         // The laser on the game's menus moves the game's cursor.
         if s.frame.intents.flags & rustvr_protocol::INT_CURSOR != 0 {
             crate::menus::point(s.frame.intents.cursor_uv);
@@ -64,6 +65,29 @@ pub fn before_update() {
     #[cfg(windows)]
     input::set(v, vr || settings::get().background);
     crate::combat::apply_pending();
+}
+
+/// Testing (`RUSTVR_OBLIVION_TRACE_MOVE=1`): for two seconds after the stick changes, the player's
+/// place every frame, to see how soon and how fast the game moves the player.
+fn trace_movement(mv: [f32; 2]) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if !*ON.get_or_init(|| std::env::var("RUSTVR_OBLIVION_TRACE_MOVE").is_ok_and(|v| v == "1")) {
+        return;
+    }
+    static T: Mutex<([f32; 2], f64, Option<[f32; 3]>)> = Mutex::new(([0.0; 2], f64::MIN, None));
+    let now = link::now();
+    let mut t = T.lock().unwrap();
+    if mv != t.0 {
+        *t = (mv, now, None);
+    }
+    if now - t.1 > 2.0 {
+        return;
+    }
+    let p = engine::player();
+    let Some(pos) = (p != 0).then(|| mem::at::<[f32; 3]>(p + refr::POS)).flatten() else { return };
+    let step = t.2.map_or(0.0, |q| ((pos[0] - q[0]).powi(2) + (pos[1] - q[1]).powi(2)).sqrt());
+    tracing::info!("player: trace {:.3} s after the move {:?}: at {:?}, {:.2} units since the last frame", now - t.1, t.0, pos, step);
+    t.2 = Some(pos);
 }
 
 /// Holds one of the game's controls (by its name in `Oblivion.ini`) for `seconds`.
@@ -100,16 +124,44 @@ fn log_once(yaw: f32) {
 
 /// The game's own movement toggles (a save can bring Auto Move back on: the player then walks
 /// until the stick pushes forward or back, as in the game).
+/// The game's state the controls depend on.
+fn game_controls() -> input::GameControls {
+    let p = engine::player();
+    input::GameControls { always_run: p != 0 && mem::at::<u8>(p + engine::pc::ALWAYS_RUN).unwrap_or(0) != 0 }
+}
+
+/// The player sneaks (its process's movement flags: `GetMovementFlags`, vtable +0x2C0; sneaking
+/// 0x400, which swimming 0x800 overrides).
+#[cfg(target_arch = "x86")]
+pub fn sneaking() -> bool {
+    const PROCESS: usize = 0x58;
+    const MOVEMENT_FLAGS: usize = 0x2C0;
+    let p = engine::player();
+    let process = if p != 0 { mem::deref(p + PROCESS) } else { 0 };
+    let vt = if process != 0 { mem::deref(process) } else { 0 };
+    let f = if vt != 0 { mem::deref(vt + MOVEMENT_FLAGS) } else { 0 };
+    if !(0x0040_1000..0x00A0_0000).contains(&f) {
+        return false;
+    }
+    let flags = unsafe { std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> u32>(f)(process) };
+    flags & 0x400 != 0 && flags & 0x800 == 0
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn sneaking() -> bool {
+    false
+}
+
 fn log_movement_toggles() {
-    static LAST: Mutex<Option<(u8, u8)>> = Mutex::new(None);
+    static LAST: Mutex<Option<(u8, u8, bool)>> = Mutex::new(None);
     let p = engine::player();
     if p == 0 {
         return;
     }
-    let now = (mem::at::<u8>(p + engine::pc::ALWAYS_RUN).unwrap_or(0), mem::at::<u8>(p + engine::pc::AUTO_MOVE).unwrap_or(0));
+    let now = (mem::at::<u8>(p + engine::pc::ALWAYS_RUN).unwrap_or(0), mem::at::<u8>(p + engine::pc::AUTO_MOVE).unwrap_or(0), sneaking());
     let mut last = LAST.lock().unwrap();
     if *last != Some(now) {
-        tracing::info!("player: always run {}, auto move {}", now.0, now.1);
+        tracing::info!("player: always run {}, auto move {}, sneaking {}", now.0, now.1, now.2);
         *last = Some(now);
     }
 }

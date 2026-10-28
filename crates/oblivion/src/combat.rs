@@ -422,7 +422,9 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
             CE_HIT => {
                 // (Gone since it was published: the game's frame ran in between.)
                 let Some(&target) = actors.get(&ev.actor).filter(|&&a| is_actor(a)) else { continue };
-                if ev.flags & CEF_GLANCING != 0 || ev.strength < 0.3 {
+                // (The game's damage is its own: any clean hit is a hit, a fast one its power
+                // attack; a blow at a bad angle glances off.)
+                if ev.flags & CEF_GLANCING != 0 {
                     tracing::info!("combat: a glancing blow on {:#x}: nothing lands", ev.actor);
                     continue;
                 }

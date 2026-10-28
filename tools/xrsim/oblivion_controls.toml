@@ -1,0 +1,78 @@
+# The controls (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load.txt): after the save
+# loads (Auto Move tapped off), the right stick's click sneaks ("sneaking"), again stands; the left
+# hand's B opens the game's menu ("menu"), again closes it.
+duration = 46
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { pos = [-0.25, -0.55, 0.15], stick = [0, 0] }
+right = { pos = [0.25, -0.55, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 30
+left = { stick = [0, 0] }
+
+[[key]]
+t = 30.1
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.4
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.5
+left = { stick = [0, 0] }
+
+[[key]]
+t = 32.6
+left = { stick = [0, -1] }
+
+[[key]]
+t = 32.9
+left = { stick = [0, 0] }
+
+[[key]]
+t = 34
+right = { stick_click = true }
+
+[[key]]
+t = 34.2
+right = { stick_click = false }
+
+[[capture]]
+t = 36
+name = "sneaking"
+
+[[key]]
+t = 37
+right = { stick_click = true }
+
+[[key]]
+t = 37.2
+right = { stick_click = false }
+
+[[key]]
+t = 39
+left = { b = true }
+
+[[key]]
+t = 39.15
+left = { b = false }
+
+[[capture]]
+t = 41
+name = "menu"
+
+[[key]]
+t = 42
+left = { b = true }
+
+[[key]]
+t = 42.15
+left = { b = false }
+
+[[capture]]
+t = 44
+name = "closed"

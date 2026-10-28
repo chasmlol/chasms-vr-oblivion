@@ -1,0 +1,164 @@
+# Analog walking (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load.txt, with
+# RUSTVR_OBLIVION_TRACE_MOVE=1 for the adapter's trace): after the save loads (Auto Move tapped
+# off), the stick a quarter, half, three quarters and fully forward for two seconds each, back the
+# same after each (to stay clear of things). The values make the runtime's move exactly 0.25, 0.5,
+# 0.75, 1 after its deadzone of 0.15.
+duration = 66
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { pos = [-0.25, -0.55, 0.15], stick = [0, 0] }
+right = { pos = [0.25, -0.55, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 30
+left = { stick = [0, 0] }
+
+[[key]]
+t = 30.1
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.4
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.5
+left = { stick = [0, 0] }
+
+[[key]]
+t = 32.6
+left = { stick = [0, -1] }
+
+[[key]]
+t = 32.9
+left = { stick = [0, 0] }
+
+[[key]]
+t = 36.00
+left = { stick = [0, 0] }
+
+[[key]]
+t = 36.01
+left = { stick = [0, 0.3625] }
+
+[[key]]
+t = 38.00
+left = { stick = [0, 0.3625] }
+
+[[key]]
+t = 38.01
+left = { stick = [0, 0] }
+
+[[key]]
+t = 39.50
+left = { stick = [0, 0] }
+
+[[key]]
+t = 39.51
+left = { stick = [0, -0.3625] }
+
+[[key]]
+t = 41.50
+left = { stick = [0, -0.3625] }
+
+[[key]]
+t = 41.51
+left = { stick = [0, 0] }
+
+[[key]]
+t = 43.00
+left = { stick = [0, 0] }
+
+[[key]]
+t = 43.01
+left = { stick = [0, 0.575] }
+
+[[key]]
+t = 45.00
+left = { stick = [0, 0.575] }
+
+[[key]]
+t = 45.01
+left = { stick = [0, 0] }
+
+[[key]]
+t = 46.50
+left = { stick = [0, 0] }
+
+[[key]]
+t = 46.51
+left = { stick = [0, -0.575] }
+
+[[key]]
+t = 48.50
+left = { stick = [0, -0.575] }
+
+[[key]]
+t = 48.51
+left = { stick = [0, 0] }
+
+[[key]]
+t = 50.00
+left = { stick = [0, 0] }
+
+[[key]]
+t = 50.01
+left = { stick = [0, 0.7875] }
+
+[[key]]
+t = 52.00
+left = { stick = [0, 0.7875] }
+
+[[key]]
+t = 52.01
+left = { stick = [0, 0] }
+
+[[key]]
+t = 53.50
+left = { stick = [0, 0] }
+
+[[key]]
+t = 53.51
+left = { stick = [0, -0.7875] }
+
+[[key]]
+t = 55.50
+left = { stick = [0, -0.7875] }
+
+[[key]]
+t = 55.51
+left = { stick = [0, 0] }
+
+[[key]]
+t = 57.00
+left = { stick = [0, 0] }
+
+[[key]]
+t = 57.01
+left = { stick = [0, 1.0] }
+
+[[key]]
+t = 59.00
+left = { stick = [0, 1.0] }
+
+[[key]]
+t = 59.01
+left = { stick = [0, 0] }
+
+[[key]]
+t = 60.50
+left = { stick = [0, 0] }
+
+[[key]]
+t = 60.51
+left = { stick = [0, -1.0] }
+
+[[key]]
+t = 62.50
+left = { stick = [0, -1.0] }
+
+[[key]]
+t = 62.51
+left = { stick = [0, 0] }

@@ -41,17 +41,17 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 
 | VR | Oblivion |
 |---|---|
-| Left stick | Forward / Back / Slide Left / Slide Right, where the head looks (pushing it clears Auto Move) |
+| Left stick | Walking, where the head looks, as the game's own analog joystick walking: slow to full speed over the stick's travel, at the pace Always Run sets (pushing it clears Auto Move) |
+| Left stick click (sprint) | Run, when Always Run is off |
+| Right stick click, or its down flick, or ducking | Crouch/Sneak (kept in step with the game's sneaking) |
+| A (either hand) | Jump |
+| Trigger, empty hand | Activate (what the head looks at); held: Rest/Wait. The off hand, with a spell ready: charge it, let go (or touch, for a touch spell) to cast |
+| Off hand's B | Menu Mode (inventory, magic, map, journal); held: the Quick Menu (hotkeys) |
+| B on a menu, or the menu button | Escape (closes the menu; in the world, the pause menu) |
+| Laser + trigger on a menu | The game's cursor and click |
 | Grip at the left hip / over a shoulder | Draw the weapon / take the shield |
 | Swing | Attack (the game's hit; a fast committed swing is a power attack) |
 | Weapon or shield across a blow | Block |
-| Trigger, empty hand | Charge the selected spell; let go (or touch, for a touch spell) to cast |
-| Laser + trigger on a menu | The game's cursor and click |
-| Jump | Jump |
-| Use | Activate |
-| Crouch | Crouch/Sneak |
-| Inventory | Menu Mode |
-| Menu button | Escape |
 
 ## Settings (`rustvr-oblivion.toml` beside the DLL)
 
