@@ -1,0 +1,76 @@
+# Touch and self spells (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load_touch.txt): a
+# zombie stands still in front; with Nordic Frost (touch) selected, the left hand charges it and
+# reaches into the zombie's chest, where it goes off; then with Heal Minor Wounds (self) selected,
+# the hand charges it and lets go. Times are seconds from the runtime's start.
+duration = 56
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { pos = [-0.25, -0.55, 0.15], trigger = 0, stick = [0, 0] }
+
+[[key]]
+t = 30
+left = { stick = [0, 0] }
+
+[[key]]
+t = 30.1
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.4
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.5
+left = { stick = [0, 0] }
+
+# Charge the touch spell beside the body, then into the zombie's chest.
+[[key]]
+t = 37
+left = { pos = [-0.2, -0.35, 0.2], pitch = 0, trigger = 0 }
+
+[[key]]
+t = 37.5
+left = { trigger = 1 }
+
+[[capture]]
+t = 39
+name = "touch_charged"
+
+[[key]]
+t = 39.5
+left = { pos = [-0.2, -0.35, 0.2], trigger = 1 }
+
+[[key]]
+t = 40.5
+left = { pos = [-0.05, -0.4, 0.75], trigger = 1 }
+
+[[capture]]
+t = 41
+name = "touched"
+
+[[key]]
+t = 42
+left = { pos = [-0.2, -0.35, 0.2], trigger = 0 }
+
+# The self spell: charge and let go.
+[[key]]
+t = 46
+left = { trigger = 0 }
+
+[[key]]
+t = 46.2
+left = { trigger = 1 }
+
+[[capture]]
+t = 47.5
+name = "self_charged"
+
+[[key]]
+t = 48.5
+left = { trigger = 1 }
+
+[[key]]
+t = 48.6
+left = { trigger = 0 }
