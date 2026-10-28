@@ -13,6 +13,8 @@
 //!     game's damage formula, skills, sneak attacks, enchantments, blocking, sounds, blood, the
 //!     OnHit scripts and the stagger. A power hit is its power attack. A glancing blow lands
 //!     nothing.
+//!   * A block (the hand's weapon meeting a creature's swing) is the game's own block: its Block
+//!     control held through the blow, so the game's block rules, skill and sounds decide it.
 //!   * A cast is the game's own cast, at once: the caster's usability check (enough magicka, not
 //!     silenced), its cost, and an immediate cast (0x69BE90: no casting animation, the hand
 //!     already did that). The projectile leaves the palm along the hand's aim: the projectile
@@ -84,6 +86,19 @@ const NODE_COUNT: usize = 0xB6;
 /// `NiObjectNET` name.
 const NODE_NAME: usize = 0x08;
 
+/// `BaseProcess::GetCurrentAction` (vtable +0x2D0, thiscall, a signed 16-bit action): attacking
+/// (attack, its follow-through) and blocking.
+const VT_CURRENT_ACTION: usize = 0x2D0;
+const ACTION_ATTACK: i16 = 2;
+const ACTION_ATTACK_FOLLOW: i16 = 3;
+const ACTION_BLOCK: i16 = 6;
+/// The process's equipped weapon (`MiddleHighProcess` +0xE4: an inventory entry, its form at +8).
+const EQUIPPED_WEAPON: usize = 0xE4;
+/// A hand's reach past its wrist when it has no weapon (metres).
+const FIST_REACH: f32 = 0.15;
+/// How long a block holds the Block control (seconds): through the blow it meets.
+const BLOCK_HOLD: f64 = 0.5;
+
 /// Spell types the hand casts: a spell, a power, a lesser power.
 const CASTABLE_TYPES: [u32; 3] = [0, 2, 3];
 
@@ -129,6 +144,52 @@ fn bones(root: usize) -> HashMap<String, usize> {
         }
     }
     out
+}
+
+/// What an actor is doing (`GetCurrentAction`), or -1.
+#[cfg(target_arch = "x86")]
+fn current_action(actor: usize) -> i16 {
+    let process = mem::deref(actor + 0x58);
+    let f = mem::deref(mem::deref(process) + VT_CURRENT_ACTION);
+    if process == 0 || !(0x0040_1000..0x00A3_0000).contains(&f) {
+        return -1;
+    }
+    type F = unsafe extern "thiscall" fn(usize) -> i16;
+    unsafe { std::mem::transmute::<usize, F>(f)(process) }
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn current_action(_actor: usize) -> i16 {
+    -1
+}
+
+/// The length of an actor's equipped weapon (its model's, from the asset cache; metres), cached by
+/// model path.
+fn weapon_length(actor: usize) -> Option<f32> {
+    static LENGTHS: Mutex<Option<HashMap<String, Option<f32>>>> = Mutex::new(None);
+    let form = mem::deref(mem::deref(mem::deref(actor + 0x58) + EQUIPPED_WEAPON) + 8);
+    if form == 0 || mem::at::<u8>(form + 4) != Some(0x21) {
+        return None;
+    }
+    let path = read_str(mem::deref(form + 0x34));
+    let mut cache = LENGTHS.lock().unwrap();
+    *cache.get_or_insert_with(HashMap::new).entry(path.clone()).or_insert_with(|| {
+        let key = oblivion_assets::export::model_key(&path);
+        rustvr_asset::load_model(&rustvr_asset::default_root().join("oblivion"), &key).ok().map(|m| m.bounds_max[2])
+    })
+}
+
+/// Where an attacker's blow is: its weapon (the `Weapon` node, the blade along its +Y as long as
+/// the weapon's model), else its right fist (forearm to past the hand).
+fn attack_segment(actor: usize, b: &HashMap<String, usize>) -> Option<(Vec3, Vec3, f32)> {
+    if let (Some(&node), Some(len)) = (b.get("Weapon"), weapon_length(actor)) {
+        let rot: [f32; 9] = mem::at(node + engine::av::WORLD_ROTATE)?;
+        let at = node_pos(node)?;
+        let along = camera::basis().dir_from_game(Vec3::new(rot[1], rot[4], rot[7])).normalize_or_zero();
+        return Some((at, at + along * len, 0.04));
+    }
+    let (Some(fore), Some(hand)) = (b.get("Bip01 R Forearm").and_then(|&n| node_pos(n)), b.get("Bip01 R Hand").and_then(|&n| node_pos(n))) else { return None };
+    Some((fore, hand + (hand - fore).normalize_or_zero() * FIST_REACH, 0.06))
 }
 
 /// A node's world position, in the protocol's space.
@@ -220,9 +281,21 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
             a.parts[0] = ActorPart { a: (f + Vec3::Y * 0.3).to_array(), radius: 0.35, b: (f + Vec3::Y * 1.3).to_array(), kind: PART_TORSO, material: MAT_FLESH, game_part: 0, _pad: [0; 2] };
             a.count = 1;
         }
+        match current_action(actor) {
+            ACTION_ATTACK | ACTION_ATTACK_FOLLOW => {
+                if let Some((wa, wb, r)) = attack_segment(actor, &b) {
+                    a.flags |= ACT_ATTACKING;
+                    a.weapon_a = wa.to_array();
+                    a.weapon_b = wb.to_array();
+                    a.weapon_radius = r;
+                }
+            }
+            ACTION_BLOCK => a.flags |= ACT_BLOCKING,
+            _ => {}
+        }
         let health = actor_value(actor, AV_HEALTH);
         let most = base_actor_value(actor, AV_HEALTH).max(1);
-        a.flags = if health > 0 { ACT_ALIVE } else { 0 };
+        a.flags |= if health > 0 { ACT_ALIVE } else { 0 };
         a.health = (health as f32 / most as f32).clamp(0.0, 1.0);
         let i = table.count as usize;
         table.actors[i] = a;
@@ -365,6 +438,10 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
                 let Some(&spell) = spells.get(&ev.what) else { continue };
                 cast(player, spell, ev, actors);
             }
+            CE_BLOCK => {
+                tracing::info!("combat: the player blocks {:#x}{}", ev.actor, if ev.flags & CEF_PARRY != 0 { " (a parry)" } else { "" });
+                crate::player::hold_control("Block", BLOCK_HOLD);
+            }
             _ => {}
         }
     }
@@ -444,7 +521,7 @@ pub fn publish() {
     let k = known.get_or_insert_with(|| Known { actors: HashMap::new(), spells: HashMap::new(), sent: None, frame: 0 });
     k.actors = actors;
     k.frame += 1;
-    if k.frame % 180 == 2 {
+    if k.frame % 60 == 2 {
         log_actors(&table);
     }
     let spells_now = (k.frame % 10 == 1).then(spells);
@@ -480,7 +557,7 @@ fn log_actors(table: &Actors) {
         .iter()
         .map(|a| {
             let c = (Vec3::from_array(a.parts[0].a) + Vec3::from_array(a.parts[0].b)) * 0.5 - me;
-            format!("{:#x} at ({:.1}, {:.1}, {:.1}) health {:.2} parts {}", a.id, c.x, c.y, c.z, a.health, a.count)
+            format!("{:#x} at ({:.1}, {:.1}, {:.1}) health {:.2} parts {} flags {:#x}", a.id, c.x, c.y, c.z, a.health, a.count, a.flags)
         })
         .collect();
     tracing::info!("combat: {} creatures: {}", list.len(), list.join("; "));

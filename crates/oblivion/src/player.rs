@@ -66,6 +66,13 @@ pub fn before_update() {
     crate::combat::apply_pending();
 }
 
+/// Holds one of the game's controls (by its name in `Oblivion.ini`) for `seconds`.
+pub fn hold_control(name: &str, seconds: f64) {
+    if let Some(b) = bridge().as_mut() {
+        b.hold(name, link::now() + seconds);
+    }
+}
+
 /// In VR the view is always the player's own eyes: a third-person camera goes back to first.
 fn first_person() {
     let p = engine::player();

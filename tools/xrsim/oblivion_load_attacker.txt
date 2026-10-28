@@ -1,0 +1,3 @@
+20 LoadGame autosave
+31 player.placeatme 00025e6e 1 70 0
+32.5 PlaceInFront ff000c46 0.9

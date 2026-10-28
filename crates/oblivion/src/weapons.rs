@@ -123,7 +123,8 @@ impl Slices {
 ///   stabs with its last 10 cm, and the pommel bludgeons;
 /// * a blunt weapon's head (from where it grows past twice the handle's width to its end)
 ///   bludgeons, and an axe's (a head that reaches out to one side) cuts with its outer edge;
-/// * a staff bludgeons with its top fifth.
+/// * a staff bludgeons with its top fifth;
+/// * all of it, end to end, guards (meets blows without hitting).
 pub fn melee_from_model(model: &rustvr_asset::Model, kind: u32, id: u32, damage: f32) -> MeleeDesc {
     let s = Slices::of(model);
     let n = s.lo.len();
@@ -180,6 +181,8 @@ pub fn melee_from_model(model: &rustvr_asset::Model, kind: u32, id: u32, damage:
         }
         _ => {}
     }
+    // The whole of it meets a blow (the haft, the grip, the flat): it guards, it doesn't hit.
+    add(Damager { kind: DMG_BLUNT, flags: DMGF_GUARD, radius: 0.03, a: [0.0, 0.0, z_lo], b: [0.0, 0.0, z_hi], ..Default::default() });
     w
 }
 
@@ -299,7 +302,8 @@ mod tests {
         // Pommel at -0.17, a guard 16 cm wide at 0, a blade 5 cm wide to 0.95.
         let m = model(&[[0.0, 0.0, -0.17], [-0.015, 0.0, -0.1], [0.015, 0.0, -0.1], [-0.08, 0.0, 0.0], [0.08, 0.0, 0.0], [-0.025, 0.0, 0.3], [0.025, 0.0, 0.3], [0.0, 0.0, 0.95]]);
         let w = melee_from_model(&m, BLADE_ONE_HAND, 9, 8.0);
-        assert_eq!(w.count, 3);
+        assert_eq!(w.count, 4);
+        assert_eq!(w.damagers[3].flags, DMGF_GUARD);
         let cut = w.damagers[0];
         assert_eq!(cut.kind, DMG_SLASH);
         assert!((cut.a[2] - 0.035).abs() < 0.011, "from just past the guard: {:?}", cut.a);

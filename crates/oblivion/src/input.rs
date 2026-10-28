@@ -86,6 +86,12 @@ impl Bridge {
         self.controls.get(name).copied().unwrap_or_default()
     }
 
+    /// Holds the control `name` (as the player's file binds it) until `until` (seconds, the link's
+    /// clock).
+    pub fn hold(&mut self, name: &str, until: f64) {
+        self.pulses.push((self.binding(name), until));
+    }
+
     pub fn update(&mut self, it: &Intents, now: f64) -> Virtual {
         let counts = self.presses.update(it);
         let mut v = Virtual::default();

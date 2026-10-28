@@ -9,7 +9,8 @@ pub fn is_readable(p: *const u8, n: usize) -> bool {
         return false;
     }
     let mut at = p as usize;
-    let end = at + n.max(1);
+    // (A pointer near the top of the address space wraps: never readable.)
+    let Some(end) = at.checked_add(n.max(1)) else { return false };
     while at < end {
         let mut mbi = MEMORY_BASIC_INFORMATION::default();
         if unsafe { VirtualQuery(Some(at as *const _), &mut mbi, std::mem::size_of::<MEMORY_BASIC_INFORMATION>()) } == 0 {
@@ -18,7 +19,8 @@ pub fn is_readable(p: *const u8, n: usize) -> bool {
         if mbi.State != MEM_COMMIT || mbi.Protect.0 & (PAGE_GUARD.0 | PAGE_NOACCESS.0) != 0 || mbi.Protect.0 == 0 {
             return false;
         }
-        at = mbi.BaseAddress as usize + mbi.RegionSize;
+        let Some(next) = (mbi.BaseAddress as usize).checked_add(mbi.RegionSize) else { return false };
+        at = next;
     }
     true
 }

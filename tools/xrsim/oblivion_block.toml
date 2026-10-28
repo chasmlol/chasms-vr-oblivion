@@ -1,0 +1,56 @@
+# Blocking (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load_attacker.txt): a zombie is put
+# in front of the player and attacks; the right hand draws the weapon from the left hip (as
+# oblivion_sword.toml) and holds it up across the body as a guard, where the zombie's blows meet it.
+# Times are seconds from the runtime's start.
+duration = 56
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { pos = [-0.25, -0.55, 0.15], stick = [0, 0] }
+right = { pos = [0.25, -0.55, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 30
+left = { stick = [0, 0] }
+
+[[key]]
+t = 30.1
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.4
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.5
+left = { stick = [0, 0] }
+
+[[key]]
+t = 34
+right = { pos = [0.25, -0.55, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 35
+right = { pos = [-0.17, -0.55, 0.05], pitch = -60, squeeze = 0 }
+
+[[key]]
+t = 35.4
+right = { squeeze = 0 }
+
+[[key]]
+t = 35.6
+right = { squeeze = 1 }
+
+# The guard: the haft across the body in front of the chest, the head up and to the left.
+[[key]]
+t = 36.6
+right = { pos = [0.15, -0.25, 0.35], pitch = 50, yaw = -50, roll = 0, squeeze = 1 }
+
+[[capture]]
+t = 40
+name = "guard"
+
+[[capture]]
+t = 46
+name = "guard2"
