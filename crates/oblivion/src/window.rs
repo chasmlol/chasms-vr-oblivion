@@ -8,6 +8,11 @@
 //!   player isn't there to), so the game runs without touching the desktop. (A desktop of its own
 //!   doesn't do: Direct3D 9 can't make a device off the interactive desktop.)
 //!
+//! * **Size**: the game renders each eye into its back buffer, which is as big as its screen. When
+//!   it makes its window (after reading its screen size, before making its renderer, 0x498340) its
+//!   screen size becomes the headset's eye size as the runtime asks for it ([`crate::resolution`]),
+//!   so the device and every render target are made at that size.
+//!
 //! Nothing here touches the game's import table before the game is running: Steam's DRM checks it
 //! when the game starts, and restarts the game through Steam if it was changed. The background
 //! hooks are on `user32.dll` itself, and only act on the game's own window.
@@ -50,10 +55,10 @@ mod win {
 
     /// Before the game makes its window.
     pub fn install_early() {
+        let c = hook_user32("CreateWindowExA", create_window as *const (), &REAL_CREATE);
         if !settings::get().background {
             return;
         }
-        let c = hook_user32("CreateWindowExA", create_window as *const (), &REAL_CREATE);
         let s = hook_user32("ShowWindow", show_window as *const (), &REAL_SHOW);
         let p = hook_user32("SetWindowPos", set_window_pos as *const (), &REAL_POS);
         let f = hook_user32("SetForegroundWindow", set_foreground_window as *const (), &REAL_FOREGROUND);
@@ -89,9 +94,13 @@ mod win {
         let real: CreateFn = unsafe { std::mem::transmute(REAL_CREATE.load(Ordering::Acquire)) };
         // The game's main window: its class is "Oblivion" (a class atom isn't a name: not ours).
         let ours = parent.0.is_null() && (cls as usize) > 0xFFFF && cstr(cls) == "Oblivion";
-        let (ex, x, y) = if ours { (ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW, OFF, OFF) } else { (ex, x, y) };
-        let hwnd = unsafe { real(ex, cls, name, style, x, y, w, h, parent, menu, inst, param) };
         if ours {
+            crate::resolution::apply();
+        }
+        let background = ours && settings::get().background;
+        let (ex, x, y) = if background { (ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW, OFF, OFF) } else { (ex, x, y) };
+        let hwnd = unsafe { real(ex, cls, name, style, x, y, w, h, parent, menu, inst, param) };
+        if background {
             GAME.store(hwnd.0 as usize, Ordering::Release);
             tracing::info!("window: the game's window made off-screen, never activated (background)");
         }

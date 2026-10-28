@@ -45,6 +45,7 @@ pub mod menus;
 pub mod player;
 pub mod proxy;
 pub mod render;
+pub mod resolution;
 pub mod settings;
 pub mod weapons;
 pub mod window;
