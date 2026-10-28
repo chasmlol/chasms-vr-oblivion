@@ -13,6 +13,7 @@ pub enum Part {
     Combat,
     Collision,
     Lighting,
+    Items,
     Eye,
     Capture,
     Depth,
@@ -20,11 +21,13 @@ pub enum Part {
     Between,
 }
 
-const PARTS: [(Part, &str); 8] = [
+const N: usize = 9;
+const PARTS: [(Part, &str); N] = [
     (Part::Prepare, "prepare"),
     (Part::Combat, "combat"),
     (Part::Collision, "collision"),
     (Part::Lighting, "lighting"),
+    (Part::Items, "items"),
     (Part::Eye, "eye renders"),
     (Part::Capture, "picture copies"),
     (Part::Depth, "depth copies"),
@@ -38,9 +41,9 @@ struct Times {
     since: Instant,
     frames: u32,
     /// Per part: this frame's, the period's total and its worst frame.
-    now: [f64; 8],
-    total: [f64; 8],
-    worst: [f64; 8],
+    now: [f64; N],
+    total: [f64; N],
+    worst: [f64; N],
     worst_frame: f64,
     frame_start: Option<Instant>,
     render_end: Option<Instant>,
@@ -72,7 +75,7 @@ pub fn render_start() {
     // (A new frame: the memory regions found readable are asked about again.)
     crate::mem::forget();
     let mut g = TIMES.lock().unwrap();
-    let t = g.get_or_insert_with(|| Times { since: Instant::now(), frames: 0, now: [0.0; 8], total: [0.0; 8], worst: [0.0; 8], worst_frame: 0.0, frame_start: None, render_end: None });
+    let t = g.get_or_insert_with(|| Times { since: Instant::now(), frames: 0, now: [0.0; N], total: [0.0; N], worst: [0.0; N], worst_frame: 0.0, frame_start: None, render_end: None });
     let now = Instant::now();
     if let Some(end) = t.render_end {
         t.now[index(Part::Between)] += (now - end).as_secs_f64() * 1000.0;
@@ -87,7 +90,7 @@ pub fn render_start() {
         }
         t.frames += 1;
     }
-    t.now = [0.0; 8];
+    t.now = [0.0; N];
     t.frame_start = Some(now);
     if t.since.elapsed() >= EVERY && t.frames > 0 {
         let secs = t.since.elapsed().as_secs_f64();
@@ -96,8 +99,8 @@ pub fn render_start() {
         tracing::info!("timing: {:.1} frames/s, worst frame {:.0} ms; ms per frame: {}; {}", n / secs, t.worst_frame, parts.join(", "), memory());
         t.since = Instant::now();
         t.frames = 0;
-        t.total = [0.0; 8];
-        t.worst = [0.0; 8];
+        t.total = [0.0; N];
+        t.worst = [0.0; N];
         t.worst_frame = 0.0;
     }
 }

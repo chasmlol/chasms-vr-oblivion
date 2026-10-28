@@ -9,7 +9,10 @@
 //! shape collection (the packed triangle strips most of the architecture is, the land's height
 //! field) through Havok's own interface for its children, one triangle at a time. A body's
 //! triangles are worked out once, when the player first comes near it; the ones within reach go to
-//! the runtime as one collision mesh, sent again when the player has moved on or the world changed.
+//! the runtime as one collision mesh, sent again when the player has moved on or the world changed,
+//! with each triangle's material (what a blade bites into): the game's own, Bethesda's per shape
+//! (`bhkShape` +0x10, the wrapper a shape's user data points to) and per part of a packed triangle
+//! mesh ([`material`]).
 //!
 //! The triangle maths is pure and tested; the Havok reads are guarded.
 
@@ -145,14 +148,31 @@ pub fn sphere_distance(t: &[Vec3; 3], at: Vec3) -> f32 {
     (c.distance(at) - r).max(0.0)
 }
 
-/// The triangles of `bodies` within `radius` of `at`, nearest first, at most `max`.
-pub fn nearby<'a>(bodies: impl IntoIterator<Item = &'a [[Vec3; 3]]>, at: Vec3, radius: f32, max: usize) -> Vec<[Vec3; 3]> {
-    let mut near: Vec<(f32, [Vec3; 3])> = Vec::new();
-    for tris in bodies {
-        near.extend(tris.iter().map(|t| (sphere_distance(t, at), *t)).filter(|(d, _)| *d <= radius));
+/// The triangles of `bodies` (with their materials) within `radius` of `at`, nearest first, at most
+/// `max`.
+pub fn nearby<'a>(bodies: impl IntoIterator<Item = (&'a [[Vec3; 3]], &'a [u8])>, at: Vec3, radius: f32, max: usize) -> Vec<([Vec3; 3], u8)> {
+    let mut near: Vec<(f32, [Vec3; 3], u8)> = Vec::new();
+    for (tris, mats) in bodies {
+        near.extend(tris.iter().zip(mats).map(|(t, &m)| (sphere_distance(t, at), *t, m)).filter(|(d, ..)| *d <= radius));
     }
     near.sort_by(|a, b| a.0.total_cmp(&b.0));
-    near.into_iter().take(max).map(|(_, t)| t).collect()
+    near.into_iter().take(max).map(|(_, t, m)| (t, m)).collect()
+}
+
+/// Bethesda's collision material (Oblivion's 0..31: stone, cloth, dirt, glass, grass, metal,
+/// organic, skin, water, wood, heavy stone, heavy metal, heavy wood, chain, snow; then each again
+/// as stairs; the elevator) as the framework's `MAT_*`.
+pub fn material(m: u32) -> u32 {
+    use rustvr_protocol::{MAT_CHAINMAIL, MAT_EARTH, MAT_FLESH, MAT_LEATHER, MAT_PLATE, MAT_STONE, MAT_WOOD};
+    match if (15..30).contains(&m) { m - 15 } else { m } {
+        1 => MAT_LEATHER,
+        2 | 4 | 14 => MAT_EARTH,
+        5 | 11 => MAT_PLATE,
+        6 | 9 | 12 => MAT_WOOD,
+        7 => MAT_FLESH,
+        13 => MAT_CHAINMAIL,
+        _ => MAT_STONE,
+    }
 }
 
 /// The height of the highest triangle under `at` (straight down along `up`, no higher than `at`
@@ -313,9 +333,9 @@ mod win {
         (lo.is_finite() && hi.is_finite() && lo.cmple(hi).all()).then_some((lo, hi))
     }
 
-    /// Every child of a shape collection, through its own interface: `each(child)` with the child
-    /// built in a buffer that's reused (read it before returning).
-    fn children(collection: usize, mut each: impl FnMut(usize) -> bool) {
+    /// Every child of a shape collection, through its own interface: `each(child, key)` with the
+    /// child built in a buffer that's reused (read it before returning).
+    fn children(collection: usize, mut each: impl FnMut(usize, u32) -> bool) {
         let (Some(first), Some(next), Some(child)) = (slot(collection, SLOT_FIRST_KEY), slot(collection, SLOT_NEXT_KEY), slot(collection, SLOT_CHILD)) else { return };
         type First = unsafe extern "thiscall" fn(usize) -> u32;
         type Next = unsafe extern "thiscall" fn(usize, u32) -> u32;
@@ -326,7 +346,7 @@ mod win {
         let mut n = 0usize;
         while key != END_KEY && n < MAX_BODY_TRIANGLES {
             let c = unsafe { child(collection, key, &mut *buf) };
-            if c != 0 && !each(c) {
+            if c != 0 && !each(c, key) {
                 return;
             }
             key = unsafe { next(collection, key) };
@@ -334,9 +354,45 @@ mod win {
         }
     }
 
-    /// The triangles of `shape` placed by `xf` (Havok's world), added to `out`; the kinds it
-    /// doesn't know are counted in `unknown`.
-    fn shape_triangles(shape: usize, xf: &Xf, out: &mut Vec<[Vec3; 3]>, unknown: &mut HashMap<i32, u32>, depth: u32) {
+    /// `hkPackedNiTriStripsShape`'s vtable; its data (+0x10) has its parts (+0x1C, 12 bytes each:
+    /// filter info, vertex count, material), a child's part the key's top byte.
+    const PACKED_STRIPS_VTABLE: usize = 0x00A9_940C;
+    const STRIPS_DATA: usize = 0x10;
+    const STRIPS_PARTS: usize = 0x1C;
+    const PART_SIZE: usize = 12;
+    const PART_MATERIAL: usize = 8;
+    /// `bhkShape::material`, on the wrapper a shape's user data (+8) points to.
+    const WRAPPER_MATERIAL: usize = 0x10;
+
+    /// The shape's own material (its Bethesda wrapper's), if it has one.
+    fn own_material(shape: usize) -> Option<u32> {
+        let wrapper = mem::deref(shape + 8);
+        (wrapper != 0).then(|| mem::at::<u32>(wrapper + WRAPPER_MATERIAL)).flatten().filter(|&m| m < 32).map(material)
+    }
+
+    /// A body's triangles in the game's world (game units): its own shape where Havok has it now
+    /// (one of the things the hands take, [`crate::items`]).
+    pub fn body_triangles(entity: usize) -> Vec<[Vec3; 3]> {
+        let shape = mem::deref(entity + ENTITY_SHAPE);
+        let Some(xf) = transform(mem::deref(entity + ENTITY_TRANSFORM)) else { return Vec::new() };
+        let (mut tris, mut mats, mut unknown) = (Vec::new(), Vec::new(), HashMap::new());
+        shape_triangles(shape, &xf, rustvr_protocol::MAT_STONE, &mut tris, &mut mats, &mut unknown, 0);
+        tris.into_iter().map(|t| t.map(|v| v * HAVOK_SCALE)).collect()
+    }
+
+    /// The triangles of `shape` placed by `xf` (Havok's world), added to `out` with their materials
+    /// to `mats` (`material`: the one it inherits); the kinds it doesn't know are counted in
+    /// `unknown`.
+    fn shape_triangles(shape: usize, xf: &Xf, material: u32, out: &mut Vec<[Vec3; 3]>, mats: &mut Vec<u8>, unknown: &mut HashMap<i32, u32>, depth: u32) {
+        let material = own_material(shape).unwrap_or(material);
+        shape_triangles_of(shape, xf, material, out, mats, unknown, depth);
+        // (The triangles a leaf shape added are its material; a collection's children set theirs.)
+        if mats.len() < out.len() {
+            mats.resize(out.len(), material as u8);
+        }
+    }
+
+    fn shape_triangles_of(shape: usize, xf: &Xf, material: u32, out: &mut Vec<[Vec3; 3]>, mats: &mut Vec<u8>, unknown: &mut HashMap<i32, u32>, depth: u32) {
         if depth > 12 || out.len() >= MAX_BODY_TRIANGLES || !mem::is_readable(shape as *const u8, 0x10) {
             return;
         }
@@ -397,24 +453,33 @@ mod win {
             CONVEX_TRANSLATE => {
                 if let Some(t) = vec4(shape + 0x20) {
                     let child = mem::deref(shape + 0x10);
-                    shape_triangles(child, &xf.of(&Xf { r: Mat3::IDENTITY, t }), out, unknown, depth + 1);
+                    shape_triangles(child, &xf.of(&Xf { r: Mat3::IDENTITY, t }), material, out, mats, unknown, depth + 1);
                 }
             }
             CONVEX_TRANSFORM => {
                 if let Some(t) = transform(shape + 0x20) {
-                    shape_triangles(mem::deref(shape + 0x10), &xf.of(&t), out, unknown, depth + 1);
+                    shape_triangles(mem::deref(shape + 0x10), &xf.of(&t), material, out, mats, unknown, depth + 1);
                 }
             }
             TRANSFORM => {
                 if let Some(t) = transform(shape + 0x20).or_else(|| quat_transform(shape + 0x10, Vec3::ZERO)) {
-                    shape_triangles(mem::deref(shape + 0xC), &xf.of(&t), out, unknown, depth + 1);
+                    shape_triangles(mem::deref(shape + 0xC), &xf.of(&t), material, out, mats, unknown, depth + 1);
                 }
             }
-            BV_TREE | MOPP => shape_triangles(mem::deref(shape + 0xC), xf, out, unknown, depth + 1),
-            COLLECTION | LIST | CONVEX_LIST | TRIANGLE_COLLECTION => children(shape, |child| {
-                shape_triangles(child, xf, out, unknown, depth + 1);
-                out.len() < MAX_BODY_TRIANGLES
-            }),
+            BV_TREE | MOPP => shape_triangles(mem::deref(shape + 0xC), xf, material, out, mats, unknown, depth + 1),
+            COLLECTION | LIST | CONVEX_LIST | TRIANGLE_COLLECTION => {
+                // A packed triangle mesh's parts each have a material of their own.
+                let parts = (mem::deref(shape) == PACKED_STRIPS_VTABLE).then(|| mem::deref(mem::deref(shape + STRIPS_DATA) + STRIPS_PARTS)).filter(|&p| p != 0);
+                children(shape, |child, key| {
+                    let m = parts
+                        .and_then(|p| mem::at::<u32>(p + (key >> 24) as usize * PART_SIZE + PART_MATERIAL))
+                        .filter(|&m| m < 32)
+                        .map(super::material)
+                        .unwrap_or(material);
+                    shape_triangles(child, xf, m, out, mats, unknown, depth + 1);
+                    out.len() < MAX_BODY_TRIANGLES
+                })
+            }
             other => *unknown.entry(other).or_default() += 1,
         }
     }
@@ -480,8 +545,9 @@ mod win {
         /// Its box in the runtime's world.
         lo: Vec3,
         hi: Vec3,
-        /// Its triangles in the runtime's world, once it's been near.
+        /// Its triangles in the runtime's world, once it's been near, and their materials.
         tris: Option<Vec<[Vec3; 3]>>,
+        mats: Vec<u8>,
     }
 
     struct State {
@@ -527,7 +593,7 @@ mod win {
                     }
                     let Some((lo, hi)) = aabb(f.shape, &f.xf) else { continue };
                     let (a, b) = (to_runtime(lo), to_runtime(hi));
-                    s.bodies.insert(e, Body { fixed: f, lo: a.min(b), hi: a.max(b), tris: None });
+                    s.bodies.insert(e, Body { fixed: f, lo: a.min(b), hi: a.max(b), tris: None, mats: Vec::new() });
                     changed = true;
                 }
                 if !s.logged_world {
@@ -555,10 +621,12 @@ mod win {
             if gap > reach || b.tris.is_some() {
                 continue;
             }
-            let mut tris = Vec::new();
-            shape_triangles(b.fixed.shape, &b.fixed.xf, &mut tris, &mut unknown, 0);
+            let (mut tris, mut mats) = (Vec::new(), Vec::new());
+            shape_triangles(b.fixed.shape, &b.fixed.xf, rustvr_protocol::MAT_STONE, &mut tris, &mut mats, &mut unknown, 0);
             made += tris.len();
+            mats.resize(tris.len(), rustvr_protocol::MAT_STONE as u8);
             b.tris = Some(tris.into_iter().map(|t| t.map(to_runtime)).collect());
+            b.mats = mats;
         }
         if !unknown.is_empty() {
             tracing::info!("collision: shapes of kinds it doesn't read (kind, count): {unknown:?}");
@@ -567,22 +635,31 @@ mod win {
             s.bodies
                 .values()
                 .filter(|b| (b.lo - feet).max(feet - b.hi).max(Vec3::ZERO).length() <= RADIUS)
-                .filter_map(|b| b.tris.as_deref()),
+                .filter_map(|b| Some((b.tris.as_deref()?, b.mats.as_slice()))),
             feet,
             RADIUS,
             MAX_TRIANGLES,
         );
-        let mut payload = bytemuck::bytes_of(&rustvr_protocol::ColMesh { id: MESH_ID, count: near.len() as u32 }).to_vec();
-        for t in &near {
+        let head = rustvr_protocol::ColMesh { id: MESH_ID, count: near.len() as u32 };
+        let mut payload = bytemuck::bytes_of(&head).to_vec();
+        for (t, _) in &near {
             let v: [f32; 9] = [t[0].x, t[0].y, t[0].z, t[1].x, t[1].y, t[1].z, t[2].x, t[2].y, t[2].z];
             payload.extend_from_slice(bytemuck::cast_slice(&v));
         }
-        if crate::link::with_adapter(|a| a.push_collision(rustvr_protocol::COL_MESH, &payload)).unwrap_or(false) {
+        let mut materials = bytemuck::bytes_of(&head).to_vec();
+        materials.extend(near.iter().map(|(_, m)| *m));
+        let sent = crate::link::with_adapter(|a| a.push_collision(rustvr_protocol::COL_MESH, &payload) && a.push_collision(rustvr_protocol::COL_MESH_MATERIALS, &materials)).unwrap_or(false);
+        if sent {
             s.sent_at = Some(feet);
+            let tris: Vec<[Vec3; 3]> = near.iter().map(|(t, _)| *t).collect();
+            let mut kinds: HashMap<u8, usize> = HashMap::new();
+            for (_, m) in &near {
+                *kinds.entry(*m).or_default() += 1;
+            }
             tracing::info!(
-                "collision: {} triangles around {feet:.2?} sent ({made} newly read); the floor under the feet is at y {:?}",
+                "collision: {} triangles around {feet:.2?} sent ({made} newly read; materials {kinds:?}); the floor under the feet is at y {:?}",
                 near.len(),
-                floor_under(&near, feet)
+                floor_under(&tris, feet)
             );
         }
     }

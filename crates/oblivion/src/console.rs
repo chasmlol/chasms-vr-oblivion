@@ -61,8 +61,9 @@ pub fn select_spell(_id: u32) -> bool {
 }
 
 /// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <hex id>` selects a spell,
-/// `PlaceInFront <ref hex id> <metres>` puts a reference that far in front of the player, facing
-/// them (tests), anything else is compiled and run as a line of script. True if it ran.
+/// `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in front of the
+/// player (and that far over their feet), facing them (tests), anything else is compiled and run as
+/// a line of script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
@@ -73,14 +74,15 @@ pub fn run(line: &str) -> bool {
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();
         let (Some(r), Some(m)) = (it.next(), it.next().and_then(|m| m.parse::<f32>().ok())) else { return false };
-        return place_in_front(r, m);
+        let up = it.next().and_then(|u| u.parse::<f32>().ok()).unwrap_or(0.0);
+        return place_in_front(r, m, up);
     }
     run_script(line)
 }
 
-/// Puts the reference `r` (its hex form id) `metres` in front of the player, on the player's
-/// level and facing them: the game's own `setpos` and `setangle`.
-fn place_in_front(r: &str, metres: f32) -> bool {
+/// Puts the reference `r` (its hex form id) `metres` in front of the player, `up` over their feet
+/// and facing them: the game's own `setpos` and `setangle`.
+fn place_in_front(r: &str, metres: f32, up: f32) -> bool {
     use crate::engine::{self, refr};
     let p = engine::player();
     let (Some(pos), Some(rot)) = (crate::mem::at::<[f32; 3]>(p + refr::POS), crate::mem::at::<[f32; 3]>(p + refr::ROT)) else { return false };
@@ -89,7 +91,7 @@ fn place_in_front(r: &str, metres: f32) -> bool {
     let d = metres * crate::camera::UNITS_PER_METER;
     let (x, y) = (pos[0] + d * h.sin(), pos[1] + d * h.cos());
     let facing = (h + std::f32::consts::PI).to_degrees().rem_euclid(360.0);
-    [format!("{r}.setpos x {x:.1}"), format!("{r}.setpos y {y:.1}"), format!("{r}.setpos z {:.1}", pos[2]), format!("{r}.setangle z {facing:.1}")].iter().all(|l| run_script(l))
+    [format!("{r}.setpos x {x:.1}"), format!("{r}.setpos y {y:.1}"), format!("{r}.setpos z {:.1}", pos[2] + up * crate::camera::UNITS_PER_METER), format!("{r}.setangle z {facing:.1}")].iter().all(|l| run_script(l))
 }
 
 /// Compile errors so far (a line ran if it compiled: what the game's run returns is the script's

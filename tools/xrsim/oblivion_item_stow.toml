@@ -1,0 +1,89 @@
+# A thing lying in the world taken in the hand and put in a body slot (tools/xrsim_oblivion.ps1
+# -Console tools/xrsim/oblivion_load_items.txt, RUSTVR_TEST_TAKE=right): a repair hammer is put a
+# metre in front; the right grip closes and it's in the hand, its card beside it ("held"); let go
+# at the right hip, the player takes it (the game's message: "stowed"), and it's gone from the
+# world.
+duration = 46
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { pos = [-0.25, -0.75, 0.15], stick = [0, 0] }
+right = { pos = [0.25, -0.75, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 30.1
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.4
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.5
+left = { stick = [0, 0] }
+
+[[key]]
+t = 32.6
+left = { stick = [0, -1] }
+
+[[key]]
+t = 32.9
+left = { stick = [0, 0] }
+
+[[key]]
+t = 33
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = -40 }
+
+[[capture]]
+t = 34
+name = "lying"
+
+# The hand out in front; the grip closes: it's in the hand.
+[[key]]
+t = 34.5
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = -40 }
+right = { pos = [0.2, -0.35, 0.35], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 35
+right = { pos = [0.15, -0.3, 0.35], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 35.3
+right = { squeeze = 1 }
+
+[[key]]
+t = 36
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = -15 }
+right = { pos = [0.1, -0.25, 0.4], pitch = 0, squeeze = 1 }
+
+[[capture]]
+t = 37
+name = "held"
+
+# To the right hip, gently, and let go there.
+[[key]]
+t = 38
+right = { pos = [0.22, -0.4, 0.15], pitch = 0, squeeze = 1 }
+
+[[key]]
+t = 39
+right = { pos = [0.21, -0.54, 0.04], pitch = 0, squeeze = 1 }
+
+[[key]]
+t = 39.5
+right = { pos = [0.21, -0.54, 0.04], pitch = 0, squeeze = 0 }
+
+[[capture]]
+t = 40.5
+name = "stowed"
+
+[[key]]
+t = 41
+right = { pos = [0.25, -0.75, 0.15], pitch = 0, squeeze = 0 }
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = -40 }
+
+[[capture]]
+t = 42
+name = "gone"

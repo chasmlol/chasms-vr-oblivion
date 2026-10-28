@@ -1,0 +1,2 @@
+20 LoadGame autosave
+31 player.placeatme 0000000C 1 70 0

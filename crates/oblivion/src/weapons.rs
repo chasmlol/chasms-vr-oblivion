@@ -351,7 +351,7 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
         }
     }
     // The melee table first: when the runtime sees the weapon, its damagers are there.
-    if a.write_melee(&melee) && a.write_objects(&objects) {
+    if a.write_melee(&melee) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
         *reg = Some(Registered { forms, seq });
     }
 }
