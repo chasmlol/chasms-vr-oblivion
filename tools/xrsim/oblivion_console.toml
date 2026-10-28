@@ -1,0 +1,11 @@
+# A quick look after console commands (tools/xrsim_oblivion.ps1 -Console <file>): the save loads,
+# the commands run, one picture. Times are seconds from the runtime's start.
+duration = 40
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+
+[[capture]]
+t = 38
+name = "after"

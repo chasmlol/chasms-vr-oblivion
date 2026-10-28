@@ -3,4 +3,7 @@
 //! (git-ignored: the files are the game's).
 
 pub mod bsa;
+pub mod dds;
+pub mod export;
 pub mod nif;
+pub mod preview;

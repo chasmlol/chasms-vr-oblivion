@@ -37,6 +37,7 @@ fn startup() {
     tracing::info!("startup: the game's code is there after {:?}", t0.elapsed());
     render::install();
     crate::combat::install();
+    crate::console::install();
     tracing::info!("startup: hooks installed");
 }
 
@@ -47,6 +48,7 @@ pub extern "system" fn DllMain(inst: HMODULE, reason: u32, _reserved: *mut core:
         let dir = module_dir(inst);
         let _ = MOD_DIR.set(dir.clone());
         log::init(&dir.join("rustvr-oblivion.log"));
+        log::watch_access_violations();
         settings::load_from(&dir);
         game_settings::restore(&dir);
         let s = settings::get();

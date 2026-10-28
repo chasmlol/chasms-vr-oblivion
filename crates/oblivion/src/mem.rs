@@ -42,3 +42,34 @@ pub fn at<T: Copy>(addr: usize) -> Option<T> {
 pub fn deref(addr: usize) -> usize {
     at::<u32>(addr).unwrap_or(0) as usize
 }
+
+/// Writes `bytes` over the game's code at `addr`, if what's there is `expect` (the build the
+/// patch was made for). True if it's patched.
+#[cfg(windows)]
+pub fn patch_code(addr: usize, expect: &[u8], bytes: &[u8]) -> bool {
+    use windows::Win32::System::Diagnostics::Debug::FlushInstructionCache;
+    use windows::Win32::System::Memory::{PAGE_EXECUTE_READWRITE, PAGE_PROTECTION_FLAGS, VirtualProtect};
+    use windows::Win32::System::Threading::GetCurrentProcess;
+    if expect.len() != bytes.len() || !is_readable(addr as *const u8, expect.len()) {
+        return false;
+    }
+    let p = addr as *mut u8;
+    if unsafe { std::slice::from_raw_parts(p, expect.len()) } != expect {
+        return false;
+    }
+    let mut old = PAGE_PROTECTION_FLAGS(0);
+    if unsafe { VirtualProtect(p as *const _, bytes.len(), PAGE_EXECUTE_READWRITE, &mut old) }.is_err() {
+        return false;
+    }
+    unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len()) };
+    unsafe {
+        let _ = VirtualProtect(p as *const _, bytes.len(), old, &mut old);
+        let _ = FlushInstructionCache(GetCurrentProcess(), Some(p as *const _), bytes.len());
+    }
+    true
+}
+
+#[cfg(not(windows))]
+pub fn patch_code(_addr: usize, _expect: &[u8], _bytes: &[u8]) -> bool {
+    false
+}

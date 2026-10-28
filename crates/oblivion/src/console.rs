@@ -1,7 +1,9 @@
 //! Running console commands: a line of script compiled and run as the console does (a temporary
-//! `Script`, as xOBSE's `RunScriptLine`). For tests, `rustvr-console-test` in the game folder lists
-//! commands to run at set times (`<seconds> <command>` per line, seconds since the game's first
-//! frame), e.g. `8 LoadGame "Skip Tutorial"`; the file is read once and deleted.
+//! `Script`, as xOBSE's `RunScriptLine`). Base forms go by their hex form ids (the game keeps no
+//! editor ids for most of them: `player.placeatme 00025e6e 1 150 0`). For tests,
+//! `rustvr-console-test` in the game folder lists commands to run at set times (`<seconds>
+//! <command>` per line, seconds since the game's first frame), e.g. `8 LoadGame "Skip Tutorial"`;
+//! the file is read once and deleted.
 
 use std::sync::Mutex;
 
@@ -59,7 +61,8 @@ pub fn select_spell(_id: u32) -> bool {
 }
 
 /// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <hex id>` selects a spell,
-/// anything else is compiled and run as a line of script. True if it ran.
+/// `PlaceInFront <ref hex id> <metres>` puts a reference that far in front of the player, facing
+/// them (tests), anything else is compiled and run as a line of script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
@@ -67,10 +70,33 @@ pub fn run(line: &str) -> bool {
     if let Some(id) = line.strip_prefix("SelectSpell ") {
         return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(select_spell);
     }
+    if let Some(rest) = line.strip_prefix("PlaceInFront ") {
+        let mut it = rest.split_whitespace();
+        let (Some(r), Some(m)) = (it.next(), it.next().and_then(|m| m.parse::<f32>().ok())) else { return false };
+        return place_in_front(r, m);
+    }
     run_script(line)
 }
 
-/// Compiles and runs one line of script. True if it ran.
+/// Puts the reference `r` (its hex form id) `metres` in front of the player, on the player's
+/// level and facing them: the game's own `setpos` and `setangle`.
+fn place_in_front(r: &str, metres: f32) -> bool {
+    use crate::engine::{self, refr};
+    let p = engine::player();
+    let (Some(pos), Some(rot)) = (crate::mem::at::<[f32; 3]>(p + refr::POS), crate::mem::at::<[f32; 3]>(p + refr::ROT)) else { return false };
+    // Heading: 0 north (+y), turning east (+x).
+    let h = rot[2];
+    let d = metres * crate::camera::UNITS_PER_METER;
+    let (x, y) = (pos[0] + d * h.sin(), pos[1] + d * h.cos());
+    let facing = (h + std::f32::consts::PI).to_degrees().rem_euclid(360.0);
+    [format!("{r}.setpos x {x:.1}"), format!("{r}.setpos y {y:.1}"), format!("{r}.setpos z {:.1}", pos[2]), format!("{r}.setangle z {facing:.1}")].iter().all(|l| run_script(l))
+}
+
+/// Compile errors so far (a line ran if it compiled: what the game's run returns is the script's
+/// own result).
+static COMPILE_ERRORS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// Compiles and runs one line of script. True if it compiled (and so ran).
 #[cfg(target_arch = "x86")]
 pub fn run_script(line: &str) -> bool {
     use std::ffi::c_void;
@@ -89,9 +115,10 @@ pub fn run_script(line: &str) -> bool {
         std::mem::transmute::<usize, ThisFn>(CONSTRUCTOR)(script);
         std::mem::transmute::<usize, ThisFn>(MARK_TEMPORARY)(script);
         std::mem::transmute::<usize, SetTextFn>(SET_TEXT)(script, text.as_ptr() as *const u8);
-        let ok = std::mem::transmute::<usize, RunFn>(COMPILE_AND_RUN)(script, *state, 1, std::ptr::null_mut()) != 0;
+        let errors = COMPILE_ERRORS.load(std::sync::atomic::Ordering::Acquire);
+        std::mem::transmute::<usize, RunFn>(COMPILE_AND_RUN)(script, *state, 1, std::ptr::null_mut());
         std::mem::transmute::<usize, ThisFn>(DESTRUCTOR)(script);
-        ok
+        COMPILE_ERRORS.load(std::sync::atomic::Ordering::Acquire) == errors
     }
 }
 
@@ -99,6 +126,62 @@ pub fn run_script(line: &str) -> bool {
 pub fn run_script(_line: &str) -> bool {
     false
 }
+
+/// The console's print (`ConsoleManager::Print(this, fmt, va_list)`, thiscall; xOBSE's
+/// `Console_Print` calls it), the script compiler's error report (cdecl `(buffer, fmt, ...)`: it
+/// prints only while the console is open) and the game's own `vsprintf`.
+const CONSOLE_PRINT: usize = 0x0058_5C90;
+const COMPILE_ERROR: usize = 0x004F_CE30;
+const VSPRINTF: usize = 0x0098_2820;
+
+/// Everything the game prints to its console goes to the log as well, and why a line of script
+/// didn't compile.
+#[cfg(target_arch = "x86")]
+mod print {
+    use std::ffi::c_void;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static REAL: AtomicUsize = AtomicUsize::new(0);
+    static REAL_ERROR: AtomicUsize = AtomicUsize::new(0);
+
+    pub fn install() {
+        crate::hooks::install_into(super::CONSOLE_PRINT as *const (), print as *const (), "Console print", &REAL);
+        crate::hooks::install_into(super::COMPILE_ERROR as *const (), compile_error as *const (), "Script compile error", &REAL_ERROR);
+    }
+
+    type Vsprintf = unsafe extern "C" fn(*mut u8, *const u8, *const c_void) -> i32;
+
+    fn format(fmt: *const u8, args: *const c_void) -> String {
+        // (The game formats into 1 KiB itself.)
+        let mut buf = [0u8; 4096];
+        let n = unsafe { std::mem::transmute::<usize, Vsprintf>(super::VSPRINTF)(buf.as_mut_ptr(), fmt, args) };
+        String::from_utf8_lossy(&buf[..(n.max(0) as usize).min(buf.len())]).trim_end().to_owned()
+    }
+
+    /// The compiler's messages take a few word-sized arguments (names, line numbers): passed on
+    /// as they came.
+    #[allow(clippy::too_many_arguments)]
+    unsafe extern "C" fn compile_error(buffer: usize, fmt: *const u8, a: usize, b: usize, c: usize, d: usize, e: usize, f: usize) -> i32 {
+        type Report = unsafe extern "C" fn(usize, *const u8, usize, usize, usize, usize, usize, usize) -> i32;
+        if !fmt.is_null() {
+            let args = [a, b, c, d, e, f];
+            tracing::warn!("script compile: {}", format(fmt, args.as_ptr() as *const c_void));
+            super::COMPILE_ERRORS.fetch_add(1, Ordering::AcqRel);
+        }
+        unsafe { std::mem::transmute::<usize, Report>(REAL_ERROR.load(Ordering::Acquire))(buffer, fmt, a, b, c, d, e, f) }
+    }
+
+    unsafe extern "thiscall" fn print(this: *mut c_void, fmt: *const u8, args: *mut c_void) -> i32 {
+        type Print = unsafe extern "thiscall" fn(*mut c_void, *const u8, *mut c_void) -> i32;
+        if !fmt.is_null() {
+            tracing::info!("game console: {}", format(fmt, args));
+        }
+        unsafe { std::mem::transmute::<usize, Print>(REAL.load(Ordering::Acquire))(this, fmt, args) }
+    }
+}
+
+#[cfg(target_arch = "x86")]
+pub use print::install;
 
 struct Test {
     start: std::time::Instant,

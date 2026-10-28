@@ -37,7 +37,62 @@ mod win {
     static REAL_FRAME: AtomicUsize = AtomicUsize::new(0);
     type FrameFn = unsafe extern "thiscall" fn(*mut c_void) -> i32;
 
+    /// The game's background thread (0xB3F940: it loads and changes the scene graph, cells
+    /// and actors' 3D) shares the scene with the render through a semaphore: the world render takes
+    /// it at its start (`mov eax, [B3F940]` at 0x40C8F7, then its wait) and gives it back at its end
+    /// (`mov esi, [B3F940]` at 0x40D059, then its release). Rendered once per eye, the thread could
+    /// run between the eyes and change the scene under the second. Those two places read these
+    /// instead (patched at install): the first eye takes the lock and keeps it, the second gives it
+    /// back; a single render does both, as the game does.
+    static LOCK_TAKE: AtomicUsize = AtomicUsize::new(0);
+    static LOCK_GIVE: AtomicUsize = AtomicUsize::new(0);
+    const BACKGROUND: usize = 0x00B3_F940;
+    const TAKE_AT: usize = 0x0040_C8F7;
+    const GIVE_AT: usize = 0x0040_D059;
+
+    fn patch_lock() {
+        let addr = |a: &AtomicUsize| (a as *const AtomicUsize as u32).to_le_bytes();
+        let [b0, b1, b2, b3] = (BACKGROUND as u32).to_le_bytes();
+        let [t0, t1, t2, t3] = addr(&LOCK_TAKE);
+        let [g0, g1, g2, g3] = addr(&LOCK_GIVE);
+        let take = crate::mem::patch_code(TAKE_AT, &[0xA1, b0, b1, b2, b3], &[0xA1, t0, t1, t2, t3]);
+        let give = crate::mem::patch_code(GIVE_AT, &[0x8B, 0x35, b0, b1, b2, b3], &[0x8B, 0x35, g0, g1, g2, g3]);
+        if take && give {
+            tracing::info!("render: both eyes are rendered under one hold of the background thread's lock");
+        } else {
+            tracing::error!("render: the background thread's lock isn't held across the eyes (patched: take {take}, give {give})");
+        }
+    }
+
+    /// The lock as the next render takes and gives it.
+    fn set_lock(take: bool, give: bool) {
+        let bg = crate::mem::deref(BACKGROUND);
+        LOCK_TAKE.store(if take { bg } else { 0 }, Ordering::Release);
+        LOCK_GIVE.store(if give { bg } else { 0 }, Ordering::Release);
+    }
+
+    /// The actors' shadows (0x4073D0, thiscall, called at the start of the world render): it picks
+    /// the actors that cast shadows, renders their shadow maps (from the lights: the same for
+    /// both eyes) and hides the caster of a shadow that has faded out. Run a second time in the
+    /// same frame it left actors hidden from the second eye, so it runs once a frame, with the
+    /// first eye; the second eye uses the same shadow maps.
+    const ACTOR_SHADOWS: usize = 0x0040_73D0;
+    static REAL_SHADOWS: AtomicUsize = AtomicUsize::new(0);
+    /// The eye being rendered is the frame's second (its shadows are done).
+    static SECOND_EYE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    unsafe extern "thiscall" fn actor_shadows(this: *mut c_void) -> i32 {
+        if SECOND_EYE.load(Ordering::Acquire) {
+            return 0;
+        }
+        let real: unsafe extern "thiscall" fn(*mut c_void) -> i32 = unsafe { std::mem::transmute(REAL_SHADOWS.load(Ordering::Acquire)) };
+        unsafe { real(this) }
+    }
+
     pub fn install() {
+        set_lock(true, true);
+        patch_lock();
+        hooks::install_into(ACTOR_SHADOWS as *const (), actor_shadows as *const (), "actor shadows", &REAL_SHADOWS);
         hooks::install_into(engine::FRAME as *const (), frame_hook as *const (), "Main::Frame", &REAL_FRAME);
         hooks::install_into(engine::RENDER as *const (), render_hook as *const (), "Main::Render", &REAL_RENDER);
     }
@@ -57,6 +112,10 @@ mod win {
 
     unsafe extern "thiscall" fn render_hook(this: *mut c_void, arg: i32) -> i32 {
         let real: RenderFn = unsafe { std::mem::transmute(REAL_RENDER.load(Ordering::Acquire)) };
+        // A single render takes and gives the background thread's lock, and does its shadows, as
+        // the game's does.
+        set_lock(true, true);
+        SECOND_EYE.store(false, Ordering::Release);
         let stereo = hooks::guard("Render", None, prepare);
         let Some((snap, game, cam)) = stereo else { return unsafe { real(this, arg) } };
         let view = snap.view.expect("prepared with a view");
@@ -90,9 +149,13 @@ mod win {
                 );
             }
             camera::write(cam, &s);
+            set_lock(eye == 0, eye == 1);
+            SECOND_EYE.store(eye == 1, Ordering::Release);
             result = unsafe { real(this, arg) };
             captured[eye] = hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false));
         }
+        set_lock(true, true);
+        SECOND_EYE.store(false, Ordering::Release);
         camera::write(cam, &game);
         if let Some(f) = arms_flags {
             unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f) };

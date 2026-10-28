@@ -121,4 +121,10 @@ impl Archives {
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.bsas.iter().flat_map(|b| b.names())
     }
+
+    /// Whether the game has the file (loose or in an archive).
+    pub fn contains(&self, path: &str) -> bool {
+        let key = normalise(path);
+        self.data.join(key.replace('\\', "/")).is_file() || self.bsas.iter().any(|b| b.contains(&key))
+    }
 }

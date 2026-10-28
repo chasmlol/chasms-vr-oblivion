@@ -1,12 +1,17 @@
 //! `oblivion-extract`: reads the user's own Oblivion install (read-only).
 //!
 //!     oblivion-extract [--game <Oblivion folder>] check <prefix>...
+//!     oblivion-extract export [--out <folder>] <prefix>...
+//!     oblivion-extract preview <model> <png>
 //!
 //! `check` parses every model under the prefixes and reports which it can't read (a test of the
-//! model reader against the real files).
+//! model reader against the real files). `export` writes every model under the prefixes, and the
+//! textures they use, into the runtime's cache (`local_assets/oblivion`, see
+//! `oblivion_assets::export`). `preview` draws one converted model from three sides.
 
 use anyhow::Result;
-use oblivion_assets::{bsa::Archives, nif::Nif};
+use oblivion_assets::export::{self, Part};
+use oblivion_assets::{bsa::Archives, nif::Nif, preview};
 use std::path::PathBuf;
 
 const DEFAULT_GAME: &str = r"C:\Program Files (x86)\Steam\steamapps\common\Oblivion";
@@ -51,8 +56,130 @@ fn main() -> Result<()> {
                 dump(&nif);
             }
         }
-        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>..."),
+        Some("export") => export(&archives, &args[1..])?,
+        Some("preview") if args.len() == 3 => {
+            let skeletons = Skeletons::load(&archives)?;
+            let path = oblivion_assets::bsa::normalise(&args[1]);
+            let nif = Nif::parse(&archives.read(&path)?)?;
+            let c = export::convert(&nif, &path, skeletons.for_model(&nif), Part::All, &|p| archives.contains(p));
+            preview::save(&c.model, std::path::Path::new(&args[2]))?;
+            println!("{path}: {} meshes, {} bones -> {}", c.model.meshes.len(), c.model.bones.len(), args[2]);
+        }
+        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>... | export [--out <folder>] <prefix>... | preview <model> <png>"),
     }
+    Ok(())
+}
+
+/// The game's two skeletons: everyone's, and the beast races' (with a tail).
+struct Skeletons {
+    human: (String, export::Skeleton),
+    beast: (String, export::Skeleton),
+}
+
+impl Skeletons {
+    fn load(archives: &Archives) -> Result<Skeletons> {
+        let load = |p: &str| -> Result<(String, export::Skeleton)> { Ok((p.to_owned(), export::Skeleton::from_nif(&Nif::parse(&archives.read(p)?)?))) };
+        Ok(Skeletons { human: load("meshes\\characters\\_male\\skeleton.nif")?, beast: load("meshes\\characters\\_male\\skeletonbeast.nif")? })
+    }
+
+    /// The skeleton a skinned model was made for: the beasts' when it has a tail.
+    fn for_model(&self, nif: &Nif) -> Option<&export::Skeleton> {
+        let tail = nif.blocks.iter().any(|b| matches!(b, oblivion_assets::nif::Block::Node { av, .. } if av.name.to_ascii_lowercase().starts_with("bip01 tail")));
+        Some(if tail { &self.beast.1 } else { &self.human.1 })
+    }
+}
+
+/// Converts every model under the prefixes (and the textures they use) into `local_assets/oblivion`
+/// (or `--out`), with an `index.toml` of what each key is.
+fn export(archives: &Archives, args: &[String]) -> Result<()> {
+    use rustvr_asset::{Index, Item, ItemKind};
+    let mut args = args.to_vec();
+    let mut out = rustvr_asset::default_root().join("oblivion");
+    if args.first().map(String::as_str) == Some("--out") && args.len() > 1 {
+        out = PathBuf::from(args.remove(1));
+        args.remove(0);
+    }
+    let prefixes: Vec<String> = args.iter().map(|p| oblivion_assets::bsa::normalise(p)).collect();
+    let skeletons = Skeletons::load(archives)?;
+    let index_path = out.join("index.toml");
+    let mut index: Index = std::fs::read_to_string(&index_path).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
+    index.game = "oblivion".into();
+    index.version = rustvr_asset::FORMAT_VERSION;
+    let mut items: std::collections::BTreeMap<String, Item> = index.items.drain(..).map(|i| (i.key.clone(), i)).collect();
+    let mut textures = std::collections::BTreeSet::new();
+    let mut add = |key: String, kind: ItemKind, name: String, model: &rustvr_asset::Model| -> Result<()> {
+        rustvr_asset::save_model(&out, &key, model)?;
+        items.insert(key.clone(), Item { key, kind, name, rig: None, hands: None, mag_size: None });
+        Ok(())
+    };
+    // The skeletons themselves (bones, no meshes).
+    for (path, s) in [&skeletons.human, &skeletons.beast] {
+        let model = rustvr_asset::Model { version: rustvr_asset::FORMAT_VERSION, source: path.clone(), bones: s.bones.clone(), ..Default::default() };
+        add(export::model_key(path), ItemKind::Body, export::normalise(path, "meshes\\"), &model)?;
+    }
+    let names: Vec<String> = archives.names().filter(|n| n.ends_with(".nif") && prefixes.iter().any(|p| n.starts_with(p.as_str()))).map(str::to_owned).collect();
+    let (mut models, mut failed) = (0, 0);
+    for path in names {
+        if path.ends_with("\\skeleton.nif") || path.ends_with("\\skeletonbeast.nif") {
+            continue;
+        }
+        let nif = match archives.read(&path).and_then(|d| Nif::parse(&d)) {
+            Ok(n) => n,
+            Err(e) => {
+                failed += 1;
+                eprintln!("{path}: {e:#}");
+                continue;
+            }
+        };
+        let skinned = nif.blocks.iter().any(|b| matches!(b, oblivion_assets::nif::Block::Shape { skin, .. } if *skin >= 0));
+        let skeleton = if skinned { skeletons.for_model(&nif) } else { None };
+        let exists = |p: &str| archives.contains(p);
+        let rel = export::normalise(&path, "meshes\\");
+        let kind = if rel.starts_with("weapons\\") {
+            ItemKind::Weapon
+        } else if skinned || rel.starts_with("characters\\") {
+            ItemKind::Body
+        } else {
+            ItemKind::Prop
+        };
+        // A weapon with its scabbard: the weapon alone, and the scabbard alone.
+        let parts: Vec<(String, String, Part)> = if nif.find("Scb").is_some() {
+            vec![(export::model_key(&path), rel.clone(), Part::Without("Scb")), (export::variant_key(&path, "scb"), format!("{rel}#scb"), Part::Only("Scb"))]
+        } else {
+            vec![(export::model_key(&path), rel.clone(), Part::All)]
+        };
+        for (key, name, part) in parts {
+            let c = export::convert(&nif, &path, skeleton, part, &exists);
+            if c.model.meshes.is_empty() {
+                continue;
+            }
+            textures.extend(c.textures);
+            add(key, kind, name, &c.model)?;
+            models += 1;
+        }
+    }
+    let (mut wrote, mut missing) = (0, 0);
+    for path in &textures {
+        let key = export::texture_key(path);
+        if out.join("textures").join(format!("{key}.{}", rustvr_asset::TEXTURE_EXT)).is_file() {
+            continue;
+        }
+        match archives.read(path).and_then(|d| oblivion_assets::dds::parse(&d, path)) {
+            Ok(t) => {
+                rustvr_asset::save_texture(&out, &key, &t)?;
+                wrote += 1;
+            }
+            Err(e) => {
+                missing += 1;
+                if missing <= 10 {
+                    eprintln!("{path}: {e:#}");
+                }
+            }
+        }
+    }
+    index.items = items.into_values().collect();
+    std::fs::write(&index_path, toml::to_string(&index)?)?;
+    println!("{models} models ({failed} unreadable), {wrote} new textures ({missing} missing) in {}", out.display());
     Ok(())
 }
 

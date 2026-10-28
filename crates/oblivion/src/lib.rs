@@ -10,6 +10,9 @@
 //!   the headset's eye is and given that eye's field of view ([`camera`]).
 //! * **The link** ([`link`]): the runtime's frame, where tracking space is in Oblivion's world, and
 //!   what the game is doing.
+//! * **Combat** ([`combat`], [`weapons`]): the game's creatures and spells to the runtime, the
+//!   equipped weapon as the object in the hand (the game's own model), and what the hands did
+//!   (hits, casts) done by the game.
 //!
 //! The rest is plumbing: the DLL proxy ([`proxy`]), the game's addresses ([`engine`]), hooking
 //! ([`hooks`], [`iat`]), the game window ([`window`]), the game's settings ([`game_settings`]) and
@@ -38,4 +41,5 @@ pub mod player;
 pub mod proxy;
 pub mod render;
 pub mod settings;
+pub mod weapons;
 pub mod window;

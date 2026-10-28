@@ -26,12 +26,25 @@ use rustvr_protocol::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-/// `ActorProcessManager` (a global struct) and its list of high-process actors (`tList`, inline
-/// first node).
+/// `ActorProcessManager` (a global struct) and its list of high-process actors (`tList` with an
+/// inline first node, then its tail: every actor the game is fully processing around the player).
+/// In this build it's at +0x68, not where xOBSE's header has `highActors` (+0x5C holds no list:
+/// walking it reads a creature's vtable as an actor).
 const PROCESS_MANAGER: usize = 0x00B3_BD00;
-const HIGH_ACTORS: usize = 0x5C;
+const ACTORS_LIST: usize = 0x68;
+/// Creatures further than this aren't sent (metres).
+const ACTORS_RANGE: f32 = 30.0;
 /// `TESForm::refID`.
 const FORM_ID: usize = 0x0C;
+/// The vtables of the game's actors (`Character`, `Creature`). Anything else in the list (an object
+/// being made or taken away, as a save loads or a creature is placed) is passed over: calling its
+/// virtuals jumps to garbage.
+const ACTOR_VTABLES: [usize; 2] = [0x00A6_FC9C, 0x00A7_10F4];
+
+/// Whether `actor` is one of the game's actors as it stands (not the player).
+fn is_actor(actor: usize) -> bool {
+    actor != 0 && ACTOR_VTABLES.contains(&mem::deref(actor))
+}
 /// `TESObjectREFR`: its base form, its 3D root.
 const BASE_FORM: usize = 0x1C;
 const NI_NODE: usize = 0x3C;
@@ -74,7 +87,7 @@ const NODE_NAME: usize = 0x08;
 /// Spell types the hand casts: a spell, a power, a lesser power.
 const CASTABLE_TYPES: [u32; 3] = [0, 2, 3];
 
-fn read_str(p: usize) -> String {
+pub(crate) fn read_str(p: usize) -> String {
     let mut out = Vec::new();
     for i in 0..128 {
         match mem::at::<u8>(p + i) {
@@ -168,16 +181,23 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
     let mut table: Box<Actors> = bytemuck::zeroed_box();
     let mut by_id = HashMap::new();
     let player = engine::player();
-    let mut node = PROCESS_MANAGER + HIGH_ACTORS;
+    let me = mem::at::<[f32; 3]>(player + refr::POS).map(|p| camera::basis().point_from_game(Vec3::from(p)));
+    let mut node = PROCESS_MANAGER + ACTORS_LIST;
     let mut guard = 0;
     while node != 0 && guard < 256 && (table.count as usize) < MAX_ACTORS {
         guard += 1;
         let actor = mem::deref(node);
         node = mem::deref(node + 4);
-        if actor == 0 || actor == player {
+        if actor == player || !is_actor(actor) {
             continue;
         }
         let Some(id) = mem::at::<u32>(actor + FORM_ID) else { continue };
+        let at = mem::at::<[f32; 3]>(actor + refr::POS).map(|p| camera::basis().point_from_game(Vec3::from(p)));
+        if let (Some(me), Some(at)) = (me, at)
+            && me.distance(at) > ACTORS_RANGE
+        {
+            continue;
+        }
         let root = mem::deref(actor + NI_NODE);
         if root == 0 {
             continue;
@@ -327,7 +347,8 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
     for ev in events {
         match ev.kind {
             CE_HIT => {
-                let Some(&target) = actors.get(&ev.actor) else { continue };
+                // (Gone since it was published: the game's frame ran in between.)
+                let Some(&target) = actors.get(&ev.actor).filter(|&&a| is_actor(a)) else { continue };
                 if ev.flags & CEF_GLANCING != 0 || ev.strength < 0.3 {
                     tracing::info!("combat: a glancing blow on {:#x}: nothing lands", ev.actor);
                     continue;
@@ -375,7 +396,7 @@ fn cast(player: usize, spell: usize, ev: &CombatEvent, actors: &HashMap<u32, usi
         rot.write(pitch);
         rot.add(2).write(heading.rem_euclid(std::f32::consts::TAU));
     }
-    let target = if ev.actor != 0 { actors.get(&ev.actor).copied().unwrap_or(0) } else { 0 };
+    let target = if ev.actor != 0 { actors.get(&ev.actor).copied().filter(|&a| is_actor(a)).unwrap_or(0) } else { 0 };
     tracing::info!("combat: the player casts {:#x} from {pos:?}, pitch {pitch:.2}, heading {heading:.2}{}", ev.what, if target != 0 { " on its target" } else { "" });
     unsafe { std::mem::transmute::<usize, Cast>(CAST_IMMEDIATE)(caster, item, target, 0) };
     unsafe {
@@ -423,8 +444,12 @@ pub fn publish() {
     let k = known.get_or_insert_with(|| Known { actors: HashMap::new(), spells: HashMap::new(), sent: None, frame: 0 });
     k.actors = actors;
     k.frame += 1;
+    if k.frame % 180 == 2 {
+        log_actors(&table);
+    }
     let spells_now = (k.frame % 10 == 1).then(spells);
     crate::link::with_adapter(|a| {
+        crate::weapons::publish(a);
         a.write_actors(&table);
         if let Some((s, by_id)) = spells_now {
             let key: Vec<(u32, u32, u32)> = s.spells[..s.count as usize].iter().map(|x| (x.id, x.flags, x.cost as u32)).collect();
@@ -441,6 +466,21 @@ pub fn publish() {
             k.spells = by_id;
         }
     });
+}
+
+/// The creatures published, where each is from the player (metres, the protocol's axes).
+fn log_actors(table: &Actors) {
+    let player = engine::player();
+    let Some(feet) = mem::at::<[f32; 3]>(player + refr::POS) else { return };
+    let me = camera::basis().point_from_game(Vec3::from(feet));
+    let list: Vec<String> = table.actors[..table.count as usize]
+        .iter()
+        .map(|a| {
+            let c = (Vec3::from_array(a.parts[0].a) + Vec3::from_array(a.parts[0].b)) * 0.5 - me;
+            format!("{:#x} at ({:.1}, {:.1}, {:.1}) health {:.2} parts {}", a.id, c.x, c.y, c.z, a.health, a.count)
+        })
+        .collect();
+    tracing::info!("combat: {} creatures: {}", list.len(), list.join("; "));
 }
 
 /// Before the game's frame: what the hands did since the last one, done by the game.

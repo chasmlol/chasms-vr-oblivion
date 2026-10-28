@@ -1,0 +1,78 @@
+# The equipped weapon drawn and swung (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load.txt):
+# after the save loads (a tap of the stick back stops its Auto Move), the right hand reaches across
+# to the left hip where a one-handed weapon hangs, takes it, draws it out in front, raises it and
+# cuts down. Times are seconds from the runtime's start.
+duration = 52
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { pos = [-0.25, -0.55, 0.15], stick = [0, 0] }
+right = { pos = [0.25, -0.55, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 30
+left = { stick = [0, 0] }
+
+[[key]]
+t = 30.1
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.4
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.5
+left = { stick = [0, 0] }
+
+[[capture]]
+t = 33.5
+name = "sheathed"
+
+# Across to the left hip, then take hold.
+[[key]]
+t = 34
+right = { pos = [0.25, -0.55, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 35
+right = { pos = [-0.17, -0.55, 0.05], pitch = -60, squeeze = 0 }
+
+[[key]]
+t = 35.4
+right = { squeeze = 0 }
+
+[[key]]
+t = 35.6
+right = { squeeze = 1 }
+
+# Drawn out in front, the blade up.
+[[key]]
+t = 36.6
+right = { pos = [0.2, -0.3, 0.4], pitch = 0, squeeze = 1 }
+
+[[capture]]
+t = 37.5
+name = "drawn"
+
+[[key]]
+t = 38.5
+right = { pos = [0.25, 0.05, 0.3], pitch = 40, squeeze = 1 }
+
+[[capture]]
+t = 39.2
+name = "raised"
+
+# A cut down and across.
+[[key]]
+t = 39.6
+right = { pos = [0.25, 0.05, 0.3], pitch = 40, squeeze = 1 }
+
+[[key]]
+t = 39.9
+right = { pos = [0.0, -0.45, 0.55], pitch = -40, squeeze = 1 }
+
+[[capture]]
+t = 40.5
+name = "cut"
