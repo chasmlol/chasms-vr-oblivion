@@ -8,6 +8,13 @@
 //! target's Direct3D 12 resource is copied on our queue into a texture shared with the adapter's
 //! Direct3D 11 device, and a shared fence says when; [`deliver`] waits for the fence on the Direct3D
 //! 11 side and copies into the runtime's texture.
+//!
+//! An eye's depth ([`capture_depth`]): the game's depth buffer after that eye (multisampled, as the
+//! game's antialiasing has it, resolved to each pixel's nearest sample first): its depth plane
+//! (24 bits in each 32) is copied into a buffer, laid out as Direct3D 12 says it copies, and from
+//! there into a shared texture as its bytes, `B8G8R8A8` (Direct3D 11 opens neither a shared depth
+//! format nor a 32-bit integer one); [`deliver_depth`] turns it into the runtime's linear depth
+//! ([`crate::depth`]).
 
 #[cfg(all(windows, target_arch = "x86"))]
 pub use win::*;
@@ -15,6 +22,7 @@ pub use win::*;
 #[cfg(all(windows, target_arch = "x86"))]
 mod win {
     use crate::hooks;
+    use anyhow::Context;
     use rustvr_gpu::Gpu;
     use std::cell::Cell;
     use std::ffi::c_void;
@@ -25,9 +33,12 @@ mod win {
     use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
     use windows::Win32::Graphics::Direct3D9::*;
     use windows::Win32::Graphics::Direct3D9on12::{D3D9ON12_ARGS, Direct3DCreate9On12, IDirect3DDevice9On12};
-    use windows::Win32::Graphics::Direct3D11::{ID3D11Device1, ID3D11Device5, ID3D11DeviceContext4, ID3D11Fence, ID3D11Texture2D};
+    use windows::Win32::Graphics::Direct3D11::{
+        D3D11_SHADER_RESOURCE_VIEW_DESC, D3D11_SHADER_RESOURCE_VIEW_DESC_0, D3D11_TEX2D_SRV, ID3D11Device1, ID3D11Device5, ID3D11DeviceContext4, ID3D11Fence,
+        ID3D11ShaderResourceView, ID3D11Texture2D,
+    };
     use windows::Win32::Graphics::Direct3D12::*;
-    use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC};
+    use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC};
     use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
     use windows::Win32::System::Threading::{CreateEventW, INFINITE, WaitForSingleObject};
     use windows::core::{IUnknown, Interface, PCWSTR, s};
@@ -70,6 +81,25 @@ mod win {
         /// The fence value each kind's latest copy is done at.
         ready: [u64; KINDS],
         event: HANDLE,
+        /// The eyes' depth, once the game's depth buffer has been seen.
+        depth: Option<Depth>,
+    }
+
+    /// Each eye's depth: the game's depth buffer as it was after that eye, in a twin shared between
+    /// Direct3D 12 and 11, with its own command lists (on the bridge's fence).
+    struct Depth {
+        size: (u32, u32),
+        /// How the depth plane copies into a buffer, and the buffers.
+        footprint: D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
+        buffers: Vec<ID3D12Resource>,
+        /// A multisampled depth buffer is resolved into these first (each pixel's nearest sample).
+        resolved: Vec<ID3D12Resource>,
+        shared12: Vec<ID3D12Resource>,
+        srv: Vec<ID3D11ShaderResourceView>,
+        allocators: Vec<ID3D12CommandAllocator>,
+        lists: Vec<ID3D12GraphicsCommandList>,
+        used: [u64; 2],
+        ready: [u64; 2],
     }
     unsafe impl Send for Bridge {}
     static BRIDGE: Mutex<Option<Bridge>> = Mutex::new(None);
@@ -264,7 +294,234 @@ mod win {
         unsafe { windows::Win32::Foundation::CloseHandle(handle) }?;
         let event = unsafe { CreateEventW(None, false, false, PCWSTR::null()) }?;
         tracing::info!("d3d9: bridge ready ({w}x{h})");
-        Ok(Bridge { size: (w, h), tex9, shared12, shared11, allocators, lists, used: vec![0; KINDS], fence12, fence11: fence11.ok_or_else(|| anyhow::anyhow!("no fence"))?, value: 0, ready: [0; KINDS], event })
+        Ok(Bridge {
+            size: (w, h),
+            tex9,
+            shared12,
+            shared11,
+            allocators,
+            lists,
+            used: vec![0; KINDS],
+            fence12,
+            fence11: fence11.ok_or_else(|| anyhow::anyhow!("no fence"))?,
+            value: 0,
+            ready: [0; KINDS],
+            event,
+            depth: None,
+        })
+    }
+
+    /// A texture of `format` shared between our Direct3D 12 device and the adapter's Direct3D 11.
+    fn shared_texture(d12: &D3d12, dev11: &ID3D11Device1, w: u32, h: u32, format: DXGI_FORMAT, flags: D3D12_RESOURCE_FLAGS) -> anyhow::Result<(ID3D12Resource, ID3D11Texture2D)> {
+        let desc = D3D12_RESOURCE_DESC {
+            Dimension: D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+            Width: w as u64,
+            Height: h,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: format,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            Flags: flags,
+            ..Default::default()
+        };
+        let heap = D3D12_HEAP_PROPERTIES { Type: D3D12_HEAP_TYPE_DEFAULT, ..Default::default() };
+        let mut r: Option<ID3D12Resource> = None;
+        unsafe { d12.device.CreateCommittedResource(&heap, D3D12_HEAP_FLAG_SHARED, &desc, D3D12_RESOURCE_STATE_COMMON, None, &mut r) }.context("made")?;
+        let r = r.ok_or_else(|| anyhow::anyhow!("no resource"))?;
+        let handle = unsafe { d12.device.CreateSharedHandle(&r, None, GENERIC_ALL.0, PCWSTR::null()) }.context("shared")?;
+        let t11 = unsafe { dev11.OpenSharedResource1::<ID3D11Texture2D>(handle) }.context("opened");
+        unsafe { windows::Win32::Foundation::CloseHandle(handle) }?;
+        Ok((r, t11?))
+    }
+
+    fn make_depth(d12: &D3d12, gpu: &Gpu, src: &D3D12_RESOURCE_DESC) -> anyhow::Result<Depth> {
+        let (w, h) = (src.Width as u32, src.Height);
+        let multisampled = src.SampleDesc.Count > 1;
+        // (A multisampled depth plane doesn't copy: it's resolved into one of these first.)
+        let single = D3D12_RESOURCE_DESC { SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 }, Alignment: 0, ..*src };
+        let src = &single;
+        // The depth plane (the first subresource), as it copies into a buffer. (The shared texture
+        // holds the words as bytes, B8G8R8A8: Direct3D 11 opens neither a 32-bit integer texture nor
+        // one that isn't a render target.)
+        let mut footprint = D3D12_PLACED_SUBRESOURCE_FOOTPRINT::default();
+        let mut bytes = 0u64;
+        unsafe { d12.device.GetCopyableFootprints(src, 0, 1, 0, Some(&mut footprint), None, None, Some(&mut bytes)) };
+        tracing::info!("d3d9: the depth plane copies as {:?}, {} bytes a row ({bytes} bytes)", footprint.Footprint.Format, footprint.Footprint.RowPitch);
+        anyhow::ensure!(footprint.Footprint.Format != DXGI_FORMAT_UNKNOWN && bytes > 0 && bytes != u64::MAX, "the depth plane doesn't copy");
+        let dev11: ID3D11Device1 = gpu.device.cast()?;
+        let (mut buffers, mut resolved, mut shared12, mut srv, mut allocators, mut lists) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        for _ in 0..2 {
+            let desc = D3D12_RESOURCE_DESC {
+                Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
+                Width: bytes,
+                Height: 1,
+                DepthOrArraySize: 1,
+                MipLevels: 1,
+                SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+                Layout: D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+                ..Default::default()
+            };
+            let heap = D3D12_HEAP_PROPERTIES { Type: D3D12_HEAP_TYPE_DEFAULT, ..Default::default() };
+            let mut buf: Option<ID3D12Resource> = None;
+            unsafe { d12.device.CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON, None, &mut buf) }.context("the buffer")?;
+            buffers.push(buf.ok_or_else(|| anyhow::anyhow!("no buffer"))?);
+            let (r, t11) = shared_texture(d12, &dev11, w, h, DXGI_FORMAT_B8G8R8A8_UNORM, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET).context("the shared texture")?;
+            let desc = D3D11_SHADER_RESOURCE_VIEW_DESC {
+                Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                ViewDimension: windows::Win32::Graphics::Direct3D::D3D11_SRV_DIMENSION_TEXTURE2D,
+                Anonymous: D3D11_SHADER_RESOURCE_VIEW_DESC_0 { Texture2D: D3D11_TEX2D_SRV { MostDetailedMip: 0, MipLevels: 1 } },
+            };
+            let mut v = None;
+            unsafe { gpu.device.CreateShaderResourceView(&t11, Some(&desc), Some(&mut v)) }.context("the view")?;
+            shared12.push(r);
+            srv.push(v.ok_or_else(|| anyhow::anyhow!("no view"))?);
+            let a: ID3D12CommandAllocator = unsafe { d12.device.CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT) }?;
+            let l: ID3D12GraphicsCommandList = unsafe { d12.device.CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, &a, None) }?;
+            unsafe { l.Close() }?;
+            allocators.push(a);
+            lists.push(l);
+            if multisampled {
+                let heap = D3D12_HEAP_PROPERTIES { Type: D3D12_HEAP_TYPE_DEFAULT, ..Default::default() };
+                let mut r: Option<ID3D12Resource> = None;
+                unsafe { d12.device.CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, src, D3D12_RESOURCE_STATE_COMMON, None, &mut r) }.context("the resolved depth")?;
+                resolved.push(r.ok_or_else(|| anyhow::anyhow!("no resource"))?);
+            }
+        }
+        tracing::info!("d3d9: depth bridge ready ({w}x{h}{})", if multisampled { ", resolved from its samples" } else { "" });
+        Ok(Depth { size: (w, h), footprint, buffers, resolved, shared12, srv, allocators, lists, used: [0; 2], ready: [0; 2] })
+    }
+
+    /// Copies the game's depth buffer as it is now (after `eye`'s render) into that eye's shared
+    /// depth. False if there's no bridge or no depth buffer.
+    pub fn capture_depth(dev: &IDirect3DDevice9, gpu: &Gpu, eye: usize) -> bool {
+        let d12 = D3D12.lock().unwrap();
+        let Some(d12) = d12.as_ref() else { return false };
+        let mut bridge = BRIDGE.lock().unwrap();
+        let Some(b) = bridge.as_mut() else { return false };
+        match copy_depth(dev, d12, gpu, b, eye) {
+            Ok(()) => true,
+            Err(e) => {
+                // (No depth buffer bound is no news: the menus, loading.)
+                let msg = format!("{e:#}");
+                static SAID: Mutex<Vec<String>> = Mutex::new(Vec::new());
+                let mut said = SAID.lock().unwrap();
+                if !said.contains(&msg) && said.len() < 8 {
+                    tracing::warn!("d3d9: depth {eye}: {msg}");
+                    said.push(msg);
+                }
+                false
+            }
+        }
+    }
+
+    fn copy_depth(dev: &IDirect3DDevice9, d12: &D3d12, gpu: &Gpu, b: &mut Bridge, eye: usize) -> anyhow::Result<()> {
+        let ds = unsafe { dev.GetDepthStencilSurface() }.context("no depth buffer")?;
+        let on12: IDirect3DDevice9On12 = dev.cast()?;
+        // (A surface is a resource, but doesn't answer for one when asked: borrowed as one.)
+        let raw_ds = ds.as_raw();
+        let Some(res9) = (unsafe { IDirect3DResource9::from_raw_borrowed(&raw_ds) }) else { return Ok(()) };
+        let mut raw: *mut c_void = std::ptr::null_mut();
+        unsafe { on12.UnwrapUnderlyingResource(res9, &d12.queue, &ID3D12Resource::IID, &mut raw) }.context("unwrapped")?;
+        let src = unsafe { ID3D12Resource::from_raw(raw) };
+        let sd = unsafe { src.GetDesc() };
+        if b.depth.as_ref().is_none_or(|d| d.size != (sd.Width as u32, sd.Height)) {
+            tracing::info!("d3d9: the game's depth buffer: {}x{} {:?} x{} samples, flags {:?}", sd.Width, sd.Height, sd.Format, sd.SampleDesc.Count, sd.Flags);
+            match make_depth(d12, gpu, &sd) {
+                Ok(d) => b.depth = Some(d),
+                Err(e) => {
+                    drop(src);
+                    unsafe { on12.ReturnUnderlyingResource(res9, 0, std::ptr::null_mut(), std::ptr::null_mut()) }?;
+                    return Err(e.context("the depth bridge"));
+                }
+            }
+        }
+        let Some(depth) = b.depth.as_mut() else { return Ok(()) };
+        if unsafe { b.fence12.GetCompletedValue() } < depth.used[eye] {
+            unsafe { b.fence12.SetEventOnCompletion(depth.used[eye], b.event) }?;
+            unsafe { WaitForSingleObject(b.event, INFINITE) };
+        }
+        let (alloc, list, buf, dst) = (&depth.allocators[eye], &depth.lists[eye], &depth.buffers[eye], &depth.shared12[eye]);
+        // The depth plane into the buffer, laid out as it copies; the same bytes into the shared
+        // texture, as bytes.
+        let into_buffer = D3D12_TEXTURE_COPY_LOCATION {
+            pResource: unsafe { std::mem::transmute_copy(buf) },
+            Type: D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+            Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 { PlacedFootprint: depth.footprint },
+        };
+        let mut as_words = depth.footprint;
+        as_words.Footprint.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        let from_buffer = D3D12_TEXTURE_COPY_LOCATION {
+            pResource: unsafe { std::mem::transmute_copy(buf) },
+            Type: D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+            Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 { PlacedFootprint: as_words },
+        };
+        let resolved = depth.resolved.get(eye);
+        let plane = resolved.unwrap_or(&src);
+        let from_depth = D3D12_TEXTURE_COPY_LOCATION {
+            pResource: unsafe { std::mem::transmute_copy(plane) },
+            Type: D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 { SubresourceIndex: 0 },
+        };
+        let into_shared = D3D12_TEXTURE_COPY_LOCATION {
+            pResource: unsafe { std::mem::transmute_copy(dst) },
+            Type: D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 { SubresourceIndex: 0 },
+        };
+        unsafe {
+            alloc.Reset().context("allocator")?;
+            list.Reset(alloc, None).context("list")?;
+            if let Some(r) = resolved {
+                // Each pixel's nearest sample.
+                let list1: ID3D12GraphicsCommandList1 = list.cast()?;
+                list.ResourceBarrier(&[
+                    transition(&src, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RESOLVE_SOURCE),
+                    transition(r, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_RESOLVE_DEST),
+                ]);
+                list1.ResolveSubresourceRegion(r, 0, 0, 0, &src, 0, None, sd.Format, D3D12_RESOLVE_MODE_MIN);
+                list.ResourceBarrier(&[
+                    transition(&src, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, D3D12_RESOURCE_STATE_COMMON),
+                    transition(r, D3D12_RESOURCE_STATE_RESOLVE_DEST, D3D12_RESOURCE_STATE_COMMON),
+                ]);
+            }
+            list.ResourceBarrier(&[
+                transition(plane, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE),
+                transition(buf, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST),
+                transition(dst, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST),
+            ]);
+            list.CopyTextureRegion(&into_buffer, 0, 0, 0, &from_depth, None);
+            list.ResourceBarrier(&[transition(buf, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE)]);
+            list.CopyTextureRegion(&into_shared, 0, 0, 0, &from_buffer, None);
+            list.ResourceBarrier(&[
+                transition(plane, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON),
+                transition(buf, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_COMMON),
+                transition(dst, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COMMON),
+            ]);
+            list.Close().context("recorded")?;
+            d12.queue.ExecuteCommandLists(&[Some(list.cast()?)]);
+        }
+        b.value += 1;
+        unsafe { d12.queue.Signal(&b.fence12, b.value) }.context("signalled")?;
+        depth.used[eye] = b.value;
+        depth.ready[eye] = b.value;
+        drop(src);
+        unsafe { on12.ReturnUnderlyingResource(res9, 0, std::ptr::null_mut(), std::ptr::null_mut()) }.context("returned")?;
+        Ok(())
+    }
+
+    /// Writes `eye`'s latest depth into `dst` (the runtime's, linear metres), for the projection
+    /// between `near` and `far` (game units). False if there's none.
+    pub fn deliver_depth(gpu: &Gpu, eye: usize, dst: &rustvr_gpu::texture::Texture, near: f32, far: f32) -> bool {
+        let bridge = BRIDGE.lock().unwrap();
+        let Some(depth) = bridge.as_ref().and_then(|b| b.depth.as_ref().map(|d| (b, d))) else { return false };
+        let (b, depth) = depth;
+        if depth.ready[eye] == 0 || (dst.width, dst.height) != depth.size {
+            return false;
+        }
+        let Ok(ctx4) = gpu.ctx.cast::<ID3D11DeviceContext4>() else { return false };
+        if unsafe { ctx4.Wait(&b.fence11, depth.ready[eye]) }.is_err() {
+            return false;
+        }
+        crate::depth::convert(gpu, &depth.srv[eye], dst, near, far, crate::camera::UNITS_PER_METER)
     }
 
     /// Copies the game's back buffer as it is now into `kind`'s shared texture. False if the

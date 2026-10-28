@@ -17,7 +17,7 @@ mod win {
     use crate::d3d9::{self, HUD};
     use crate::link::{self, GameFrame, Snapshot};
     use crate::{engine, hooks};
-    use rustvr_protocol::{SLOT_HUD, SLOT_MENU, SLOT_STEREO, SlotInfo};
+    use rustvr_protocol::{DEPTH_LINEAR, SLOT_DEPTH, SLOT_HUD, SLOT_MENU, SLOT_STEREO, SlotInfo};
     use std::ffi::c_void;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -30,6 +30,9 @@ mod win {
     struct Eyes {
         snap: Snapshot,
         captured: [bool; 2],
+        /// Each eye's depth was copied, and the projection's near and far planes (game units).
+        depth: [bool; 2],
+        near_far: (f32, f32),
     }
     static EYES: Mutex<Option<Eyes>> = Mutex::new(None);
     static LAST: Mutex<f64> = Mutex::new(0.0);
@@ -122,6 +125,7 @@ mod win {
         let Some(dev) = d3d9::device(engine::device() as *mut c_void) else { return unsafe { real(this, arg) } };
         let mut result = 0;
         let mut captured = [false; 2];
+        let mut depth = [false; 2];
         // The game's own first-person arms aren't drawn: the runtime draws the player's hands.
         let arms = crate::player::first_person_node();
         let arms_flags = crate::mem::at::<u16>(arms + engine::av::FLAGS);
@@ -153,6 +157,7 @@ mod win {
             SECOND_EYE.store(eye == 1, Ordering::Release);
             result = unsafe { real(this, arg) };
             captured[eye] = hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false));
+            depth[eye] = hooks::guard("capture depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), eye)).unwrap_or(false));
         }
         set_lock(true, true);
         SECOND_EYE.store(false, Ordering::Release);
@@ -163,7 +168,7 @@ mod win {
         hooks::guard_void("Render end", || {
             // The menus are drawn next: alone on black, they're the HUD layer.
             let _ = unsafe { dev.Clear(0, std::ptr::null(), D3DCLEAR_TARGET as u32, 0, 1.0, 0) };
-            *EYES.lock().unwrap() = Some(Eyes { snap, captured });
+            *EYES.lock().unwrap() = Some(Eyes { snap, captured, depth, near_far: (game.frustum[4], game.frustum[5]) });
         });
         result
     }
@@ -185,6 +190,7 @@ mod win {
         snap.view?;
         log_camera_once(&game);
         crate::combat::publish();
+        hooks::guard_void("collision", || crate::collision::update(now));
         Some((snap, game, cam))
     }
 
@@ -214,6 +220,7 @@ mod win {
             let gpu = a.gpu().clone();
             let hud = d3d9::capture(dev, &gpu, HUD);
             let mut have_hud = false;
+            let mut have_depth = false;
             {
                 let Some(slot) = a.begin_slot() else { return };
                 for eye in 0..2 {
@@ -224,13 +231,22 @@ mod win {
                 if let (true, Some(dst)) = (hud, slot.hud.as_ref()) {
                     have_hud = d3d9::deliver(&gpu, HUD, &dst.tex);
                 }
+                // The game's depth, which the runtime hides what it draws behind.
+                if let (true, Some(d)) = (e.depth == [true, true], slot.depth.as_ref()) {
+                    have_depth = (0..2).all(|eye| d3d9::deliver_depth(&gpu, eye, &d[eye], e.near_far.0, e.near_far.1));
+                }
             }
             let mut info: SlotInfo = bytemuck::Zeroable::zeroed();
             info.frame_index = e.snap.frame.frame_index;
             info.eye_pose = e.snap.frame.eyes;
             info.fov = e.snap.frame.fov;
             info.eye_map = [view.slot_map(); 2];
-            info.flags = SLOT_STEREO | if have_hud { SLOT_HUD } else { 0 };
+            info.flags = SLOT_STEREO | if have_hud { SLOT_HUD } else { 0 } | if have_depth { SLOT_DEPTH } else { 0 };
+            if have_depth {
+                info.depth_near = e.near_far.0 / crate::camera::UNITS_PER_METER;
+                info.depth_far = e.near_far.1 / crate::camera::UNITS_PER_METER;
+                info.depth_flags = DEPTH_LINEAR;
+            }
             info.hud_aspect = aspect;
             static LAYOUT_SENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
             if have_hud && !LAYOUT_SENT.swap(true, Ordering::AcqRel) {

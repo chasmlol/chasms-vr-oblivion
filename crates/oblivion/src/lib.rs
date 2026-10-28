@@ -25,9 +25,11 @@
 
 pub mod body;
 pub mod camera;
+pub mod collision;
 pub mod combat;
 pub mod console;
 pub mod d3d9;
+pub mod depth;
 pub mod engine;
 #[cfg(all(windows, target_arch = "x86"))]
 pub mod entry;
