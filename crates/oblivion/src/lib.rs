@@ -49,5 +49,6 @@ pub mod proxy;
 pub mod render;
 pub mod resolution;
 pub mod settings;
+pub mod timing;
 pub mod weapons;
 pub mod window;

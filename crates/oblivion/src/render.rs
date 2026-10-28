@@ -115,11 +115,19 @@ mod win {
 
     unsafe extern "thiscall" fn render_hook(this: *mut c_void, arg: i32) -> i32 {
         let real: RenderFn = unsafe { std::mem::transmute(REAL_RENDER.load(Ordering::Acquire)) };
+        crate::timing::render_start();
+        let result = unsafe { render_stereo(this, arg, real) };
+        crate::timing::render_end();
+        result
+    }
+
+    unsafe fn render_stereo(this: *mut c_void, arg: i32, real: RenderFn) -> i32 {
+        use crate::timing::{Part, time};
         // A single render takes and gives the background thread's lock, and does its shadows, as
         // the game's does.
         set_lock(true, true);
         SECOND_EYE.store(false, Ordering::Release);
-        let stereo = hooks::guard("Render", None, prepare);
+        let stereo = time(Part::Prepare, || hooks::guard("Render", None, prepare));
         let Some((snap, game, cam)) = stereo else { return unsafe { real(this, arg) } };
         let view = snap.view.expect("prepared with a view");
         let Some(dev) = d3d9::device(engine::device() as *mut c_void) else { return unsafe { real(this, arg) } };
@@ -159,9 +167,9 @@ mod win {
             camera::write(cam, &s);
             set_lock(eye == 0, eye == 1);
             SECOND_EYE.store(eye == 1, Ordering::Release);
-            result = unsafe { real(this, arg) };
-            captured[eye] = hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false));
-            depth[eye] = hooks::guard("capture depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), eye)).unwrap_or(false));
+            result = time(Part::Eye, || unsafe { real(this, arg) });
+            captured[eye] = time(Part::Capture, || hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false)));
+            depth[eye] = time(Part::Depth, || hooks::guard("capture depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), eye)).unwrap_or(false)));
         }
         set_lock(true, true);
         SECOND_EYE.store(false, Ordering::Release);
@@ -193,11 +201,12 @@ mod win {
         let snap = link::game_frame(&GameFrame { eye: Some(game.eye()), look_yaw: game.look_yaw(), menu, now, dt })?;
         snap.view?;
         log_camera_once(&game);
-        crate::combat::publish();
-        hooks::guard_void("collision", || crate::collision::update(now));
+        use crate::timing::{Part, time};
+        time(Part::Combat, crate::combat::publish);
+        time(Part::Collision, || hooks::guard_void("collision", || crate::collision::update(now)));
         if let Some(view) = snap.view.as_ref() {
             let head = glam::Vec3::from(snap.frame.hmd.pos);
-            hooks::guard_void("lighting", || crate::lighting::publish(view, head));
+            time(Part::Lighting, || hooks::guard_void("lighting", || crate::lighting::publish(view, head)));
         }
         Some((snap, game, cam))
     }

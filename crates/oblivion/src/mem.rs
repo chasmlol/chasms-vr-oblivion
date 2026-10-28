@@ -1,5 +1,38 @@
 //! Reading the game's memory safely: every pointer walk checks the page first, so a stale pointer
 //! can't fault the game.
+//!
+//! Asking Windows about a page (`VirtualQuery`) costs tens of microseconds in the game's process
+//! (its address space is full of small regions), more than the game's whole frame when the
+//! adapter reads thousands of values. So the readable regions found are remembered ([`Regions`])
+//! and asked about again only after [`REMEMBER`]: long enough for the reads of a frame, short
+//! enough that memory the game frees (it frees between frames, on its own thread) is soon
+//! forgotten.
+
+/// How long a region found readable is taken to stay so.
+#[cfg(windows)]
+const REMEMBER: std::time::Duration = std::time::Duration::from_millis(50);
+/// At most this many regions are remembered at once (the reads of a frame touch a few heaps).
+#[cfg(windows)]
+const MAX_REGIONS: usize = 64;
+
+/// The readable regions found lately: (start, end), and since when.
+#[cfg(windows)]
+struct Regions {
+    since: Option<std::time::Instant>,
+    spans: Vec<(usize, usize)>,
+}
+
+#[cfg(windows)]
+static REGIONS: std::sync::Mutex<Regions> = std::sync::Mutex::new(Regions { since: None, spans: Vec::new() });
+
+/// Forgets every region (each frame, and in tests).
+#[cfg(windows)]
+pub fn forget() {
+    if let Ok(mut r) = REGIONS.lock() {
+        r.spans.clear();
+        r.since = None;
+    }
+}
 
 /// The bytes at `p` can be read (committed, readable, not a guard page).
 #[cfg(windows)]
@@ -11,6 +44,14 @@ pub fn is_readable(p: *const u8, n: usize) -> bool {
     let mut at = p as usize;
     // (A pointer near the top of the address space wraps: never readable.)
     let Some(end) = at.checked_add(n.max(1)) else { return false };
+    let mut regions = REGIONS.lock().unwrap_or_else(|e| e.into_inner());
+    if regions.since.is_some_and(|t| t.elapsed() > REMEMBER) {
+        regions.spans.clear();
+        regions.since = None;
+    }
+    if regions.spans.iter().any(|&(s, e)| s <= at && end <= e) {
+        return true;
+    }
     while at < end {
         let mut mbi = MEMORY_BASIC_INFORMATION::default();
         if unsafe { VirtualQuery(Some(at as *const _), &mut mbi, std::mem::size_of::<MEMORY_BASIC_INFORMATION>()) } == 0 {
@@ -19,11 +60,20 @@ pub fn is_readable(p: *const u8, n: usize) -> bool {
         if mbi.State != MEM_COMMIT || mbi.Protect.0 & (PAGE_GUARD.0 | PAGE_NOACCESS.0) != 0 || mbi.Protect.0 == 0 {
             return false;
         }
-        let Some(next) = (mbi.BaseAddress as usize).checked_add(mbi.RegionSize) else { return false };
+        let base = mbi.BaseAddress as usize;
+        let Some(next) = base.checked_add(mbi.RegionSize) else { return false };
+        if regions.spans.len() >= MAX_REGIONS {
+            regions.spans.remove(0);
+        }
+        regions.spans.push((base, next));
+        regions.since.get_or_insert_with(std::time::Instant::now);
         at = next;
     }
     true
 }
+
+#[cfg(not(windows))]
+pub fn forget() {}
 
 #[cfg(not(windows))]
 pub fn is_readable(_p: *const u8, _n: usize) -> bool {

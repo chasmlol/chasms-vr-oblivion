@@ -4,8 +4,9 @@
 # shows or takes the focus). Blocks until the script's duration is up, then closes Oblivion. Usage:
 #   powershell -File tools\xrsim_oblivion.ps1 -Script tools\xrsim\oblivion_boot.toml [-Out captures\xrsim] [-NoBuild] [-Console <file>]
 # -Console: a `rustvr-console-test` file (timed console commands, crates/oblivion/src/console.rs),
-# e.g. to load a save.
-param([Parameter(Mandatory)][string]$Script, [string]$Out = "", [switch]$NoBuild, [string]$Console = "")
+# e.g. to load a save. -Settings: more lines for rustvr-oblivion.toml for the run, separated by ";"
+# (e.g. "eye_width = 4147; eye_height = 4406" to render at a headset's eye size).
+param([Parameter(Mandatory)][string]$Script, [string]$Out = "", [switch]$NoBuild, [string]$Console = "", [string]$Settings = "")
 $ErrorActionPreference = "Continue"
 $env:Path = "$env:USERPROFILE\.cargo\bin;" + $env:Path
 if (-not $env:RUSTVR_DESKTOP_VIEW) { $env:RUSTVR_DESKTOP_VIEW = "0" }
@@ -20,13 +21,15 @@ Get-CimInstance Win32_Process -Filter "Name = 'rustvr-xrsim.exe' OR Name = 'rust
     Where-Object { $_.Name -eq 'rustvr-xrsim.exe' -or $_.CommandLine -match '--attach|--game-pid|--exit-with-game|--no-range' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Get-Process Oblivion -ErrorAction SilentlyContinue | Stop-Process -Force
+# (Gone before the adapter is installed: a closing game still holds its DLL.)
+Get-Process Oblivion -ErrorAction SilentlyContinue | Wait-Process -Timeout 20 -ErrorAction SilentlyContinue
 if (-not $NoBuild) {
     $build = cmd /c "cargo build -q --release -p rustvr-oblivion --target i686-pc-windows-msvc -j 8 2>&1 && cargo build -q --release --manifest-path framework\Cargo.toml --target-dir target -p rustvr-runtime -p rustvr-xrsim -j 8 2>&1"
     if ($LASTEXITCODE -ne 0) { "build failed:"; $build; exit 1 }
 }
 python tools\install_oblivion.py | Select-Object -First 1
 # Tests run in the background; the setting goes back afterwards.
-Set-Content "$game\rustvr-oblivion.toml" "background = true`n"
+Set-Content "$game\rustvr-oblivion.toml" ("background = true`n" + (($Settings -split ";" | ForEach-Object { $_.Trim() }) -join "`n") + "`n")
 if ($Console) { Copy-Item $Console "$game\rustvr-console-test" -Force }
 if (Test-Path $Out) { Remove-Item -Recurse -Force $Out }
 New-Item -ItemType Directory -Force $Out | Out-Null
