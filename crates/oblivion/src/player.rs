@@ -51,6 +51,10 @@ pub fn before_update() {
             *last = mv;
         }
         log_movement_toggles();
+        // The laser on the game's menus moves the game's cursor.
+        if s.frame.intents.flags & rustvr_protocol::INT_CURSOR != 0 {
+            crate::menus::point(s.frame.intents.cursor_uv);
+        }
         if let Some(view) = s.view {
             log_once(view.look_yaw);
             first_person();

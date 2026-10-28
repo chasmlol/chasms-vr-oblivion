@@ -41,6 +41,7 @@ pub mod lighting;
 pub mod link;
 pub mod log;
 pub mod mem;
+pub mod menus;
 pub mod player;
 pub mod proxy;
 pub mod render;

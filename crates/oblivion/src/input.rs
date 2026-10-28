@@ -118,6 +118,10 @@ impl Bridge {
                 self.pulses.push((self.binding(name), now + PULSE));
             }
         }
+        // The laser's trigger on the game's menus: the left mouse button.
+        if it.flags & rustvr_protocol::INT_CURSOR_DOWN != 0 {
+            v.buttons |= 1;
+        }
         if pressed(&counts, Action::Menu) {
             self.pulses.push((Binding { key: Some(DIK_ESCAPE), mouse: None }, now + PULSE));
         }

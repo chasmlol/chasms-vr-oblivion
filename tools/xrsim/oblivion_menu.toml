@@ -1,0 +1,70 @@
+# The main menu under the laser (tools/xrsim_oblivion.ps1, no console file): the right hand points
+# at the game's menu panel, at Continue, and pulls the trigger, then at Yes; the latest save loads. Times are
+# seconds from the runtime's start.
+duration = 50
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+right = { pos = [0.15, -0.3, 0.3], pitch = 10, yaw = 0, trigger = 0 }
+
+[[key]]
+t = 24
+right = { pos = [0.15, -0.3, 0.3], pitch = 10, yaw = 0, trigger = 0 }
+
+[[key]]
+t = 25
+right = { pos = [0.15, -0.3, 0.3], pitch = -3, yaw = -23, trigger = 0 }
+
+[[capture]]
+t = 26
+name = "aimed"
+
+[[key]]
+t = 27
+right = { trigger = 0 }
+
+[[key]]
+t = 27.1
+right = { trigger = 1 }
+
+[[key]]
+t = 27.4
+right = { trigger = 1 }
+
+[[key]]
+t = 27.5
+right = { trigger = 0 }
+
+[[capture]]
+t = 28.5
+name = "clicked"
+
+# Yes, continue.
+[[key]]
+t = 29.5
+right = { pos = [0.15, -0.3, 0.3], pitch = -3, yaw = -23, trigger = 0 }
+
+[[key]]
+t = 30.5
+right = { pos = [0.15, -0.3, 0.3], pitch = 9.5, yaw = -5, trigger = 0 }
+
+[[key]]
+t = 31
+right = { trigger = 0 }
+
+[[key]]
+t = 31.1
+right = { trigger = 1 }
+
+[[key]]
+t = 31.4
+right = { trigger = 1 }
+
+[[key]]
+t = 31.5
+right = { trigger = 0 }
+
+[[capture]]
+t = 46
+name = "loaded"

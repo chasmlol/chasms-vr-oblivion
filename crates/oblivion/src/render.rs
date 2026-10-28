@@ -179,7 +179,9 @@ mod win {
             *last = now;
             dt.clamp(0.0, 0.25)
         };
-        let snap = link::game_frame(&GameFrame { eye: Some(game.eye()), look_yaw: game.look_yaw(), menu: false, now, dt })?;
+        // (A menu over the world: the runtime shows the menus as a panel to point at.)
+        let menu = crate::menus::menu_mode();
+        let snap = link::game_frame(&GameFrame { eye: Some(game.eye()), look_yaw: game.look_yaw(), menu, now, dt })?;
         snap.view?;
         log_camera_once(&game);
         crate::combat::publish();
