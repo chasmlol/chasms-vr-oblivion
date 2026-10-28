@@ -8,10 +8,10 @@
 //! Each is the game's: its collision is its own Havok body's shape ([`SHAPE_HULL`]), its weight its
 //! Havok mass, and the game draws it, with its own lighting and effects (a candle in the hand still
 //! burns). While a hand has it, the adapter puts the game's object where the runtime has it, as the
-//! game's own `SetPos` does (the node moved, its collision told to follow); let go, it flies on in
-//! the runtime (on the world's collision, the game's object following) until it comes to rest, and
-//! it's the game's again where it lies. What it is goes to a card beside it ([`ItemInfos`]): its
-//! name, its numbers as the game's inventory shows them, and whether it's stolen.
+//! game's own `SetPos` does (the node moved, its collision told to follow); let go, it's Havok's
+//! again at once, its body given the throw's velocity and woken (`hkEntity::activate`). What it is
+//! goes to a card beside it ([`ItemInfos`]): its name, its numbers as the game's inventory shows
+//! them, and whether it's stolen.
 //!
 //! Forms (xOBSE's `GameForms.h`): `TESForm` type +4, flags +8 (deleted 0x20, quest item 0x400,
 //! disabled 0x800), form id +0xC; `TESObjectREFR` base form +0x1C, 3D +0x3C, extra data +0x44; the
@@ -208,11 +208,15 @@ mod game {
     const NODE_CHILDREN: usize = 0xB0;
     const NODE_COUNT: usize = 0xB6;
     /// `bhkNiCollisionObject` -> `bhkRigidBody` (+0x10) -> `hkRigidBody` (+8); its motion (+0x50):
-    /// inverse mass +0xC0.
+    /// inverse mass +0xC0, linear and angular velocity +0xD0, +0xE0 (Havok units: 7 game units).
+    /// `hkEntity::activate` (thiscall): its island marked active, so Havok moves it again.
     const COLLISION_BODY: usize = 0x10;
     const HK_OBJ: usize = 0x8;
     const BODY_MOTION: usize = 0x50;
     const MOTION_MASS_INV: usize = 0xC0;
+    const MOTION_LIN_VEL: usize = 0xD0;
+    const MOTION_ANG_VEL: usize = 0xE0;
+    const ACTIVATE: usize = 0x008A_6410;
 
     /// The game's dynamic cast (cdecl: object, 0, from, to, 0), and the parts' type descriptors.
     const DYNAMIC_CAST: usize = 0x0098_32E6;
@@ -347,6 +351,28 @@ mod game {
         true
     }
 
+    /// Sets a Havok body moving (the runtime's world, metres and radians a second) and wakes it.
+    fn launch(body: usize, lin: Vec3, ang: Vec3) {
+        let motion = mem::deref(body + BODY_MOTION);
+        if motion == 0 || !mem::is_readable((motion + MOTION_LIN_VEL) as *const u8, 32) {
+            return;
+        }
+        let b = camera::basis();
+        let v = b.point_to_game(lin) / crate::collision::HAVOK_SCALE;
+        let w = b.dir_to_game(ang);
+        type Activate = unsafe extern "thiscall" fn(usize) -> u32;
+        unsafe {
+            ((motion + MOTION_LIN_VEL) as *mut [f32; 4]).write_unaligned([v.x, v.y, v.z, 0.0]);
+            ((motion + MOTION_ANG_VEL) as *mut [f32; 4]).write_unaligned([w.x, w.y, w.z, 0.0]);
+            std::mem::transmute::<usize, Activate>(ACTIVATE)(body);
+        }
+    }
+
+    fn body_speed(body: usize) -> Option<f32> {
+        let v: [f32; 4] = mem::at(mem::deref(body + BODY_MOTION) + MOTION_LIN_VEL)?;
+        Some(Vec3::new(v[0], v[1], v[2]).length() * crate::collision::HAVOK_SCALE / camera::UNITS_PER_METER)
+    }
+
     /// The player takes it, as activating it does (the game's own pick-up: stealing, the message,
     /// the sound); one with a script is activated by the player, its script deciding.
     fn take(refr: usize, id: u32) -> bool {
@@ -439,6 +465,7 @@ mod game {
     struct Item {
         refr: usize,
         node: usize,
+        body: usize,
         desc: ObjectDesc,
         info: ItemInfo,
         hull: Vec<Vec3>,
@@ -504,7 +531,7 @@ mod game {
         // (The game's weight is about pounds: a kilogram is two.)
         let mass = mass_inv.map(|m| 1.0 / m).or(f.weight.map(|w| w * 0.45)).unwrap_or(1.0).clamp(0.05, 60.0);
         let desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
-        Some(Item { refr, node, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, flying: None, taken_at: None })
+        Some(Item { refr, node, body, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, flying: None, taken_at: None })
     }
 
     /// Once a game frame, where its scripts run: things put in a slot taken into the inventory;
@@ -641,15 +668,26 @@ mod game {
                     }
                     it.owned = true;
                     put(it.node, pos, rot.normalize());
+                } else if it.owned && it.body != 0 {
+                    // Let go: Havok's again at once, moving as it left the hand.
+                    it.owned = false;
+                    let dir = |v: [f32; 3]| if tracking { view.dir(Vec3::from_array(v)) } else { Vec3::from_array(v) };
+                    let (v, w) = (dir(st.lin_vel), dir(st.ang_vel));
+                    put(it.node, pos, rot.normalize());
+                    let g = camera::basis().point_to_game(pos);
+                    type SetPos = unsafe extern "thiscall" fn(usize, f32, f32, f32);
+                    unsafe { std::mem::transmute::<usize, SetPos>(SET_POS)(it.refr, g.x, g.y, g.z) };
+                    launch(it.body, v, w);
+                    tracing::info!("items: {} let go at {pos:.2?}, {:.2} m/s: Havok's", it.info.name(), v.length());
+                    s.trace.push((st.id, now + 1.0, now));
                 } else if it.owned || it.flying.is_some() {
-                    // Let go: it flies on in the runtime (the game's object where it has it) until
-                    // it comes to rest, then it's the game's again, where it lies.
+                    // Let go of one without a Havok body: it flies on in the runtime (the game's
+                    // object where it has it) until it comes to rest, then it's the game's again.
                     let speed = Vec3::from_array(st.lin_vel).length();
                     if it.owned {
                         it.owned = false;
                         it.flying = Some((now, None));
                         tracing::info!("items: {} let go at {pos:.2?}, {speed:.2} m/s", it.info.name());
-                        s.trace.push((st.id, now + 1.5, now));
                     }
                     put(it.node, pos, rot.normalize());
                     let (since, still) = it.flying.unwrap();
@@ -671,7 +709,8 @@ mod game {
                 if now >= *next {
                     *next = now + 0.1;
                     let at = pose_of(it.node).map(|p| p.0);
-                    tracing::info!("items: {} flying at {at:.2?}", it.info.name());
+                    let v = if it.body != 0 { body_speed(it.body) } else { None };
+                    tracing::info!("items: {} flying at {at:.2?}, Havok has it moving {v:.2?} m/s", it.info.name());
                 }
                 true
             });
