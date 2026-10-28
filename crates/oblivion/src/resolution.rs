@@ -63,7 +63,9 @@ pub fn eye_size() -> Option<(u32, u32)> {
     let saved = saved_path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| parse_saved(&t));
     match runtime_eye_size(if saved.is_some() { WAIT_SAVED } else { WAIT }) {
         Some((w, h)) => {
+            // (Tests' emulated headsets aren't the player's: theirs isn't kept.)
             if saved != Some((w, h))
+                && !s.background
                 && let Some(p) = saved_path()
                 && let Err(e) = std::fs::write(&p, format!("{w} {h}\n"))
             {
