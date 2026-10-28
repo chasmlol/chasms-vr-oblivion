@@ -18,12 +18,14 @@
 use std::collections::HashMap;
 
 use glam::{Mat3, Mat4, Quat, Vec3};
-use rustvr_asset::{Bone, FORMAT_VERSION, Material, Mesh, Model, Vertex};
+use rustvr_asset::{Bone, FORMAT_VERSION, Material, Mesh, Model, Shader, Vertex};
 
 use crate::nif::{Block, Nif, Transform};
 
 /// Game units to the metre (the adapter's world scale).
 pub const UNITS_PER_METRE: f32 = 70.0;
+/// The specular power of a shape without a material (the game's own, 0x85BEA0).
+pub const GLOSSINESS: f32 = 30.0;
 
 /// The swap of Y and Z (its own inverse).
 const SWAP: Mat3 = Mat3::from_cols(Vec3::X, Vec3::Z, Vec3::Y);
@@ -219,7 +221,10 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
         let mut vertices = Vec::with_capacity(d.vertices.len());
         for (v, &p) in d.vertices.iter().enumerate() {
             let n = d.normals.get(v).copied().unwrap_or(Vec3::Z);
-            let mut vert = Vertex { uv: d.uvs.get(v).copied().unwrap_or_default(), ao: 255, ..Default::default() };
+            // The vertex colour, which the game multiplies the base texture by: grey in every model
+            // the player wears or holds, so its brightness alone.
+            let ao = d.colors.get(v).map_or(255, |c| (((c[0] + c[1] + c[2]) / 3.0).clamp(0.0, 1.0) * 255.0).round() as u8);
+            let mut vert = Vertex { uv: d.uvs.get(v).copied().unwrap_or_default(), ao, ..Default::default() };
             let w = &mut weights[v];
             if w.is_empty() || skin_to.is_empty() {
                 vert.pos = point(rigid.apply(p)).to_array();
@@ -250,26 +255,45 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
             }
             vertices.push(vert);
         }
-        let mut material = Material::default();
+        // Gamebryo's lighting (rustvr_asset::Shader::GamebryoLit): the skin's (the parts made with
+        // the races' skins, under `textures\characters\`) with its rim; the normal map
+        // (`<texture>_n.dds`), the glow map, and the material's glossiness, specular, emittance and
+        // alpha.
+        let mut material = Material { shader: Shader::GamebryoLit, params: [GLOSSINESS, 0.0, 0.0, 0.0], color: [0.0, 0.0, 0.0, 1.0], ..Default::default() };
         let mut texture = String::new();
+        let add = |path: String, textures: &mut Vec<String>| {
+            let key = texture_key(&path);
+            if !textures.contains(&path) {
+                textures.push(path);
+            }
+            key
+        };
         for &p in &av.properties {
             match nif.get(p) {
                 Some(Block::Texturing(t)) => {
                     if let Some(Block::SourceTexture { file }) = nif.get(t.base) {
                         let path = format!("textures\\{}", normalise(file, "textures\\"));
-                        texture = texture_key(&path);
-                        if !textures.contains(&path) {
-                            textures.push(path.clone());
+                        if path.starts_with("textures\\characters\\") && !path.contains("\\hair\\") {
+                            material.shader = Shader::GamebryoSkin;
                         }
                         let normal = path.strip_suffix(".dds").map(|s| format!("{s}_n.dds"));
+                        texture = add(path, &mut textures);
                         if let Some(n) = normal.filter(|n| exists(n)) {
-                            material.bump = texture_key(&n);
-                            if !textures.contains(&n) {
-                                textures.push(n);
-                            }
+                            material.bump = add(n, &mut textures);
+                        }
+                    }
+                    if let Some(Block::SourceTexture { file }) = nif.get(t.glow) {
+                        let path = format!("textures\\{}", normalise(file, "textures\\"));
+                        if exists(&path) {
+                            material.detail = add(path, &mut textures);
                         }
                     }
                 }
+                Some(Block::Material(m)) => {
+                    material.params[0] = m.glossiness;
+                    material.color = [m.emissive[0], m.emissive[1], m.emissive[2], m.alpha];
+                }
+                Some(Block::Specular { on }) => material.params[1] = *on as u32 as f32,
                 Some(Block::Alpha { flags, .. }) => material.alpha_test = flags & 0x201 != 0,
                 _ => {}
             }

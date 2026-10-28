@@ -127,8 +127,12 @@ mod win {
         let mut captured = [false; 2];
         let mut depth = [false; 2];
         // The game's own first-person arms aren't drawn: the runtime draws the player's hands.
+        // (Testing, `RUSTVR_OBLIVION_GAME_ARMS=1`: they are, to hold the runtime's lighting of the
+        // same armour up to the game's own.)
+        static GAME_ARMS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let keep = *GAME_ARMS.get_or_init(|| std::env::var("RUSTVR_OBLIVION_GAME_ARMS").is_ok_and(|v| v == "1"));
         let arms = crate::player::first_person_node();
-        let arms_flags = crate::mem::at::<u16>(arms + engine::av::FLAGS);
+        let arms_flags = if keep { None } else { crate::mem::at::<u16>(arms + engine::av::FLAGS) };
         if let Some(f) = arms_flags {
             unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f | engine::av::APP_CULLED) };
         }
@@ -191,6 +195,10 @@ mod win {
         log_camera_once(&game);
         crate::combat::publish();
         hooks::guard_void("collision", || crate::collision::update(now));
+        if let Some(view) = snap.view.as_ref() {
+            let head = glam::Vec3::from(snap.frame.hmd.pos);
+            hooks::guard_void("lighting", || crate::lighting::publish(view, head));
+        }
         Some((snap, game, cam))
     }
 

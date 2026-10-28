@@ -66,7 +66,9 @@ pub enum Block {
     Alpha { flags: u16, threshold: u8 },
     StringExtra { name: String, value: String },
     IntegerExtra { name: String, value: u32 },
-    BinaryExtra { name: String },
+    BinaryExtra { name: String, data: Vec<u8> },
+    /// `NiSpecularProperty`: whether the shape has specular highlights.
+    Specular { on: bool },
     CollisionObject { target: i32, body: i32 },
     RigidBody(RigidBody),
     BoxShape { dims: Vec3, radius: f32 },
@@ -75,8 +77,8 @@ pub enum Block {
     ConvexVertices { vertices: Vec<Vec3>, radius: f32 },
     ListShape { shapes: Vec<i32> },
     ConvexTransform { shape: i32, transform: [f32; 16] },
-    /// Read past: of no use here (stencil, vertex colour, z-buffer, specular properties,
-    /// constraints).
+    /// Read past: of no use here (stencil, vertex colour, z-buffer, wireframe, dither and shade
+    /// properties, constraints).
     Other(String),
 }
 
@@ -485,7 +487,11 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(2 + 4)?;
             Block::Other(kind.into())
         }
-        "NiSpecularProperty" | "NiWireframeProperty" | "NiDitherProperty" | "NiShadeProperty" => {
+        "NiSpecularProperty" => {
+            object_net(r)?;
+            Block::Specular { on: r.u16()? & 1 != 0 }
+        }
+        "NiWireframeProperty" | "NiDitherProperty" | "NiShadeProperty" => {
             object_net(r)?;
             r.skip(2)?;
             Block::Other(kind.into())
@@ -503,8 +509,8 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
         "NiBinaryExtraData" => {
             let name = r.string()?;
             let n = r.u32()? as usize;
-            r.skip(n)?;
-            Block::BinaryExtra { name }
+            let data = r.take(n)?.to_vec();
+            Block::BinaryExtra { name, data }
         }
         "BSBound" => {
             r.string()?;

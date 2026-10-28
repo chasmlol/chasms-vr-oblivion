@@ -26,6 +26,15 @@ left = { stick = [0, -1] }
 t = 30.5
 left = { stick = [0, 0] }
 
+# (Again, for a save that loads late.)
+[[key]]
+t = 32.6
+left = { stick = [0, -1] }
+
+[[key]]
+t = 32.9
+left = { stick = [0, 0] }
+
 [[capture]]
 t = 33.5
 name = "sheathed"
