@@ -1,0 +1,4 @@
+[submodule "framework"]
+	path = framework
+	url = https://github.com/chasmlol/chasms-vr-framework.git
+	branch = main

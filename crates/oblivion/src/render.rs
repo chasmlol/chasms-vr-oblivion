@@ -1,0 +1,198 @@
+//! The eyes. Oblivion's world render (`Main::Render`, [`crate::engine::RENDER`]) runs once per eye
+//! each game frame, its camera put where that eye is ([`crate::camera`]); after each, the back
+//! buffer holds that eye's finished picture (world, first person, HDR) and is copied out
+//! ([`crate::d3d9::capture`]). Then the back buffer is cleared, so what the game draws over it before
+//! it presents is its HUD and menus alone: that goes to the runtime as the HUD layer, with the eyes,
+//! in one slot ([`on_present`]).
+//!
+//! Outside the world (the main menu, loading screens) the render isn't called: the whole picture
+//! goes to the runtime as a menu panel.
+
+#[cfg(all(windows, target_arch = "x86"))]
+pub use win::*;
+
+#[cfg(all(windows, target_arch = "x86"))]
+mod win {
+    use crate::camera::{self, CameraState};
+    use crate::d3d9::{self, HUD};
+    use crate::link::{self, GameFrame, Snapshot};
+    use crate::{engine, hooks};
+    use rustvr_protocol::{SLOT_HUD, SLOT_MENU, SLOT_STEREO, SlotInfo};
+    use std::ffi::c_void;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use windows::Win32::Graphics::Direct3D9::D3DCLEAR_TARGET;
+
+    static REAL_RENDER: AtomicUsize = AtomicUsize::new(0);
+    type RenderFn = unsafe extern "thiscall" fn(*mut c_void, i32) -> i32;
+
+    /// This game frame's eyes, waiting for the HUD at Present.
+    struct Eyes {
+        snap: Snapshot,
+        captured: [bool; 2],
+    }
+    static EYES: Mutex<Option<Eyes>> = Mutex::new(None);
+    static LAST: Mutex<f64> = Mutex::new(0.0);
+
+    static REAL_FRAME: AtomicUsize = AtomicUsize::new(0);
+    type FrameFn = unsafe extern "thiscall" fn(*mut c_void) -> i32;
+
+    pub fn install() {
+        hooks::install_into(engine::FRAME as *const (), frame_hook as *const (), "Main::Frame", &REAL_FRAME);
+        hooks::install_into(engine::RENDER as *const (), render_hook as *const (), "Main::Render", &REAL_RENDER);
+    }
+
+    /// The game's frame: test commands run first, where the game's own scripts and console would
+    /// (a save can be loaded from here, not from inside the render or Present).
+    unsafe extern "thiscall" fn frame_hook(this: *mut c_void) -> i32 {
+        let real: FrameFn = unsafe { std::mem::transmute(REAL_FRAME.load(Ordering::Acquire)) };
+        static FIRST: std::sync::Once = std::sync::Once::new();
+        FIRST.call_once(|| tracing::info!("render: the game's frames run"));
+        hooks::guard_void("Frame", || {
+            crate::console::tick();
+            crate::player::before_update();
+        });
+        unsafe { real(this) }
+    }
+
+    unsafe extern "thiscall" fn render_hook(this: *mut c_void, arg: i32) -> i32 {
+        let real: RenderFn = unsafe { std::mem::transmute(REAL_RENDER.load(Ordering::Acquire)) };
+        let stereo = hooks::guard("Render", None, prepare);
+        let Some((snap, game, cam)) = stereo else { return unsafe { real(this, arg) } };
+        let view = snap.view.expect("prepared with a view");
+        let Some(dev) = d3d9::device(engine::device() as *mut c_void) else { return unsafe { real(this, arg) } };
+        let mut result = 0;
+        let mut captured = [false; 2];
+        // The game's own first-person arms aren't drawn: the runtime draws the player's hands.
+        let arms = crate::player::first_person_node();
+        let arms_flags = crate::mem::at::<u16>(arms + engine::av::FLAGS);
+        if let Some(f) = arms_flags {
+            unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f | engine::av::APP_CULLED) };
+        }
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let log = LOGGED.fetch_add(1, Ordering::Relaxed) % 600 == 30;
+        for eye in 0..2 {
+            let s = camera::eye_camera(&view, &snap.frame.eyes[eye], &snap.frame.fov[eye], &game);
+            if log {
+                tracing::info!(
+                    "render: eye {eye}: tracking pos {:?} rot {:?} -> game pos {:?} dir {:?} up {:?} frustum {:?}; game camera pos {:?} dir {:?}; view anchor {:?} yaw {} wpm {}",
+                    snap.frame.eyes[eye].pos,
+                    snap.frame.eyes[eye].rot,
+                    s.pos,
+                    s.dir(),
+                    s.up(),
+                    s.frustum,
+                    game.pos,
+                    game.dir(),
+                    view.anchor,
+                    view.body_yaw,
+                    view.world_per_meter
+                );
+            }
+            camera::write(cam, &s);
+            result = unsafe { real(this, arg) };
+            captured[eye] = hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false));
+        }
+        camera::write(cam, &game);
+        if let Some(f) = arms_flags {
+            unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f) };
+        }
+        hooks::guard_void("Render end", || {
+            // The menus are drawn next: alone on black, they're the HUD layer.
+            let _ = unsafe { dev.Clear(0, std::ptr::null(), D3DCLEAR_TARGET as u32, 0, 1.0, 0) };
+            *EYES.lock().unwrap() = Some(Eyes { snap, captured });
+        });
+        result
+    }
+
+    /// The runtime's frame and the game's camera, when the eyes are to be rendered.
+    fn prepare() -> Option<(Snapshot, CameraState, usize)> {
+        let cam = engine::world_camera();
+        let game = camera::read(cam)?;
+        let now = link::now();
+        let dt = {
+            let mut last = LAST.lock().unwrap();
+            let dt = if *last == 0.0 { 1.0 / 90.0 } else { (now - *last) as f32 };
+            *last = now;
+            dt.clamp(0.0, 0.25)
+        };
+        let snap = link::game_frame(&GameFrame { eye: Some(game.eye()), look_yaw: game.look_yaw(), menu: false, now, dt })?;
+        snap.view?;
+        log_camera_once(&game);
+        Some((snap, game, cam))
+    }
+
+    fn log_camera_once(game: &CameraState) {
+        static DONE: std::sync::Once = std::sync::Once::new();
+        DONE.call_once(|| tracing::info!("render: the game's camera: rot {:?}, pos {:?}, frustum {:?}", game.rot, game.pos, game.frustum));
+    }
+
+    /// Present: the eyes and the HUD to the runtime; outside the world, the whole picture as a
+    /// menu panel.
+    pub fn on_present(dev_raw: *mut c_void) {
+        let Some(dev) = d3d9::device(dev_raw) else { return };
+        if let Some((w, h)) = d3d9::backbuffer_size(&dev) {
+            link::set_size(w, h);
+        }
+        let aspect = d3d9::backbuffer_size(&dev).map(|(w, h)| w as f32 / h.max(1) as f32).unwrap_or(1.0);
+        let eyes = EYES.lock().unwrap().take();
+        match eyes {
+            Some(e) if e.captured == [true, true] => stereo(&dev, &e, aspect),
+            _ => menu(&dev, aspect),
+        }
+    }
+
+    fn stereo(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, e: &Eyes, aspect: f32) {
+        let Some(view) = e.snap.view else { return };
+        link::with_adapter(|a| {
+            let gpu = a.gpu().clone();
+            let hud = d3d9::capture(dev, &gpu, HUD);
+            let mut have_hud = false;
+            {
+                let Some(slot) = a.begin_slot() else { return };
+                for eye in 0..2 {
+                    if !d3d9::deliver(&gpu, eye, &slot.eyes[eye].tex) {
+                        return;
+                    }
+                }
+                if let (true, Some(dst)) = (hud, slot.hud.as_ref()) {
+                    have_hud = d3d9::deliver(&gpu, HUD, &dst.tex);
+                }
+            }
+            let mut info: SlotInfo = bytemuck::Zeroable::zeroed();
+            info.frame_index = e.snap.frame.frame_index;
+            info.eye_pose = e.snap.frame.eyes;
+            info.fov = e.snap.frame.fov;
+            info.eye_map = [view.slot_map(); 2];
+            info.flags = SLOT_STEREO | if have_hud { SLOT_HUD } else { 0 };
+            info.hud_aspect = aspect;
+            static LAYOUT_SENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+            if have_hud && !LAYOUT_SENT.swap(true, Ordering::AcqRel) {
+                a.write_hud_layout(&crate::hud::layout());
+            }
+            a.submit(info);
+        });
+    }
+
+    fn menu(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32) {
+        // Keeps the link alive and says the game is in its menus.
+        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, now: link::now(), dt: 0.0 });
+        link::with_adapter(|a| {
+            let gpu = a.gpu().clone();
+            if !d3d9::capture(dev, &gpu, HUD) {
+                return;
+            }
+            {
+                let Some(slot) = a.begin_slot() else { return };
+                let Some(dst) = slot.hud.as_ref() else { return };
+                if !d3d9::deliver(&gpu, HUD, &dst.tex) {
+                    return;
+                }
+            }
+            let mut info: SlotInfo = bytemuck::Zeroable::zeroed();
+            info.flags = SLOT_MENU | SLOT_HUD;
+            info.hud_aspect = aspect;
+            a.submit(info);
+        });
+    }
+}

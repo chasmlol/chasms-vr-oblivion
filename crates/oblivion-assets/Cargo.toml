@@ -1,0 +1,19 @@
+[package]
+name = "oblivion-assets"
+description = "Reads Oblivion's archives and models and writes its weapons, hands and armour to the local test cache"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "oblivion-extract"
+path = "src/main.rs"
+
+[dependencies]
+rustvr-asset.workspace = true
+anyhow.workspace = true
+glam.workspace = true
+flate2.workspace = true
+serde.workspace = true
+toml.workspace = true

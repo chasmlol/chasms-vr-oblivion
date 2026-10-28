@@ -1,0 +1,36 @@
+# The first look (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load.txt): the main menu
+# on its panel, then a save loaded and the world in both eyes, looking ahead, right and up.
+# Times are seconds from the runtime's start (Oblivion starts about 2 s later).
+duration = 75
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+
+[[capture]]
+t = 14
+name = "menu"
+
+[[key]]
+t = 45
+head = { yaw = 0, pitch = 0 }
+
+[[capture]]
+t = 46
+name = "ahead"
+
+[[key]]
+t = 52
+head = { yaw = 60, pitch = 0 }
+
+[[capture]]
+t = 53
+name = "right"
+
+[[key]]
+t = 59
+head = { yaw = 0, pitch = 30 }
+
+[[capture]]
+t = 60
+name = "up"

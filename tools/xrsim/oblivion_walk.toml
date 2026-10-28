@@ -1,0 +1,77 @@
+# Walking and jumping (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load.txt): after the
+# save loads, the left stick pushed forward for 3 s, a turn of the head (the player walks where it
+# looks), a jump. Times are seconds from the runtime's start.
+duration = 70
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { stick = [0, 0] }
+
+[[capture]]
+t = 36
+name = "start"
+
+[[key]]
+t = 38
+left = { stick = [0, 0] }
+
+[[key]]
+t = 38.2
+left = { stick = [0, 1] }
+
+[[key]]
+t = 41
+left = { stick = [0, 1] }
+
+[[key]]
+t = 41.2
+left = { stick = [0, 0] }
+
+[[capture]]
+t = 42
+name = "walked"
+
+[[key]]
+t = 44
+head = { yaw = 0 }
+
+[[key]]
+t = 46
+head = { yaw = 90 }
+
+[[key]]
+t = 47
+left = { stick = [0, 0] }
+
+[[key]]
+t = 47.2
+left = { stick = [0, 1] }
+
+[[key]]
+t = 50
+left = { stick = [0, 1] }
+
+[[key]]
+t = 50.2
+left = { stick = [0, 0] }
+
+[[capture]]
+t = 51
+name = "turned"
+
+[[key]]
+t = 53
+right = { a = false }
+
+[[key]]
+t = 53.01
+right = { a = true }
+
+[[key]]
+t = 53.3
+right = { a = false }
+
+[[capture]]
+t = 53.5
+name = "jump"

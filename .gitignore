@@ -1,0 +1,10 @@
+/target
+/target-*
+# Game assets extracted from installed games for local testing. Never commit or redistribute.
+/local_assets
+# PNG captures and logs written by headless test runs.
+/captures
+*.log
+__pycache__/
+# Agent worktrees.
+/.claude/worktrees
