@@ -37,6 +37,7 @@ pub mod entry;
 pub mod game_settings;
 pub mod hooks;
 pub mod hud;
+pub mod hud_info;
 pub mod iat;
 pub mod input;
 pub mod items;

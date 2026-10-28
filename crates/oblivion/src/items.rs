@@ -217,6 +217,11 @@ mod game {
     const MOTION_LIN_VEL: usize = 0xD0;
     const MOTION_ANG_VEL: usize = 0xE0;
     const ACTIVATE: usize = 0x008A_6410;
+    /// `hkEntity`'s collision filter info (+0x30): Bethesda's layer its low 7 bits; layer 15 meets
+    /// nothing (the player's character controller's casts read it as they go).
+    const ENTITY_FILTER: usize = 0x30;
+    const LAYER_MASK: u32 = 0x7F;
+    const LAYER_NONCOLLIDABLE: u32 = 15;
 
     /// The game's dynamic cast (cdecl: object, 0, from, to, 0), and the parts' type descriptors.
     const DYNAMIC_CAST: usize = 0x0098_32E6;
@@ -328,10 +333,9 @@ mod game {
         Some((b.point_from_game(t), b.rot_from_game(m).normalize()))
     }
 
-    /// Puts a thing's 3D at a pose in the runtime's world, as `SetPos` does; `body`: its collision
-    /// too. (In the hand only what's drawn moves: the game's body would be in the player's own way,
-    /// walking into it.)
-    fn put(node: usize, pos: Vec3, rot: Quat, body: bool) -> bool {
+    /// Puts a thing's 3D and its collision at a pose in the runtime's world, as `SetPos` does (the
+    /// game draws a thing with a body where its body is).
+    fn put(node: usize, pos: Vec3, rot: Quat) -> bool {
         type Reset = unsafe extern "C" fn(usize, u8);
         type Update = unsafe extern "thiscall" fn(usize, f32, u32) -> u32;
         if !mem::is_readable(node as *const u8, 0xB8) {
@@ -347,9 +351,7 @@ mod game {
         unsafe {
             ((node + av::LOCAL_ROTATE) as *mut [f32; 9]).write_unaligned(ni_rows(r));
             ((node + av::LOCAL_TRANSLATE) as *mut [f32; 3]).write_unaligned(t.to_array());
-            if body {
-                std::mem::transmute::<usize, Reset>(RESET_COLLISION)(node, 1);
-            }
+            std::mem::transmute::<usize, Reset>(RESET_COLLISION)(node, 1);
             std::mem::transmute::<usize, Update>(UPDATE_NODE)(node, 0.0, 0);
         }
         true
@@ -369,6 +371,12 @@ mod game {
             ((motion + MOTION_LIN_VEL) as *mut [f32; 4]).write_unaligned([v.x, v.y, v.z, 0.0]);
             ((motion + MOTION_ANG_VEL) as *mut [f32; 4]).write_unaligned([w.x, w.y, w.z, 0.0]);
             std::mem::transmute::<usize, Activate>(ACTIVATE)(body);
+        }
+    }
+
+    fn set_filter(body: usize, filter: u32) {
+        if mem::is_readable((body + ENTITY_FILTER) as *const u8, 4) {
+            unsafe { ((body + ENTITY_FILTER) as *mut u32).write(filter) };
         }
     }
 
@@ -475,6 +483,8 @@ mod game {
         hull: Vec<Vec3>,
         /// A hand has it (held or pulled): the game's object goes where the runtime has it.
         owned: bool,
+        /// Its body's own collision filter, while a hand has it (it's out of the way meanwhile).
+        filter: Option<u32>,
         /// Let go and still moving (since when, still since when): the runtime simulates it, on the
         /// world's collision, and the game's object goes where it has it until it comes to rest.
         flying: Option<(f64, Option<f64>)>,
@@ -535,7 +545,7 @@ mod game {
         // (The game's weight is about pounds: a kilogram is two.)
         let mass = mass_inv.map(|m| 1.0 / m).or(f.weight.map(|w| w * 0.45)).unwrap_or(1.0).clamp(0.05, 60.0);
         let desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
-        Some(Item { refr, node, body, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, flying: None, taken_at: None })
+        Some(Item { refr, node, body, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, filter: None, flying: None, taken_at: None })
     }
 
     /// Once a game frame, where its scripts run: things put in a slot taken into the inventory;
@@ -655,6 +665,9 @@ mod game {
                     continue;
                 }
                 if st.flags & OS_STOWED != 0 {
+                    if let Some(f) = it.filter.take() {
+                        set_filter(it.body, f);
+                    }
                     if !s.to_take.contains(&st.id) {
                         s.to_take.push(st.id);
                     }
@@ -670,14 +683,25 @@ mod game {
                     if !it.owned {
                         tracing::info!("items: {} taken in hand ({:#x})", it.info.name(), st.flags);
                     }
+                    if !it.owned && it.body != 0 {
+                        // Out of everything's way while a hand has it (the player walks into it
+                        // otherwise): Havok's layer for things nothing meets.
+                        it.filter = mem::at::<u32>(it.body + ENTITY_FILTER);
+                        if let Some(f) = it.filter {
+                            set_filter(it.body, (f & !LAYER_MASK) | LAYER_NONCOLLIDABLE);
+                        }
+                    }
                     it.owned = true;
-                    put(it.node, pos, rot.normalize(), false);
+                    put(it.node, pos, rot.normalize());
                 } else if it.owned && it.body != 0 {
                     // Let go: Havok's again at once, moving as it left the hand.
                     it.owned = false;
                     let dir = |v: [f32; 3]| if tracking { view.dir(Vec3::from_array(v)) } else { Vec3::from_array(v) };
                     let (v, w) = (dir(st.lin_vel), dir(st.ang_vel));
-                    put(it.node, pos, rot.normalize(), true);
+                    put(it.node, pos, rot.normalize());
+                    if let Some(f) = it.filter.take() {
+                        set_filter(it.body, f);
+                    }
                     let g = camera::basis().point_to_game(pos);
                     type SetPos = unsafe extern "thiscall" fn(usize, f32, f32, f32);
                     unsafe { std::mem::transmute::<usize, SetPos>(SET_POS)(it.refr, g.x, g.y, g.z) };
@@ -693,7 +717,7 @@ mod game {
                         it.flying = Some((now, None));
                         tracing::info!("items: {} let go at {pos:.2?}, {speed:.2} m/s", it.info.name());
                     }
-                    put(it.node, pos, rot.normalize(), true);
+                    put(it.node, pos, rot.normalize());
                     let (since, still) = it.flying.unwrap();
                     let still = if speed < REST_SPEED && Vec3::from_array(st.ang_vel).length() < 0.5 { Some(still.unwrap_or(now)) } else { None };
                     if still.is_some_and(|t| now - t > REST_TIME) || now - since > MAX_FLIGHT {
@@ -718,6 +742,8 @@ mod game {
                 }
                 true
             });
+            // The game's card of a thing is the held thing's.
+            crate::hud_info::set_held(s.items.values().find(|i| i.owned && i.taken_at.is_none()).map_or(0, |i| i.refr));
             s.poses.count = 0;
             for it in s.items.values().filter(|i| !i.owned && i.flying.is_none() && i.taken_at.is_none()) {
                 let i = s.poses.count as usize;

@@ -1,0 +1,90 @@
+# Walking with a thing in the hand (tools/xrsim_oblivion.ps1 -Console
+# tools/xrsim/oblivion_load_items.txt, RUSTVR_TEST_TAKE=right, RUSTVR_OBLIVION_TRACE_MOVE=1): the
+# nearest thing comes into the right hand, the game's card of it over it ("held"); then the stick
+# forward and back two seconds each: the player walks as fast as with empty hands ("walking").
+duration = 46
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { pos = [-0.25, -0.75, 0.15], stick = [0, 0] }
+right = { pos = [0.25, -0.75, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 30.1
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.4
+left = { stick = [0, -1] }
+
+[[key]]
+t = 30.5
+left = { stick = [0, 0] }
+
+[[key]]
+t = 32.6
+left = { stick = [0, -1] }
+
+[[key]]
+t = 32.9
+left = { stick = [0, 0] }
+
+[[key]]
+t = 33
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = -40 }
+
+[[capture]]
+t = 34
+name = "lying"
+
+# The hand out in front; the grip closes: it's in the hand.
+[[key]]
+t = 34.5
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = -40 }
+right = { pos = [0.2, -0.35, 0.35], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 35
+right = { pos = [0.15, -0.3, 0.35], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 35.3
+right = { squeeze = 1 }
+
+[[key]]
+t = 36
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = -15 }
+right = { pos = [0.1, -0.25, 0.4], pitch = 0, squeeze = 1 }
+
+[[capture]]
+t = 37
+name = "held"
+
+[[key]]
+t = 39
+left = { stick = [0, 0] }
+
+[[key]]
+t = 39.01
+left = { stick = [0, 0.75] }
+
+[[capture]]
+t = 40
+name = "walking"
+
+[[key]]
+t = 41
+left = { stick = [0, 0.75] }
+
+[[key]]
+t = 41.01
+left = { stick = [0, -0.75] }
+
+[[key]]
+t = 43
+left = { stick = [0, -0.75] }
+
+[[key]]
+t = 43.01
+left = { stick = [0, 0] }

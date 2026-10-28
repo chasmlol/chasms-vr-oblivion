@@ -269,8 +269,10 @@ mod win {
             }
             info.hud_aspect = aspect;
             static LAYOUT_SENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-            if have_hud && !LAYOUT_SENT.swap(true, Ordering::AcqRel) {
-                a.write_hud_layout(&crate::hud::layout());
+            // (Again when the game's card of a thing has moved on its HUD.)
+            let card_moved = hooks::guard("hud info", None, crate::hud_info::moved).is_some();
+            if have_hud && (!LAYOUT_SENT.swap(true, Ordering::AcqRel) || card_moved) {
+                a.write_hud_layout(&crate::hud::layout(crate::hud_info::last()));
             }
             a.submit(info);
         });

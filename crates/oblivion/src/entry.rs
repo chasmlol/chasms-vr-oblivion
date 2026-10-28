@@ -40,6 +40,8 @@ fn startup() {
     crate::clock::install();
     #[cfg(target_arch = "x86")]
     crate::movement::install();
+    #[cfg(target_arch = "x86")]
+    crate::hud_info::install();
     crate::combat::install();
     crate::console::install();
     tracing::info!("startup: hooks installed");
