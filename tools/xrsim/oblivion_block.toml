@@ -1,6 +1,7 @@
 # Blocking (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load_attacker.txt): a zombie is put
 # in front of the player and attacks; the right hand draws the weapon from the left hip (as
-# oblivion_sword.toml) and holds it up across the body as a guard, where the zombie's blows meet it.
+# oblivion_sword.toml) and holds it up across the body as a guard, where the zombie's blows meet it;
+# the left hand takes the shield from over the left shoulder and holds it up in front.
 # Times are seconds from the runtime's start.
 duration = 56
 
@@ -47,8 +48,29 @@ right = { squeeze = 1 }
 t = 36.6
 right = { pos = [0.15, -0.25, 0.35], pitch = 50, yaw = -50, roll = 0, squeeze = 1 }
 
+# The shield, from over the left shoulder, up in front.
+[[key]]
+t = 37
+left = { pos = [-0.25, -0.55, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 38
+left = { pos = [-0.17, -0.05, -0.15], pitch = 40, squeeze = 0 }
+
+[[key]]
+t = 38.3
+left = { squeeze = 0 }
+
+[[key]]
+t = 38.5
+left = { squeeze = 1 }
+
+[[key]]
+t = 39.5
+left = { pos = [-0.15, -0.2, 0.35], pitch = 10, yaw = 20, squeeze = 1 }
+
 [[capture]]
-t = 40
+t = 40.5
 name = "guard"
 
 [[capture]]

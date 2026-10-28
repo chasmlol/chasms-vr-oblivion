@@ -6,8 +6,12 @@
 //! pommel are measured on the model ([`melee_from_model`]), and what they hit is the game's hit
 //! with the equipped weapon (`crate::combat::apply`): the game's damage, skill and enchantment.
 //!
+//! The equipped shield is the other: taken from over the left shoulder by its strap, it guards (it
+//! meets blows, it doesn't hit), and a block with it is the game's block with its shield.
+//!
 //! Forms: `MiddleHighProcess::equippedWeaponData` (+0xE4 of the player's process) is the
-//! inventory entry of the equipped weapon (its form at +8). `TESObjectWEAP` (xOBSE's
+//! inventory entry of the equipped weapon (its form at +8), `equippedShieldData` (+0xF0) the
+//! shield's (an armour: its male model's path at +0x70). `TESObjectWEAP` (xOBSE's
 //! `GameForms.h`): its name at +0x28, its model's path at +0x34, its weight at +0x7C, its damage at
 //! +0x8C, its type, speed and reach at +0x90..+0x98.
 
@@ -16,12 +20,17 @@ use glam::{Mat3, Quat, Vec3};
 use rustvr_protocol::*;
 use std::sync::Mutex;
 
-/// The weapon's object id (stable while it's equipped).
+/// The weapon's object id (stable while it's equipped), and the shield's.
 pub const WEAPON_ID: u32 = 0x0B1E_0001;
+pub const SHIELD_ID: u32 = 0x0B1E_0002;
 
 /// `Actor::process` and `MiddleHighProcess::equippedWeaponData`; an inventory entry's form.
 const PROCESS: usize = 0x58;
 const EQUIPPED_WEAPON: usize = 0xE4;
+const EQUIPPED_SHIELD: usize = 0xF0;
+/// An armour's male biped model path (`TESBipedModelForm` +0x64, its first model's path +0xC).
+const ARMOR_MODEL: usize = 0x70;
+const FORM_ARMOR: u8 = 0x14;
 const ENTRY_FORM: usize = 0x08;
 /// `TESObjectWEAP` fields.
 const WEAP_NAME: usize = 0x28;
@@ -72,6 +81,60 @@ pub fn equipped() -> Option<Equipped> {
         reach: mem::at(form + WEAP_REACH)?,
         weight: mem::at(form + WEAP_WEIGHT)?,
     })
+}
+
+/// The equipped shield: its form and model path.
+pub fn equipped_shield() -> Option<(usize, String)> {
+    let process = mem::deref(engine::player() + PROCESS);
+    let form = mem::deref(mem::deref(process + EQUIPPED_SHIELD) + ENTRY_FORM);
+    if process == 0 || form == 0 || mem::at::<u8>(form + 4) != Some(FORM_ARMOR) {
+        return None;
+    }
+    let model = crate::combat::read_str(mem::deref(form + ARMOR_MODEL));
+    (!model.is_empty()).then_some((form, model))
+}
+
+/// A shield as an object, measured on its model (Oblivion's shields: the disc across X and Y, its
+/// face to -Z, the strap standing out on the +Z side): held by the strap (the furthest out at +Z),
+/// the fist round it with the thumb up the disc and the back of the hand to the shield; the disc
+/// guards (one capsule across it).
+pub fn shield(model: &rustvr_asset::Model, key: &str, id: u32) -> (ObjectDesc, MeleeDesc) {
+    let lo = Vec3::from_array(model.bounds_min);
+    let hi = Vec3::from_array(model.bounds_max);
+    let (mut strap, mut n) = (Vec3::ZERO, 0.0);
+    for v in model.meshes.iter().flat_map(|m| &m.vertices) {
+        let p = Vec3::from_array(v.pos);
+        if p.z > hi.z - 0.015 {
+            strap += p;
+            n += 1.0;
+        }
+    }
+    let strap = if n > 0.0 { strap / n } else { (lo + hi) * 0.5 };
+    let centre = (lo + hi) * 0.5;
+    let radius = ((hi.x - lo.x).min(hi.y - lo.y) * 0.5).max(0.1);
+    let mut d: ObjectDesc = bytemuck::Zeroable::zeroed();
+    d.id = id;
+    d.kind = OBJ_MELEE;
+    d.flags = OBJF_GRABBABLE | OBJF_PULLABLE | OBJF_HOLSTERABLE | OBJF_RUNTIME_DRAWS;
+    d.shape = SHAPE_BOX;
+    d.half_extents = ((hi - lo) * 0.5).max(Vec3::splat(0.01)).to_array();
+    d.center = centre.to_array();
+    d.mass = 3.0;
+    d.grip = strap.to_array();
+    d.grip_rot = fist(Vec3::Y, Vec3::NEG_Z).to_array();
+    d.start_slot = 1 + SLOT_BACK_LEFT;
+    set_name(&mut d.name, &format!("oblivion/{key}"));
+    let mut w = MeleeDesc { id, count: 1, reach: radius, ..Default::default() };
+    let half = (radius * 0.4).max(0.02);
+    w.damagers[0] = Damager {
+        kind: DMG_BLUNT,
+        flags: DMGF_GUARD,
+        radius: radius * 0.8,
+        a: [centre.x, centre.y - half, centre.z],
+        b: [centre.x, centre.y + half, centre.z],
+        ..Default::default()
+    };
+    (d, w)
 }
 
 /// The controller grip rotation for a fist round a handle along `tube` (little finger to thumb),
@@ -216,7 +279,8 @@ pub fn object_desc(model: &rustvr_asset::Model, e: &Equipped, key: &str, id: u32
 }
 
 struct Registered {
-    form: usize,
+    /// The weapon's form and the shield's.
+    forms: (usize, usize),
     seq: u32,
 }
 
@@ -227,9 +291,10 @@ static MISSING: Mutex<Option<String>> = Mutex::new(None);
 /// changes, or taken away when there's none.
 pub fn publish(a: &rustvr_adapter::Adapter) {
     let now = equipped();
+    let shield_now = equipped_shield();
     let mut reg = REGISTERED.lock().unwrap();
-    let form = now.as_ref().map_or(0, |e| e.form);
-    if reg.as_ref().is_some_and(|r| r.form == form) {
+    let forms = (now.as_ref().map_or(0, |e| e.form), shield_now.as_ref().map_or(0, |s| s.0));
+    if reg.as_ref().is_some_and(|r| r.forms == forms) {
         return;
     }
     let seq = reg.as_ref().map_or(0, |r| r.seq).wrapping_add(1).max(1);
@@ -269,9 +334,25 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
     } else {
         tracing::info!("weapons: none equipped");
     }
+    if let Some((_, path)) = &shield_now {
+        let key = oblivion_assets::export::model_key(path);
+        match rustvr_asset::load_model(&rustvr_asset::default_root().join("oblivion"), &key) {
+            Ok(model) => {
+                let (mut d, w) = shield(&model, &key, SHIELD_ID);
+                d.spawn_seq = seq;
+                let (i, k) = (objects.count as usize, melee.count as usize);
+                objects.descs[i] = d;
+                objects.count += 1;
+                melee.weapons[k] = w;
+                melee.count += 1;
+                tracing::info!("weapons: the shield {path} (model {key}), held by its strap at {:?}", d.grip);
+            }
+            Err(err) => tracing::warn!("weapons: the shield {path} has no extracted model ({key}: {err:#})"),
+        }
+    }
     // The melee table first: when the runtime sees the weapon, its damagers are there.
     if a.write_melee(&melee) && a.write_objects(&objects) {
-        *reg = Some(Registered { form, seq });
+        *reg = Some(Registered { forms, seq });
     }
 }
 
@@ -331,6 +412,17 @@ mod tests {
         let w = melee_from_model(&m, BLUNT_ONE_HAND, 9, 8.0);
         assert_eq!(w.damagers[0].kind, DMG_BLUNT);
         assert!(w.damagers[0].radius > 0.03);
+    }
+
+    #[test]
+    fn a_shield_is_held_by_its_strap_and_only_guards() {
+        // A disc 60 cm across in X and Y, its face at z -0.1, the strap standing out to +0.04.
+        let m = model(&[[-0.05, -0.3, -0.1], [0.55, 0.3, -0.1], [0.25, 0.0, -0.15], [0.2, -0.05, 0.04], [0.2, 0.05, 0.04]]);
+        let (d, w) = shield(&m, "m1", SHIELD_ID);
+        assert!((Vec3::from_array(d.grip) - Vec3::new(0.2, 0.0, 0.04)).length() < 1e-5, "{:?}", d.grip);
+        assert_eq!(d.start_slot, 1 + SLOT_BACK_LEFT);
+        assert_eq!((w.count, w.damagers[0].flags), (1, DMGF_GUARD));
+        assert!(w.damagers[0].radius > 0.2);
     }
 
     #[test]
