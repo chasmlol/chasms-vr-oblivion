@@ -202,6 +202,7 @@ mod win {
         let snap = link::game_frame(&GameFrame { eye: Some(game.eye()), look_yaw: game.look_yaw(), menu, now, dt })?;
         snap.view?;
         log_camera_once(&game);
+        crate::player::trace_frame(now, &snap, &game);
         use crate::timing::{Part, time};
         time(Part::Combat, crate::combat::publish);
         time(Part::Collision, || hooks::guard_void("collision", || crate::collision::update(now)));

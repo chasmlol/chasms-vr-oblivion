@@ -328,8 +328,10 @@ mod game {
         Some((b.point_from_game(t), b.rot_from_game(m).normalize()))
     }
 
-    /// Puts a thing's 3D (and its collision) at a pose in the runtime's world, as `SetPos` does.
-    fn put(node: usize, pos: Vec3, rot: Quat) -> bool {
+    /// Puts a thing's 3D at a pose in the runtime's world, as `SetPos` does; `body`: its collision
+    /// too. (In the hand only what's drawn moves: the game's body would be in the player's own way,
+    /// walking into it.)
+    fn put(node: usize, pos: Vec3, rot: Quat, body: bool) -> bool {
         type Reset = unsafe extern "C" fn(usize, u8);
         type Update = unsafe extern "thiscall" fn(usize, f32, u32) -> u32;
         if !mem::is_readable(node as *const u8, 0xB8) {
@@ -345,7 +347,9 @@ mod game {
         unsafe {
             ((node + av::LOCAL_ROTATE) as *mut [f32; 9]).write_unaligned(ni_rows(r));
             ((node + av::LOCAL_TRANSLATE) as *mut [f32; 3]).write_unaligned(t.to_array());
-            std::mem::transmute::<usize, Reset>(RESET_COLLISION)(node, 1);
+            if body {
+                std::mem::transmute::<usize, Reset>(RESET_COLLISION)(node, 1);
+            }
             std::mem::transmute::<usize, Update>(UPDATE_NODE)(node, 0.0, 0);
         }
         true
@@ -667,13 +671,13 @@ mod game {
                         tracing::info!("items: {} taken in hand ({:#x})", it.info.name(), st.flags);
                     }
                     it.owned = true;
-                    put(it.node, pos, rot.normalize());
+                    put(it.node, pos, rot.normalize(), false);
                 } else if it.owned && it.body != 0 {
                     // Let go: Havok's again at once, moving as it left the hand.
                     it.owned = false;
                     let dir = |v: [f32; 3]| if tracking { view.dir(Vec3::from_array(v)) } else { Vec3::from_array(v) };
                     let (v, w) = (dir(st.lin_vel), dir(st.ang_vel));
-                    put(it.node, pos, rot.normalize());
+                    put(it.node, pos, rot.normalize(), true);
                     let g = camera::basis().point_to_game(pos);
                     type SetPos = unsafe extern "thiscall" fn(usize, f32, f32, f32);
                     unsafe { std::mem::transmute::<usize, SetPos>(SET_POS)(it.refr, g.x, g.y, g.z) };
@@ -689,7 +693,7 @@ mod game {
                         it.flying = Some((now, None));
                         tracing::info!("items: {} let go at {pos:.2?}, {speed:.2} m/s", it.info.name());
                     }
-                    put(it.node, pos, rot.normalize());
+                    put(it.node, pos, rot.normalize(), true);
                     let (since, still) = it.flying.unwrap();
                     let still = if speed < REST_SPEED && Vec3::from_array(st.ang_vel).length() < 0.5 { Some(still.unwrap_or(now)) } else { None };
                     if still.is_some_and(|t| now - t > REST_TIME) || now - since > MAX_FLIGHT {

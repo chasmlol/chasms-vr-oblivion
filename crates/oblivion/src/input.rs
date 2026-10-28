@@ -74,10 +74,20 @@ pub struct Virtual {
 /// The joystick axis the game walks (or runs) at full speed at.
 pub const FULL_SPEED_AXIS: f32 = 50.0;
 
-/// The joystick's axes for the runtime's move (x right, y forward; each -1..1).
+/// The joystick's axes for the runtime's move (x right, y forward; its length, 0..1, the speed).
+/// Oblivion walks one of eight ways (its keys: forward, back, the strafes and between them: it
+/// presses one for any push of an axis), so the stick's direction is taken to the nearest of the
+/// eight, and its length is how fast (the game's `|axis| · 0.02`, the larger axis's).
 pub fn stick_axes(move_xy: [f32; 2]) -> [i32; 2] {
-    let axis = |v: f32| (v.clamp(-1.0, 1.0) * FULL_SPEED_AXIS).round() as i32;
-    [axis(move_xy[0]), -axis(move_xy[1])]
+    let (x, y) = (move_xy[0], move_xy[1]);
+    let m = x.hypot(y).min(1.0);
+    if !(m > 1e-3) {
+        return [0, 0];
+    }
+    let k = (y.atan2(x) / std::f32::consts::FRAC_PI_4).round() * std::f32::consts::FRAC_PI_4;
+    let (dx, dy) = (k.cos().round() as i32, k.sin().round() as i32);
+    let axis = ((m * FULL_SPEED_AXIS).round() as i32).max(1);
+    [dx * axis, -dy * axis]
 }
 
 /// Turns the runtime's actions into Oblivion's keys and buttons.
@@ -444,6 +454,20 @@ mod tests {
     }
 
     #[test]
+    fn the_stick_goes_one_of_eight_ways_at_its_length() {
+        // A touch to the side of forward stays forward; half way round is the diagonal.
+        assert_eq!(stick_axes([0.05, 0.5]), [0, -25]);
+        assert_eq!(stick_axes([0.5, 0.5]), [35, -35]);
+        assert_eq!(stick_axes([-0.7, -0.1]), [-35, 0]);
+        // The whole push is full speed (and never more); none is still.
+        assert_eq!(stick_axes([0.0, 1.0]), [0, -50]);
+        assert_eq!(stick_axes([0.0, -1.0]), [0, 50]);
+        assert_eq!(stick_axes([0.0, 0.0]), [0, 0]);
+        // The slightest push moves.
+        assert_eq!(stick_axes([0.0, 0.01]), [0, -1]);
+    }
+
+    #[test]
     fn the_stick_walks_and_a_press_taps() {
         let mut b = Bridge::new(HashMap::new());
         let g = GameControls::default();
@@ -451,7 +475,7 @@ mod tests {
         it.move_xy = [0.3, 0.8];
         let v = b.update(&it, g, 0.0);
         assert!(v.keys.is_empty());
-        assert_eq!(v.stick, [15, -40]);
+        assert_eq!(v.stick, [0, -43], "mostly forward walks forward, as fast as the stick's pushed");
         it.move_xy = [0.0, 0.0];
         it.presses[Action::Jump as usize] = 1;
         let v = b.update(&it, g, 0.1);

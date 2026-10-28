@@ -25,6 +25,7 @@
 
 pub mod body;
 pub mod camera;
+pub mod clock;
 pub mod collision;
 pub mod combat;
 pub mod console;
@@ -45,6 +46,7 @@ pub mod link;
 pub mod log;
 pub mod mem;
 pub mod menus;
+pub mod movement;
 pub mod objects;
 pub mod player;
 pub mod proxy;

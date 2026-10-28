@@ -35,9 +35,39 @@ fn set_look(yaw: f32, pitch: f32) {
     }
 }
 
+/// Oblivion's physics steps (0x889810, once a frame): by default (`iUpdateType` 0) in fixed steps
+/// of `fMaxTime` (1/60 s), or one of the frame's whole time once that's half a step. At a headset's
+/// 90 to 120 frames a second that's a step on some frames and none on others, so the player (and
+/// all Havok moves) lurches along unevenly, and runs on a step after the stick is let go. Its update
+/// type 10 steps once every frame by the frame's time, smoothed by a factor (0xB2E2F0); unsmoothed,
+/// it's each frame's own time: everything moves every frame, as far as that frame's time takes it.
+const HAVOK_UPDATE_TYPE: usize = 0x00BA_7918;
+const HAVOK_SMOOTHING: usize = 0x00B2_E2F0;
+const STEP_EVERY_FRAME: u32 = 10;
+
+fn step_physics_every_frame() {
+    if mem::at::<u32>(HAVOK_UPDATE_TYPE) == Some(STEP_EVERY_FRAME) && mem::at::<f32>(HAVOK_SMOOTHING) == Some(1.0) {
+        return;
+    }
+    if !mem::is_readable(HAVOK_UPDATE_TYPE as *const u8, 4) || !mem::is_readable(HAVOK_SMOOTHING as *const u8, 4) {
+        return;
+    }
+    unsafe {
+        (HAVOK_UPDATE_TYPE as *mut u32).write(STEP_EVERY_FRAME);
+        (HAVOK_SMOOTHING as *mut f32).write(1.0);
+    }
+    tracing::info!("player: the game's physics steps every frame, by the frame's own time");
+}
+
 pub fn before_update() {
     let snap = link::last();
     let vr = snap.is_some_and(|s| s.view.is_some());
+    if vr || settings::get().background {
+        step_physics_every_frame();
+    }
+    // The player's step on the ground is the stick's (crate::movement).
+    #[cfg(target_arch = "x86")]
+    crate::movement::set_stick(snap.filter(|_| vr).map(|s| s.frame.intents.move_xy));
     let mut v = input::Virtual::default();
     if let Some(s) = snap {
         if let Some(b) = bridge().as_mut() {
@@ -88,6 +118,38 @@ fn trace_movement(mv: [f32; 2]) {
     let step = t.2.map_or(0.0, |q| ((pos[0] - q[0]).powi(2) + (pos[1] - q[1]).powi(2)).sqrt());
     tracing::info!("player: trace {:.3} s after the move {:?}: at {:?}, {:.2} units since the last frame", now - t.1, t.0, pos, step);
     t.2 = Some(pos);
+}
+
+/// Tests (`RUSTVR_OBLIVION_TRACE_MOVE=1`): every rendered frame, the runtime's move, the game's
+/// analog speed (0xB14E58), where the player is, where the game's camera is and where the view
+/// puts tracking's origin.
+pub fn trace_frame(now: f64, snap: &link::Snapshot, game: &crate::camera::CameraState) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if !*ON.get_or_init(|| std::env::var("RUSTVR_OBLIVION_TRACE_MOVE").is_ok_and(|v| v == "1")) {
+        return;
+    }
+    let p = engine::player();
+    let pos = (p != 0).then(|| mem::at::<[f32; 3]>(p + refr::POS)).flatten();
+    let anchor = snap.view.map(|v| v.anchor);
+    // The process's movement flags (virtual 0x2C0) and the actor's movement speed (0x5E65B0).
+    #[cfg(target_arch = "x86")]
+    let (flags, base) = {
+        let process = mem::deref(p + 0x58);
+        let f = mem::deref(mem::deref(process) + 0x2C0);
+        type Flags = unsafe extern "thiscall" fn(usize) -> u16;
+        type Speed = unsafe extern "thiscall" fn(usize) -> f32;
+        if process != 0 && f != 0 { unsafe { (std::mem::transmute::<usize, Flags>(f)(process), std::mem::transmute::<usize, Speed>(0x005E_65B0)(p)) } } else { (0, 0.0) }
+    };
+    #[cfg(not(target_arch = "x86"))]
+    let (flags, base) = (0u16, 0.0f32);
+    tracing::info!(
+        "move: {now:.4} stick {:?} flags {flags:#x} base {base:.1} speed {:?} refr {:?} eye {:?} anchor {:?}",
+        snap.frame.intents.move_xy,
+        mem::at::<f32>(0x00B1_4E58),
+        pos,
+        game.pos,
+        anchor.map(|a| a.to_array())
+    );
 }
 
 /// Holds one of the game's controls (by its name in `Oblivion.ini`) for `seconds`.

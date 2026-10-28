@@ -36,6 +36,10 @@ fn startup() {
     }
     tracing::info!("startup: the game's code is there after {:?}", t0.elapsed());
     render::install();
+    #[cfg(target_arch = "x86")]
+    crate::clock::install();
+    #[cfg(target_arch = "x86")]
+    crate::movement::install();
     crate::combat::install();
     crate::console::install();
     tracing::info!("startup: hooks installed");

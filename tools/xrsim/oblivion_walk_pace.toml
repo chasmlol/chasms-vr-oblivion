@@ -1,0 +1,229 @@
+# Analog walking at the headset's pace (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load.txt
+# -Settings "eye_width = 4147; eye_height = 4406", RUSTVR_OBLIVION_TRACE_MOVE=1): the stick forward
+# then back for two seconds each at a tenth, a quarter, half, three quarters and all the way (after
+# the runtime's deadzone of 0.08 and its rim at 0.95), stopping between, to see the speed follow the
+# stick and the player move evenly every frame and stop dead.
+duration = 71
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = 0 }
+left = { pos = [-0.25, -0.55, 0.15], stick = [0, 0] }
+right = { pos = [0.25, -0.55, 0.15], pitch = 0, squeeze = 0 }
+
+[[key]]
+t = 30.00
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 30.10
+left = { stick = [0, -1.0000] }
+
+[[key]]
+t = 30.40
+left = { stick = [0, -1.0000] }
+
+[[key]]
+t = 30.50
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 32.60
+left = { stick = [0, -1.0000] }
+
+[[key]]
+t = 32.90
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 34.00
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 34.01
+left = { stick = [0, 0.1670] }
+
+[[key]]
+t = 36.00
+left = { stick = [0, 0.1670] }
+
+[[key]]
+t = 36.01
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 36.80
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 36.81
+left = { stick = [0, -0.1670] }
+
+[[key]]
+t = 38.80
+left = { stick = [0, -0.1670] }
+
+[[key]]
+t = 38.81
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 39.60
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 39.61
+left = { stick = [0, 0.2975] }
+
+[[key]]
+t = 41.60
+left = { stick = [0, 0.2975] }
+
+[[key]]
+t = 41.61
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 42.40
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 42.41
+left = { stick = [0, -0.2975] }
+
+[[key]]
+t = 44.40
+left = { stick = [0, -0.2975] }
+
+[[key]]
+t = 44.41
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 45.20
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 45.21
+left = { stick = [0, 0.5150] }
+
+[[key]]
+t = 47.20
+left = { stick = [0, 0.5150] }
+
+[[key]]
+t = 47.21
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 48.00
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 48.01
+left = { stick = [0, -0.5150] }
+
+[[key]]
+t = 50.00
+left = { stick = [0, -0.5150] }
+
+[[key]]
+t = 50.01
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 50.80
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 50.81
+left = { stick = [0, 0.7325] }
+
+[[key]]
+t = 52.80
+left = { stick = [0, 0.7325] }
+
+[[key]]
+t = 52.81
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 53.60
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 53.61
+left = { stick = [0, -0.7325] }
+
+[[key]]
+t = 55.60
+left = { stick = [0, -0.7325] }
+
+[[key]]
+t = 55.61
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 56.40
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 56.41
+left = { stick = [0, 0.9500] }
+
+[[key]]
+t = 58.40
+left = { stick = [0, 0.9500] }
+
+[[key]]
+t = 58.41
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 59.20
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 59.21
+left = { stick = [0, -0.9500] }
+
+[[key]]
+t = 61.20
+left = { stick = [0, -0.9500] }
+
+[[key]]
+t = 61.21
+left = { stick = [0, 0.0000] }
+
+[[key]]
+t = 62.00
+left = { stick = [0, 0] }
+
+[[key]]
+t = 62.01
+left = { stick = [0.600, 0.300] }
+
+[[key]]
+t = 64.00
+left = { stick = [0.600, 0.300] }
+
+[[key]]
+t = 64.01
+left = { stick = [0, 0] }
+
+[[key]]
+t = 64.80
+left = { stick = [0, 0] }
+
+[[key]]
+t = 64.81
+left = { stick = [-0.600, -0.300] }
+
+[[key]]
+t = 66.80
+left = { stick = [-0.600, -0.300] }
+
+[[key]]
+t = 66.81
+left = { stick = [0, 0] }
+
