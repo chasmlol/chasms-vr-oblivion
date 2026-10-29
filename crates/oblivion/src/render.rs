@@ -102,6 +102,8 @@ mod win {
     /// grid (`TES` +8).
     const GRID_CELL: usize = 0x0048_2150;
     const TES: usize = 0x00B3_33A0;
+    /// The texture the game draws the world into behind its menus (`Main::Render`'s argument then).
+    const WORLD_TEXTURE: usize = 0x00B3_33E8;
     static REAL_GRID_REDRAW: AtomicUsize = AtomicUsize::new(0);
 
     unsafe extern "thiscall" fn grid_redraw(this: *mut c_void) {
@@ -145,6 +147,13 @@ mod win {
 
     unsafe extern "thiscall" fn render_hook(this: *mut c_void, arg: i32) -> i32 {
         let real: RenderFn = unsafe { std::mem::transmute(REAL_RENDER.load(Ordering::Acquire)) };
+        // A picture of the world into a texture of the game's own making (a save's picture, taken
+        // as an autosave goes through a door) is the game's, drawn as it draws it: two eyes drawn
+        // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
+        // menus goes into its world texture.)
+        if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
+            return unsafe { real(this, arg) };
+        }
         crate::timing::render_start();
         let result = unsafe { render_stereo(this, arg, real) };
         crate::timing::render_end();
