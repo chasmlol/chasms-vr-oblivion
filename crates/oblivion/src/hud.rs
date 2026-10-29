@@ -21,11 +21,18 @@
 //! each floats on its own; the first is the one the others are arranged round. The laser points at
 //! the ones that take clicks.
 //!
-//! **The HUD** (`menus\main\hud_main_menu.xml`) keeps its pieces anchored to the screen's corners
-//! and centre at any aspect: the health, magicka and fatigue bars and the equipped weapon and spell
-//! icons in the lower left, the compass at the bottom middle, the crosshair (and what it can
-//! activate: "Open Door", a name) at the centre, the sneak eye above it; the card of what it's on
-//! (its name and numbers) at the bottom right ([`crate::hud_info`]).
+//! **The HUD** is cut the same way, from its own menus' tiles, each piece where VR games put it:
+//!
+//! | Piece | From | Where |
+//! |---|---|---|
+//! | the health, magicka and fatigue bars, the weapon and the spell | `hud_main_menu.xml` | the back of the off-hand wrist (Alyx's glove) |
+//! | the spells and potions working on the player | `hud_main_menu.xml` | up the forearm from the bars |
+//! | the compass | `hud_main_menu.xml` | low in front of the body |
+//! | the crosshair, what it can activate, the sneak eye | `hud_reticle.xml` | where the head looks |
+//! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that; over the thing while a hand has one |
+//! | a foe's health | `hud_reticle.xml` | over the foe |
+//! | spoken lines | `hud_subtitle_menu.xml` | the caption strip |
+//! | notices ("Iron Arrow added"), a region's name | `hud_subtitle_menu.xml`, `hud_main_menu.xml` | over the captions |
 
 use rustvr_protocol::*;
 
@@ -145,6 +152,12 @@ mod win {
     const MENU_STATS: u32 = 0x3EB;
     const MENU_HUD: u32 = 0x3EC;
     const MENU_CONTAINER: u32 = 0x3F0;
+    const MENU_SUBTITLES: u32 = 0x3F2;
+    /// The reticle's tile (`hud_reticle.xml`), not a menu of its own: a pseudo-type for [`Trees`].
+    const RETICLE: u32 = 0;
+    /// `HUDInfoMenu`: what the crosshair is on (a reference).
+    const HUD_INFO_MENU: usize = 0x00B3_B33C;
+    const CROSSHAIR_REF: usize = 0x54;
     const MENU_DIALOG: u32 = 0x3F1;
     const MENU_QUANTITY: u32 = 0x3F8;
     const MENU_MAGIC: u32 = 0x3FE;
@@ -225,7 +238,7 @@ mod win {
 
     impl Trees {
         fn get(&mut self, kind: u32) -> &tiles::Tree {
-            self.0.entry(kind).or_insert_with(|| tiles::Tree::read(tiles::menu_tile(kind)))
+            self.0.entry(kind).or_insert_with(|| tiles::Tree::read(if kind == RETICLE { tiles::reticle_tile() } else { tiles::menu_tile(kind) }))
         }
     }
 
@@ -300,11 +313,11 @@ mod win {
         let Some(screen) = tiles::screen() else { return l };
         // A line of the game's ordinary text (a list row's name: 38 units with its leading).
         l.text_height = 36.0 / screen.1;
+        let mut trees = Trees::default();
         if !crate::menus::menu_mode() {
-            hud(&mut l);
+            hud(&mut l, screen, &mut trees);
             return l;
         }
-        let mut trees = Trees::default();
         // (Tests: each menu's tiles into the log, once.)
         for kind in MENU_MESSAGE..=MENU_LAST {
             if tiles::menu_tile(kind) != 0 {
@@ -361,19 +374,50 @@ mod win {
         l
     }
 
-    /// The HUD's pieces (out of menus).
-    fn hud(l: &mut HudLayout) {
-        // The bars, the equipped weapon and spell, the compass: on the off-hand wrist.
-        l.push(HudElement::new(HUD_STATUS, [0.0, 0.86, 0.5, 1.0]));
-        // The crosshair and what it can activate: at gaze.
-        l.push(HudElement::new(HUD_CENTER, [0.3, 0.38, 0.7, 0.62]));
-        // Spoken lines.
-        l.push(HudElement::new(HUD_SUBTITLES, [0.1, 0.62, 0.9, 0.86]));
-        // Messages ("You have learned..."), top left.
-        l.push(HudElement::new(HUD_HINTS, [0.0, 0.0, 0.5, 0.16]));
-        // The card of what the crosshair's on (or what a hand has): over the thing in a hand.
+    /// The HUD's pieces (out of menus): see the module's table.
+    fn hud(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees) {
+        let piece = |l: &mut HudLayout, trees: &mut Trees, role: u32, menu: u32, from: &'static [From]| -> Option<[f32; 4]> {
+            let b = piece_box(trees.get(menu), &Piece::of(from, false))?;
+            l.push(HudElement::new(role, tiles::uv_of(b, screen, MARGIN)?));
+            Some(b)
+        };
+        piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("hudmain_statusbars"), From::Drawn("hudmain_Weapon_Icon"), From::Drawn("hudmain_Magic_Icon")]);
+        piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("magic_icons")]);
+        piece(l, trees, HUD_COMPASS, MENU_HUD, &[From::Drawn("hudmain_compass_layout")]);
+        piece(l, trees, HUD_SUBTITLES, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_text")]);
+        piece(l, trees, HUD_HINTS, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_icon"), From::Drawn("hudsubtitle_notice")]);
+        piece(l, trees, HUD_HINTS, MENU_HUD, &[From::Drawn("hudmain_region")]);
+        // At gaze: the reticle where it is from the screen's middle (the crosshair on the point
+        // looked at), and the card of what it's on under it.
+        let (w, h) = screen;
+        let offset = |b: [f32; 4]| [((b[0] + b[2]) * 0.5 - w * 0.5) / h, -((b[1] + b[3]) * 0.5 - h * 0.5) / h, 0.0];
+        let reticle = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_reticle"), From::Drawn("hudreticle_sneak")], false));
+        if let Some((b, uv)) = reticle.and_then(|b| Some((b, tiles::uv_of(b, screen, MARGIN)?))) {
+            l.push(HudElement { role: HUD_GAZE, uv, offset: offset(b), ..Default::default() });
+        }
+        let crosshair = mem::deref(mem::deref(HUD_INFO_MENU) + CROSSHAIR_REF);
         if let Some(uv) = crate::hud_info::card_uv() {
-            l.push(HudElement::new(HUD_HELD, uv));
+            if crate::hud_info::holding() {
+                // (Over the thing in a hand.)
+                l.push(HudElement::new(HUD_HELD, uv));
+            } else {
+                let below = reticle.map_or(0.0, |r| (r[3] - r[1]) * 0.5 / h) + (uv[3] - uv[1]) * 0.5 + 0.01;
+                let above_middle = reticle.map_or([0.0; 3], offset);
+                l.push(HudElement { role: HUD_GAZE, uv, offset: [0.0, above_middle[1] - below, 0.0], ..Default::default() });
+            }
+        }
+        // A foe's health over the foe (what the crosshair is on), or at gaze with nobody there.
+        if let Some(b) = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_enemy_health")], false))
+            && let Some(uv) = tiles::uv_of(b, screen, MARGIN)
+        {
+            match (crosshair != 0 && is_actor(crosshair)).then(|| head(crosshair)).flatten() {
+                Some(head) => {
+                    l.target = (head + Vec3::Y * 0.35).to_array();
+                    l.has_target = 1;
+                    l.push(HudElement::new(HUD_TARGET, uv));
+                }
+                None => l.push(HudElement { role: HUD_GAZE, uv, offset: offset(b), ..Default::default() }),
+            }
         }
     }
 

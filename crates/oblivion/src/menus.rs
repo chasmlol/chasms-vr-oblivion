@@ -52,14 +52,19 @@ pub fn menu_mode() -> bool {
     false
 }
 
-/// The big four (inventory, magic, map, character) are the menus open: the menu on top is theirs.
+/// The pause menu and its own (options and their pages, load, save; the main menu): Escape closes
+/// them. Any other menu (a container, dialogue, the big four...) closes with Menu Mode, and Escape
+/// would open the pause menu over it.
+const ESCAPE_CLOSES: [u32; 10] = [0x3F5, 0x3F7, 0x3F9, 0x3FA, 0x3FB, 0x3FC, 0x3FD, 0x40E, 0x40F, MENU_MAIN];
+
+/// A menu in the world is on top, one the game's Menu Mode closes.
 #[cfg(target_arch = "x86")]
-pub fn big_four() -> bool {
-    menu_mode() && crate::tiles::top_menu() == crate::tiles::BIG_FOUR
+pub fn tab_closes() -> bool {
+    menu_mode() && in_world() && !ESCAPE_CLOSES.contains(&crate::tiles::top_menu())
 }
 
 #[cfg(not(target_arch = "x86"))]
-pub fn big_four() -> bool {
+pub fn tab_closes() -> bool {
     false
 }
 

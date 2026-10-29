@@ -291,6 +291,14 @@ mod win {
         unsafe { std::mem::transmute::<usize, unsafe extern "C" fn() -> u32>(TOP_MENU)() }
     }
 
+    /// The HUD's reticle (`hud_reticle.xml`: the crosshair, the sneak eye, a foe's health), a tile
+    /// of the interface's own (`InterfaceManager` +0x80), not a menu.
+    pub fn reticle_tile() -> usize {
+        type Interface = unsafe extern "C" fn(u8, u8) -> usize;
+        let ui = unsafe { std::mem::transmute::<usize, Interface>(INTERFACE)(0, 1) };
+        if ui == 0 { 0 } else { mem::deref(ui + 0x80) }
+    }
+
     /// The screen's size in the menus' units.
     pub fn screen() -> Option<(f32, f32)> {
         type Interface = unsafe extern "C" fn(u8, u8) -> usize;

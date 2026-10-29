@@ -40,6 +40,11 @@ mod win {
         unsafe { real(if held != 0 { held } else { target }, a, force) }
     }
 
+    /// A hand has one of the game's things (the card is its).
+    pub fn holding() -> bool {
+        HELD.load(Ordering::Acquire) != 0
+    }
+
     /// The thing a hand has now (0: none): the card is its.
     pub fn set_held(refr: usize) {
         if HELD.swap(refr, Ordering::AcqRel) != refr && REAL.load(Ordering::Acquire) != 0 {
