@@ -10,8 +10,8 @@
 //! |---|---|---|
 //! | a container | beside it | its list (heads, scroll bar, gold, weight), its tabs, its buttons |
 //! | barter | beside the merchant | the same, with the merchant's gold and haggle |
-//! | dialogue | the speaker: their line under their face, the topics beside them | the name and line; the topics and services |
-//! | the inventory, magic, the map, the character | ahead of the player | the page; the HUD's switcher between them (bars: character, weapon: inventory, spell: magic, compass: map) |
+//! | dialogue | the speaker: their name over their head, their line under their face, the topics beside them | the name; the line; the topics and services |
+//! | the inventory, magic, the map, the character | ahead of the player | the page or list; its tabs; the HUD's switcher between them (bars: character, weapon: inventory, spell: magic, compass: map); a description over the page |
 //! | a count, a question, haggling | where the eyes look, the menu under it where it was | the box |
 //! | a service from dialogue (spells, training, repair, recharge, persuasion) | beside the speaker | the menu, cut from the screen |
 //! | a thing's own (a lock being picked, an altar's enchanting or spellmaking, a sigil stone) | beside the thing | the menu, cut from the screen |
