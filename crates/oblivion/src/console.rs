@@ -62,16 +62,44 @@ pub fn select_spell(_id: u32) -> bool {
     false
 }
 
+/// `Actor::EquipItem` (thiscall: the form, how many, an extra data list, 1, locked).
+const EQUIP_ITEM: usize = 0x005F_AEA0;
+
+/// Equips all the player has of the form with id `id`, as the inventory's own equip does a stack
+/// (the script's `EquipItem` equips one: a single arrow).
+#[cfg(target_arch = "x86")]
+pub fn equip_all(id: u32) -> bool {
+    type Lookup = unsafe extern "C" fn(u32) -> usize;
+    type Equip = unsafe extern "thiscall" fn(usize, usize, u32, usize, u32, u8);
+    let player = crate::engine::player();
+    let form = unsafe { std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(id) };
+    let Some(count) = crate::archery::inventory_count(form).filter(|&n| n > 0) else { return false };
+    if player == 0 || form == 0 {
+        return false;
+    }
+    unsafe { std::mem::transmute::<usize, Equip>(EQUIP_ITEM)(player, form, count, 0, 1, 0) };
+    true
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn equip_all(_id: u32) -> bool {
+    false
+}
+
 /// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <hex id>` selects a spell,
-/// `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in front of the
-/// player (and that far over their feet), facing them (tests), anything else is compiled and run as
-/// a line of script. True if it ran.
+/// `EquipAll <hex id>` equips all the player has of a thing (a stack of arrows), `PlaceInFront
+/// <ref hex id> <metres> [<metres up>]` puts a reference that far in front of the player (and that
+/// far over their feet), facing them (tests), anything else is compiled and run as a line of
+/// script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
     }
     if let Some(id) = line.strip_prefix("SelectSpell ") {
         return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(select_spell);
+    }
+    if let Some(id) = line.strip_prefix("EquipAll ") {
+        return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(equip_all);
     }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();

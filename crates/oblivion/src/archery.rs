@@ -271,7 +271,7 @@ mod game {
     /// How many of `form` the player has: its entry in the player's container changes
     /// (`ExtraContainerChanges`, extra 0x1A: data +0xC, its list of entries +0 as (entry, next)
     /// nodes; an entry's count +4, more than the base container's, which holds no arrows).
-    fn inventory_count(form: usize) -> Option<u32> {
+    pub fn inventory_count(form: usize) -> Option<u32> {
         type Get = unsafe extern "thiscall" fn(usize, u32) -> usize;
         let player = engine::player();
         let changes = unsafe { std::mem::transmute::<usize, Get>(GET_EXTRA)(player + REFR_EXTRA, EXTRA_CONTAINER_CHANGES) };
@@ -554,11 +554,6 @@ mod game {
         });
     }
 
-    /// The farthest the game's arrows go (metres; 0: unknown).
-    pub fn range() -> f32 {
-        f32_at(MAX_DISTANCE) / camera::UNITS_PER_METER
-    }
-
     /// The equipped arrows and how many (what the registration changes with).
     pub fn arrows_key() -> (usize, u32) {
         equipped_arrows().map_or((0, 0), |a| (a.form, a.count))
@@ -602,7 +597,9 @@ mod game {
             b.speed = [s0, s1];
             b.gravity = [g0 * GRAVITY_UNITS, g1 * GRAVITY_UNITS];
         }
-        b.range = range();
+        // (The game's arrows fly until they hit something or age out: `fArrowMaxDistance` is how
+        // far its archers shoot from, not how far an arrow goes.)
+        b.range = 0.0;
         set_name(&mut b.crosshair, &format!("oblivion/{}", texture_key(RETICLE)));
         bows.bows[0] = b;
         bows.count = 1;
