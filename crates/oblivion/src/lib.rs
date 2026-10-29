@@ -40,6 +40,7 @@ pub mod hud;
 pub mod hud_info;
 pub mod iat;
 pub mod input;
+pub mod inventory;
 pub mod items;
 pub mod launcher;
 pub mod lighting;

@@ -251,7 +251,8 @@ mod game {
     const VT_PICK_UP: usize = 0xB3 * 4;
     const CODE: std::ops::Range<usize> = 0x0040_1000..0x00A0_0000;
 
-    fn cast(obj: usize, to: usize) -> usize {
+    /// The game's dynamic cast of a form to one of its parts (`to`: its type descriptor), or 0.
+    pub fn cast(obj: usize, to: usize) -> usize {
         type Cast = unsafe extern "C" fn(usize, u32, usize, usize, u32) -> usize;
         if obj == 0 || !mem::is_readable(obj as *const u8, 8) {
             return 0;
