@@ -1,9 +1,13 @@
 //! The game's own models, put in its world where the player's hands have them: loaded through the
-//! game's model cache, hung under `MagicProjectileRoot` (which the game updates every frame with
-//! its time and controllers, as it does its spells in flight, and which the world render draws: lit,
-//! fogged, in its depth, in both eyes), and placed each frame before the eyes are drawn. Their
-//! lights are the game's own too: a light's form makes its point light and flickers it as the game
-//! does for a torch, and a spell effect's casting light is the game's `MagicLight`.
+//! game's model cache, set up as the game sets up an effect it puts in the world (0x5713F0), hung
+//! under the world's `ShadowSceneNode` (which the world render draws: lit, fogged, in its depth, in
+//! both eyes), placed each frame before the eyes are drawn and run on the game's world time (its
+//! particles, flames and sequences). Their lights are the game's own too: a light's form makes its
+//! point light and flickers it as the game does for a torch, and a spell effect's casting light is
+//! the game's `MagicLight`.
+//!
+//! (Not under `MagicProjectileRoot`: the game updates that with the frame's time where its
+//! controllers want a clock (0x40D800), and particles under it are never made.)
 //!
 //! The functions (docs/research/torches.md):
 //! * 0x69FBF0 (cdecl, a model's path): a fresh copy of the model's root from the game's cache. Its
@@ -28,8 +32,6 @@ use crate::engine::av;
 use crate::{camera, mem, nodes};
 use glam::{Mat3, Quat, Vec3};
 
-/// `MagicProjectileRoot`.
-const PROJECTILE_ROOT: usize = 0x00B3_33A4;
 const LOAD_MODEL: usize = 0x0069_FBF0;
 const VT_ATTACH: usize = 0x84;
 /// `NiAVObject`'s collision object.
@@ -56,21 +58,23 @@ const MAGIC_LIGHT_GONE: usize = 0x0069_E0B0;
 const MAGIC_LIGHT_SIZE: usize = 28;
 const ALLOC: usize = 0x0040_1F00;
 const FREE: usize = 0x0040_1F20;
+/// What the game does to an effect's model it puts in the world (0x5713F0): its properties
+/// updated (0x707610, thiscall), its billboards set straight (0x570A30, stdcall) and every
+/// controller started (0x715B40, cdecl).
+const UPDATE_PROPERTIES: usize = 0x0070_7610;
+const RESET_BILLBOARDS: usize = 0x0057_0A30;
+const START_CONTROLLERS: usize = 0x0071_5B40;
 /// `NiAVObject::Update(time, flags)` (thiscall).
 const UPDATE_NODE: usize = 0x0070_7370;
 pub const LOCAL_SCALE: usize = 0x60;
-/// The frame's time, seconds.
+/// The frame's time, seconds; the world's time (the sum of them, as the game keeps it in 0x4424D0).
 pub const FRAME_TIME: usize = 0x00B3_3E9C;
+pub const WORLD_TIME: usize = 0x00B3_3A30;
 
-/// The root the game's spells in flight hang under, or 0.
-pub fn projectile_root() -> usize {
-    mem::deref(PROJECTILE_ROOT)
-}
-
-/// A copy of a model (a path under `meshes\`), hung under `MagicProjectileRoot`, or 0.
+/// A copy of a model (a path under `meshes\`), in the world, or 0.
 #[cfg(target_arch = "x86")]
 pub fn load(path: &str) -> usize {
-    let root = projectile_root();
+    let root = crate::lighting::world_scene().unwrap_or(0);
     let Ok(c) = std::ffi::CString::new(path) else { return 0 };
     if root == 0 || path.is_empty() {
         return 0;
@@ -88,6 +92,18 @@ pub fn load(path: &str) -> usize {
         release(collision);
     }
     attach(root, node);
+    // As the game sets up its own effects in the world (a temporary effect, 0x5713F0): its world
+    // transforms and properties, its billboards, and every controller started.
+    type Node = unsafe extern "thiscall" fn(usize);
+    type Update = unsafe extern "thiscall" fn(usize, f32, u32) -> u32;
+    type Billboards = unsafe extern "stdcall" fn(usize) -> u32;
+    type Start = unsafe extern "C" fn(usize) -> u32;
+    unsafe {
+        std::mem::transmute::<usize, Node>(UPDATE_PROPERTIES)(node);
+        std::mem::transmute::<usize, Update>(UPDATE_NODE)(node, world_time(), 1);
+        std::mem::transmute::<usize, Billboards>(RESET_BILLBOARDS)(node);
+        std::mem::transmute::<usize, Start>(START_CONTROLLERS)(node);
+    }
     node
 }
 
@@ -147,10 +163,39 @@ pub fn place(node: usize, pos: Vec3, rot: Quat, scale: f32) -> bool {
     true
 }
 
-/// Starts one of a model's controller sequences by name (`SpecialIdle_Cast`): its length
-/// (seconds), or None if it has none.
+/// One of a model's controller sequences, started ([`play`]).
+#[derive(Clone, Copy, Debug)]
+pub struct Sequence {
+    seq: usize,
+    /// Its length, seconds.
+    pub length: f32,
+}
+
+impl Sequence {
+    /// Plays it round and round between `from` and `to` seconds into it (`phase`: where it is,
+    /// moved on `dt`).
+    pub fn cycle(&self, phase: &mut f32, from: f32, to: f32, dt: f32) {
+        *phase += dt;
+        if *phase >= to || *phase < from {
+            *phase = from;
+        }
+        self.hold(*phase);
+    }
+
+    /// Holds it at `phase` seconds into it (until held elsewhere): what it drives (its emitters,
+    /// what it shows and hides) stays as it is there, while the particles it makes go on living
+    /// in the world's time.
+    pub fn hold(&self, phase: f32) {
+        if mem::is_readable(self.seq as *const u8, SEQUENCE_OFFSET + 4) {
+            unsafe { ((self.seq + SEQUENCE_OFFSET) as *mut f32).write_unaligned(phase.clamp(0.0, self.length) - world_time()) };
+        }
+    }
+}
+
+/// Starts one of a model's controller sequences by name (`SpecialIdle_Cast`), or None if it has
+/// none.
 #[cfg(target_arch = "x86")]
-pub fn play(node: usize, sequence: &str) -> Option<f32> {
+pub fn play(node: usize, sequence: &str) -> Option<Sequence> {
     type AsManager = unsafe extern "C" fn(usize, usize) -> usize;
     type ByName = unsafe extern "thiscall" fn(usize, *const u8, *mut usize) -> u8;
     type Reset = unsafe extern "thiscall" fn(usize, f32);
@@ -172,7 +217,7 @@ pub fn play(node: usize, sequence: &str) -> Option<f32> {
         flags.write_unaligned(flags.read_unaligned() | 8);
         ((seq + SEQUENCE_OFFSET) as *mut f32).write_unaligned(-f32::MAX);
     }
-    mem::at::<f32>(seq + SEQUENCE_LENGTH)
+    Some(Sequence { seq, length: mem::at::<f32>(seq + SEQUENCE_LENGTH)? })
 }
 
 /// A light form's own light on one of the game's models: made as the game makes a torch's, and
@@ -265,6 +310,21 @@ impl CastingLight {
             std::mem::transmute::<usize, Free>(FREE)(self.0);
         }
     }
+}
+
+/// Runs a model's controllers (its particles, its sequences) at the game's world time (as the game
+/// runs the world's: `NiAVObject::Update(time, 1)` with the time 0x4424D0 keeps).
+#[cfg(target_arch = "x86")]
+pub fn animate(node: usize) {
+    type Update = unsafe extern "thiscall" fn(usize, f32, u32) -> u32;
+    if mem::is_readable(node as *const u8, 0xB8) {
+        unsafe { std::mem::transmute::<usize, Update>(UPDATE_NODE)(node, world_time(), 1) };
+    }
+}
+
+/// The game's world time (seconds since the game started; what its world's controllers run on).
+pub fn world_time() -> f32 {
+    mem::at::<f32>(WORLD_TIME).filter(|t| t.is_finite()).unwrap_or(0.0)
 }
 
 /// The game's frame time now (seconds).

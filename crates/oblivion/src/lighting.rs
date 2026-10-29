@@ -259,7 +259,7 @@ pub fn scene_lights() -> Vec<SceneLight> {
 
 /// The world's `ShadowSceneNode`: the "World" node's child that is one.
 #[cfg(target_arch = "x86")]
-fn world_scene() -> Option<usize> {
+pub fn world_scene() -> Option<usize> {
     let world = mem::deref(engine::SCENE_GRAPH);
     if world == 0 {
         return None;

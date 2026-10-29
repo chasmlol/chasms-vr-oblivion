@@ -9,11 +9,16 @@
 //! The equipped shield is the other: taken from over the left shoulder by its strap, it guards (it
 //! meets blows, it doesn't hit), and a block with it is the game's block with its shield.
 //!
+//! A staff casts: held in either hand, its trigger charges its enchantment at its tip and letting go
+//! casts it from there along the staff (`OBJF_CASTS`): the game's own staff cast, its charge used
+//! up (`crate::combat`).
+//!
 //! Forms: `MiddleHighProcess::equippedWeaponData` (+0xE4 of the player's process) is the
 //! inventory entry of the equipped weapon (its form at +8), `equippedShieldData` (+0xF0) the
 //! shield's (an armour: its male model's path at +0x70). `TESObjectWEAP` (xOBSE's
-//! `GameForms.h`): its name at +0x28, its model's path at +0x34, its weight at +0x7C, its damage at
-//! +0x8C, its type, speed and reach at +0x90..+0x98.
+//! `GameForms.h`): its name at +0x28, its model's path at +0x34, its enchantment at +0x64
+//! (`TESEnchantableForm` +0x60), its weight at +0x7C, its damage at +0x8C, its type, speed and reach
+//! at +0x90..+0x98.
 
 use crate::{engine, mem};
 use glam::{Mat3, Quat, Vec3};
@@ -35,6 +40,7 @@ const ENTRY_FORM: usize = 0x08;
 /// `TESObjectWEAP` fields.
 const WEAP_NAME: usize = 0x28;
 const WEAP_MODEL: usize = 0x34;
+const WEAP_ENCHANTMENT: usize = 0x64;
 const WEAP_WEIGHT: usize = 0x7C;
 const WEAP_DAMAGE: usize = 0x8C;
 const WEAP_TYPE: usize = 0x90;
@@ -57,6 +63,8 @@ pub struct Equipped {
     pub damage: u16,
     pub reach: f32,
     pub weight: f32,
+    /// Its enchantment's form id (0: none).
+    pub enchantment: u32,
 }
 
 /// The player's equipped weapon, if any.
@@ -80,6 +88,7 @@ pub fn equipped() -> Option<Equipped> {
         damage: mem::at(form + WEAP_DAMAGE)?,
         reach: mem::at(form + WEAP_REACH)?,
         weight: mem::at(form + WEAP_WEIGHT)?,
+        enchantment: Some(mem::deref(form + WEAP_ENCHANTMENT)).filter(|&e| e != 0).and_then(|e| mem::at::<u32>(e + 0x0C)).unwrap_or(0),
     })
 }
 
@@ -272,6 +281,11 @@ pub fn object_desc(model: &rustvr_asset::Model, e: &Equipped, key: &str, id: u32
         d.foregrip = [0.0, 0.0, lo.z * 0.6];
         d.support_rot = d.grip_rot;
     }
+    // An enchanted staff casts its enchantment from its tip (over the spell hand's casting time).
+    if e.kind == STAFF && e.enchantment != 0 {
+        d.flags |= OBJF_CASTS;
+        d.casts = e.enchantment;
+    }
     d.start_slot = 1 + if two_handed { SLOT_BACK_RIGHT } else { SLOT_HIP_LEFT };
     // The model's name, `<game>/<key>` (as `rustvr_guns::desc::model_name` makes it).
     set_name(&mut d.name, &format!("oblivion/{key}"));
@@ -313,12 +327,13 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
                 melee.weapons[0] = melee_from_model(&model, e.kind, WEAPON_ID, e.damage as f32);
                 melee.count = 1;
                 tracing::info!(
-                    "weapons: {} ({}, model {key}, type {}, damage {}, reach {}): {} damagers, {:.2} m long",
+                    "weapons: {} ({}, model {key}, type {}, damage {}, reach {}, enchantment {:#x}): {} damagers, {:.2} m long",
                     e.name,
                     e.model,
                     e.kind,
                     e.damage,
                     e.reach,
+                    e.enchantment,
                     melee.weapons[0].count,
                     model.bounds_max[2] - model.bounds_min[2]
                 );
@@ -428,7 +443,7 @@ mod tests {
     #[test]
     fn a_one_handed_weapon_hangs_at_the_left_hip_a_two_handed_on_the_back() {
         let m = model(&[[0.0, 0.0, -0.2], [0.0, 0.0, 1.0]]);
-        let mut e = Equipped { form: 1, name: "x".into(), model: "weapons\\iron\\longsword.nif".into(), kind: BLADE_ONE_HAND, damage: 8, reach: 1.0, weight: 22.0 };
+        let mut e = Equipped { form: 1, name: "x".into(), model: "weapons\\iron\\longsword.nif".into(), kind: BLADE_ONE_HAND, damage: 8, reach: 1.0, weight: 22.0, enchantment: 0 };
         let d = object_desc(&m, &e, "m1", WEAPON_ID);
         assert_eq!(d.start_slot, 1 + SLOT_HIP_LEFT);
         assert_eq!(name_str(&d.name), "oblivion/m1");

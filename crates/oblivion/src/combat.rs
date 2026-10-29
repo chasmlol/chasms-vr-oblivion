@@ -78,6 +78,8 @@ const VT_APPLY_COST: usize = 0x18;
 const VT_USABLE: usize = 0x1C;
 /// `MagicCaster` immediate cast (`this`, item, target, unknown).
 const CAST_IMMEDIATE: usize = 0x0069_BE90;
+/// The game's staff cast (thiscall on the actor: its equipped weapon's inventory entry).
+const USE_STAFF: usize = 0x005E_4920;
 /// The projectile spawn (cdecl, 12 arguments: ... x, y, z, angle x, y, z).
 pub const SPAWN_PROJECTILE: usize = 0x0069_F490;
 /// `NiNode` children (`NiTArray`: data at +0xB0, first free entry at +0xB6).
@@ -328,6 +330,8 @@ pub fn spells() -> (Box<Spells>, HashMap<u32, usize>) {
     table.magicka = magicka;
     table.magicka_max = base_actor_value(player, AV_MAGICKA) as f32;
     table.cast_time = 0.5;
+    // The game's own casting art goes where the runtime's casting is (`crate::magic`).
+    table.flags = SPELLS_GAME_ART;
     let active = active_magic_item(player);
     static ACTIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(usize::MAX);
     if ACTIVE.swap(active, std::sync::atomic::Ordering::Relaxed) != active {
@@ -388,6 +392,11 @@ pub fn spells() -> (Box<Spells>, HashMap<u32, usize>) {
     (table, by_id)
 }
 
+/// The player's spell with form id `id` (its `SpellItem`), as last published.
+pub fn spell_item(id: u32) -> Option<usize> {
+    KNOWN.lock().unwrap().as_ref()?.spells.get(&id).copied()
+}
+
 /// A cast the adapter is making: the projectile goes from here this way (game units, radians).
 #[derive(Clone, Copy, Debug)]
 pub struct Launch {
@@ -436,6 +445,7 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
                     unsafe { std::mem::transmute::<usize, Hit>(f)(player, power as u8, 0, target) };
                 }
             }
+            CE_CAST if ev.object == crate::weapons::WEAPON_ID => cast_staff(player, ev, actors),
             CE_CAST => {
                 let Some(&spell) = spells.get(&ev.what) else { continue };
                 cast(player, spell, ev, actors);
@@ -447,6 +457,42 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
             _ => {}
         }
     }
+}
+
+/// While the game casts for the hand: the projectile leaves `ev.point` along `ev.dir` (the launch
+/// the projectile spawn takes) and the player faces that way (the game aims some things by where
+/// the caster faces); `f` casts.
+#[cfg(target_arch = "x86")]
+fn launching(player: usize, ev: &CombatEvent, f: impl FnOnce()) {
+    let dir = Vec3::from_array(ev.dir);
+    let (pitch, heading) = angles(dir);
+    let pos = camera::basis().point_to_game(Vec3::from_array(ev.point)).to_array();
+    *LAUNCH.lock().unwrap() = Some(Launch { pos, pitch, heading });
+    let rot = (player + refr::ROT) as *mut f32;
+    let (old_pitch, old_heading) = unsafe { (rot.read(), rot.add(2).read()) };
+    unsafe {
+        rot.write(pitch);
+        rot.add(2).write(heading.rem_euclid(std::f32::consts::TAU));
+    }
+    f();
+    unsafe {
+        rot.write(old_pitch);
+        rot.add(2).write(old_heading);
+    }
+    *LAUNCH.lock().unwrap() = None;
+}
+
+/// A staff's cast: the game's own (0x5E4920, as its staff attack does it: the enchantment's cost
+/// taken from the staff's charge, cast, or the game's "not enough charge"), from its tip.
+#[cfg(target_arch = "x86")]
+fn cast_staff(player: usize, ev: &CombatEvent, _actors: &HashMap<u32, usize>) {
+    let entry = mem::deref(mem::deref(player + 0x58) + EQUIPPED_WEAPON);
+    if entry == 0 {
+        return;
+    }
+    tracing::info!("combat: the player's staff casts {:#x} from {:?} towards {:?}", ev.what, ev.point, ev.dir);
+    type UseStaff = unsafe extern "thiscall" fn(usize, usize);
+    launching(player, ev, || unsafe { std::mem::transmute::<usize, UseStaff>(USE_STAFF)(player, entry) });
 }
 
 #[cfg(target_arch = "x86")]
@@ -464,25 +510,11 @@ fn cast(player: usize, spell: usize, ev: &CombatEvent, actors: &HashMap<u32, usi
         return;
     }
     unsafe { std::mem::transmute::<usize, Cost>(mem::deref(vt + VT_APPLY_COST))(caster, item, 1) };
-    let dir = Vec3::from_array(ev.dir);
-    let (pitch, heading) = angles(dir);
-    let pos = camera::basis().point_to_game(Vec3::from_array(ev.point)).to_array();
-    *LAUNCH.lock().unwrap() = Some(Launch { pos, pitch, heading });
-    // The player faces the aim for the cast (the game aims some things by where the caster faces).
-    let rot = (player + refr::ROT) as *mut f32;
-    let (old_pitch, old_heading) = unsafe { (rot.read(), rot.add(2).read()) };
-    unsafe {
-        rot.write(pitch);
-        rot.add(2).write(heading.rem_euclid(std::f32::consts::TAU));
-    }
     let target = if ev.actor != 0 { actors.get(&ev.actor).copied().filter(|&a| is_actor(a)).unwrap_or(0) } else { 0 };
-    tracing::info!("combat: the player casts {:#x} from {pos:?}, pitch {pitch:.2}, heading {heading:.2}{}", ev.what, if target != 0 { " on its target" } else { "" });
-    unsafe { std::mem::transmute::<usize, Cast>(CAST_IMMEDIATE)(caster, item, target, 0) };
-    unsafe {
-        rot.write(old_pitch);
-        rot.add(2).write(old_heading);
-    }
-    *LAUNCH.lock().unwrap() = None;
+    tracing::info!("combat: the player casts {:#x} from {:?} towards {:?}{}", ev.what, ev.point, ev.dir, if target != 0 { " on its target" } else { "" });
+    launching(player, ev, || unsafe {
+        std::mem::transmute::<usize, Cast>(CAST_IMMEDIATE)(caster, item, target, 0);
+    });
 }
 
 #[cfg(not(target_arch = "x86"))]

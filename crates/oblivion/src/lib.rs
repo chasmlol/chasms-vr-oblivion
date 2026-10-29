@@ -45,6 +45,7 @@ pub mod launcher;
 pub mod lighting;
 pub mod link;
 pub mod log;
+pub mod magic;
 pub mod mem;
 pub mod menus;
 pub mod movement;

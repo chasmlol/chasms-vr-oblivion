@@ -5,7 +5,7 @@
 //!
 //! The game's own equipped torch is the first-person viewmodel's (and never shows in VR), so the
 //! torch the hand has is a copy of its model from the game's model cache, hung where the game
-//! hangs its spells in flight (`crate::scene`): its `FlameNode` given the game's flame (0x4E26F0),
+//! puts its effects in the world (`crate::scene`): its `FlameNode` given the game's flame (0x4E26F0),
 //! its light made from the torch's form as the game makes a torch's (its radius, colour and
 //! attenuation, in the world's lights), flickered every frame. So it lights the world as the game's
 //! torches do, and the body and hands with it (`crate::lighting` reads the world's lights).
@@ -205,6 +205,7 @@ mod game {
             let (pos, rot) = if st.flags & OS_TRACKING != 0 { view.pose(&st.pose) } else { (Vec3::from_array(st.pose.pos), Quat::from_array(st.pose.rot)) };
             cull(t.node, false);
             scene::place(t.node, pos, rot, 1.0);
+            scene::animate(t.node);
             // (Logged as it changes hands: held, holstered, let go.)
             let how = st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT | OS_HOLSTERED | OS_PULLED);
             if t.logged != Some(how) {
