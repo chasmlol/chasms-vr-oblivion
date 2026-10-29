@@ -57,8 +57,10 @@ trigger to click. The right stick scrolls, and B closes.
      the person offering them.
 7. **Pause.** Press the menu button. The game's pause menu floats ahead, with RustVR's own
    settings beside it on the right.
-8. **Everything else** floats ahead of you as one piece, cut out of the flat screen: sleep and
-   wait, books, the level-up, lockpicking, spellmaking, enchanting, alchemy and the race menu.
+8. **A thing's own menu** floats beside the thing: picking a lock beside the locked door or chest,
+   an altar's enchanting or spellmaking beside the altar, a sigil stone beside it.
+9. **Everything else** floats ahead of you as one piece, cut out of the flat screen: sleep and
+   wait, books, the level-up, alchemy, repair with a hammer and the race menu.
 
 ## What was checked in the game (emulated headset, captures)
 
@@ -97,6 +99,8 @@ trigger to click. The right stick scrolls, and B closes.
   - spellmaking, enchanting and alchemy;
   - books;
   - a service menu beside a speaker;
+  - a lock's, an altar's or a sigil stone's menu beside it (the console can't name the test's
+    locked chest, so no lock was picked);
   - the real Jensine's stock;
   - a container that's tall enough for its list to go to its side (the side placement was only
     seen with a merchant).
@@ -148,6 +152,10 @@ trigger to click. The right stick scrolls, and B closes.
 - **Most menus aren't cut into pieces.** Everything except the container, barter, dialogue, the
   big four, pop-ups and pause floats as one piece cut out of the screen. The map's journal pages are
   its page as a whole.
+- **Typing** (naming a spell or a potion, `TextEditMenu`) still needs the keyboard: there's no
+  keyboard in VR yet.
+- **The race menu** shows the player's face in the flat game; in VR the world is live and nothing
+  looks at your face (that's the mirror, overnight feature 15).
 - **Loading screens and the main menu** are as before: a panel in the runtime's room, since there's
   no world to float them in.
 - **Tile dumps.** To cut another menu, set `RUSTVR_OBLIVION_DUMP_TILES=1` and the adapter logs its

@@ -14,6 +14,7 @@
 //! | the inventory, magic, the map, the character | ahead of the player | the page; the HUD's switcher between them (bars: character, weapon: inventory, spell: magic, compass: map) |
 //! | a count, a question, haggling | where the eyes look, the menu under it where it was | the box |
 //! | a service from dialogue (spells, training, repair, recharge, persuasion) | beside the speaker | the menu, cut from the screen |
+//! | a thing's own (a lock being picked, an altar's enchanting or spellmaking, a sigil stone) | beside the thing | the menu, cut from the screen |
 //! | anything else | ahead of the player | the menu, cut from the screen |
 //!
 //! **Transparency**: the pieces are as opaque as the game draws them, and the rest of the screen is
@@ -175,6 +176,7 @@ mod win {
     const MENU_DIALOG: u32 = 0x3F1;
     const MENU_SUBTITLES: u32 = 0x3F2;
     const MENU_PAUSE: u32 = 0x3F5;
+    const MENU_LOCKPICK: u32 = 0x3F6;
     const MENU_QUANTITY: u32 = 0x3F8;
     const MENU_MAGIC: u32 = 0x3FE;
     const MENU_MAP: u32 = 0x3FF;
@@ -182,6 +184,12 @@ mod win {
     const MENU_MAGIC_POPUP: u32 = 0x400;
     /// Haggling over a price (from barter).
     const MENU_NEGOTIATE: u32 = 0x401;
+    const MENU_SPELLMAKING: u32 = 0x411;
+    const MENU_ENCHANTMENT: u32 = 0x412;
+    const MENU_SIGIL_STONE: u32 = 0x418;
+    /// Menus a thing in the world opens as it's activated (a lock, an altar, a sigil stone): they
+    /// float beside it.
+    const THINGS_OWN: [u32; 4] = [MENU_LOCKPICK, MENU_SPELLMAKING, MENU_ENCHANTMENT, MENU_SIGIL_STONE];
     const MENU_LAST: u32 = 0x41B;
     /// The reticle's tile (`hud_reticle.xml`), not a menu of its own: a pseudo-type for [`Trees`].
     const RETICLE: u32 = 0;
@@ -442,7 +450,10 @@ mod win {
         // A line of the game's ordinary text (a list row's name: 38 units with its leading).
         l.text_height = 36.0 / screen.1;
         let mut trees = Trees::default();
+        // (What the crosshair was last on out of menus: what a menu opened by activating it is about.)
+        static LOOKED_AT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         if !crate::menus::menu_mode() {
+            LOOKED_AT.store(mem::deref(mem::deref(HUD_INFO_MENU) + CROSSHAIR_REF), std::sync::atomic::Ordering::Relaxed);
             hud(&mut l, screen, &mut trees);
             return l;
         }
@@ -506,9 +517,17 @@ mod win {
                     l.flags |= HUDL_SETTINGS;
                 }
                 // A menu opened from dialogue (a service: spells, training, repair, recharge,
-                // persuasion) beside the one who offers it; any other ahead of the player.
+                // persuasion) beside the one who offers it; a thing's own beside the thing; any
+                // other ahead of the player.
                 let speaker = mem::deref(tiles::menu(MENU_DIALOG) + DIALOG_SPEAKER);
-                let group = if speaker != 0 && tiles::menu_tile(MENU_DIALOG) != 0 { beside(speaker, kind, SIDE_RIGHT, false) } else { player(kind) };
+                let thing = LOOKED_AT.load(std::sync::atomic::Ordering::Relaxed);
+                let group = if speaker != 0 && tiles::menu_tile(MENU_DIALOG) != 0 {
+                    beside(speaker, kind, SIDE_RIGHT, false)
+                } else if THINGS_OWN.contains(&kind) && thing != 0 && !is_actor(thing) {
+                    beside(thing, kind, SIDE_RIGHT, false)
+                } else {
+                    player(kind)
+                };
                 add_group(&mut l, group, kind, WHOLE, screen, &mut trees);
             }
         }
