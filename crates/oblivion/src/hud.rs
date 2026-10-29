@@ -15,6 +15,13 @@
 //! | a count, a question | where the eyes look | the box |
 //! | anything else | ahead of the player | the menu, cut from the screen |
 //!
+//! **Transparency**: the pieces are as opaque as the game draws them, and the rest of the screen is
+//! clear. The menus' backgrounds (their parchment: each menu's image tiles named `..._background`)
+//! are drawn a little see-through (`menu_background` in `rustvr-oblivion.toml`, 0.8), so the world
+//! shows through them while the text and icons on them stay solid: the game's own `alpha` of each,
+//! set through the game's own update of a tile's value (so what it draws follows) whenever the
+//! game sets it afresh.
+//!
 //! A piece is named by its tiles in the game's own menu file (`menus\container_menu.xml`...): its
 //! rectangle is the box of what the game shows under them now, so it follows the game (a button the
 //! game hides leaves its piece). The pieces keep the game's own arrangement, drawn apart a little so
@@ -155,6 +162,8 @@ mod win {
     const MENU_SUBTITLES: u32 = 0x3F2;
     /// The reticle's tile (`hud_reticle.xml`), not a menu of its own: a pseudo-type for [`Trees`].
     const RETICLE: u32 = 0;
+    /// `Tile::UpdateFloat(this, id, value)` (thiscall): sets a value and updates what's drawn from it.
+    const UPDATE_FLOAT: usize = 0x0058_CEB0;
     /// `HUDInfoMenu`: what the crosshair is on (a reference).
     const HUD_INFO_MENU: usize = 0x00B3_B33C;
     const CROSSHAIR_REF: usize = 0x54;
@@ -272,6 +281,36 @@ mod win {
         }
     }
 
+    /// A menu's background image (its parchment), by the game's names for them.
+    fn is_background(name: &str) -> bool {
+        name.ends_with("_background") || name.ends_with("_background_2")
+    }
+
+    /// The menu's backgrounds a little see-through (see the module's notes): each time the game sets
+    /// a background's alpha afresh, it's set to that much of it.
+    fn see_through(tree: &tiles::Tree) {
+        static OURS: Mutex<Vec<(usize, f32)>> = Mutex::new(Vec::new());
+        let k = crate::settings::get().menu_background.clamp(0.0, 1.0);
+        if k >= 1.0 {
+            return;
+        }
+        let mut ours = OURS.lock().unwrap();
+        for p in tree.0.iter().filter(|p| p.kind == tiles::KIND_IMAGE && p.shown && is_background(&p.name)) {
+            let Some(a) = p.alpha.filter(|&a| a > 0.0) else { continue };
+            if ours.iter().any(|&(t, v)| t == p.tile && (v - a).abs() < 0.5) {
+                continue;
+            }
+            let v = a * k;
+            type Update = unsafe extern "thiscall" fn(usize, u32, f32);
+            crate::hooks::guard_void("menu background", || unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(p.tile, tiles::ALPHA as u32, v) });
+            ours.retain(|&(t, _)| t != p.tile);
+            if ours.len() >= 64 {
+                ours.remove(0);
+            }
+            ours.push((p.tile, v));
+        }
+    }
+
     fn is_actor(refr: usize) -> bool {
         mem::at::<u8>(refr + FORM_TYPE).is_some_and(|t| ACTORS.contains(&t))
     }
@@ -371,6 +410,9 @@ mod win {
                 add_group(&mut l, player(kind), kind, WHOLE, screen, &mut trees)
             }
         }
+        for tree in trees.0.values() {
+            see_through(tree);
+        }
         l
     }
 
@@ -383,7 +425,10 @@ mod win {
         };
         piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("hudmain_statusbars"), From::Drawn("hudmain_Weapon_Icon"), From::Drawn("hudmain_Magic_Icon")]);
         piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("magic_icons")]);
-        piece(l, trees, HUD_COMPASS, MENU_HUD, &[From::Drawn("hudmain_compass_layout")]);
+        if let Some(i) = piece(l, trees, HUD_COMPASS, MENU_HUD, &[From::Drawn("hudmain_compass_layout")]).map(|_| l.count as usize - 1) {
+            // (A little bigger than the game's text: its heading letters are small.)
+            l.elements[i].scale = 1.4;
+        }
         piece(l, trees, HUD_SUBTITLES, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_text")]);
         piece(l, trees, HUD_HINTS, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_icon"), From::Drawn("hudsubtitle_notice")]);
         piece(l, trees, HUD_HINTS, MENU_HUD, &[From::Drawn("hudmain_region")]);
