@@ -12,7 +12,7 @@
 //! | barter | beside the merchant | the same, with the merchant's gold and haggle |
 //! | dialogue | the speaker: their line under their face, the topics beside them | the name and line; the topics and services |
 //! | the inventory, magic, the map, the character | ahead of the player | the page; the HUD's switcher between them (bars: character, weapon: inventory, spell: magic, compass: map) |
-//! | a count, a question | where the eyes look | the box |
+//! | a count, a question, haggling | where the eyes look, the menu under it where it was | the box |
 //! | a service from dialogue (spells, training, repair, recharge, persuasion) | beside the speaker | the menu, cut from the screen |
 //! | anything else | ahead of the player | the menu, cut from the screen |
 //!
@@ -54,21 +54,32 @@ pub enum From {
     All,
 }
 
-/// A piece of a menu: the tiles it's made of (in its group's menu, or in another: the HUD's), and
-/// whether the laser points at it.
+/// A piece of a menu: the tiles it's made of (in its group's menu, or in another: the HUD's),
+/// whether the laser points at it, and whether it lies over the others (a description that pops up
+/// over the page it's about) rather than beside them.
 #[derive(Clone, Copy, Debug)]
 pub struct Piece {
     pub menu: u32,
     pub from: &'static [From],
     pub point: bool,
+    pub over: bool,
 }
 
 impl Piece {
     /// A piece of the group's own menu.
     pub const fn of(from: &'static [From], point: bool) -> Piece {
-        Piece { menu: 0, from, point }
+        Piece { menu: 0, from, point, over: false }
+    }
+
+    /// A description that pops up over the page (`menu`'s; 0: the group's own): just where the
+    /// game puts it, lifted a little towards the eye, so it covers itself in the page under it.
+    pub const fn over(menu: u32, from: &'static [From]) -> Piece {
+        Piece { menu, from, point: false, over: true }
     }
 }
+
+/// How far a piece that lies over the others is lifted towards the eye (the group's units).
+pub const LIFT: f32 = 0.02;
 
 /// How far apart the pieces of a menu float (the HUD texture's height).
 pub const GAP: f32 = 0.018;
@@ -170,7 +181,11 @@ mod win {
     const CROSSHAIR_REF: usize = 0x54;
     const MENU_DIALOG: u32 = 0x3F1;
     const MENU_QUANTITY: u32 = 0x3F8;
+    /// Haggling over a price (from barter).
+    const MENU_NEGOTIATE: u32 = 0x401;
     const MENU_MAGIC: u32 = 0x3FE;
+    /// The description of a spell pointed at in the magic menu, a menu of its own.
+    const MENU_MAGIC_POPUP: u32 = 0x400;
     const MENU_MAP: u32 = 0x3FF;
     const MENU_LAST: u32 = 0x41B;
     use tiles::BIG_FOUR;
@@ -209,7 +224,7 @@ mod win {
 
     /// The HUD's frame in the big four (`hud_main_menu.xml`): the bars, the weapon, the spell and
     /// the compass, each the way to its menu (character, inventory, magic, the map).
-    const SWITCHER: Piece = Piece { menu: MENU_HUD, from: &[From::Drawn("hudmain_background")], point: true };
+    const SWITCHER: Piece = Piece { menu: MENU_HUD, from: &[From::Drawn("hudmain_background")], point: true, over: false };
 
     /// The inventory (`main\inventory_menu.xml`): its list as the container's (heads, scroll bar,
     /// the weight, armour and gold under it), its tabs, and the switcher.
@@ -224,9 +239,16 @@ mod win {
         Piece::of(&[From::Box("magic_window"), From::Drawn("magic_headers_top"), From::Drawn("magic_scroll_bar"), From::Drawn("magic_misc_elements")], true),
         Piece::of(&[From::Drawn("magic_tabs")], true),
         SWITCHER,
+        Piece::over(MENU_MAGIC_POPUP, &[From::All]),
     ];
-    /// The character (`main\stats_menu.xml`): its page, its tabs, and the switcher.
-    const STATS: &[Piece] = &[Piece::of(&[From::Drawn("stat_background")], true), Piece::of(&[From::Drawn("stat_tabs")], true), SWITCHER];
+    /// The character (`main\stats_menu.xml`): its page, its tabs, the switcher, and the description
+    /// of what's pointed at over the page.
+    const STATS: &[Piece] = &[
+        Piece::of(&[From::Drawn("stat_background")], true),
+        Piece::of(&[From::Drawn("stat_tabs")], true),
+        SWITCHER,
+        Piece::over(0, &[From::Drawn("stat_pop_background")]),
+    ];
     /// The map and the journal (`main\map_menu.xml`): its page, its tabs, and the switcher.
     const MAP: &[Piece] = &[Piece::of(&[From::Drawn("map_background")], true), Piece::of(&[From::Drawn("map_tabs")], true), SWITCHER];
 
@@ -270,9 +292,27 @@ mod win {
         if found.is_empty() {
             return None;
         }
+        // (The pieces beside each other are cut apart and drawn apart; one over them is where the
+        // game has it, nearer.)
         let mut boxes: Vec<[f32; 4]> = found.iter().map(|(_, b)| *b).collect();
-        carve(&mut boxes);
-        let offsets = arrange(&boxes, screen);
+        let beside: Vec<usize> = (0..found.len()).filter(|&i| !found[i].0.over).collect();
+        let mut apart: Vec<[f32; 4]> = beside.iter().map(|&i| boxes[i]).collect();
+        carve(&mut apart);
+        for (&i, b) in beside.iter().zip(&apart) {
+            boxes[i] = *b;
+        }
+        let mut offsets = vec![[0.0; 3]; boxes.len()];
+        for (&i, o) in beside.iter().zip(arrange(&apart, screen)) {
+            offsets[i] = o;
+        }
+        if let Some(&first) = beside.first() {
+            let f = boxes[first];
+            for i in (0..found.len()).filter(|&i| found[i].0.over) {
+                let b = boxes[i];
+                let h = screen.1.max(1.0);
+                offsets[i] = [((b[0] + b[2]) - (f[0] + f[2])) * 0.5 / h, -((b[1] + b[3]) - (f[1] + f[3])) * 0.5 / h, LIFT];
+            }
+        }
         let n = layout.add_group(group);
         for ((p, _), (b, offset)) in found.iter().zip(boxes.iter().zip(offsets)) {
             if let Some(uv) = tiles::uv_of(*b, screen, MARGIN) {
@@ -426,7 +466,7 @@ mod win {
             // (The big four are one place: switching between them keeps it.)
             add_group(l, player(BIG_FOUR), kind, pieces, screen, trees).map(|b| (kind, b))
         };
-        if !matches!(top, MENU_QUANTITY | MENU_MESSAGE) {
+        if !matches!(top, MENU_QUANTITY | MENU_MESSAGE | MENU_NEGOTIATE) {
             put_back();
         }
         match top {
@@ -442,9 +482,9 @@ mod win {
             BIG_FOUR => {
                 big_four(&mut l, &mut trees);
             }
-            MENU_QUANTITY | MENU_MESSAGE => {
-                // A count or a question over another menu: where the eyes look, the menu under it
-                // where it was.
+            MENU_QUANTITY | MENU_MESSAGE | MENU_NEGOTIATE => {
+                // A count, a question or a haggle over another menu: where the eyes look, the menu
+                // under it where it was.
                 let under = if tiles::menu_tile(MENU_CONTAINER) != 0 { container(&mut l, &mut trees) } else { big_four(&mut l, &mut trees) };
                 let popup = add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);
                 if let (Some((kind, u)), Some(p)) = (under, popup) {
@@ -465,7 +505,7 @@ mod win {
             }
         }
         // (A pop-up stays solid: what's behind it in the world is the menu it's over.)
-        for (_, tree) in trees.0.iter().filter(|(k, _)| !matches!(**k, MENU_QUANTITY | MENU_MESSAGE)) {
+        for (_, tree) in trees.0.iter().filter(|(k, _)| !matches!(**k, MENU_QUANTITY | MENU_MESSAGE | MENU_NEGOTIATE)) {
             see_through(tree);
         }
         l
