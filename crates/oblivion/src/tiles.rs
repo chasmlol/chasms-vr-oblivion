@@ -317,8 +317,8 @@ mod win {
         t != 0 && value(t, VISIBLE).is_none_or(|v| v == TRUE)
     }
 
-    /// Tests: every tile of the menu of this type (but a list's rows), its kind, box and whether it
-    /// shows, into the log (once a type, hidden and showing).
+    /// Testing: every tile of the menu of this type (but a list's rows), its kind, box and whether it
+    /// shows, into the log (once a type, hidden and showing): what a menu is cut into pieces by.
     pub fn dump(kind_of_menu: u32) {
         static DONE: std::sync::Mutex<Vec<(u32, bool)>> = std::sync::Mutex::new(Vec::new());
         {

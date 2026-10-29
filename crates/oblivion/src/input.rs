@@ -416,7 +416,6 @@ mod win {
             } else if dev as usize == MOUSE.load(Acquire) && size >= 16 {
                 // (`DIMOUSESTATE`: x, y, the wheel, the buttons.) The game reads its wheel here.
                 if s.wheel != 0 {
-                    tracing::info!("input: the game's mouse wheel turns {}", s.wheel);
                     unsafe { (data.add(MOUSE_WHEEL as usize) as *mut i32).write((data.add(MOUSE_WHEEL as usize) as *const i32).read() + s.wheel) };
                     s.wheel = 0;
                 }

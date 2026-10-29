@@ -442,10 +442,14 @@ mod win {
             hud(&mut l, screen, &mut trees);
             return l;
         }
-        // (Tests: each menu's tiles into the log, once.)
-        for kind in MENU_MESSAGE..=MENU_LAST {
-            if tiles::menu_tile(kind) != 0 {
-                tiles::dump(kind);
+        // Testing (`RUSTVR_OBLIVION_DUMP_TILES=1`): each menu's tiles into the log, once, for cutting
+        // a menu into pieces.
+        static DUMP: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if *DUMP.get_or_init(|| std::env::var("RUSTVR_OBLIVION_DUMP_TILES").is_ok_and(|v| v == "1")) {
+            for kind in MENU_MESSAGE..=MENU_LAST {
+                if tiles::menu_tile(kind) != 0 {
+                    tiles::dump(kind);
+                }
             }
         }
         let player = |kind: u32| HudGroup { anchor: ANCHOR_PLAYER, id: kind, ..Default::default() };
