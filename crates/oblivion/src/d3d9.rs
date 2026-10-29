@@ -233,7 +233,25 @@ mod win {
         if LAST_TCL.swap(hr.0, Ordering::AcqRel) != hr.0 {
             tracing::info!("d3d9: TestCooperativeLevel {:#x}", hr.0);
         }
+        // Lost (the desktop's display changed: a headset's streamer connecting), the device is reset
+        // by the game, which it can only do once nothing else has a texture of its own on it: our
+        // copies go, and are made again on its next frame.
+        if hr.is_err() {
+            hooks::guard_void("TestCooperativeLevel", release_bridge);
+        }
         hr
+    }
+
+    /// Lets go of our copies of the game's picture (once the copies in flight are done).
+    fn release_bridge() {
+        let Some(b) = BRIDGE.lock().unwrap().take() else { return };
+        if unsafe { b.fence12.GetCompletedValue() } < b.value && unsafe { b.fence12.SetEventOnCompletion(b.value, b.event) }.is_ok() {
+            unsafe { WaitForSingleObject(b.event, 1000) };
+        }
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(b.event);
+        }
+        tracing::info!("d3d9: the device is lost: our copies of its picture let go, for the game to reset it");
     }
 
     /// The game's device, borrowed.
