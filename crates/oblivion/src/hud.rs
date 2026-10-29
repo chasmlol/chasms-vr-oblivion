@@ -164,6 +164,7 @@ mod win {
     use glam::Vec3;
     use std::collections::HashMap;
     use std::sync::Mutex;
+    use tiles::BIG_FOUR;
 
     // The menus by type (`kMenuType_*`).
     const MENU_MESSAGE: u32 = 0x3E9;
@@ -171,26 +172,25 @@ mod win {
     const MENU_STATS: u32 = 0x3EB;
     const MENU_HUD: u32 = 0x3EC;
     const MENU_CONTAINER: u32 = 0x3F0;
+    const MENU_DIALOG: u32 = 0x3F1;
     const MENU_SUBTITLES: u32 = 0x3F2;
+    const MENU_PAUSE: u32 = 0x3F5;
+    const MENU_QUANTITY: u32 = 0x3F8;
+    const MENU_MAGIC: u32 = 0x3FE;
+    const MENU_MAP: u32 = 0x3FF;
+    /// The description of a spell pointed at in the magic menu, a menu of its own.
+    const MENU_MAGIC_POPUP: u32 = 0x400;
+    /// Haggling over a price (from barter).
+    const MENU_NEGOTIATE: u32 = 0x401;
+    const MENU_LAST: u32 = 0x41B;
     /// The reticle's tile (`hud_reticle.xml`), not a menu of its own: a pseudo-type for [`Trees`].
     const RETICLE: u32 = 0;
+
     /// `Tile::UpdateFloat(this, id, value)` (thiscall): sets a value and updates what's drawn from it.
     const UPDATE_FLOAT: usize = 0x0058_CEB0;
     /// `HUDInfoMenu`: what the crosshair is on (a reference).
     const HUD_INFO_MENU: usize = 0x00B3_B33C;
     const CROSSHAIR_REF: usize = 0x54;
-    const MENU_DIALOG: u32 = 0x3F1;
-    const MENU_QUANTITY: u32 = 0x3F8;
-    /// Haggling over a price (from barter).
-    const MENU_NEGOTIATE: u32 = 0x401;
-    const MENU_MAGIC: u32 = 0x3FE;
-    /// The description of a spell pointed at in the magic menu, a menu of its own.
-    const MENU_MAGIC_POPUP: u32 = 0x400;
-    const MENU_MAP: u32 = 0x3FF;
-    const MENU_LAST: u32 = 0x41B;
-    use tiles::BIG_FOUR;
-    const MENU_PAUSE: u32 = 0x3F5;
-
     /// `ContainerMenu`: the container (or the merchant, bartering).
     const CONTAINER_REF: usize = 0x44;
     /// `DialogMenu`: the speaker.
