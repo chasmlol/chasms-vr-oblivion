@@ -264,11 +264,11 @@ mod win {
             .fold(None, tiles::grow)
     }
 
-    /// Menu `kind`'s pieces as a group of `layout`.
-    fn add_group(layout: &mut HudLayout, group: HudGroup, kind: u32, pieces: &[Piece], screen: (f32, f32), trees: &mut Trees) {
+    /// Menu `kind`'s pieces as a group of `layout`; the box they take on the screen.
+    fn add_group(layout: &mut HudLayout, group: HudGroup, kind: u32, pieces: &[Piece], screen: (f32, f32), trees: &mut Trees) -> Option<[f32; 4]> {
         let found: Vec<(&Piece, [f32; 4])> = pieces.iter().filter_map(|p| piece_box(trees.get(if p.menu != 0 { p.menu } else { kind }), p).map(|b| (p, b))).collect();
         if found.is_empty() {
-            return;
+            return None;
         }
         let mut boxes: Vec<[f32; 4]> = found.iter().map(|(_, b)| *b).collect();
         carve(&mut boxes);
@@ -279,6 +279,50 @@ mod win {
                 let flags = HUDE_SOFT | if p.point { HUDE_POINT } else { 0 };
                 layout.push(HudElement::piece(n, uv, offset, flags));
             }
+        }
+        boxes.into_iter().fold(None, tiles::grow)
+    }
+
+    /// A menu moved on the screen to make room for a pop-up over it: its top tile, and how far down.
+    static MOVED: Mutex<Option<(usize, f32)>> = Mutex::new(None);
+
+    /// Moves a menu's top tile (and so all of it) down the screen by `dy` (the game's own update of
+    /// its `y`, so what it draws and where it takes clicks follow).
+    fn move_menu(tile: usize, dy: f32) {
+        let y = tiles::value(tile, tiles::Y).unwrap_or(0.0);
+        type Update = unsafe extern "thiscall" fn(usize, u32, f32);
+        crate::hooks::guard_void("menu room", || unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(tile, tiles::Y as u32, y + dy) });
+    }
+
+    /// A pop-up (a count, a question) comes in the middle of the screen over the menu it's for, so
+    /// cut out, part of it would show again in that menu's pieces. So they're put apart on the
+    /// screen (each where it floats in the world is its own): the menu under it to the screen's
+    /// foot, the pop-up in the room above. `under` and `popup`: their top tiles and the boxes their
+    /// pieces take now.
+    fn make_room(under: (usize, [f32; 4]), popup: (usize, [f32; 4]), screen: (f32, f32)) {
+        let ((ut, u), (pt, p)) = (under, popup);
+        let over = u[0] < p[2] && p[0] < u[2] && u[1] < p[3] && p[1] < u[3];
+        let gap = 3.0 * MARGIN;
+        if !over || (u[3] - u[1]) + (p[3] - p[1]) + 3.0 * gap > screen.1 {
+            return;
+        }
+        let mut moved = MOVED.lock().unwrap();
+        let down = (screen.1 - gap - u[3]).max(0.0);
+        move_menu(ut, down);
+        let room = u[1] + down - gap;
+        move_menu(pt, (room - (p[3] - p[1])) * 0.5 - p[1]);
+        let before = moved.filter(|&(t, _)| t == ut).map_or(0.0, |(_, d)| d);
+        *moved = Some((ut, before + down));
+        tracing::info!("hud: a pop-up made room for: the menu under it {down:.0} down the screen, the pop-up over it");
+    }
+
+    /// The menu moved for a pop-up back where it was (the pop-up gone).
+    fn put_back() {
+        let mut moved = MOVED.lock().unwrap();
+        if let Some((tile, dy)) = moved.take()
+            && [MENU_CONTAINER, MENU_INVENTORY, MENU_STATS, MENU_MAGIC, MENU_MAP].iter().any(|&k| tiles::menu_tile(k) == tile)
+        {
+            move_menu(tile, -dy);
         }
     }
 
@@ -368,39 +412,44 @@ mod win {
         let top = tiles::top_menu();
         let container = |l: &mut HudLayout, trees: &mut Trees| {
             let refr = mem::deref(tiles::menu(MENU_CONTAINER) + CONTAINER_REF);
-            add_group(l, beside(refr, MENU_CONTAINER, SIDE_RIGHT, false), MENU_CONTAINER, CONTAINER, screen, trees);
+            add_group(l, beside(refr, MENU_CONTAINER, SIDE_RIGHT, false), MENU_CONTAINER, CONTAINER, screen, trees).map(|b| (MENU_CONTAINER, b))
         };
         let big_four = |l: &mut HudLayout, trees: &mut Trees| {
             // (All four are there, hidden, from when a game loads: the one that shows.)
-            if let Some(kind) = [MENU_INVENTORY, MENU_STATS, MENU_MAGIC, MENU_MAP].into_iter().find(|&k| tiles::shows(k)) {
-                let pieces = match kind {
-                    MENU_INVENTORY => INVENTORY,
-                    MENU_MAGIC => MAGIC,
-                    MENU_STATS => STATS,
-                    _ => MAP,
-                };
-                // (The big four are one place: switching between them keeps it.)
-                add_group(l, player(BIG_FOUR), kind, pieces, screen, trees);
-            }
+            let kind = [MENU_INVENTORY, MENU_STATS, MENU_MAGIC, MENU_MAP].into_iter().find(|&k| tiles::shows(k))?;
+            let pieces = match kind {
+                MENU_INVENTORY => INVENTORY,
+                MENU_MAGIC => MAGIC,
+                MENU_STATS => STATS,
+                _ => MAP,
+            };
+            // (The big four are one place: switching between them keeps it.)
+            add_group(l, player(BIG_FOUR), kind, pieces, screen, trees).map(|b| (kind, b))
         };
+        if !matches!(top, MENU_QUANTITY | MENU_MESSAGE) {
+            put_back();
+        }
         match top {
-            MENU_CONTAINER => container(&mut l, &mut trees),
+            MENU_CONTAINER => {
+                container(&mut l, &mut trees);
+            }
             MENU_DIALOG => {
                 let speaker = mem::deref(tiles::menu(MENU_DIALOG) + DIALOG_SPEAKER);
                 add_group(&mut l, beside(speaker, MENU_DIALOG, SIDE_BELOW, true), MENU_DIALOG, DIALOG_LINE, screen, &mut trees);
                 add_group(&mut l, beside(speaker, MENU_DIALOG, SIDE_ABOVE, true), MENU_DIALOG, DIALOG_NAME, screen, &mut trees);
                 add_group(&mut l, beside(speaker, MENU_DIALOG, SIDE_RIGHT, true), MENU_DIALOG, DIALOG_TOPICS, screen, &mut trees);
             }
-            BIG_FOUR => big_four(&mut l, &mut trees),
+            BIG_FOUR => {
+                big_four(&mut l, &mut trees);
+            }
             MENU_QUANTITY | MENU_MESSAGE => {
                 // A count or a question over another menu: where the eyes look, the menu under it
                 // where it was.
-                if tiles::menu_tile(MENU_CONTAINER) != 0 {
-                    container(&mut l, &mut trees);
-                } else {
-                    big_four(&mut l, &mut trees);
+                let under = if tiles::menu_tile(MENU_CONTAINER) != 0 { container(&mut l, &mut trees) } else { big_four(&mut l, &mut trees) };
+                let popup = add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);
+                if let (Some((kind, u)), Some(p)) = (under, popup) {
+                    make_room((tiles::menu_tile(kind), u), (tiles::menu_tile(top), p), screen);
                 }
-                add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);
             }
             0 => {}
             kind => {
@@ -412,10 +461,11 @@ mod win {
                 // persuasion) beside the one who offers it; any other ahead of the player.
                 let speaker = mem::deref(tiles::menu(MENU_DIALOG) + DIALOG_SPEAKER);
                 let group = if speaker != 0 && tiles::menu_tile(MENU_DIALOG) != 0 { beside(speaker, kind, SIDE_RIGHT, false) } else { player(kind) };
-                add_group(&mut l, group, kind, WHOLE, screen, &mut trees)
+                add_group(&mut l, group, kind, WHOLE, screen, &mut trees);
             }
         }
-        for tree in trees.0.values() {
+        // (A pop-up stays solid: what's behind it in the world is the menu it's over.)
+        for (_, tree) in trees.0.iter().filter(|(k, _)| !matches!(**k, MENU_QUANTITY | MENU_MESSAGE)) {
             see_through(tree);
         }
         l
