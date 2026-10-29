@@ -114,7 +114,7 @@ pub(crate) fn read_str(p: usize) -> String {
 }
 
 /// The named nodes under `root` that are bones (named `Bip01...`), and a few named attachments.
-fn bones(root: usize) -> HashMap<String, usize> {
+pub(crate) fn bones(root: usize) -> HashMap<String, usize> {
     let mut out = HashMap::new();
     let mut stack = vec![(root, 0u32)];
     let mut seen = 0;

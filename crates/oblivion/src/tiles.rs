@@ -10,6 +10,10 @@
 //! the screen's units, the y axis down. What kind of tile it is is its vtable's fourth function:
 //! 0x385 a rect (a box for others), 0x386 an image, 0x387 text, 0x388 a model.
 //!
+//! A text's `x` is where its `justify` (0xFD1: 1 left, 2 centre, 4 right) puts it: its left edge,
+//! its middle or its right edge. A tile with `clipwindow` (0xFA4) shows only what's inside it of
+//! what's under it (a list's rows, the compass's strip).
+//!
 //! A menu is read once a frame into a [`Tree`] (a container's hundreds of rows aren't: a piece is
 //! never one row, and reading them all would cost the game its frame).
 
@@ -37,10 +41,17 @@ pub const ALPHA: u16 = 0xFA7;
 pub const Y: u16 = 0xFAC;
 pub const X: u16 = 0xFAD;
 pub const USER0: u16 = 0xFAE;
+pub const CLIP_WINDOW: u16 = 0xFA4;
+pub const JUSTIFY: u16 = 0xFD1;
+const CENTRE: f32 = 2.0;
+const RIGHT: f32 = 4.0;
 pub const HEIGHT: u16 = 0xFCA;
 pub const WIDTH: u16 = 0xFCB;
 /// Tile values' true (1 is false).
 pub const TRUE: f32 = 2.0;
+
+/// The menu on top while the big four (inventory, magic, map, character) are.
+pub const BIG_FOUR: u32 = 1;
 
 pub const KIND_RECT: u32 = 0x385;
 pub const KIND_IMAGE: u32 = 0x386;
@@ -158,6 +169,8 @@ mod win {
         visible: Option<f32>,
         locus: bool,
         alpha: Option<f32>,
+        justify: f32,
+        clips: bool,
     }
 
     fn values(tile: usize) -> Values {
@@ -177,6 +190,8 @@ mod win {
                 VISIBLE => v.visible = Some(num),
                 LOCUS => v.locus = num == TRUE,
                 ALPHA => v.alpha = Some(num),
+                JUSTIFY => v.justify = num,
+                CLIP_WINDOW => v.clips = num == TRUE,
                 _ => {}
             }
         }
@@ -216,25 +231,41 @@ mod win {
     impl Tree {
         /// The tiles under `root` (a menu's top tile) as placed now.
         pub fn read(root: usize) -> Tree {
-            fn go(tile: usize, origin: (f32, f32), shown: bool, depth: u32, out: &mut Vec<Placed>) {
+            fn go(tile: usize, origin: (f32, f32), clip: [f32; 4], shown: bool, depth: u32, out: &mut Vec<Placed>) {
                 if depth > 24 || out.len() > 2048 {
                     return;
                 }
                 let v = values(tile);
                 let (x, y) = (origin.0 + v.x, origin.1 + v.y);
                 let shown = shown && v.visible.is_none_or(|v| v == TRUE);
-                out.push(Placed { tile, name: name(tile), depth, rect: [x, y, x + v.w, y + v.h], shown, alpha: v.alpha, kind: kind(tile) });
+                let k = kind(tile);
+                // (A text's x is its left edge, its middle or its right edge, as it's justified.)
+                let left = if k != KIND_TEXT {
+                    x
+                } else if v.justify == CENTRE {
+                    x - v.w * 0.5
+                } else if v.justify == RIGHT {
+                    x - v.w
+                } else {
+                    x
+                };
+                let own = [left, y, left + v.w, y + v.h];
+                let r = [own[0].max(clip[0]), own[1].max(clip[1]), own[2].min(clip[2]), own[3].min(clip[3])];
+                let r = if r[2] > r[0] && r[3] > r[1] { r } else { [own[0], own[1], own[0], own[1]] };
+                out.push(Placed { tile, name: name(tile), depth, rect: r, shown, alpha: v.alpha, kind: k });
                 let inner = if v.locus { (x, y) } else { origin };
+                let clip = if v.clips { [clip[0].max(own[0]), clip[1].max(own[1]), clip[2].min(own[2]), clip[3].min(own[3])] } else { clip };
                 let kids = children(tile);
                 if kids.len() <= LIST {
                     for c in kids {
-                        go(c, inner, shown, depth + 1, out);
+                        go(c, inner, clip, shown, depth + 1, out);
                     }
                 }
             }
             let mut out = Vec::new();
             if root != 0 {
-                go(root, (0.0, 0.0), true, 0, &mut out);
+                let all = [f32::MIN, f32::MIN, f32::MAX, f32::MAX];
+                go(root, (0.0, 0.0), all, true, 0, &mut out);
             }
             Tree(out)
         }
@@ -272,16 +303,23 @@ mod win {
         (v.w > 0.0 && v.h > 0.0).then_some((v.w, v.h))
     }
 
+    /// The open menu of this type shows (its top tile is visible).
+    pub fn shows(kind: u32) -> bool {
+        let t = menu_tile(kind);
+        t != 0 && value(t, VISIBLE).is_none_or(|v| v == TRUE)
+    }
+
     /// Tests: every tile of the menu of this type (but a list's rows), its kind, box and whether it
-    /// shows, into the log (once a type).
+    /// shows, into the log (once a type, hidden and showing).
     pub fn dump(kind_of_menu: u32) {
-        static DONE: std::sync::Mutex<Vec<u32>> = std::sync::Mutex::new(Vec::new());
+        static DONE: std::sync::Mutex<Vec<(u32, bool)>> = std::sync::Mutex::new(Vec::new());
         {
+            let key = (kind_of_menu, shows(kind_of_menu));
             let mut done = DONE.lock().unwrap();
-            if done.contains(&kind_of_menu) {
+            if done.contains(&key) {
                 return;
             }
-            done.push(kind_of_menu);
+            done.push(key);
         }
         tracing::info!("tiles: menu {kind_of_menu:#x} on a screen of {:?}:", screen());
         for p in Tree::read(menu_tile(kind_of_menu)).0 {

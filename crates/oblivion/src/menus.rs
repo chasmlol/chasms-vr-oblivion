@@ -52,6 +52,17 @@ pub fn menu_mode() -> bool {
     false
 }
 
+/// The big four (inventory, magic, map, character) are the menus open: the menu on top is theirs.
+#[cfg(target_arch = "x86")]
+pub fn big_four() -> bool {
+    menu_mode() && crate::tiles::top_menu() == crate::tiles::BIG_FOUR
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn big_four() -> bool {
+    false
+}
+
 /// Where a point on the screen (0..1 from the top left) is in menu units (x, height).
 pub fn menu_point(uv: [f32; 2], width: f32, height: f32) -> (f32, f32) {
     let (w, h) = if height >= width { (1280.0, height / width * 1280.0) } else { (width / height * 960.0, 960.0) };

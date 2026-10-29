@@ -113,6 +113,9 @@ pub struct Bridge {
 pub struct GameControls {
     /// Always Run is on: running is the game's pace already.
     pub always_run: bool,
+    /// The big four (inventory, magic, map, character) are open: the game's own Menu Mode closes
+    /// them (its Escape would open the pause menu over them).
+    pub big_four: bool,
 }
 
 /// A press holds its key this long.
@@ -195,9 +198,13 @@ impl Bridge {
         } else {
             self.wheel = 0.0;
         }
+        // B on the big four: Menu Mode again, which closes them.
+        if game.big_four && pressed(&counts, Action::MenuBack) {
+            self.pulses.push((self.binding("Menu Mode"), now + PULSE));
+        }
         // The menu button, and B on a menu (the runtime's "back"): Escape, which closes the game's
         // menus.
-        if pressed(&counts, Action::Menu) || pressed(&counts, Action::MenuBack) {
+        if pressed(&counts, Action::Menu) || (pressed(&counts, Action::MenuBack) && !game.big_four) {
             self.pulses.push((Binding { key: Some(DIK_ESCAPE), mouse: None }, now + PULSE));
         }
         self.pulses.retain(|&(_, until)| until > now);
@@ -528,8 +535,8 @@ mod tests {
         assert_eq!(b.update(&it, GameControls::default(), 0.1).keys, vec![0x1D]);
         assert!(b.update(&it, GameControls::default(), 0.3).keys.is_empty());
         it.held = Action::Sprint.bit();
-        assert_eq!(b.update(&it, GameControls { always_run: false }, 0.4).keys, vec![0x2A]);
-        assert!(b.update(&it, GameControls { always_run: true }, 0.5).keys.is_empty());
+        assert_eq!(b.update(&it, GameControls { always_run: false, big_four: false }, 0.4).keys, vec![0x2A]);
+        assert!(b.update(&it, GameControls { always_run: true, big_four: false }, 0.5).keys.is_empty());
     }
 
     #[test]
