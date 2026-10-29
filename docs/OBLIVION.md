@@ -23,6 +23,7 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | The body | The runtime draws the player's body from the game's own models: the race's skin where nothing is worn, the armour and clothes worn over it, on the game's skeleton. | `body.rs` |
 | Lighting | The body and what the hands hold are lit as Oblivion's own shaders light them: the scene's sun or moon, the point lights near the player (torches, candles, spells), the ambient (Night-Eye's too), normal maps, specular, the skin's rim, glow maps and the fog. | `lighting.rs`, `docs/research/oblivion-lighting.md` |
 | Weapons | The equipped weapon (the game's model) hangs at the left hip, or on the back if two-handed, and the hand draws it. The equipped shield is taken from over the left shoulder. Edges, points, heads and guards are measured on each model. | `weapons.rs` |
+| Archery | The equipped bow is the runtime's bow (the game's model, measured on it, bending as the game's own morph bends it, its limbs springing back after a shot as the player's bow animation has them), on the back over the left shoulder; the equipped arrows (their model, the equipped stack's count) come from the quiver over the shoulder or at the hip, which the body wears with as many of its five arrows showing as are left. An arrow loosed is the game's own `ArrowProjectile` from the VR arrow's tip along it, with the power the game gives its bow held drawn that long (the draw stands in for the hold timer), then the game's `UseAmmo`, fatigue, invisibility and wear; `WPNBowDraw` and `bowShoot` play at the bow, and held drawn the fatigue burns as the game's hold burns it. The arrow flies, hits, sticks and is picked up as the game's own. See [research/archery.md](research/archery.md) | `archery.rs`, `body.rs` |
 | Combat | Hits are the game's own hit with the equipped weapon (damage, skill, enchantments). A blow met by the weapon or shield is the game's block. Spells charge in the palm and go off as the game's own cast: target spells from the palm along the aim, touch spells into what the hand touches, self spells on the player. | `combat.rs` |
 | Things in the world | Everything the player can take near them (weapons, armour, clothes, books, potions, ingredients, keys, soul gems, sigil stones, apparatus, carriable lights, clutter) is the hands' to take or pull with the gloves: its collision its own Havok shape, its weight its Havok mass, drawn by the game where the hand has it (a candle still burns), and let go, the game's again, flying on with the throw. A card beside it says what it is: its name, damage or armour, weight, value, condition, and whether it's stolen. Let go in any body slot (a hip, a shoulder, the chest, the belt), the player takes it: the game's own pick-up, with its stealing and its message. | `items.rs`, `objects.rs` |
 | Menus | While a menu is open it's a panel; the game's cursor follows the laser and the trigger clicks. | `menus.rs` |
@@ -33,8 +34,12 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 The game's models are converted once into `local_assets/oblivion` (never committed):
 
 ```
-cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters textures/menus/misc/hud_reticle.dds
 ```
+
+Bows are written bent too (`#bent`, from their morph), arrows alone and their quivers worn on the
+skeleton (`#quiver0` .. `#quiver5`), with `bows.toml` (the limbs' spring, from the player's bow
+animation); the reticle is the bow's optional crosshair.
 
 Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
 
@@ -53,6 +58,9 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Grip at the left hip / over a shoulder | Draw the weapon / take the shield |
 | Grip on a thing in the world, or point and flick (the gloves) | Take it in the hand; let go in a body slot to take it into the inventory |
 | Swing | Attack (the game's hit; a fast committed swing is a power attack) |
+| Grip over the left shoulder (a bow equipped) | Take the bow by its grip, in either hand |
+| Grip over the other shoulder or at its hip, the bow in the other hand | An arrow from the quiver (let go there, it goes back in) |
+| The arrow's back end to the string; pull back; let go | Nock, draw, loose: the further drawn, the faster and flatter it flies (a fifth or less: it stays on the string) |
 | Weapon or shield across a blow | Block |
 
 ## Settings (`rustvr-oblivion.toml` beside the DLL)
