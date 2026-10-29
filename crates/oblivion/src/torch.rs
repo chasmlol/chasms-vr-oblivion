@@ -61,7 +61,7 @@ pub fn object_desc(model: &rustvr_asset::Model, flame: Option<f32>, weight: f32,
     let mut d: ObjectDesc = bytemuck::Zeroable::zeroed();
     d.id = TORCH_ID;
     d.kind = OBJ_PROP;
-    d.flags = OBJF_GRABBABLE | OBJF_PULLABLE | OBJF_HOLSTERABLE;
+    d.flags = OBJF_GRABBABLE | OBJF_PULLABLE | OBJF_HOLSTERABLE | OBJF_UPRIGHT;
     d.spawn_seq = seq;
     d.shape = SHAPE_BOX;
     d.half_extents = ((hi - lo) * 0.5).max(Vec3::splat(0.01)).to_array();
