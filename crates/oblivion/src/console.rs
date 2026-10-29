@@ -1,9 +1,11 @@
 //! Running console commands: a line of script compiled and run as the console does (a temporary
 //! `Script`, as xOBSE's `RunScriptLine`). Base forms go by their hex form ids (the game keeps no
 //! editor ids for most of them: `player.placeatme 00025e6e 1 150 0`). For tests,
-//! `rustvr-console-test` in the game folder lists commands to run at set times (`<seconds>
-//! <command>` per line, seconds since the game's first frame), e.g. `8 LoadGame "Skip Tutorial"`;
-//! the file is read once and deleted.
+//! `rustvr-console-test` in the game folder lists commands to run at set times, one a line:
+//! `<seconds> <command>` (since the game's first frame), `menu[+<seconds>] <command>` (after the main
+//! menu is up) or `game[+<seconds>] <command>` (after a game is loaded and the player is in it),
+//! e.g. `menu LoadGame "rustvr-city"`, then `game+1 player.additem 0000000A 5`. The file is read
+//! once and deleted (`tools/oblivion.ps1` writes it).
 
 use std::sync::Mutex;
 
@@ -185,22 +187,42 @@ mod print {
 #[cfg(target_arch = "x86")]
 pub use print::install;
 
+/// What a test line's time counts from: the game's first frame, the main menu coming up, or a game
+/// being loaded and the player in it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum From {
+    Start,
+    Menu,
+    Game,
+}
+
 struct Test {
     start: std::time::Instant,
-    lines: Vec<(f32, String)>,
+    menu: Option<std::time::Instant>,
+    game: Option<std::time::Instant>,
+    lines: Vec<(From, f32, String)>,
 }
 static TEST: Mutex<Option<Test>> = Mutex::new(None);
 
-pub fn parse(text: &str) -> Vec<(f32, String)> {
-    let mut out: Vec<(f32, String)> = text
+pub fn parse(text: &str) -> Vec<(From, f32, String)> {
+    let mut out: Vec<(From, f32, String)> = text
         .lines()
         .filter_map(|l| {
             let l = l.trim();
-            let (t, cmd) = l.split_once(' ')?;
-            Some((t.parse().ok()?, cmd.trim().to_owned()))
+            let (when, cmd) = l.split_once(' ')?;
+            let after = |rest: &str| if rest.is_empty() { Some(0.0) } else { rest.strip_prefix('+')?.parse().ok() };
+            let (from, t) = if let Some(rest) = when.strip_prefix("menu") {
+                (From::Menu, after(rest)?)
+            } else if let Some(rest) = when.strip_prefix("game") {
+                (From::Game, after(rest)?)
+            } else {
+                (From::Start, when.parse().ok()?)
+            };
+            Some((from, t, cmd.trim().to_owned()))
         })
         .collect();
-    out.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // (Stable: lines due together run in the file's order.)
+    out.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
     out
 }
 
@@ -211,7 +233,7 @@ pub fn load_test(dir: &std::path::Path) {
     let _ = std::fs::remove_file(&path);
     let lines = parse(&text);
     tracing::info!("console: {} test commands", lines.len());
-    *TEST.lock().unwrap() = Some(Test { start: std::time::Instant::now(), lines });
+    *TEST.lock().unwrap() = Some(Test { start: std::time::Instant::now(), menu: None, game: None, lines });
 }
 
 /// Once a frame, on the game's thread: the test commands that are due.
@@ -219,9 +241,29 @@ pub fn tick() {
     let due: Vec<String> = {
         let mut t = TEST.lock().unwrap();
         let Some(test) = t.as_mut() else { return };
-        let now = test.start.elapsed().as_secs_f32();
-        let n = test.lines.iter().take_while(|(at, _)| *at <= now).count();
-        test.lines.drain(..n).map(|(_, c)| c).collect()
+        let now = std::time::Instant::now();
+        if test.menu.is_none() && crate::menus::menu_open(crate::menus::MENU_MAIN) {
+            tracing::info!("console: the main menu is up after {:.1} s", test.start.elapsed().as_secs_f32());
+            test.menu = Some(now);
+        }
+        if test.game.is_none() && crate::menus::in_world() {
+            tracing::info!("console: in the game after {:.1} s", test.start.elapsed().as_secs_f32());
+            test.game = Some(now);
+        }
+        let since = |from: From| match from {
+            From::Start => Some(test.start),
+            From::Menu => test.menu,
+            From::Game => test.game,
+        };
+        let mut due = Vec::new();
+        test.lines.retain(|(from, at, cmd)| {
+            let ready = since(*from).is_some_and(|s| now.duration_since(s).as_secs_f32() >= *at);
+            if ready {
+                due.push(cmd.clone());
+            }
+            !ready
+        });
+        due
     };
     for cmd in due {
         tracing::info!("console: {cmd}");
@@ -236,8 +278,17 @@ pub fn tick() {
 mod tests {
     #[test]
     fn parses_timed_commands() {
-        let l = super::parse("8 LoadGame \"Skip Tutorial\"\n\n2.5 tgm\nnonsense\n");
-        assert_eq!(l, vec![(2.5, "tgm".to_owned()), (8.0, "LoadGame \"Skip Tutorial\"".to_owned())]);
+        use super::From;
+        let l = super::parse("8 LoadGame \"Skip Tutorial\"\n\n2.5 tgm\nnonsense\ngame+1 coc Weye\nmenu LoadGame x\n");
+        assert_eq!(
+            l,
+            vec![
+                (From::Start, 2.5, "tgm".to_owned()),
+                (From::Start, 8.0, "LoadGame \"Skip Tutorial\"".to_owned()),
+                (From::Menu, 0.0, "LoadGame x".to_owned()),
+                (From::Game, 1.0, "coc Weye".to_owned()),
+            ]
+        );
     }
 }
 

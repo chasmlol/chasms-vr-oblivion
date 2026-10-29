@@ -15,6 +15,8 @@ import sys
 import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Where the builds are: this checkout's `target`, or `CARGO_TARGET_DIR` (a worktree's own).
+TARGET = os.environ.get("CARGO_TARGET_DIR") or os.path.join(REPO, "target")
 DEFAULT_GAME = r"C:\Program Files (x86)\Steam\steamapps\common\Oblivion"
 OURS = ["dinput8.dll", "dinput8.pdb", "rustvr-runtime.txt"]
 IN_THE_WAY = ["dinput8.dll", "dinput8.pdb"]
@@ -42,8 +44,8 @@ def is_ours(path):
 
 
 def install(game):
-    dll = os.path.join(REPO, "target", "i686-pc-windows-msvc", "release", "dinput8.dll")
-    play = os.path.join(REPO, "target", "release", "rustvr-play.exe")
+    dll = os.path.join(TARGET, "i686-pc-windows-msvc", "release", "dinput8.dll")
+    play = os.path.join(TARGET, "release", "rustvr-play.exe")
     for p in (dll, play):
         if not os.path.exists(p):
             sys.exit(f"missing {p}: cargo build --release -p rustvr-oblivion --target i686-pc-windows-msvc, and cargo build --release "
@@ -62,7 +64,7 @@ def install(game):
         shutil.move(p, dest)
         print(f"moved {name} -> {BACKUP}\\{name}")
     copy(dll, os.path.join(game, "dinput8.dll"))
-    pdb = os.path.join(REPO, "target", "i686-pc-windows-msvc", "release", "dinput8.pdb")
+    pdb = os.path.join(TARGET, "i686-pc-windows-msvc", "release", "dinput8.pdb")
     if os.path.exists(pdb):
         copy(pdb, os.path.join(game, "dinput8.pdb"))
     with open(os.path.join(game, "rustvr-runtime.txt"), "w", encoding="utf-8") as f:

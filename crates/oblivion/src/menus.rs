@@ -16,6 +16,28 @@ const TILE_NODE: usize = 0x24;
 const NODE_X: usize = 0x54;
 const NODE_HEIGHT: usize = 0x5C;
 /// The game's screen size (`nWidth`, `nHeight`).
+/// The game's open menus by type (`g_TileMenuArray`: an `NiTArray` of `TileMenu*`, its data at +4,
+/// the first entry `kMenuType_Message`, 0x3E9); an entry is there while its menu is.
+const TILE_MENUS: usize = 0x00B1_3970;
+const MENU_FIRST: u32 = 0x3E9;
+pub const MENU_LOADING: u32 = 0x3EF;
+pub const MENU_MAIN: u32 = 0x414;
+/// `PlayerCharacter*`, and a reference's cell (`TESObjectREFR::parentCell`).
+const PLAYER: usize = 0x00B3_33C4;
+const PARENT_CELL: usize = 0x40;
+
+/// The menu of this type is open (`kMenuType_*`).
+pub fn menu_open(kind: u32) -> bool {
+    let data = mem::deref(TILE_MENUS + 4);
+    kind >= MENU_FIRST && data != 0 && mem::deref(data + 4 * (kind - MENU_FIRST) as usize) != 0
+}
+
+/// A game is loaded and the player is in it: in a cell, not at the main menu or a loading screen.
+pub fn in_world() -> bool {
+    let player = mem::deref(PLAYER);
+    player != 0 && mem::deref(player + PARENT_CELL) != 0 && !menu_open(MENU_MAIN) && !menu_open(MENU_LOADING)
+}
+
 const SCREEN_W: usize = 0x00B0_6C4C;
 const SCREEN_H: usize = 0x00B0_6C50;
 
