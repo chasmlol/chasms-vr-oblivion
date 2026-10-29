@@ -195,3 +195,75 @@ mod game {
         }
     }
 }
+
+/// `TESEffectShader`: its `EFSH` data at +0x18 as the record has it (flags; the membrane's blend;
+/// the fill's colour and alpha (fade in, full, fade out, persistent ratio, pulse amplitude and
+/// frequency) at +0x28; its texture's speed +0x44; the edge's falloff +0x4C, colour and alpha at
+/// +0x50; their full alpha ratios +0x6C; the membrane's destination blend +0x74), its fill
+/// texture's path +0xFC and its particles' +0x108.
+const SHADER_FLAGS: usize = 0x18;
+const SHADER_FILL: usize = 0x28;
+const SHADER_SPEED: usize = 0x44;
+const SHADER_FALLOFF: usize = 0x4C;
+const SHADER_EDGE: usize = 0x50;
+const SHADER_DEST_BLEND: usize = 0x74;
+const SHADER_FILL_TEXTURE: usize = 0xFC;
+/// The shader's flags: no membrane, an inverse edge.
+const SHADER_NO_MEMBRANE: u8 = 0x01;
+const SHADER_EDGE_INVERSE: u8 = 0x10;
+/// Direct3D's `D3DBLEND_ONE`: the membrane is added.
+const BLEND_ONE: u32 = 2;
+/// `EffectSetting`'s enchant effect (the shader an enchanted thing wears).
+const EFFECT_ENCHANT_SHADER: usize = 0x7C;
+
+/// One of the game's membrane colours and its persistent alpha (the ratio it settles at once its
+/// effect has started), with its pulse: (rgb 0..1, alpha, [amplitude, frequency]).
+fn membrane(shader: usize, at: usize) -> Option<([f32; 3], f32, [f32; 2])> {
+    let c = mem::at::<[u8; 4]>(shader + at)?;
+    let m = mem::at::<[f32; 6]>(shader + at + 4)?;
+    Some(([c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0], m[3].clamp(0.0, 1.0), [m[4], m[5]]))
+}
+
+/// The shimmer of what's enchanted with `enchantment` (its main effect's enchant effect shader),
+/// over the object `object`: as the game draws it once it has settled (each membrane at its
+/// persistent alpha, pulsing as it pulses, its fill texture scrolling as it scrolls). None: no
+/// enchantment, or its shader draws no membrane.
+#[cfg(target_arch = "x86")]
+pub fn enchant_overlay(enchantment: u32, object: u32) -> Option<Overlay> {
+    let effect = main_effect(enchantment, true);
+    let shader = mem::deref(effect + EFFECT_ENCHANT_SHADER);
+    if effect == 0 || shader == 0 {
+        return None;
+    }
+    let flags = mem::at::<u8>(shader + SHADER_FLAGS)?;
+    if flags & SHADER_NO_MEMBRANE != 0 {
+        return None;
+    }
+    let (fill, fill_a, fill_pulse) = membrane(shader, SHADER_FILL)?;
+    let (edge, edge_a, edge_pulse) = membrane(shader, SHADER_EDGE)?;
+    let mut o: Overlay = bytemuck::Zeroable::zeroed();
+    o.object = object;
+    o.flags = if edge_a > 0.0 { OVL_EDGE } else { 0 } | if fill_a > 0.0 { OVL_FILL } else { 0 } | if flags & SHADER_EDGE_INVERSE != 0 { OVL_EDGE_INVERSE } else { 0 } | if mem::at::<u32>(shader + SHADER_DEST_BLEND) == Some(BLEND_ONE) { OVL_ADDITIVE } else { 0 };
+    o.fill = [fill[0], fill[1], fill[2], fill_a];
+    o.fill_pulse = fill_pulse;
+    o.scroll = mem::at::<[f32; 2]>(shader + SHADER_SPEED).unwrap_or_default();
+    o.edge = [edge[0], edge[1], edge[2], edge_a];
+    o.edge_pulse = edge_pulse;
+    o.edge_falloff = mem::at::<f32>(shader + SHADER_FALLOFF).unwrap_or(1.0);
+    let texture = crate::combat::read_str(mem::deref(shader + SHADER_FILL_TEXTURE));
+    if !texture.is_empty() {
+        o.set_texture(&format!("oblivion/{}", oblivion_assets::export::texture_key(&format!("textures\\{texture}"))));
+    }
+    tracing::info!(
+        "magic: the shimmer of {enchantment:#x} (its effect {:#x}, shader {:#x}): flags {flags:#x}, fill {:?}, edge {:?} falloff {}, texture {texture:?} ({:?}), the shader's textures {:?} {:?}",
+        mem::at::<u32>(effect + FORM_ID).unwrap_or(0),
+        mem::at::<u32>(shader + FORM_ID).unwrap_or(0),
+        o.fill,
+        o.edge,
+        o.edge_falloff,
+        o.texture(),
+        crate::combat::read_str(mem::deref(shader + 0xFC)),
+        crate::combat::read_str(mem::deref(shader + 0x108)),
+    );
+    (o.flags & (OVL_EDGE | OVL_FILL) != 0).then_some(o)
+}

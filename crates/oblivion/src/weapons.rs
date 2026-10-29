@@ -11,7 +11,8 @@
 //!
 //! A staff casts: held in either hand, its trigger charges its enchantment at its tip and letting go
 //! casts it from there along the staff (`OBJF_CASTS`): the game's own staff cast, its charge used
-//! up (`crate::combat`).
+//! up (`crate::combat`). An enchanted one shimmers as the game draws it: its enchantment's own
+//! effect shader over it (`crate::magic::enchant_overlay`).
 //!
 //! Forms: `MiddleHighProcess::equippedWeaponData` (+0xE4 of the player's process) is the
 //! inventory entry of the equipped weapon (its form at +8), `equippedShieldData` (+0xF0) the
@@ -365,8 +366,15 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             Err(err) => tracing::warn!("weapons: the shield {path} has no extracted model ({key}: {err:#})"),
         }
     }
+    // An enchanted weapon's shimmer: its enchantment's own effect shader.
+    let mut overlays: Box<Overlays> = zeroed();
+    #[cfg(target_arch = "x86")]
+    if let Some(o) = now.as_ref().filter(|e| e.enchantment != 0).and_then(|e| crate::magic::enchant_overlay(e.enchantment, WEAPON_ID)) {
+        overlays.overlays[0] = o;
+        overlays.count = 1;
+    }
     // The melee table first: when the runtime sees the weapon, its damagers are there.
-    if a.write_melee(&melee) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
+    if a.write_melee(&melee) && a.write_overlays(&overlays) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
         *reg = Some(Registered { forms, seq });
     }
 }
