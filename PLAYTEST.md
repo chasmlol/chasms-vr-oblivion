@@ -25,7 +25,8 @@ trigger to click. The right stick scrolls, and B closes.
    - It comes as three strips: the list (with its column heads, scroll bar, your gold and weight
      under it), the category tabs, and the buttons (Take All, the switch to your own things, Exit).
    - The parchment is a little see-through; the text on it isn't.
-   - Point at a row and the game highlights it. Pull the trigger to take it.
+   - Point at a row and the game highlights it, with a light tick in your hand each time the
+     highlight moves to another row, tab or button. Pull the trigger to take it.
    - Push the right stick to scroll. Dragging the scroll bar with the trigger held should work too.
    - Click a tab, Take All, or the switch icon to put your own things in.
    - B closes the chest, as Exit does.
@@ -82,6 +83,7 @@ trigger to click. The right stick scrolls, and B closes.
   - The barter icon opened her wares beside her. The copy has no stock, so the list was empty;
     the real Jensine in the save has stock.
 - **A message box** (the console's `messagebox`) popped up ahead, and the laser hovered "Yes".
+- **The hover tick**: 20 haptic pulses in a run of pointing at and scrolling the chest's list.
 - **The pause menu**, with the RustVR settings beside it.
 - **The HUD outside menus**: the compass low in front, the bars and icons on the left wrist, and
   the card of what's looked at under the gaze point.
@@ -104,6 +106,8 @@ trigger to click. The right stick scrolls, and B closes.
   - the real Jensine's stock;
   - a container that's tall enough for its list to go to its side (the side placement was only
     seen with a merchant).
+- **A crash once while loading a save** (in the game's own load, before any menu): it also
+  happened on 28 October before this work, so it isn't from it, but it's there.
 - **Performance** in a big exterior with a menu open. The world is now rendered every frame under
   menus, where it used to be a frozen picture.
 

@@ -86,6 +86,21 @@ pub fn point(uv: [f32; 2]) {
         ((node + NODE_X) as *mut f32).write(x);
         ((node + NODE_HEIGHT) as *mut f32).write(z);
     }
+    hover_tick();
+}
+
+/// The tile the game's cursor is over (`InterfaceManager` +0x98), as the game worked it out.
+const ACTIVE_TILE: usize = 0x98;
+
+/// A light tick in the laser's hand as the game's own hover moves onto another thing (a row, a tab,
+/// a button): the laser is felt crossing what it can click, as the game shows it.
+fn hover_tick() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static LAST: AtomicUsize = AtomicUsize::new(0);
+    let active = mem::deref(mem::deref(INTERFACE_MANAGER) + ACTIVE_TILE);
+    if LAST.swap(active, Ordering::Relaxed) != active && active != 0 {
+        crate::link::with_adapter(|a| a.haptic(rustvr_protocol::HAPTIC_FIRING_HAND, 0.008, 200.0, 0.12));
+    }
 }
 
 #[cfg(test)]
