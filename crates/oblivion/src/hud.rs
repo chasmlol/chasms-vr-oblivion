@@ -13,6 +13,7 @@
 //! | dialogue | the speaker: their line under their face, the topics beside them | the name and line; the topics and services |
 //! | the inventory, magic, the map, the character | ahead of the player | the page; the HUD's switcher between them (bars: character, weapon: inventory, spell: magic, compass: map) |
 //! | a count, a question | where the eyes look | the box |
+//! | a service from dialogue (spells, training, repair, recharge, persuasion) | beside the speaker | the menu, cut from the screen |
 //! | anything else | ahead of the player | the menu, cut from the screen |
 //!
 //! **Transparency**: the pieces are as opaque as the game draws them, and the rest of the screen is
@@ -407,7 +408,11 @@ mod win {
                 if kind == MENU_PAUSE {
                     l.flags |= HUDL_SETTINGS;
                 }
-                add_group(&mut l, player(kind), kind, WHOLE, screen, &mut trees)
+                // A menu opened from dialogue (a service: spells, training, repair, recharge,
+                // persuasion) beside the one who offers it; any other ahead of the player.
+                let speaker = mem::deref(tiles::menu(MENU_DIALOG) + DIALOG_SPEAKER);
+                let group = if speaker != 0 && tiles::menu_tile(MENU_DIALOG) != 0 { beside(speaker, kind, SIDE_RIGHT, false) } else { player(kind) };
+                add_group(&mut l, group, kind, WHOLE, screen, &mut trees)
             }
         }
         for tree in trees.0.values() {
