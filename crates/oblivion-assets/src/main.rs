@@ -9,7 +9,8 @@
 //! model reader against the real files). `export` writes every model under the prefixes, and the
 //! textures they use, into the runtime's cache (`local_assets/oblivion`, see
 //! `oblivion_assets::export`; a `textures/...` prefix brings every texture under it, e.g. the races'
-//! skins). `preview` draws one converted model from three sides.
+//! skins). `preview` draws one converted model from three sides. `anims` lists each model's animations
+//! and what each moves (a door's leaf turned about its hinge, a lever's handle, a gate slid up).
 
 use anyhow::Result;
 use oblivion_assets::export::{self, Part};

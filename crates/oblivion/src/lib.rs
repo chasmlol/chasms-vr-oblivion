@@ -15,6 +15,8 @@
 //! * **Combat** ([`combat`], [`weapons`]): the game's creatures and spells to the runtime, the
 //!   equipped weapon as the object in the hand (the game's own model), and what the hands did
 //!   (hits, casts) done by the game.
+//! * **The world** ([`items`], [`world`]): the things lying about, to take in the hands; the doors
+//!   and levers, worked by hand with the game's own activation.
 //!
 //! The rest is plumbing: the DLL proxy ([`proxy`]), the game's addresses ([`engine`]), hooking
 //! ([`hooks`], [`iat`]), the game window ([`window`]), the game's settings ([`game_settings`]) and
@@ -57,3 +59,4 @@ pub mod settings;
 pub mod timing;
 pub mod weapons;
 pub mod window;
+pub mod world;

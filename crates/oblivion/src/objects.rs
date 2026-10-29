@@ -1,6 +1,8 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
-//! ([`crate::weapons`]) and the game's things lying about near the player ([`crate::items`]), each
-//! owner's entries kept apart and written together.
+//! ([`crate::weapons`]), the game's things lying about near the player ([`crate::items`]) and the
+//! world's moving parts, its doors and levers ([`crate::world`]), each owner's entries kept apart
+//! and written together. The same for the regions that go with the table: where the game has its
+//! own objects ([`GamePoses`]) and their convex collision ([`GameHulls`]).
 
 use rustvr_protocol::*;
 
@@ -9,28 +11,35 @@ use rustvr_protocol::*;
 pub enum Owner {
     Weapons,
     Items,
+    World,
+}
+
+const OWNERS: usize = 3;
+
+fn index(owner: Owner) -> usize {
+    match owner {
+        Owner::Weapons => 0,
+        Owner::Items => 1,
+        Owner::World => 2,
+    }
 }
 
 /// The owners' entries (pure: no link), merged into a table.
 #[derive(Default)]
 pub struct Parts {
-    weapons: Vec<ObjectDesc>,
-    items: Vec<ObjectDesc>,
+    descs: [Vec<ObjectDesc>; OWNERS],
     seq: u32,
 }
 
 impl Parts {
-    /// Replaces `owner`'s entries and returns the merged table (weapons first; at most
-    /// [`MAX_OBJECTS`]), its sequence number bumped.
+    /// Replaces `owner`'s entries and returns the merged table (weapons first, then the items and
+    /// the world's; at most [`MAX_OBJECTS`]), its sequence number bumped.
     pub fn set(&mut self, owner: Owner, descs: &[ObjectDesc], table: &mut ObjectTable) {
-        let mine = match owner {
-            Owner::Weapons => &mut self.weapons,
-            Owner::Items => &mut self.items,
-        };
+        let mine = &mut self.descs[index(owner)];
         mine.clear();
         mine.extend(descs.iter().filter(|d| d.id != 0));
         table.descs.fill(bytemuck::Zeroable::zeroed());
-        let all: Vec<&ObjectDesc> = self.weapons.iter().chain(&self.items).take(MAX_OBJECTS).collect();
+        let all: Vec<&ObjectDesc> = self.descs.iter().flatten().take(MAX_OBJECTS).collect();
         for (i, d) in all.iter().enumerate() {
             table.descs[i] = **d;
         }
@@ -40,18 +49,70 @@ impl Parts {
     }
 }
 
+/// Each owner's game poses and hulls, merged.
+#[derive(Default)]
+pub struct Regions {
+    poses: [Vec<GamePose>; OWNERS],
+    hulls: [Vec<GameHull>; OWNERS],
+}
+
+impl Regions {
+    pub fn set_poses(&mut self, owner: Owner, poses: &[GamePose], out: &mut GamePoses) {
+        self.poses[index(owner)] = poses.to_vec();
+        out.count = 0;
+        for (i, p) in self.poses.iter().flatten().take(MAX_OBJECTS).enumerate() {
+            out.poses[i] = *p;
+            out.count = i as u32 + 1;
+        }
+    }
+
+    pub fn set_hulls(&mut self, owner: Owner, hulls: &[GameHull], out: &mut GameHulls) {
+        self.hulls[index(owner)] = hulls.to_vec();
+        out.count = 0;
+        for (i, h) in self.hulls.iter().flatten().take(MAX_GAME_HULLS).enumerate() {
+            out.hulls[i] = *h;
+            out.count = i as u32 + 1;
+        }
+    }
+}
+
 struct Table {
     parts: Parts,
     table: Box<ObjectTable>,
+    regions: Regions,
+    poses: Box<GamePoses>,
+    hulls: Box<GameHulls>,
 }
 static TABLE: std::sync::Mutex<Option<Table>> = std::sync::Mutex::new(None);
 
+fn with_table<R>(f: impl FnOnce(&mut Table) -> R) -> R {
+    let mut t = TABLE.lock().unwrap();
+    f(t.get_or_insert_with(|| Table { parts: Parts::default(), table: bytemuck::zeroed_box(), regions: Regions::default(), poses: bytemuck::zeroed_box(), hulls: bytemuck::zeroed_box() }))
+}
+
 /// Replaces `owner`'s objects and writes the whole table to the runtime.
 pub fn publish(owner: Owner, descs: &[ObjectDesc], adapter: &rustvr_adapter::Adapter) -> bool {
-    let mut t = TABLE.lock().unwrap();
-    let t = t.get_or_insert_with(|| Table { parts: Parts::default(), table: bytemuck::zeroed_box() });
-    t.parts.set(owner, descs, &mut t.table);
-    adapter.write_objects(&t.table)
+    with_table(|t| {
+        t.parts.set(owner, descs, &mut t.table);
+        adapter.write_objects(&t.table)
+    })
+}
+
+/// Replaces where `owner`'s own objects are (the game moves them) and writes them all.
+pub fn publish_poses(owner: Owner, poses: &[GamePose], adapter: &rustvr_adapter::Adapter) -> bool {
+    with_table(|t| {
+        t.regions.set_poses(owner, poses, &mut t.poses);
+        adapter.write_game_poses(&t.poses)
+    })
+}
+
+/// Replaces `owner`'s objects' convex collision and writes them all (before the objects that use
+/// them are published).
+pub fn publish_hulls(owner: Owner, hulls: &[GameHull], adapter: &rustvr_adapter::Adapter) -> bool {
+    with_table(|t| {
+        t.regions.set_hulls(owner, hulls, &mut t.hulls);
+        adapter.write_game_hulls(&t.hulls)
+    })
 }
 
 #[cfg(test)]

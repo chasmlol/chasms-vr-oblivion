@@ -1002,10 +1002,25 @@ impl Nif {
         Some(String::from_utf8_lossy(&rest[..end]).into_owned())
     }
 
-    /// Where an animation has each node it moves at its start and at its end: (node name, local
-    /// transform at the start, at the end). A node's part the animation doesn't key stays as the
-    /// node has it.
-    pub fn sequence_ends(&self, s: &Sequence) -> Vec<(String, Transform, Transform)> {
+    /// An animation's start and stop times (its keys' when it doesn't say).
+    pub fn sequence_span(&self, s: &Sequence) -> (f32, f32) {
+        let valid = |v: f32| v.is_finite() && v.abs() < 1e30;
+        if valid(s.start) && valid(s.stop) && s.stop > s.start {
+            return (s.start, s.stop);
+        }
+        let keys = s.blocks.iter().filter_map(|&(interp, _)| match self.get(interp) {
+            Some(Block::TransformInterpolator { data, .. }) => match self.get(*data) {
+                Some(Block::Keyframes(k)) => k.span(),
+                _ => None,
+            },
+            _ => None,
+        });
+        keys.fold(None, |a: Option<(f32, f32)>, (lo, hi)| Some(a.map_or((lo, hi), |(a, b)| (a.min(lo), b.max(hi))))).unwrap_or((0.0, 0.0))
+    }
+
+    /// Where an animation has each node it moves at time `t`: (node name, local transform). A
+    /// node's part the animation doesn't key stays as the node has it.
+    pub fn sequence_pose(&self, s: &Sequence, t: f32) -> Vec<(String, Transform)> {
         let mut out = Vec::new();
         for &(interp, offset) in &s.blocks {
             let Some(name) = self.palette_name(s.palette, offset) else { continue };
@@ -1019,15 +1034,31 @@ impl Nif {
                 Some(Block::Keyframes(k)) => Some(k),
                 _ => None,
             };
-            let (t0, t1) = if valid(s.start) && valid(s.stop) && s.stop > s.start { (s.start, s.stop) } else { keys.and_then(Keyframes::span).unwrap_or((0.0, 0.0)) };
-            let at = |t: f32| Transform {
-                rotation: keys.and_then(|k| k.rotation_at(t)).map(Mat3::from_quat).unwrap_or(base_r),
-                translation: keys.and_then(|k| k.translation_at(t)).unwrap_or(base_t),
-                scale: rest.scale,
-            };
-            out.push((name, at(t0), at(t1)));
+            out.push((
+                name,
+                Transform {
+                    rotation: keys.and_then(|k| k.rotation_at(t)).map(Mat3::from_quat).unwrap_or(base_r),
+                    translation: keys.and_then(|k| k.translation_at(t)).unwrap_or(base_t),
+                    scale: rest.scale,
+                },
+            ));
         }
         out
+    }
+
+    /// Where an animation has each node it moves at its start and at its end: (node name, local
+    /// transform at the start, at the end).
+    pub fn sequence_ends(&self, s: &Sequence) -> Vec<(String, Transform, Transform)> {
+        let (t0, t1) = self.sequence_span(s);
+        self.sequence_pose(s, t0).into_iter().zip(self.sequence_pose(s, t1)).map(|((n, a), (_, b))| (n, a, b)).collect()
+    }
+
+    /// An animation's text keys (its sounds: "Sound: DRSMetalOpen01" where it plays).
+    pub fn text_keys(&self, s: &Sequence) -> &[(f32, String)] {
+        match self.get(s.text_keys) {
+            Some(Block::TextKeys(k)) => k,
+            _ => &[],
+        }
     }
 }
 
