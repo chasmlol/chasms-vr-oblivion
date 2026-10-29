@@ -193,20 +193,23 @@ mod game {
                 l.update(dt);
             }
         }
+        super::publish_overlays();
     }
 }
 
 /// `TESEffectShader`: its `EFSH` data at +0x18 as the record has it (flags; the membrane's blend;
 /// the fill's colour and alpha (fade in, full, fade out, persistent ratio, pulse amplitude and
 /// frequency) at +0x28; its texture's speed +0x44; the edge's falloff +0x4C, colour and alpha at
-/// +0x50; their full alpha ratios +0x6C; the membrane's destination blend +0x74), its fill
-/// texture's path +0xFC and its particles' +0x108.
+/// +0x50; their full alpha ratios +0x6C and +0x70; the membrane's destination blend +0x74), its
+/// fill texture's path +0xFC.
 const SHADER_FLAGS: usize = 0x18;
 const SHADER_FILL: usize = 0x28;
 const SHADER_SPEED: usize = 0x44;
 const SHADER_FALLOFF: usize = 0x4C;
 const SHADER_EDGE: usize = 0x50;
 const SHADER_DEST_BLEND: usize = 0x74;
+const SHADER_FILL_FULL: usize = 0x6C;
+const SHADER_EDGE_FULL: usize = 0x70;
 const SHADER_FILL_TEXTURE: usize = 0xFC;
 /// The shader's flags: no membrane, an inverse edge.
 const SHADER_NO_MEMBRANE: u8 = 0x01;
@@ -216,31 +219,36 @@ const BLEND_ONE: u32 = 2;
 /// `EffectSetting`'s enchant effect (the shader an enchanted thing wears).
 const EFFECT_ENCHANT_SHADER: usize = 0x7C;
 
-/// One of the game's membrane colours and its persistent alpha (the ratio it settles at once its
-/// effect has started), with its pulse: (rgb 0..1, alpha, [amplitude, frequency]).
-fn membrane(shader: usize, at: usize) -> Option<([f32; 3], f32, [f32; 2])> {
+/// One of the game's membranes (the fill at +0x28, the edge at +0x50, each followed by its full
+/// alpha ratio at `full`): its colour (0..1), its alpha `age` seconds after its effect began (None:
+/// settled, its persistent ratio) and its pulse ([amplitude, frequency]). The game's curve: it
+/// fades in to its full ratio, holds it, then fades to its persistent ratio and stays there.
+fn membrane(shader: usize, at: usize, full: usize, age: Option<f32>) -> Option<([f32; 3], f32, [f32; 2])> {
     let c = mem::at::<[u8; 4]>(shader + at)?;
+    // Fade in, full alpha time, fade out, persistent ratio, pulse amplitude, pulse frequency.
     let m = mem::at::<[f32; 6]>(shader + at + 4)?;
-    Some(([c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0], m[3].clamp(0.0, 1.0), [m[4], m[5]]))
+    let full = mem::at::<f32>(shader + full)?;
+    let alpha = match age {
+        None => m[3],
+        Some(t) if t < m[0] => full * t / m[0].max(1e-3),
+        Some(t) if t < m[0] + m[1] => full,
+        Some(t) if t < m[0] + m[1] + m[2] => full + (m[3] - full) * (t - m[0] - m[1]) / m[2].max(1e-3),
+        Some(_) => m[3],
+    };
+    Some(([c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0], alpha.clamp(0.0, 1.0), [m[4], m[5]]))
 }
 
-/// The shimmer of what's enchanted with `enchantment` (its main effect's enchant effect shader),
-/// over the object `object`: as the game draws it once it has settled (each membrane at its
-/// persistent alpha, pulsing as it pulses, its fill texture scrolling as it scrolls). None: no
-/// enchantment, or its shader draws no membrane.
-#[cfg(target_arch = "x86")]
-pub fn enchant_overlay(enchantment: u32, object: u32) -> Option<Overlay> {
-    let effect = main_effect(enchantment, true);
-    let shader = mem::deref(effect + EFFECT_ENCHANT_SHADER);
-    if effect == 0 || shader == 0 {
-        return None;
-    }
+/// The game's effect shader `shader` (a `TESEffectShader`) over `object`, `age` seconds after its
+/// effect began (None: settled): each membrane at its alpha then, pulsing as it pulses, its fill
+/// texture scrolling as it scrolls, its edge's falloff, blended over or added as its destination
+/// blend says. None: it draws no membrane, or nothing of it shows now.
+pub fn shader_overlay(shader: usize, object: u32, age: Option<f32>) -> Option<Overlay> {
     let flags = mem::at::<u8>(shader + SHADER_FLAGS)?;
     if flags & SHADER_NO_MEMBRANE != 0 {
         return None;
     }
-    let (fill, fill_a, fill_pulse) = membrane(shader, SHADER_FILL)?;
-    let (edge, edge_a, edge_pulse) = membrane(shader, SHADER_EDGE)?;
+    let (fill, fill_a, fill_pulse) = membrane(shader, SHADER_FILL, SHADER_FILL_FULL, age)?;
+    let (edge, edge_a, edge_pulse) = membrane(shader, SHADER_EDGE, SHADER_EDGE_FULL, age)?;
     let mut o: Overlay = bytemuck::Zeroable::zeroed();
     o.object = object;
     o.flags = if edge_a > 0.0 { OVL_EDGE } else { 0 } | if fill_a > 0.0 { OVL_FILL } else { 0 } | if flags & SHADER_EDGE_INVERSE != 0 { OVL_EDGE_INVERSE } else { 0 } | if mem::at::<u32>(shader + SHADER_DEST_BLEND) == Some(BLEND_ONE) { OVL_ADDITIVE } else { 0 };
@@ -254,16 +262,100 @@ pub fn enchant_overlay(enchantment: u32, object: u32) -> Option<Overlay> {
     if !texture.is_empty() {
         o.set_texture(&format!("oblivion/{}", oblivion_assets::export::texture_key(&format!("textures\\{texture}"))));
     }
+    (o.flags & (OVL_EDGE | OVL_FILL) != 0).then_some(o)
+}
+
+/// The shimmer of what's enchanted with `enchantment` (its main effect's enchant effect shader),
+/// settled, over the object `object`. None: no enchantment, or its shader draws no membrane.
+#[cfg(target_arch = "x86")]
+pub fn enchant_overlay(enchantment: u32, object: u32) -> Option<Overlay> {
+    let effect = main_effect(enchantment, true);
+    let shader = mem::deref(effect + EFFECT_ENCHANT_SHADER);
+    if effect == 0 || shader == 0 {
+        return None;
+    }
+    let o = shader_overlay(shader, object, None);
     tracing::info!(
-        "magic: the shimmer of {enchantment:#x} (its effect {:#x}, shader {:#x}): flags {flags:#x}, fill {:?}, edge {:?} falloff {}, texture {texture:?} ({:?}), the shader's textures {:?} {:?}",
+        "magic: the shimmer of {enchantment:#x} (its effect {:#x}, shader {:#x}): {:?}",
         mem::at::<u32>(effect + FORM_ID).unwrap_or(0),
         mem::at::<u32>(shader + FORM_ID).unwrap_or(0),
-        o.fill,
-        o.edge,
-        o.edge_falloff,
-        o.texture(),
-        crate::combat::read_str(mem::deref(shader + 0xFC)),
-        crate::combat::read_str(mem::deref(shader + 0x108)),
+        o.map(|o| (o.flags, o.fill, o.edge, o.edge_falloff, o.texture().to_owned()))
     );
-    (o.flags & (OVL_EDGE | OVL_FILL) != 0).then_some(o)
+    o
+}
+
+/// The overlays the runtime has (the weapon's shimmer, set as the weapon changes; the spells'
+/// shaders on the player, every frame), as last written.
+struct OverlayState {
+    weapon: Option<Overlay>,
+    sent: Option<Vec<u8>>,
+    table: Box<Overlays>,
+}
+
+static OVERLAYS: std::sync::Mutex<Option<OverlayState>> = std::sync::Mutex::new(None);
+
+/// The equipped weapon's shimmer from now on (None: none).
+pub fn set_weapon_overlay(o: Option<Overlay>) {
+    let mut s = OVERLAYS.lock().unwrap();
+    s.get_or_insert_with(|| OverlayState { weapon: None, sent: None, table: bytemuck::zeroed_box() }).weapon = o;
+}
+
+/// Once a frame: the weapon's shimmer and the spells' shaders on the player's body (each where its
+/// curve has it now), written when they change.
+#[cfg(target_arch = "x86")]
+fn publish_overlays() {
+    let mut s = OVERLAYS.lock().unwrap();
+    let s = s.get_or_insert_with(|| OverlayState { weapon: None, sent: None, table: bytemuck::zeroed_box() });
+    let mut all: Vec<Overlay> = s.weapon.into_iter().collect();
+    for (_, shader, age) in player_hit_shaders() {
+        if let Some(o) = shader_overlay(shader, OVERLAY_BODY, Some(age)) {
+            all.push(o);
+        }
+    }
+    all.truncate(MAX_OVERLAYS);
+    let bytes: Vec<u8> = all.iter().flat_map(|o| bytemuck::bytes_of(o).to_vec()).collect();
+    if s.sent.as_ref() == Some(&bytes) {
+        return;
+    }
+    s.table.count = all.len() as u32;
+    for (i, o) in all.iter().enumerate() {
+        s.table.overlays[i] = *o;
+    }
+    if crate::link::with_adapter(|a| a.write_overlays(&s.table)).unwrap_or(false) {
+        s.sent = Some(bytes);
+    }
+}
+
+/// `ActorProcessManager`'s two lists of the game's temporary effects in the world (`tList`s,
+/// inline first nodes, 0x678D30 puts each in one): its spells' shaders on actors
+/// (`MagicShaderHitEffect`: the target +0x1C, the shader +0x34) among them.
+const PROCESS_MANAGER: usize = 0x00B3_BD00;
+const TEMP_EFFECTS: [usize; 2] = [0x40, 0x48];
+const HIT_TARGET: usize = 0x1C;
+const HIT_AGE: usize = 0x20;
+const HIT_SHADER: usize = 0x34;
+
+/// The game's spells' shaders on the player now (each `MagicShaderHitEffect` whose target is the
+/// player): (the effect, its shader, how long it has run: seconds).
+#[cfg(target_arch = "x86")]
+pub fn player_hit_shaders() -> Vec<(usize, usize, f32)> {
+    let player = crate::engine::player();
+    let mut out = Vec::new();
+    for list in TEMP_EFFECTS {
+        let mut node = PROCESS_MANAGER + list;
+        let mut guard = 0;
+        while node != 0 && guard < 512 {
+            guard += 1;
+            let e = mem::deref(node);
+            node = mem::deref(node + 4);
+            if e == 0 || crate::nodes::class(e) != "MagicShaderHitEffect" || mem::deref(e + HIT_TARGET) != player {
+                continue;
+            }
+            let shader = mem::deref(e + HIT_SHADER);
+            if shader != 0 {
+                out.push((e, shader, mem::at::<f32>(e + HIT_AGE).filter(|t| t.is_finite()).unwrap_or(0.0)));
+            }
+        }
+    }
+    out
 }

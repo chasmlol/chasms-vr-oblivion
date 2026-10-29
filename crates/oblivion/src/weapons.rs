@@ -367,14 +367,10 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
         }
     }
     // An enchanted weapon's shimmer: its enchantment's own effect shader.
-    let mut overlays: Box<Overlays> = zeroed();
     #[cfg(target_arch = "x86")]
-    if let Some(o) = now.as_ref().filter(|e| e.enchantment != 0).and_then(|e| crate::magic::enchant_overlay(e.enchantment, WEAPON_ID)) {
-        overlays.overlays[0] = o;
-        overlays.count = 1;
-    }
+    crate::magic::set_weapon_overlay(now.as_ref().filter(|e| e.enchantment != 0).and_then(|e| crate::magic::enchant_overlay(e.enchantment, WEAPON_ID)));
     // The melee table first: when the runtime sees the weapon, its damagers are there.
-    if a.write_melee(&melee) && a.write_overlays(&overlays) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
+    if a.write_melee(&melee) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
         *reg = Some(Registered { forms, seq });
     }
 }
