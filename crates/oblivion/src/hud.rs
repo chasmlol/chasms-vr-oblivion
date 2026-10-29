@@ -234,10 +234,12 @@ mod win {
         SWITCHER,
     ];
     /// Magic (`main\magic_menu.xml`): its list of spells (heads, scroll bar, the cost and
-    /// magnitude marks), its tabs, and the switcher.
+    /// magnitude marks, the spell effectiveness under it), its tabs, and the switcher.
     const MAGIC: &[Piece] = &[
-        Piece::of(&[From::Box("magic_window"), From::Drawn("magic_headers_top"), From::Drawn("magic_scroll_bar"), From::Drawn("magic_misc_elements")], true),
-        Piece::of(&[From::Drawn("magic_tabs")], true),
+        Piece::of(&[From::Box("magic_window"), From::Drawn("magic_headers_top"), From::Drawn("magic_scroll_bar"), From::Drawn("magic_misc_elements"), From::Drawn("magic_effectivness")], true),
+        // (The tabs' own icons: the page art they're drawn on reaches up under the spell
+        // effectiveness, which is the list's.)
+        Piece::of(MAGIC_TABS, true),
         SWITCHER,
         Piece::over(MENU_MAGIC_POPUP, &[From::All]),
     ];
@@ -250,7 +252,9 @@ mod win {
         Piece::over(0, &[From::Drawn("stat_pop_background")]),
     ];
     /// The map and the journal (`main\map_menu.xml`): its page, its tabs, and the switcher.
-    const MAP: &[Piece] = &[Piece::of(&[From::Drawn("map_background")], true), Piece::of(&[From::Drawn("map_tabs")], true), SWITCHER];
+    const MAP: &[Piece] = &[Piece::of(&[From::Drawn("map_background")], true), Piece::of(MAP_TABS, true), SWITCHER];
+    const MAGIC_TABS: &[From] = &[From::Drawn("magic_tabs_p1"), From::Drawn("magic_tabs_p2"), From::Drawn("magic_tabs_p3"), From::Drawn("magic_tabs_p4"), From::Drawn("magic_tabs_p5")];
+    const MAP_TABS: &[From] = &[From::Drawn("map_tabs_p1"), From::Drawn("map_tabs_p2"), From::Drawn("map_tabs_p3"), From::Drawn("map_tabs_p4"), From::Drawn("map_tabs_p5")];
 
     /// Dialogue (`dialog\dialog_menu.xml`) at the speaker: their line under their face (the game
     /// shows it while they speak, and the topics after)...
