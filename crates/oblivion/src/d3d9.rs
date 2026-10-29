@@ -363,6 +363,9 @@ mod win {
 
     /// Lets go of our copies of the game's picture (once the copies in flight are done).
     fn release_bridge() {
+        // (The UI's targets too: a reset can't happen while anything holds the back buffer.)
+        UI_PASS.store(false, Ordering::Release);
+        UI_TARGETS.lock().unwrap().take();
         let Some(b) = BRIDGE.lock().unwrap().take() else { return };
         if unsafe { b.fence12.GetCompletedValue() } < b.value && unsafe { b.fence12.SetEventOnCompletion(b.value, b.event) }.is_ok() {
             unsafe { WaitForSingleObject(b.event, 1000) };
