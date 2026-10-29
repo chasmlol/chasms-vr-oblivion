@@ -526,8 +526,13 @@ mod win {
             l.push(HudElement::new(role, tiles::uv_of(b, screen, MARGIN)?));
             Some(b)
         };
+        let status = l.count as usize;
         piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("hudmain_statusbars"), From::Drawn("hudmain_Weapon_Icon"), From::Drawn("hudmain_Magic_Icon")]);
         piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("magic_icons")]);
+        // (The bars and icons a little bigger than a watch's face: they're read at a glance.)
+        for e in &mut l.elements[status..l.count as usize] {
+            e.scale = 1.3;
+        }
         if let Some(i) = piece(l, trees, HUD_COMPASS, MENU_HUD, &[From::Drawn("hudmain_compass_layout")]).map(|_| l.count as usize - 1) {
             // (A little bigger than the game's text: its heading letters are small.)
             l.elements[i].scale = 1.4;
