@@ -16,7 +16,7 @@ mod win {
     use crate::camera::{self, CameraState};
     use crate::d3d9::{self, HUD};
     use crate::link::{self, GameFrame, Snapshot};
-    use crate::{engine, hooks};
+    use crate::{engine, hooks, mem};
     use rustvr_protocol::{DEPTH_LINEAR, SLOT_DEPTH, SLOT_HUD, SLOT_MENU, SLOT_STEREO, SlotInfo};
     use std::ffi::c_void;
     use std::sync::Mutex;
@@ -92,12 +92,41 @@ mod win {
         unsafe { real(this) }
     }
 
+    /// The game's redraw from the outdoor cell grid (thiscall), which it also runs as soon as its
+    /// lost device is reset: it reads the grid's middle cell without asking if there is one, and
+    /// indoors there isn't (a crash on any device reset inside a building; the device is lost when
+    /// the desktop's displays change, as Virtual Desktop adds its monitor when the headset
+    /// connects). Skipped with no middle cell.
+    const GRID_REDRAW: usize = 0x0049_A200;
+    /// `GridCellArray::GetCell(x, y)` (thiscall): the slot holding the cell at (x, y) of the outdoor
+    /// grid (`TES` +8).
+    const GRID_CELL: usize = 0x0048_2150;
+    const TES: usize = 0x00B3_33A0;
+    static REAL_GRID_REDRAW: AtomicUsize = AtomicUsize::new(0);
+
+    unsafe extern "thiscall" fn grid_redraw(this: *mut c_void) {
+        let grid = mem::deref(mem::deref(TES) + 8);
+        let middle = grid != 0 && {
+            let cell_at: unsafe extern "thiscall" fn(usize, i32, i32) -> usize = unsafe { std::mem::transmute(GRID_CELL) };
+            let slot = unsafe { cell_at(grid, 1, 1) };
+            slot != 0 && mem::deref(slot) != 0
+        };
+        if !middle {
+            static SAID: std::sync::Once = std::sync::Once::new();
+            SAID.call_once(|| tracing::info!("render: the game's redraw from the outdoor grid skipped indoors (it would crash)"));
+            return;
+        }
+        let real: unsafe extern "thiscall" fn(*mut c_void) = unsafe { std::mem::transmute(REAL_GRID_REDRAW.load(Ordering::Acquire)) };
+        unsafe { real(this) }
+    }
+
     pub fn install() {
         set_lock(true, true);
         patch_lock();
         hooks::install_into(ACTOR_SHADOWS as *const (), actor_shadows as *const (), "actor shadows", &REAL_SHADOWS);
         hooks::install_into(engine::FRAME as *const (), frame_hook as *const (), "Main::Frame", &REAL_FRAME);
         hooks::install_into(engine::RENDER as *const (), render_hook as *const (), "Main::Render", &REAL_RENDER);
+        hooks::install_into(GRID_REDRAW as *const (), grid_redraw as *const (), "the outdoor grid's redraw", &REAL_GRID_REDRAW);
     }
 
     /// The game's frame: test commands run first, where the game's own scripts and console would
