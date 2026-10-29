@@ -1,0 +1,132 @@
+# Oblivion's armour marks: which parts of the game's armour models are rigid plates, and what each
+# rides. The guide to the format is the framework's docs/ARMOUR.md; the research behind it is
+# docs/research/armour.md. Look at a piece with the preview, from this repository's root:
+#
+#     framework\target\release\rustvr-armour oblivion --set iron
+#
+# Bone names: the game's skeleton (characters\_male\skeleton.nif). `*` matches either side
+# (`Bip01 * Forearm`); a plate rides the bone on its own side.
+
+game = "oblivion"
+
+[preview]
+skeleton = 'characters\_male\skeleton.nif'
+
+# The bare body under what a set leaves uncovered (Oblivion's biped slots).
+[[preview.skin]]
+slot = "upper"
+model = 'characters\_male\upperbody.nif'
+
+[[preview.skin]]
+slot = "lower"
+model = 'characters\_male\lowerbody.nif'
+
+[[preview.skin]]
+slot = "hands"
+model = 'characters\_male\hand.nif'
+
+[[preview.skin]]
+slot = "feet"
+model = 'characters\_male\foot.nif'
+
+[[set]]
+name = "iron"
+models = ['armor\iron\m\cuirass.nif', 'armor\iron\m\gauntlets.nif', 'armor\iron\m\greaves.nif', 'armor\iron\m\boots.nif']
+
+[[piece]]
+name = "Iron cuirass"
+models = ['armor\iron\m\cuirass.nif']
+covers = "upper"
+
+# The pauldrons: two islands of the first shape. The game's weights (78% clavicle, 22% upper arm)
+# drape them over the shoulder by bending them; rigid on those, they'd stand out like wings with
+# the arms down (the models are bound with the arms out level). Half on each, hinged at the top of
+# the shoulder, they hang over the arm at rest and lift half as far as it does.
+[[piece.plate]]
+name = "pauldron"
+mesh = 0
+bone = "Bip01 * Clavicle"
+ride = { "Bip01 * Clavicle" = 0.5, "Bip01 * UpperArm" = 0.5 }
+pivot = [0.14, 1.57, -0.03]
+layer = 2
+
+# The upper arm's plates (the rerebrace), under the pauldron: rigid on the upper arm, its edges
+# (on the clavicle and the forearm) soft.
+[[piece.plate]]
+name = "rerebrace"
+mesh = 1
+bone = ["Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
+vertices = ["Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
+ride = { "Bip01 * UpperArm" = 1.0 }
+layer = 1
+
+# The couters: half on the upper arm, half on the forearm, turning about the elbow.
+[[piece.plate]]
+name = "couter"
+mesh = 1
+bone = "Bip01 * Forearm"
+ride = { "Bip01 * UpperArm" = 0.5, "Bip01 * Forearm" = 0.5 }
+layer = 2
+
+# The tassets, front and back, hinged at the hip on their own weights.
+[[piece.plate]]
+name = "front tasset"
+mesh = 3
+within = { min = [0.0, 0.7, 0.0], max = [0.3, 1.2, 0.3] }
+pivot = "Bip01 * Thigh"
+
+[[piece.plate]]
+name = "back tasset"
+mesh = 3
+within = { min = [0.0, 0.7, -0.3], max = [0.3, 1.2, 0.0] }
+pivot = "Bip01 * Thigh"
+
+[[piece]]
+name = "Iron gauntlets"
+models = ['armor\iron\m\gauntlets.nif']
+covers = "hands"
+
+# The cuff over the forearm and the back of the hand is one island, bent at the wrist by its
+# weights: its forearm part rigid on the forearm (rolling with its twist), its hand part on the hand.
+[[piece.plate]]
+name = "vambrace"
+mesh = 0
+vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+layer = 1
+
+[[piece.plate]]
+name = "hand plate"
+mesh = 0
+vertices = "Bip01 * Hand"
+ride = { "Bip01 * Hand" = 1.0 }
+
+[[piece]]
+name = "Iron greaves"
+models = ['armor\iron\m\greaves.nif']
+covers = "lower"
+
+[[piece.plate]]
+name = "cuisse"
+bone = "Bip01 * Thigh"
+side = "both"
+
+[[piece]]
+name = "Iron boots"
+models = ['armor\iron\m\boots.nif']
+covers = "feet"
+
+[[piece.plate]]
+name = "greave"
+vertices = "Bip01 * Calf"
+ride = { "Bip01 * Calf" = 1.0 }
+
+[[piece.plate]]
+name = "sabaton"
+vertices = "Bip01 * Foot"
+ride = { "Bip01 * Foot" = 1.0 }
+
+[[piece.plate]]
+name = "toe cap"
+vertices = "Bip01 * Toe0"
+ride = { "Bip01 * Toe0" = 1.0 }
