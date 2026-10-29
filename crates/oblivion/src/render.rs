@@ -248,6 +248,7 @@ mod win {
             let head = glam::Vec3::from(snap.frame.hmd.pos);
             time(Part::Lighting, || hooks::guard_void("lighting", || crate::lighting::publish(view, head)));
             time(Part::Items, || hooks::guard_void("items", || crate::items::place(view, now)));
+            time(Part::Items, || hooks::guard_void("torch", || crate::torch::place(view)));
         }
         Some((snap, game, cam))
     }

@@ -48,12 +48,16 @@ pub mod log;
 pub mod mem;
 pub mod menus;
 pub mod movement;
+pub mod nodes;
 pub mod objects;
 pub mod player;
 pub mod proxy;
 pub mod render;
 pub mod resolution;
+#[cfg(target_arch = "x86")]
+pub mod scene;
 pub mod settings;
 pub mod timing;
+pub mod torch;
 pub mod weapons;
 pub mod window;

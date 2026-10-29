@@ -529,6 +529,7 @@ pub fn publish() {
     let spells_now = (k.frame % 10 == 1).then(spells);
     crate::link::with_adapter(|a| {
         crate::weapons::publish(a);
+        crate::torch::publish(a);
         if k.frame % 30 == 3 {
             crate::body::publish(a);
         }

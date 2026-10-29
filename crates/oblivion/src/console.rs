@@ -73,6 +73,9 @@ pub fn run(line: &str) -> bool {
     if let Some(id) = line.strip_prefix("SelectSpell ") {
         return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(select_spell);
     }
+    if line.trim() == "InspectTorch" {
+        return crate::torch::inspect();
+    }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();
         let (Some(r), Some(m)) = (it.next(), it.next().and_then(|m| m.parse::<f32>().ok())) else { return false };

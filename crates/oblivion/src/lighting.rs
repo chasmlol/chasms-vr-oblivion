@@ -208,6 +208,32 @@ pub fn scene_lights() -> Vec<SceneLight> {
     out
 }
 
+/// The scene's lights: each `NiLight` and its `ShadowSceneLight`.
+#[cfg(target_arch = "x86")]
+pub fn scene_light_nodes() -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let Some(scene) = world_scene() else { return out };
+    let count = mem::at::<u32>(scene + SCENE_LIGHTS + 0xC).unwrap_or(0).min(512);
+    let mut node = mem::deref(scene + SCENE_LIGHTS + 4);
+    for _ in 0..count {
+        if node == 0 {
+            break;
+        }
+        let ssl = mem::deref(node + 8);
+        node = mem::deref(node);
+        let light = if ssl != 0 { mem::deref(ssl + SSL_LIGHT) } else { 0 };
+        if light != 0 {
+            out.push((light, ssl));
+        }
+    }
+    out
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn scene_light_nodes() -> Vec<(usize, usize)> {
+    Vec::new()
+}
+
 /// The sky's sun as a scene light.
 #[cfg(target_arch = "x86")]
 fn sky_sun(hdr: bool) -> Option<SceneLight> {
