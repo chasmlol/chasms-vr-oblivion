@@ -1,8 +1,11 @@
 # Oblivion's armour marks: which parts of the game's armour models are rigid plates, and what each
 # rides. The guide to the format is the framework's docs/ARMOUR.md; the research behind it is
-# docs/research/armour.md. Look at a piece with the preview, from this repository's root:
+# docs/research/armour.md. Look at a set with the preview, from this repository's root:
 #
-#     framework\target\release\rustvr-armour oblivion --set iron
+#     cargo build --release --manifest-path framework\Cargo.toml --target-dir target -p rustvr-avatar --bin rustvr-armour
+#     target\release\rustvr-armour oblivion --set iron
+#
+# (`--list` lists every model's islands and the plates made of them; the sets are below.)
 #
 # Bone names: the game's skeleton (characters\_male\skeleton.nif). `*` matches either side
 # (`Bip01 * Forearm`); a plate rides the bone on its own side.
