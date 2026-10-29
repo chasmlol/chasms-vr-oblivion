@@ -149,10 +149,29 @@ fn export(archives: &Archives, args: &[String]) -> Result<()> {
         let parts: Vec<(String, String, Part)> = if nif.find("Scb").is_some() {
             vec![(export::model_key(&path), rel.clone(), Part::Without("Scb")), (export::variant_key(&path, "scb"), format!("{rel}#scb"), Part::Only("Scb"))]
         } else if nif.find("ArrowQuiver").is_some() {
-            vec![(export::model_key(&path), rel.clone(), Part::Without("ArrowQuiver")), (export::variant_key(&path, "quiver"), format!("{rel}#quiver"), Part::Only("ArrowQuiver"))]
+            vec![(export::model_key(&path), rel.clone(), Part::Without("ArrowQuiver"))]
         } else {
             vec![(export::model_key(&path), rel.clone(), Part::All)]
         };
+        // A quiver, worn on the body where the game hangs it (its `Prn`, the skeleton's `Quiver`),
+        // showing as many of its arrows as the game would (`#quiver0` .. `#quiver5`).
+        if nif.find("ArrowQuiver").is_some() {
+            let prn = nif.blocks.iter().find_map(|b| match b {
+                oblivion_assets::nif::Block::StringExtra { name, value } if name == "Prn" => Some(value.clone()),
+                _ => None,
+            });
+            const ARROWS: [&str; 5] = ["Arrow1", "Arrow2", "Arrow3", "Arrow4", "Arrow5"];
+            for shown in 0..=ARROWS.len() {
+                let mut c = export::convert(&nif, &path, None, Part::OnlyBut("ArrowQuiver", &ARROWS[shown..]), &exists);
+                let on = prn.as_deref().unwrap_or("Quiver");
+                if c.model.meshes.is_empty() || !export::worn_on(&mut c.model, &skeletons.human.1, on) {
+                    continue;
+                }
+                textures.extend(c.textures);
+                add(export::variant_key(&path, &format!("quiver{shown}")), ItemKind::Body, format!("{rel}#quiver{shown}"), &c.model)?;
+                models += 1;
+            }
+        }
         // A model the game bends (a bow drawn): bent all the way too, the same meshes and vertices.
         let bent = nif.morphed(1.0);
         for (key, name, part) in parts {

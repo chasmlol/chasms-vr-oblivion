@@ -10,9 +10,13 @@
 //! entries (`ExtraContainerChanges` in the reference's extra data, +0x44) with an extra data list
 //! marked worn (`ExtraWorn` 0x1B, `ExtraWornLeft` 0x1C). An armour's `TESBipedModelForm` is at
 //! +0x64, clothing's at +0x5C: the slots it covers (+4), its male and female models (+0xC, +0x24).
+//!
+//! Arrows worn hang their quiver on the body as the game hangs it (the arrows' model's `Prn`, the
+//! skeleton's `Quiver`: on the back, its arrows at the right shoulder), showing as many of its five
+//! arrows as there are left (`oblivion-extract` writes `#quiver0` .. `#quiver5`).
 
 use crate::{combat::read_str, engine, mem};
-use oblivion_assets::export::{model_key, texture_key};
+use oblivion_assets::export::{model_key, texture_key, variant_key};
 use rustvr_protocol::*;
 use std::sync::Mutex;
 
@@ -29,6 +33,10 @@ const EXTRA_WORN_LEFT: u8 = 0x1C;
 const FORM_TYPE: usize = 0x04;
 const ARMOR: u8 = 0x14;
 const CLOTHING: u8 = 0x16;
+const AMMO: u8 = 0x22;
+/// `TESAmmo`'s model path; the arrows a quiver shows at most.
+const AMMO_MODEL: usize = 0x34;
+const QUIVER_ARROWS: u32 = 5;
 
 /// Biped slots (bits of a `TESBipedModelForm`'s mask).
 const UPPER_BODY: u16 = 1 << 2;
@@ -59,6 +67,8 @@ pub struct Body {
     /// Worn items: (slots, model path).
     pub worn: Vec<(u16, String)>,
     pub tail: String,
+    /// Arrows worn: their model and how many of the quiver's arrows show.
+    pub quiver: Option<(String, u32)>,
 }
 
 /// Walks a `tList` from its inline first node: its items.
@@ -90,6 +100,18 @@ fn extra(list: usize, kind: u8) -> usize {
     0
 }
 
+/// How many an inventory entry's extra data list stands for (`ExtraDataList::GetCount`).
+#[cfg(target_arch = "x86")]
+fn stack_count(list: usize) -> u32 {
+    type Count = unsafe extern "thiscall" fn(usize) -> i16;
+    (unsafe { std::mem::transmute::<usize, Count>(0x0041_E860)(list) }).max(0) as u32
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn stack_count(_list: usize) -> u32 {
+    1
+}
+
 /// The player's body, if there's a player.
 pub fn body() -> Option<Body> {
     let player = engine::player();
@@ -100,11 +122,21 @@ pub fn body() -> Option<Body> {
     }
     let female = mem::at::<u32>(base + NPC_FLAGS)? & 1 != 0;
     let tail = read_str(mem::deref(race + RACE_TAILS + if female { MODEL_SIZE } else { 0 } + 4));
-    let mut b = Body { race: read_str(mem::deref(race + RACE_NAME)), female, beast: !tail.is_empty(), worn: Vec::new(), tail };
+    let mut b = Body { race: read_str(mem::deref(race + RACE_NAME)), female, beast: !tail.is_empty(), worn: Vec::new(), tail, quiver: None };
     let changes = extra(player + 0x44, EXTRA_CONTAINER_CHANGES);
     let data = mem::deref(changes + 0x0C);
     for entry in list(mem::deref(data), 512) {
         let form = mem::deref(entry + 8);
+        // Arrows worn: their quiver, with as many showing as are left (up to its five).
+        if mem::at::<u8>(form + FORM_TYPE) == Some(AMMO)
+            && let Some(l) = list(mem::deref(entry), 64).into_iter().find(|&l| extra(l, EXTRA_WORN) != 0)
+        {
+            let path = read_str(mem::deref(form + AMMO_MODEL));
+            if !path.is_empty() {
+                b.quiver = Some((path, stack_count(l).min(QUIVER_ARROWS)));
+            }
+            continue;
+        }
         let biped = match mem::at::<u8>(form + FORM_TYPE) {
             Some(ARMOR) => form + 0x64,
             Some(CLOTHING) => form + 0x5C,
@@ -147,6 +179,9 @@ pub fn avatar(b: &Body) -> AvatarDesc {
     if b.beast && covered & TAIL == 0 && !b.tail.is_empty() {
         d.push_part(&name(&b.tail));
     }
+    if let Some((path, shown)) = &b.quiver {
+        d.push_part(&format!("oblivion/{}", variant_key(path, &format!("quiver{shown}"))));
+    }
     // The race's own skin: its folder for the Imperial one.
     let folder = b.race.to_ascii_lowercase().replace(' ', "");
     if !folder.is_empty() && folder != "imperial" {
@@ -174,11 +209,12 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
     }
     let d = avatar(&b);
     tracing::info!(
-        "body: {} {} ({}), wearing {:?}: {} parts, {} texture swaps",
+        "body: {} {} ({}), wearing {:?}, a quiver {:?}: {} parts, {} texture swaps",
         if b.female { "female" } else { "male" },
         b.race,
         if b.beast { "beast" } else { "human" },
         b.worn,
+        b.quiver,
         d.count,
         d.swap_count
     );
@@ -193,7 +229,7 @@ mod tests {
 
     #[test]
     fn worn_items_cover_their_slots_and_the_skin_fills_the_rest() {
-        let b = Body { race: "Nord".into(), female: false, beast: false, worn: vec![(UPPER_BODY | LOWER_BODY, "clothes\\robe.nif".into()), (1 << 6, "clothes\\ring.nif".into())], tail: String::new() };
+        let b = Body { race: "Nord".into(), female: false, beast: false, worn: vec![(UPPER_BODY | LOWER_BODY, "clothes\\robe.nif".into()), (1 << 6, "clothes\\ring.nif".into())], tail: String::new(), quiver: None };
         let d = avatar(&b);
         let parts: Vec<&str> = (0..d.count as usize).map(|i| d.part(i)).collect();
         assert_eq!(parts[0], format!("oblivion/{}", model_key("clothes\\robe.nif")));
@@ -207,7 +243,7 @@ mod tests {
 
     #[test]
     fn a_beast_has_its_own_skeleton_and_its_tail() {
-        let b = Body { race: "Khajiit".into(), female: true, beast: true, worn: Vec::new(), tail: "characters\\khajiit\\tail.nif".into() };
+        let b = Body { race: "Khajiit".into(), female: true, beast: true, worn: Vec::new(), tail: "characters\\khajiit\\tail.nif".into(), quiver: None };
         let d = avatar(&b);
         assert_eq!(name_str(&d.skeleton), format!("oblivion/{}", model_key("characters\\_male\\skeletonbeast.nif")));
         assert_eq!(d.count, 5);

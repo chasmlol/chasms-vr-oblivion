@@ -184,7 +184,7 @@ mod game {
     /// changes' extra.
     const GET_EXTRA: usize = 0x0041_E210;
     const REFR_EXTRA: usize = 0x44;
-    const EXTRA_CONTAINER_CHANGES: u32 = 0x15;
+    const EXTRA_CONTAINER_CHANGES: u32 = 0x1A;
     /// `FormHeap_Allocate` (cdecl size), `ArrowProjectile`'s size and constructor (thiscall: the
     /// shooter, x, y, z, heading, pitch, power, the arrows' entry, the bow's), and the process
     /// lists it joins (`ActorProcessManager` 0xB3BD00, thiscall: the projectile, 0, 0, 0, 0).
@@ -269,7 +269,7 @@ mod game {
     }
 
     /// How many of `form` the player has: its entry in the player's container changes
-    /// (`ExtraContainerChanges`, extra 0x15: data +0xC, its list of entries +0 as (entry, next)
+    /// (`ExtraContainerChanges`, extra 0x1A: data +0xC, its list of entries +0 as (entry, next)
     /// nodes; an entry's count +4, more than the base container's, which holds no arrows).
     fn inventory_count(form: usize) -> Option<u32> {
         type Get = unsafe extern "thiscall" fn(usize, u32) -> usize;

@@ -138,6 +138,9 @@ pub enum Part<'a> {
     Without(&'a str),
     /// Only the node of this name and what hangs from it.
     Only(&'a str),
+    /// Only the node of this name and what hangs from it, but not the nodes of these names (a
+    /// quiver with fewer of its arrows).
+    OnlyBut(&'a str, &'a [&'a str]),
 }
 
 /// Converts a model. `skeleton`: put a skinned model in its bind pose with its bones (else the
@@ -187,6 +190,8 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
             Part::All => {}
             Part::Without(n) if under(i, n) => continue,
             Part::Only(n) if !under(i, n) => continue,
+            Part::OnlyBut(n, _) if !under(i, n) => continue,
+            Part::OnlyBut(_, but) if but.iter().any(|b| under(i, b)) => continue,
             _ => {}
         }
         let Some(Block::ShapeData(d)) = nif.get(*data) else { continue };
@@ -314,6 +319,30 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
         model: Model { version: FORMAT_VERSION, source: source.to_owned(), meshes, bones, bounds_min: lo.to_array(), bounds_max: hi.to_array() },
         textures,
     }
+}
+
+/// A rigid model worn on the skeleton's bone `bone` (a quiver on its `Quiver` node, where the
+/// model's `Prn` says it hangs): put where the bone is in the bind pose and skinned to it alone,
+/// with the skeleton's bones, as the body's parts are. False when the skeleton has no such bone.
+pub fn worn_on(model: &mut Model, skeleton: &Skeleton, bone: &str) -> bool {
+    let Some(k) = skeleton.find(bone) else { return false };
+    let m = matrix(&skeleton.world[k]);
+    let (lo, hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+    let (mut lo, mut hi) = (lo, hi);
+    for v in model.meshes.iter_mut().flat_map(|m| &mut m.vertices) {
+        let p = m.transform_point3(Vec3::from_array(v.pos));
+        v.pos = p.to_array();
+        v.normal = m.transform_vector3(Vec3::from_array(v.normal)).normalize_or(Vec3::Y).to_array();
+        v.bones = [k as u8, 0, 0, 0];
+        v.weights = [255, 0, 0, 0];
+        lo = lo.min(p);
+        hi = hi.max(p);
+    }
+    model.bones = skeleton.bones.clone();
+    if lo.x <= hi.x {
+        (model.bounds_min, model.bounds_max) = (lo.to_array(), hi.to_array());
+    }
+    true
 }
 
 /// The skeleton's bone for a node: its own name's, else its nearest ancestor's.
