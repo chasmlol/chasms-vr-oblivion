@@ -10,6 +10,9 @@
 //! attenuation, in the world's lights), flickered every frame. So it lights the world as the game's
 //! torches do, and the body and hands with it (`crate::lighting` reads the world's lights).
 //!
+//! It crackles with the game's own held-torch loop (`ITMTorchHeldLP`, the process's own: its
+//! virtual 0xD2 plays it on the actor, 0xD1 stops its sound slot 1).
+//!
 //! Holstered, it still burns: a light at the hip with both hands free. Let go anywhere else, it
 //! falls and lies burning where it lands (the runtime's physics on the game's collision); left
 //! behind, it's back at the hip. Unequipped in the inventory, it's gone.
@@ -40,6 +43,12 @@ const LIGHT_FLAGS: usize = 0x7C;
 const LIGHT_CAN_CARRY: u32 = 2;
 /// The game's flame on a model's `FlameNode`s (cdecl, the 3D).
 const FLAMES: usize = 0x004E_26F0;
+/// The process's held-torch loop: played (virtual 0xD2, thiscall: the actor), stopped (virtual
+/// 0xD1: its sound slot, 1), the sound itself in that slot (+0x224).
+const VT_TORCH_SOUND_PLAY: usize = 0xD2 * 4;
+const VT_SOUND_STOP: usize = 0xD1 * 4;
+const TORCH_SOUND_SLOT: u32 = 1;
+const TORCH_SOUND: usize = 0x224;
 
 /// The equipped torch, if the player has one: its form and model's path.
 pub fn equipped() -> Option<(usize, String)> {
@@ -108,6 +117,8 @@ mod game {
         desc: ObjectDesc,
         /// How it was held when last logged.
         logged: Option<u32>,
+        /// When its crackle is looked at next.
+        next_crackle: f64,
     }
 
     struct State {
@@ -141,6 +152,7 @@ mod game {
             }
             if let Some(old) = s.torch.take() {
                 tracing::info!("torch: put away (no longer equipped)");
+                crackle(false);
                 if let Some(l) = old.light {
                     l.remove();
                 }
@@ -180,7 +192,8 @@ mod game {
                     desc.mass
                 );
                 descs.push(desc);
-                s.torch = Some(Held { form, node, light, desc, logged: None });
+                crackle(true);
+                s.torch = Some(Held { form, node, light, desc, logged: None, next_crackle: 0.0 });
             }
             crate::objects::publish(crate::objects::Owner::Torch, &descs, a);
         });
@@ -191,6 +204,16 @@ mod game {
         with_state(|s| {
             note_game_torch(s);
             let Some(t) = s.torch.as_mut() else { return };
+            // (Once a second: the game lets its loop go when it thinks no torch is out.)
+            let now = crate::link::now();
+            if now >= t.next_crackle {
+                t.next_crackle = now + 1.0;
+                let had = mem::deref(mem::deref(engine::player() + PROCESS) + TORCH_SOUND) != 0;
+                if !had {
+                    tracing::info!("torch: its crackle (again)");
+                }
+                crackle(true);
+            }
             if let Some(l) = t.light.as_mut() {
                 l.flicker();
             }
@@ -228,6 +251,27 @@ mod game {
                 crate::link::with_adapter(|a| crate::objects::publish(crate::objects::Owner::Torch, &[desc], a));
             }
         });
+    }
+
+    /// The game's held-torch loop on the player (`on`), or stopped; played again if the game let it
+    /// go.
+    fn crackle(on: bool) {
+        let player = engine::player();
+        let process = mem::deref(player + PROCESS);
+        let vt = mem::deref(process);
+        if process == 0 || vt == 0 {
+            return;
+        }
+        if on {
+            if mem::deref(process + TORCH_SOUND) != 0 {
+                return;
+            }
+            type Play = unsafe extern "thiscall" fn(usize, usize) -> usize;
+            unsafe { std::mem::transmute::<usize, Play>(mem::deref(vt + VT_TORCH_SOUND_PLAY))(process, player) };
+        } else {
+            type Stop = unsafe extern "thiscall" fn(usize, u32);
+            unsafe { std::mem::transmute::<usize, Stop>(mem::deref(vt + VT_SOUND_STOP))(process, TORCH_SOUND_SLOT) };
+        }
     }
 
     fn cull(node: usize, culled: bool) {
