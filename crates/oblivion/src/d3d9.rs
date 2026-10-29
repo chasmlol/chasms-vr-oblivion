@@ -15,6 +15,15 @@
 //! there into a shared texture as its bytes, `B8G8R8A8` (Direct3D 11 opens neither a shared depth
 //! format nor a 32-bit integer one); [`deliver_depth`] turns it into the runtime's linear depth
 //! ([`crate::depth`]).
+//!
+//! The UI's alpha ([`ui_pass`]): the back buffer has none (`X8R8G8B8`, and the game's renderer
+//! looks its pixel formats up by it, so it stays that). While the game draws its menus and HUD,
+//! they go into our HUD copy's render target instead (`A8R8G8B8`, cleared to nothing): wherever the
+//! game puts its back buffer as the target, ours is put. Its alpha is blended apart from colour,
+//! as coverage: over what's there for the game's ordinary blending (`ONE, INVSRCALPHA`), untouched
+//! for its additive blending (light added covers nothing). The colour is the game's own blending
+//! over black, so the HUD texture is the UI premultiplied by its alpha: drawn over the world it's
+//! exactly what the game would have drawn over it.
 
 #[cfg(all(windows, target_arch = "x86"))]
 pub use win::*;
@@ -50,6 +59,11 @@ mod win {
     static REAL_CREATE9: AtomicUsize = AtomicUsize::new(0);
     static REAL_CREATE_DEVICE: AtomicUsize = AtomicUsize::new(0);
     static REAL_PRESENT: AtomicUsize = AtomicUsize::new(0);
+    static REAL_SET_STATE: AtomicUsize = AtomicUsize::new(0);
+    /// The game is drawing its UI ([`ui_pass`]), and the blending it last asked for (source,
+    /// destination; `D3DBLEND_*`).
+    static UI_PASS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    static BLEND: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(5 | (6 << 16));
     static REAL_TCL: AtomicUsize = AtomicUsize::new(0);
     static LAST_TCL: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 
@@ -206,6 +220,12 @@ mod win {
             // IDirect3DDevice9::Present (vtable slot 17).
             let present = unsafe { *(*(dev as *const *const usize)).add(17) };
             hooks::install_into(present as *const (), present_hook as *const (), "IDirect3DDevice9::Present", &REAL_PRESENT);
+            // IDirect3DDevice9::SetRenderTarget (slot 37): the UI into ours.
+            let set_target = unsafe { *(*(dev as *const *const usize)).add(37) };
+            hooks::install_into(set_target as *const (), set_render_target as *const (), "IDirect3DDevice9::SetRenderTarget", &REAL_SET_TARGET);
+            // IDirect3DDevice9::SetRenderState (slot 57): the UI's alpha follows its blending.
+            let set_state = unsafe { *(*(dev as *const *const usize)).add(57) };
+            hooks::install_into(set_state as *const (), set_render_state as *const (), "IDirect3DDevice9::SetRenderState", &REAL_SET_STATE);
             // IDirect3DDevice9::TestCooperativeLevel (slot 3): the game skips its frames while it fails.
             let tcl = unsafe { *(*(dev as *const *const usize)).add(3) };
             hooks::install_into(tcl as *const (), test_cooperative_level as *const (), "IDirect3DDevice9::TestCooperativeLevel", &REAL_TCL);
@@ -219,6 +239,105 @@ mod win {
             }
         });
         hr
+    }
+
+    type SetTargetFn = unsafe extern "system" fn(*mut c_void, u32, *mut c_void) -> windows::core::HRESULT;
+    static REAL_SET_TARGET: AtomicUsize = AtomicUsize::new(0);
+    /// In the UI pass: the game's back buffer (its first target before the pass), and ours that the
+    /// UI goes into instead (both surfaces, held for the pass).
+    static UI_TARGETS: Mutex<Option<UiTargets>> = Mutex::new(None);
+    struct UiTargets {
+        back: IDirect3DSurface9,
+        ours: IDirect3DSurface9,
+    }
+    // (Only ever used on the game's render thread.)
+    unsafe impl Send for UiTargets {}
+    /// The UI of the frame now being presented went into ours (the HUD copy needn't take it from
+    /// the back buffer).
+    static UI_DRAWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    unsafe extern "system" fn set_render_target(dev: *mut c_void, index: u32, surface: *mut c_void) -> windows::core::HRESULT {
+        let real: SetTargetFn = unsafe { std::mem::transmute(REAL_SET_TARGET.load(Ordering::Acquire)) };
+        if index == 0 && UI_PASS.load(Ordering::Acquire) {
+            let targets = UI_TARGETS.lock().unwrap();
+            if let Some(t) = targets.as_ref()
+                && t.back.as_raw() == surface
+            {
+                return unsafe { real(dev, 0, t.ours.as_raw()) };
+            }
+        }
+        unsafe { real(dev, index, surface) }
+    }
+
+    type SetStateFn = unsafe extern "system" fn(*mut c_void, D3DRENDERSTATETYPE, u32) -> windows::core::HRESULT;
+
+    /// The alpha blending for the game's colour blending (`D3DBLEND_*` source and destination), in the
+    /// UI pass: coverage over what's there, or nothing for light added.
+    fn alpha_blend(src: u32, dst: u32) -> (u32, u32) {
+        let _ = src;
+        if dst == D3DBLEND_ONE.0 as u32 || dst == D3DBLEND_SRCCOLOR.0 as u32 || dst == D3DBLEND_INVSRCCOLOR.0 as u32 {
+            (D3DBLEND_ZERO.0 as u32, D3DBLEND_ONE.0 as u32)
+        } else {
+            (D3DBLEND_ONE.0 as u32, D3DBLEND_INVSRCALPHA.0 as u32)
+        }
+    }
+
+    fn set_alpha_blend(dev: *mut c_void) {
+        let real: SetStateFn = unsafe { std::mem::transmute(REAL_SET_STATE.load(Ordering::Acquire)) };
+        let b = BLEND.load(Ordering::Acquire);
+        let (sa, da) = alpha_blend(b & 0xFFFF, b >> 16);
+        unsafe {
+            let _ = real(dev, D3DRS_SRCBLENDALPHA, sa);
+            let _ = real(dev, D3DRS_DESTBLENDALPHA, da);
+            let _ = real(dev, D3DRS_BLENDOPALPHA, D3DBLENDOP_ADD.0 as u32);
+        }
+    }
+
+    unsafe extern "system" fn set_render_state(dev: *mut c_void, state: D3DRENDERSTATETYPE, value: u32) -> windows::core::HRESULT {
+        let real: SetStateFn = unsafe { std::mem::transmute(REAL_SET_STATE.load(Ordering::Acquire)) };
+        let hr = unsafe { real(dev, state, value) };
+        if state == D3DRS_SRCBLEND || state == D3DRS_DESTBLEND {
+            let b = BLEND.load(Ordering::Acquire);
+            let b = if state == D3DRS_SRCBLEND { (b & 0xFFFF_0000) | value } else { (b & 0xFFFF) | (value << 16) };
+            BLEND.store(b, Ordering::Release);
+            if UI_PASS.load(Ordering::Acquire) {
+                set_alpha_blend(dev);
+            }
+        }
+        hr
+    }
+
+    /// The game is about to draw its UI (`on`), or is done with it. While it does, it draws into our
+    /// HUD copy's target (cleared to nothing) instead of the back buffer, its alpha blended as
+    /// coverage; after, the back buffer is the target again (as the game believes it always was) and
+    /// the world's blending is the game's own.
+    pub fn ui_pass(dev: &IDirect3DDevice9, on: bool) {
+        if REAL_SET_STATE.load(Ordering::Acquire) == 0 || REAL_SET_TARGET.load(Ordering::Acquire) == 0 || UI_PASS.load(Ordering::Acquire) == on {
+            return;
+        }
+        let raw = dev.as_raw();
+        let set_state: SetStateFn = unsafe { std::mem::transmute(REAL_SET_STATE.load(Ordering::Acquire)) };
+        let set_target: SetTargetFn = unsafe { std::mem::transmute(REAL_SET_TARGET.load(Ordering::Acquire)) };
+        if on {
+            let ours = BRIDGE.lock().unwrap().as_ref().and_then(|b| unsafe { b.tex9[HUD].GetSurfaceLevel(0) }.ok());
+            let back = unsafe { dev.GetRenderTarget(0) }.ok();
+            let (Some(ours), Some(back)) = (ours, back) else { return };
+            if unsafe { set_target(raw, 0, ours.as_raw()) }.is_err() {
+                return;
+            }
+            let _ = unsafe { dev.Clear(0, std::ptr::null(), D3DCLEAR_TARGET as u32, 0, 1.0, 0) };
+            *UI_TARGETS.lock().unwrap() = Some(UiTargets { back, ours });
+            UI_PASS.store(true, Ordering::Release);
+            UI_DRAWN.store(true, Ordering::Release);
+            let _ = unsafe { set_state(raw, D3DRS_SEPARATEALPHABLENDENABLE, 1) };
+            set_alpha_blend(raw);
+        } else {
+            UI_PASS.store(false, Ordering::Release);
+            if let Some(t) = UI_TARGETS.lock().unwrap().take() {
+                let _ = unsafe { set_target(raw, 0, t.back.as_raw()) };
+            }
+            let _ = unsafe { set_state(raw, D3DRS_SEPARATEALPHABLENDENABLE, 0) };
+        }
     }
 
     unsafe extern "system" fn present_hook(dev: *mut c_void, src: *const c_void, dst: *const c_void, wnd: HWND, dirty: *const c_void) -> windows::core::HRESULT {
@@ -569,9 +688,12 @@ mod win {
     }
 
     fn copy(dev: &IDirect3DDevice9, d12: &D3d12, b: &mut Bridge, kind: usize) -> anyhow::Result<()> {
-        let bb = unsafe { dev.GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO) }?;
-        let ours = unsafe { b.tex9[kind].GetSurfaceLevel(0) }?;
-        unsafe { dev.StretchRect(&bb, std::ptr::null(), &ours, std::ptr::null(), D3DTEXF_NONE) }?;
+        // (The UI drew itself into ours: see `ui_pass`.)
+        if !(kind == HUD && UI_DRAWN.swap(false, Ordering::AcqRel)) {
+            let bb = unsafe { dev.GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO) }?;
+            let ours = unsafe { b.tex9[kind].GetSurfaceLevel(0) }?;
+            unsafe { dev.StretchRect(&bb, std::ptr::null(), &ours, std::ptr::null(), D3DTEXF_NONE) }?;
+        }
         let on12: IDirect3DDevice9On12 = dev.cast()?;
         let mut raw: *mut c_void = std::ptr::null_mut();
         let res9: IDirect3DResource9 = b.tex9[kind].cast()?;

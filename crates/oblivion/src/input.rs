@@ -69,7 +69,12 @@ pub struct Virtual {
     pub buttons: u8,
     /// The joystick's X and Y axes (-100..100; Y negative forward): walking.
     pub stick: [i32; 2],
+    /// The mouse wheel turned this frame (120 a notch, up positive): scrolling a menu.
+    pub wheel: i32,
 }
+
+/// A mouse wheel's notch, as DirectInput counts it.
+pub const WHEEL_NOTCH: i32 = 120;
 
 /// The joystick axis the game walks (or runs) at full speed at.
 pub const FULL_SPEED_AXIS: f32 = 50.0;
@@ -98,6 +103,9 @@ pub struct Bridge {
     pulses: Vec<(Binding, f64)>,
     /// The runtime's held actions last frame (a long press acts once, as it starts).
     last_held: u64,
+    /// Scrolling's notches not yet turned, and when it was last looked at.
+    wheel: f32,
+    last_now: f64,
 }
 
 /// The game's state the controls depend on.
@@ -114,7 +122,7 @@ impl Bridge {
     pub fn new(controls: HashMap<String, Binding>) -> Bridge {
         let mut c = default_controls();
         c.extend(controls);
-        Bridge { controls: c, presses: Presses::default(), pulses: Vec::new(), last_held: 0 }
+        Bridge { controls: c, presses: Presses::default(), pulses: Vec::new(), last_held: 0, wheel: 0.0, last_now: 0.0 }
     }
 
     fn binding(&self, name: &str) -> Binding {
@@ -176,6 +184,17 @@ impl Bridge {
         if it.flags & rustvr_protocol::INT_CURSOR_DOWN != 0 {
             v.buttons |= 1;
         }
+        // Scrolling a menu: the mouse wheel, a notch at a time as the stick's rate adds up.
+        let dt = if self.last_now > 0.0 { (now - self.last_now).clamp(0.0, 0.1) as f32 } else { 0.0 };
+        self.last_now = now;
+        if it.flags & rustvr_protocol::INT_MENU_MODE != 0 && it.scroll != 0.0 {
+            self.wheel += it.scroll * dt;
+            let notches = self.wheel.trunc();
+            self.wheel -= notches;
+            v.wheel = notches as i32 * WHEEL_NOTCH;
+        } else {
+            self.wheel = 0.0;
+        }
         // The menu button, and B on a menu (the runtime's "back"): Escape, which closes the game's
         // menus.
         if pressed(&counts, Action::Menu) || pressed(&counts, Action::MenuBack) {
@@ -203,6 +222,8 @@ mod win {
     const DISCL_BACKGROUND: u32 = 0x8;
     /// `DIMOFS_BUTTON0`: the first mouse button's offset in its state and events.
     const MOUSE_BUTTON0: u32 = 12;
+    /// `DIMOFS_Z`: the wheel's.
+    const MOUSE_WHEEL: u32 = 8;
 
     static REAL_CREATE: AtomicUsize = AtomicUsize::new(0);
     static REAL_STATE: AtomicUsize = AtomicUsize::new(0);
@@ -220,8 +241,16 @@ mod win {
         told_keys: Vec<u8>,
         told_buttons: u8,
         sequence: u32,
+        /// The wheel's turn the game hasn't read yet.
+        wheel: i32,
     }
-    static STATE: Mutex<State> = Mutex::new(State { v: super::Virtual { keys: Vec::new(), buttons: 0, stick: [0; 2] }, told_keys: Vec::new(), told_buttons: 0, sequence: 0x4000_0000 });
+    static STATE: Mutex<State> = Mutex::new(State {
+        v: super::Virtual { keys: Vec::new(), buttons: 0, stick: [0; 2], wheel: 0 },
+        told_keys: Vec::new(),
+        told_buttons: 0,
+        sequence: 0x4000_0000,
+        wheel: 0,
+    });
 
     /// `OSGlobals*` (+0x20 its `OSInputGlobals*`), and the game's poll of its devices (thiscall on
     /// the input globals); the first joystick's state in them.
@@ -244,6 +273,7 @@ mod win {
         if s.v.keys != v.keys || s.v.buttons != v.buttons {
             tracing::info!("input: keys {:02x?}, mouse buttons {:#x}", v.keys, v.buttons);
         }
+        s.wheel += v.wheel;
         s.v = v;
     }
 
@@ -370,12 +400,18 @@ mod win {
             if hr < 0 || only {
                 unsafe { std::ptr::write_bytes(data, 0, size as usize) };
             }
-            let s = STATE.lock().unwrap();
+            let mut s = STATE.lock().unwrap();
             if dev as usize == KEYBOARD.load(Acquire) && size >= 256 {
                 for &k in &s.v.keys {
                     unsafe { *data.add(k as usize) = 0x80 };
                 }
             } else if dev as usize == MOUSE.load(Acquire) && size >= 16 {
+                // (`DIMOUSESTATE`: x, y, the wheel, the buttons.) The game reads its wheel here.
+                if s.wheel != 0 {
+                    tracing::info!("input: the game's mouse wheel turns {}", s.wheel);
+                    unsafe { (data.add(MOUSE_WHEEL as usize) as *mut i32).write((data.add(MOUSE_WHEEL as usize) as *const i32).read() + s.wheel) };
+                    s.wheel = 0;
+                }
                 for b in 0..((size - MOUSE_BUTTON0) as usize).min(8) {
                     if s.v.buttons & (1 << b) != 0 {
                         unsafe { *data.add(MOUSE_BUTTON0 as usize + b) = 0x80 };
