@@ -12,9 +12,9 @@
 //!   what the game is doing.
 //! * **The player's body** ([`body`]): the race's skin and what's worn, as the parts of the
 //!   runtime's avatar (the game's own models).
-//! * **Combat** ([`combat`], [`weapons`]): the game's creatures and spells to the runtime, the
-//!   equipped weapon as the object in the hand (the game's own model), and what the hands did
-//!   (hits, casts) done by the game.
+//! * **Combat** ([`combat`], [`weapons`], [`archery`]): the game's creatures and spells to the
+//!   runtime, the equipped weapon as the object in the hand (the game's own model; a bow and its
+//!   arrows), and what the hands did (hits, casts, arrows loosed) done by the game.
 //!
 //! The rest is plumbing: the DLL proxy ([`proxy`]), the game's addresses ([`engine`]), hooking
 //! ([`hooks`], [`iat`]), the game window ([`window`]), the game's settings ([`game_settings`]) and
@@ -23,6 +23,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(linker_messages)]
 
+pub mod archery;
 pub mod body;
 pub mod camera;
 pub mod clock;

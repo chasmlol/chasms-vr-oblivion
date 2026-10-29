@@ -144,20 +144,45 @@ fn export(archives: &Archives, args: &[String]) -> Result<()> {
         } else {
             ItemKind::Prop
         };
-        // A weapon with its scabbard: the weapon alone, and the scabbard alone.
+        // A weapon with its scabbard: the weapon alone, and the scabbard alone. Arrows: the arrow
+        // alone (what the hand nocks), and the quiver with its arrows (what the body wears).
         let parts: Vec<(String, String, Part)> = if nif.find("Scb").is_some() {
             vec![(export::model_key(&path), rel.clone(), Part::Without("Scb")), (export::variant_key(&path, "scb"), format!("{rel}#scb"), Part::Only("Scb"))]
+        } else if nif.find("ArrowQuiver").is_some() {
+            vec![(export::model_key(&path), rel.clone(), Part::Without("ArrowQuiver")), (export::variant_key(&path, "quiver"), format!("{rel}#quiver"), Part::Only("ArrowQuiver"))]
         } else {
             vec![(export::model_key(&path), rel.clone(), Part::All)]
         };
+        // A model the game bends (a bow drawn): bent all the way too, the same meshes and vertices.
+        let bent = nif.morphed(1.0);
         for (key, name, part) in parts {
             let c = export::convert(&nif, &path, skeleton, part, &exists);
             if c.model.meshes.is_empty() {
                 continue;
             }
             textures.extend(c.textures);
-            add(key, kind, name, &c.model)?;
+            add(key, kind, name.clone(), &c.model)?;
             models += 1;
+            if let Some(b) = &bent {
+                let c = export::convert(b, &path, skeleton, part, &exists);
+                add(export::variant_key(&path, "bent"), kind, format!("{name}#bent"), &c.model)?;
+                models += 1;
+            }
+        }
+    }
+    // With bows: how their limbs spring back after a shot, as the player's bow animation has it
+    // (`bows.toml`, for the adapter).
+    if items.values().any(|i| i.name.ends_with("bow.nif#bent")) {
+        const KF: &str = "meshes\\characters\\_1stperson\\bowattack.kf";
+        match archives.read(KF).and_then(|d| Nif::parse(&d)).map(|kf| kf.bow_spring("BowMorph")) {
+            Ok(Some(spring)) => {
+                let keys: Vec<String> = spring.iter().map(|[t, w]| format!("[{t:.4}, {w:.4}]")).collect();
+                let text = format!("# How a bow's limbs spring back after a shot: the player's bow animation ({KF}),\n# its BowMorph from the Hold key on: [seconds after the hold, bend as a share of full draw].\nspring = [{}]\n", keys.join(", "));
+                std::fs::write(out.join("bows.toml"), text)?;
+                println!("bows.toml: the limbs' spring, {} keys", spring.len());
+            }
+            Ok(None) => eprintln!("{KF}: no BowMorph after a Hold key"),
+            Err(e) => eprintln!("{KF}: {e:#}"),
         }
     }
     // Textures asked for by folder (a race's skins, which no model names: the game swaps them in).
@@ -225,6 +250,13 @@ fn dump(nif: &Nif) {
             Block::RigidBody(r) => println!("{i:3} rigid body shape {} mass {} centre {:?} layer {}", r.shape, r.mass, r.center, r.layer),
             Block::StringExtra { name, value } => println!("{i:3} string '{name}' = '{value}'"),
             Block::IntegerExtra { name, value } => println!("{i:3} int '{name}' = {value:#x}"),
+            Block::MorphData { morphs } => {
+                for (name, offsets) in morphs {
+                    let moved = offsets.iter().filter(|o| o.length() > 1e-3).count();
+                    let most = offsets.iter().map(|o| o.length()).fold(0.0f32, f32::max);
+                    println!("{i:3} morph '{name}': {moved} of {} vertices move, at most {most:.2}", offsets.len());
+                }
+            }
             other => println!("{i:3} {}", format!("{other:?}").chars().take(120).collect::<String>()),
         }
     }

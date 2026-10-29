@@ -77,6 +77,25 @@ pub enum Block {
     ConvexVertices { vertices: Vec<Vec3>, radius: f32 },
     ListShape { shapes: Vec<i32> },
     ConvexTransform { shape: i32, transform: [f32; 16] },
+    /// `NiGeomMorpherController`: shape `target`'s vertices morphed (a bow bending as it's drawn),
+    /// by `data` ([`Block::MorphData`]), each morph weighted by one of `interpolators`.
+    Morpher { target: i32, data: i32, interpolators: Vec<i32> },
+    /// `NiMorphData`: each morph's name and its vertices' offsets from the shape's own (Oblivion's
+    /// are all relative: the first, "Base", is all zero).
+    MorphData { morphs: Vec<(String, Vec<Vec3>)> },
+    /// An animation (`NiControllerSequence`, a `.kf`'s): its name, its text keys' block, its
+    /// string palette's block, and what it animates: for each, its interpolator's block and
+    /// offsets into the palette of the node's name, the controller's type, the controller's id and
+    /// the interpolator's id.
+    Sequence { name: String, text_keys: i32, palette: i32, controlled: Vec<(i32, [u32; 4])> },
+    /// `NiStringPalette`: names, each ending in a NUL, found by their offsets.
+    Palette(String),
+    /// `NiTextKeyExtraData`: (time, text) the animation marks (`Hold`, `Sound: ...`).
+    TextKeys(Vec<(f32, String)>),
+    /// `NiFloatInterpolator`: its value when it has no keys, and its keys' block.
+    FloatInterpolator { value: f32, data: i32 },
+    /// `NiFloatData`: its keys, (time, value).
+    FloatKeys(Vec<(f32, f32)>),
     /// Read past: of no use here (stencil, vertex colour, z-buffer, wireframe, dither and shade
     /// properties, constraints).
     Other(String),
@@ -355,6 +374,27 @@ fn key_group(r: &mut Reader, width: usize) -> Result<()> {
     r.skip(n * each)
 }
 
+/// A `KeyGroup` of single floats, kept: (time, value) (a quadratic key's tangents and a TBC key's
+/// parameters read past).
+fn float_keys(r: &mut Reader) -> Result<Vec<(f32, f32)>> {
+    let n = r.u32()? as usize;
+    if n == 0 {
+        return Ok(Vec::new());
+    }
+    let interpolation = r.u32()?;
+    (0..n)
+        .map(|_| {
+            let (t, v) = (r.f32()?, r.f32()?);
+            r.skip(match interpolation {
+                2 => 8,
+                3 => 12,
+                _ => 0,
+            })?;
+            Ok((t, v))
+        })
+        .collect()
+}
+
 fn havok_material(r: &mut Reader) -> Result<()> {
     r.skip(4)
 }
@@ -620,8 +660,9 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             Block::Other(kind.into())
         }
         "NiFloatInterpolator" => {
-            r.skip(4 + 4)?;
-            Block::Other(kind.into())
+            let value = r.f32()?;
+            let data = r.i32()?;
+            Block::FloatInterpolator { value, data }
         }
         "NiTransformData" | "NiKeyframeData" => {
             let n = r.u32()?;
@@ -643,18 +684,64 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             key_group(r, 1)?;
             Block::Other(kind.into())
         }
-        "NiFloatData" => {
-            key_group(r, 1)?;
-            Block::Other(kind.into())
+        "NiFloatData" => Block::FloatKeys(float_keys(r)?),
+        "NiControllerSequence" => {
+            let name = r.string()?;
+            let n = r.u32()?;
+            r.skip(4)?; // array grow by
+            let mut controlled = Vec::new();
+            for _ in 0..n {
+                // Interpolator, controller, priority, string palette, then the offsets of the node's
+                // name, the property's type, the controller's type, its id and the interpolator's.
+                let interpolator = r.i32()?;
+                r.skip(4 + 1 + 4)?;
+                let node = r.u32()?;
+                r.skip(4)?;
+                let (ctrl, ctrl_id, interp_id) = (r.u32()?, r.u32()?, r.u32()?);
+                controlled.push((interpolator, [node, ctrl, ctrl_id, interp_id]));
+            }
+            r.skip(4)?; // weight
+            let text_keys = r.i32()?;
+            r.skip(4 * 4 + 4)?; // cycle, frequency, start, stop, manager
+            r.string()?; // the accumulation root's name
+            let palette = r.i32()?;
+            Block::Sequence { name, text_keys, palette, controlled }
+        }
+        "NiStringPalette" => {
+            let p = r.string()?;
+            r.skip(4)?;
+            Block::Palette(p)
+        }
+        "NiGeomMorpherController" => {
+            // `NiTimeController`'s fields, to its target.
+            r.skip(4 + 2 + 4 * 4)?;
+            let target = r.i32()?;
+            r.skip(2)?; // morpher flags
+            let data = r.i32()?;
+            r.skip(1)?; // always update
+            let n = r.u32()?;
+            let interpolators = (0..n).map(|_| r.i32()).collect::<Result<Vec<_>>>()?;
+            // (Bethesda's unknown ints, 20.0.0.4/5 with a user version past 9.)
+            let unknown = r.u32()? as usize;
+            r.skip(unknown * 4)?;
+            Block::Morpher { target, data, interpolators }
+        }
+        "NiMorphData" => {
+            let n = r.u32()?;
+            let vertices = r.u32()? as usize;
+            r.skip(1)?; // relative targets (always 1 in the game's files)
+            let mut morphs = Vec::new();
+            for _ in 0..n {
+                let name = r.string()?;
+                let offsets = (0..vertices).map(|_| r.vec3()).collect::<Result<Vec<_>>>()?;
+                morphs.push((name, offsets));
+            }
+            Block::MorphData { morphs }
         }
         "NiTextKeyExtraData" => {
             r.string()?;
             let n = r.u32()?;
-            for _ in 0..n {
-                r.skip(4)?;
-                r.string()?;
-            }
-            Block::Other(kind.into())
+            Block::TextKeys((0..n).map(|_| Ok((r.f32()?, r.string()?))).collect::<Result<_>>()?)
         }
         "bhkBlendCollisionObject" => {
             let target = r.i32()?;
@@ -740,6 +827,46 @@ impl Nif {
             }
         }
         Ok(Nif { version, blocks, kinds, roots, stopped_at })
+    }
+
+    /// The model as its morphs bend it `weight` of the way (a bow at full draw: 1): each morphed
+    /// shape's vertices moved by its morphs past the first (the base) times `weight`. None when
+    /// nothing in it morphs. (The game morphs positions only: the normals stay.)
+    pub fn morphed(&self, weight: f32) -> Option<Nif> {
+        let mut out = Nif { version: self.version, blocks: self.blocks.clone(), kinds: self.kinds.clone(), roots: self.roots.clone(), stopped_at: self.stopped_at.clone() };
+        let mut any = false;
+        for b in &self.blocks {
+            let Block::Morpher { target, data, .. } = b else { continue };
+            let (Some(Block::Shape { data: shape_data, .. }), Some(Block::MorphData { morphs })) = (self.get(*target), self.get(*data)) else { continue };
+            let Some(Block::ShapeData(d)) = out.blocks.get_mut(*shape_data as usize) else { continue };
+            let n = d.vertices.len();
+            for (_, offsets) in morphs.iter().skip(1).filter(|(_, o)| o.len() == n) {
+                for (v, o) in d.vertices.iter_mut().zip(offsets) {
+                    *v += *o * weight;
+                }
+                any = true;
+            }
+        }
+        any.then_some(out)
+    }
+
+    /// How a bow's limbs spring back as the game animates its shot (the player's `AttackBow`,
+    /// this `.kf`): its morph `morph`'s weight from the text key `Hold` (full draw) on, as
+    /// (seconds after the hold, the bend as a share of the bend at the hold).
+    pub fn bow_spring(&self, morph: &str) -> Option<Vec<[f32; 2]>> {
+        let (palette, text_keys, controlled) = self.blocks.iter().find_map(|b| match b {
+            Block::Sequence { palette, text_keys, controlled, .. } => Some((*palette, *text_keys, controlled)),
+            _ => None,
+        })?;
+        let Some(Block::Palette(p)) = self.get(palette) else { return None };
+        let at = |o: u32| p.get(o as usize..).and_then(|s| s.split('\0').next()).unwrap_or("");
+        let Some(Block::TextKeys(keys)) = self.get(text_keys) else { return None };
+        let hold = keys.iter().find(|(_, k)| k.eq_ignore_ascii_case("Hold"))?.0;
+        let interpolator = controlled.iter().find(|(_, o)| at(o[1]) == "NiGeomMorpherController" && at(o[3]).eq_ignore_ascii_case(morph))?.0;
+        let Some(Block::FloatInterpolator { data, .. }) = self.get(interpolator) else { return None };
+        let Some(Block::FloatKeys(k)) = self.get(*data) else { return None };
+        let full = k.iter().find(|(t, _)| (*t - hold).abs() < 1e-3).map(|(_, v)| *v).filter(|v| v.abs() > 1e-3)?;
+        Some(k.iter().filter(|(t, _)| *t >= hold - 1e-3).map(|&(t, v)| [(t - hold).max(0.0), v / full]).collect())
     }
 
     pub fn get(&self, i: i32) -> Option<&Block> {
