@@ -1,0 +1,88 @@
+# The arms and hands up close (tools/xrsim_oblivion.ps1 -Console tools/xrsim/oblivion_load.txt):
+# after the save loads, the right hand held in front and turned, bent, reached out and brought in
+# to the face, the left beside it; a capture of each pose, to judge the skinning (wrist stretch,
+# armour bending) and the hands' size. Times are seconds from the runtime's start.
+duration = 58
+capture_width = 1536
+
+[[key]]
+t = 0
+head = { pos = [0, 1.7, 0], yaw = 0, pitch = -20 }
+left = { pos = [-0.18, -0.25, 0.32], yaw = 0, pitch = 0, roll = 0, stick = [0, 0] }
+right = { pos = [0.15, -0.2, 0.35], yaw = 0, pitch = 0, roll = 0 }
+
+[[capture]]
+t = 39
+name = "neutral"
+
+[[key]]
+t = 40
+right = { roll = 0 }
+
+[[key]]
+t = 40.6
+right = { roll = 90 }
+
+[[capture]]
+t = 41.5
+name = "twist_out"
+
+[[key]]
+t = 42
+right = { roll = 90 }
+
+[[key]]
+t = 42.8
+right = { roll = -90 }
+
+[[capture]]
+t = 43.8
+name = "twist_in"
+
+[[key]]
+t = 44
+right = { roll = -90, pitch = 0 }
+
+[[key]]
+t = 44.6
+right = { roll = 0, pitch = 60 }
+
+[[capture]]
+t = 45.6
+name = "bend_up"
+
+[[key]]
+t = 46
+right = { pitch = 60 }
+
+[[key]]
+t = 46.6
+right = { pitch = -60 }
+
+[[capture]]
+t = 47.6
+name = "bend_down"
+
+[[key]]
+t = 48
+right = { pos = [0.15, -0.2, 0.35], pitch = -60 }
+
+[[key]]
+t = 48.8
+right = { pos = [0.2, -0.1, 0.68], pitch = 0 }
+
+[[capture]]
+t = 49.8
+name = "reach"
+
+[[key]]
+t = 50
+right = { pos = [0.2, -0.1, 0.68], yaw = 0 }
+
+[[key]]
+t = 50.8
+right = { pos = [0.06, -0.06, 0.2], yaw = -40 }
+
+[[capture]]
+t = 51.8
+name = "close"
