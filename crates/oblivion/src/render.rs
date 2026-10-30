@@ -69,9 +69,9 @@ mod win {
         let take = crate::mem::patch_code(TAKE_AT, &[0xA1, b0, b1, b2, b3], &[0xA1, t0, t1, t2, t3]);
         let give = crate::mem::patch_code(GIVE_AT, &[0x8B, 0x35, b0, b1, b2, b3], &[0x8B, 0x35, g0, g1, g2, g3]);
         if take && give {
-            tracing::info!("render: both eyes are rendered under one hold of the background thread's lock");
+            tracing::info!("render: the renders take and give the background thread's lock as the adapter says");
         } else {
-            tracing::error!("render: the background thread's lock isn't held across the eyes (patched: take {take}, give {give})");
+            tracing::error!("render: the background thread's lock is the game's, once a render (patched: take {take}, give {give})");
         }
     }
 
