@@ -67,4 +67,4 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | `d3d9on12` | true | Make the device on D3D9On12 (off: plain Direct3D 9, no VR) |
 | `background` | false | Tests: the window is off-screen and never activated, and message boxes are answered |
 | `eye_width`, `eye_height` | 0 | The per-eye size to render at (0: the game's resolution) |
-| `anisotropy` | 1 | The anisotropic filtering of the game's textures (1: none, as the game has it; up to 16). Oblivion has none of its own, and a driver's override doesn't reach D3D9On12. Off by default: at 16x a playtest saw foliage streaked across the trees |
+| `anisotropy` | 16 | The anisotropic filtering of the game's textures (1: none, as the game has it). Oblivion has none of its own, and a driver's override doesn't reach D3D9On12 |

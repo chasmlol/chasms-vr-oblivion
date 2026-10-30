@@ -17,19 +17,22 @@ them. Each picture costs a short hitch. They let me hold the two eyes up to each
 What was wrong, why, and the audit of the rest: `docs/research/visuals.md`. Research on Oblivion's
 own settings for distance and sharpness: `<builds>\visuals\research\oblivion-technical.md`.
 
-## Round 4: the streaks across the trees
+## Round 3: the distance, and the ghosting
 
-`playtest.bat` and `playtest-af.bat` boot `rustvr-city` and move you to the forest spot where the
-streaks were (Tamriel -14, 16, looking south-east; it takes a few seconds to get there).
-
-1. **`playtest.bat`**: this build's default, no anisotropic filtering. The streaks across the trees
-   should be gone. Look round the same trees and the hillside behind the log.
-2. **`playtest-af.bat`** (only if you want to confirm): anisotropic filtering 16x, as the run with the
-   streaks had it. If they're back, it was the filtering.
-3. **The far distance** (round 3, the runtime): far trees, fences and roofs shouldn't flicker as your
-   head moves. That fix is in both .bats.
-
-The ghosting on moving people (round 3's tests) is parked: tell me when you want it back.
+1. **The distance.** Walk out of the city's gate (or stay on a wall) and look at the hills,
+   trees and buildings a few hundred metres off, then far off. Move your head a little.
+   - Far trees, fences and roofs should stay put: no flicker or flashing as the head moves.
+   - The ground and walls a few metres to a few hundred metres off should be sharper than before,
+     not mushy, even where you see them at a slant (a road ahead, a long wall).
+2. **The ghosting on moving people.** Watch people walking past. If you still see an outline or a
+   ghost around them, try these one at a time and tell me which one makes it go:
+   - In Virtual Desktop's streaming settings, turn **Synchronous Spacewarp** off.
+   - In RustVR's menu (the Display tab), turn off **Smooth the game's picture to every headset frame**.
+     (Walking and turning will then judder when the game is slower than the headset: that's
+     expected, it's only a test.)
+   - Set the headset to 90 Hz in Virtual Desktop (the game gives about 115 pictures a second
+     now at your resolution, short of 120).
+3. **The sky, the people's shadows, the people** (rounds 1 and 2, fixed): still right?
 
 ## `playtest-rain.bat`
 
@@ -51,11 +54,10 @@ below is in both.)
   game's picture for each headset pixel, skipping the ones between, so far detail (branches, fences,
   roofs) flickered in and out as your head moved, and the supersampling smoothed nothing. Now each
   headset pixel averages the game's pixels it covers.
-- **Round 4, the streaks.** Round 3 filtered the game's textures anisotropically, 16x (Oblivion has
-  none of its own, and the driver's override doesn't reach the game in VR). The first run with it
-  showed long streaks of foliage across the trees in one spot, and the game drew fewer pictures a
-  second. It's now off by default (`anisotropy` in `rustvr-oblivion.toml`); `playtest-af.bat` turns
-  it on to compare.
+- **Round 3, the mushy distance** (the adapter). Oblivion has no anisotropic filtering of its own;
+  on a desktop players force it in the graphics driver, which doesn't reach the game in VR (it runs
+  on D3D9On12). Without it, ground and walls at a slant blur a few metres off. The adapter now
+  filters the game's textures anisotropically, 16x (`anisotropy` in `rustvr-oblivion.toml`).
 - **Round 2, the people's shadows.** The game clips each actor's shadow to its light with six clip
   planes, made in the camera's own space once a frame, for the left eye. The right eye used the left
   eye's planes, which cut its shadows away. Now the game makes them again for each eye.
@@ -69,8 +71,7 @@ below is in both.)
 
 ## Not done, not checked
 
-- Round 4 hasn't been seen yet: that the filtering made the streaks is inferred from when they
-  came, not proven.
+- None of round 3 has been seen in the headset yet.
 - The ghosting on moving people: not found in the game's picture (the saved pictures, taken before
   the runtime moves them, show none). It's after: Virtual Desktop's spacewarp, the runtime's
   smoothing, or the frames the game misses at 120 Hz. The tests above will tell which.
