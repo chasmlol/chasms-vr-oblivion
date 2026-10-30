@@ -39,6 +39,19 @@ hand instead of the flat screen.
   hand. While you hold it nearly still they're smoothed hard, so your hand's tremor all but goes;
   as you move it they follow more and more closely, so they keep up with a deliberate move.
 
+## Since the fourth headset play (2026-10-30)
+
+- **No laser on a book or the map**: press their buttons with your free hand's finger. Lift your
+  index finger off the trigger to point it, then touch the button: Take, Exit, Next and Prev on a
+  book, the tabs and the places on the map. As the fingertip comes near, the game lights what's
+  under it; touch it and you feel a tick. The laser still comes for anything that floats ahead,
+  like the map's fast travel question.
+- **Flick on the pages, lighter**: a flick turns a page only with your hand over the pages or near
+  them (a forearm's length in front, or a little behind or beside them), and a lighter one does it
+  (0.45 m/s).
+- **The map is in front of your hand**: it lies a hand's depth in front of the hand holding it (or
+  both, spread), so your fingers don't come through it.
+
 The flat game's crosshair is gone (taken from the menus branch, which has it from riding): where you
 look shows only the icon of what you can activate, red when taking it is stealing.
 
@@ -53,16 +66,18 @@ look shows only the icon of what you can activate, red when taking it is stealin
      into your **off hand** and opens there.
    - It's about as big as a large open book (38 by 28 cm): bring it nearer to read it bigger. Your
      other hand in front of the pages covers them, as a real hand would.
-2. **Turn a page.** Flick your free hand sideways, right to left, a light flick: the page turns
-   onwards. Left to right turns back. Anywhere: the hand needn't be near the pages. Let the hand slow
+2. **Turn a page.** Flick your free hand sideways over the pages or near them, right to left, a
+   light flick: the page turns onwards. Left to right turns back. Let the hand slow
    before the next flick; bringing it back after a flick doesn't turn the page back (the way back is
    shut for a little over a second after a turn). Or pull the trigger at a page's edge and pull it
    across. You feel a tick and hear the game's own page turn. The right stick turns pages too.
-3. **Take it, or put it down.** The laser comes from your free hand while you hold a book:
-   - point at **Take** and pull the trigger: the game takes it into your pack (it's the shop's: the
-     owner reacts as the game has them react to a theft);
-   - **Exit**, or **B**: it shuts, back to the closed book in your hand. It stays shut until you let
-     go of it and take it again;
+3. **Take it, or put it down.** There's no laser on a book: point your free hand's index finger
+   (lift it off the trigger) and touch its buttons. The game lights what's under your fingertip as
+   it comes near; touching it gives a tick:
+   - touch **Take**: the game takes it into your pack (it's the shop's: the owner reacts as the game
+     has them react to a theft);
+   - touch **Exit**, or press **B**: it shuts, back to the closed book in your hand. It stays shut
+     until you let go of it and take it again;
    - your other hand's grip on the book takes it as anything else (from hand to hand);
    - let go of the book while it's open: it shuts and falls.
 4. **A skill book.** Take one in your hand (drop *Proper Lock Design* out of your pack and pick it
@@ -85,8 +100,9 @@ look shows only the icon of what you can activate, red when taking it is stealin
    - with one hand on it, grip its **face** with the other and move: the game drags its map (its own
      pan; the hand in front of the map covers it);
    - holding it in both hands, let go with the first: the other hand has it, where it took it;
-   - point at a place with the laser (it comes from your free hand) and pull the trigger: the game's
-     own fast travel, its question and its rules;
+   - touch a tab, or a place on the map, with your free hand's fingertip: the game's own click (a
+     place you've found: its fast travel question, which floats ahead of you; answer it with the
+     laser, which comes back for it);
    - put it back at the hip, or just let go of it, anywhere: it goes back to the hip and the map
      shuts.
 
@@ -115,7 +131,7 @@ look shows only the icon of what you can activate, red when taking it is stealin
 
 - **The real headset**: the size of the pages (a line of the game's text 1.5 degrees at 45 cm), the
   feel of the sweep, how near the free hand has to be to open a book, comfort.
-- **Fast travel** from the held map (its laser clicks, the game's question).
+- **Fast travel** from the held map (a fingertip's tap on a place, the game's question).
 - **A book taken off a shelf by hand** (the gloves' pull and the grip are the existing ones; the tests
   put books in the hand from the console or brought them by activating them).
 - **The local map's picture**: indoors the local map's window showed the parchment and your arrow
@@ -136,8 +152,9 @@ look shows only the icon of what you can activate, red when taking it is stealin
   eyes from its middle (the first build laid it on the cover, where it turned with the wrist), just
   in front of the book and the fingers round it.
 - **Turning by a flick**: the free hand's controller velocity, sideways as the eyes see it (level),
-  0.6 m/s or more with most of its speed sideways, anywhere; the hand empty and not gripping; none in
-  the 0.4 s after the pages appear. The first build's sweep had to start well out on a page and cross
+  0.45 m/s or more with most of its speed sideways, the hand over the pages or near them (30 cm in
+  front, 12 cm behind, 40% past their sides, top and bottom: "on the UI or near it"); the hand empty,
+  not gripping and not pressing a button; none in the 0.4 s after the pages appear. The first build's sweep had to start well out on a page and cross
   the spine within a few centimetres (in the first play the buttons turned the pages instead); the
   second's flick was the hand's speed against the pages, near them, and turned pages at random as
   the pages turned with the head and moved with the book. A trigger pinch pulled across still turns
@@ -154,8 +171,17 @@ look shows only the icon of what you can activate, red when taking it is stealin
   CHI 2012): a third of a second behind while nearly still, a fifteenth at half a metre a second.
   So text doesn't shake, but a page can trail the book a centimetre or two as it moves. Spread
   between both hands the map follows them exactly (a pinch steadied would slide under them).
-- **A sheet faces you, centred on the hand.** The map, and a book read from the pack, are held at
-  their middle (the hand behind them, hidden), always turned to your eyes, upright, steadied.
+- **Fingers, not a laser, on what's held.** A book's and the map's buttons are pressed by the free
+  hand's index fingertip (the rig's, where the drawn finger is: straight when it's off the
+  trigger). Within 6 cm in front of a piece the game's cursor follows the fingertip (the game lights
+  what's under it); the fingertip within 1 cm of it, come from in front, holds the game's button
+  down there until it's 2.5 cm off again (a click where it's let go, so sliding off a button before
+  lifting doesn't press it). A fingertip sweeping across faster than 0.35 m/s isn't pressing, so a
+  flick that brushes the pages doesn't press Take. What floats (a question over the map) still has
+  the laser.
+- **A sheet faces you, centred on the hand, in front of it.** The map, and a book read from the pack,
+  are held at their middle, 8 cm in front of the hand towards your eyes (a hand's depth: the
+  fingers holding it stay behind it, hidden), always turned to your eyes, upright, steadied.
   Spread between the hands, the points of it each hand took stay in them (a pinch to zoom: nothing
   jumps as the second hand takes it), and handed over, the second hand keeps it where it took it.
 - **The map never leaves the hand but by letting go**: every page of the map menu, the journal's

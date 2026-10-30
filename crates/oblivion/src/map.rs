@@ -4,7 +4,7 @@
 //! the belt, it opens the game's own map menu on the local map in an interior and the world map
 //! outside, and the map's page lies in the hand as a sheet of paper ([`crate::hud`]:
 //! `ANCHOR_HELD`, `HELD_SHEET`): the other hand spreads it (bigger), grips its face to drag the
-//! map (the game's own pan), and points at it with the laser (a place's name, fast travel with the
+//! map (the game's own pan), and presses it with a fingertip (a place's name, fast travel with the
 //! game's own question and rules; its tabs, the journal's pages too, stay in the hand). Put back (or
 //! let go), it folds away: the game's menu shut, and nothing of it shown while it shuts.
 //!
