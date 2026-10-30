@@ -309,8 +309,10 @@ mod win {
             static LAYOUT_SENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
             // (Again when the game's card of a thing has moved on its HUD.)
             let card_moved = hooks::guard("hud info", None, crate::hud_info::moved).is_some();
-            if have_hud && (!LAYOUT_SENT.swap(true, Ordering::AcqRel) || card_moved) {
-                a.write_hud_layout(&crate::hud::layout(crate::hud_info::last()));
+            // (And when the game's breath meter first shows, or moves.)
+            let meter_moved = hooks::guard("breath meter", None, crate::swim::meter_moved).is_some();
+            if have_hud && (!LAYOUT_SENT.swap(true, Ordering::AcqRel) || card_moved || meter_moved) {
+                a.write_hud_layout(&crate::hud::layout(crate::hud_info::last(), crate::swim::meter()));
             }
             a.submit(info);
         });

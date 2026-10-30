@@ -100,9 +100,15 @@ mod win {
 
     /// Where the game's card is on its HUD now (the part of it, 0..1), if it shows one.
     pub fn card_uv() -> Option<[f32; 4]> {
-        type Interface = unsafe extern "C" fn(u8, u8) -> usize;
         let menu = mem::deref(HUD_INFO_MENU);
-        let tile = mem::deref(menu + MENU_TILE);
+        tile_uv(mem::deref(menu + MENU_TILE), 6.0, false)
+    }
+
+    /// Where what a menu's tile shows is on the HUD now (the part of it, 0..1, `margin` screen
+    /// units round it), if it shows anything. `inner`: only what's in it, not the menu's own box (a
+    /// menu as big as the screen with a small piece in it).
+    pub fn tile_uv(tile: usize, margin: f32, inner: bool) -> Option<[f32; 4]> {
+        type Interface = unsafe extern "C" fn(u8, u8) -> usize;
         let ui = unsafe { std::mem::transmute::<usize, Interface>(INTERFACE)(0, 1) };
         let root = mem::deref(ui + MENU_ROOT);
         if tile == 0 || root == 0 {
@@ -110,8 +116,18 @@ mod win {
         }
         let screen = (value(root, WIDTH)?, value(root, HEIGHT)?);
         let mut b = None;
-        shown(tile, (0.0, 0.0), 0, &mut b);
-        super::uv_of(b?, screen, 6.0)
+        if inner {
+            if value(tile, VISIBLE).is_some_and(|v| v != TRUE) {
+                return None;
+            }
+            let at = (value(tile, X).unwrap_or(0.0), value(tile, Y).unwrap_or(0.0));
+            for c in list(tile + TILE_CHILDREN) {
+                shown(c, at, 1, &mut b);
+            }
+        } else {
+            shown(tile, (0.0, 0.0), 0, &mut b);
+        }
+        super::uv_of(b?, screen, margin)
     }
 
     unsafe extern "C" fn set_target(target: usize, a: u8, force: u8) -> u8 {

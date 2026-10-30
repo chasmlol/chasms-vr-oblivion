@@ -4,6 +4,8 @@
 
 use crate::engine::{self, refr};
 use crate::{input, link, mem, settings};
+use glam::{Quat, Vec2, Vec3};
+use rustvr_protocol::{Action, INT_SWIM, Intents};
 use std::sync::Mutex;
 
 static BRIDGE: Mutex<Option<input::Bridge>> = Mutex::new(None);
@@ -68,10 +70,17 @@ pub fn before_update() {
     // The player's step on the ground is the stick's (crate::movement).
     #[cfg(target_arch = "x86")]
     crate::movement::set_stick(snap.filter(|_| vr).map(|s| s.frame.intents.move_xy));
+    // Swimming, the arms' strokes are the game's swimming step (also crate::movement); the sky's
+    // underwater fog is where the headset's eyes are (crate::swim).
+    #[cfg(target_arch = "x86")]
+    {
+        crate::movement::set_swim(snap.filter(|_| vr).and_then(strokes));
+        crate::swim::set_head(snap.and_then(|s| s.view).map(|v| crate::camera::basis().point_to_game(v.head_pos).z));
+    }
     let mut v = input::Virtual::default();
     if let Some(s) = snap {
         if let Some(b) = bridge().as_mut() {
-            v = b.update(&s.frame.intents, game_controls(), link::now());
+            v = b.update(&swimmer(&s), game_controls(), link::now());
         }
         static LAST_MOVE: Mutex<[f32; 2]> = Mutex::new([0.0; 2]);
         let mv = s.frame.intents.move_xy;
@@ -95,6 +104,41 @@ pub fn before_update() {
     #[cfg(windows)]
     input::set(v, vr || settings::get().background);
     crate::combat::apply_pending();
+}
+
+/// The arms' strokes in the world (game units a second), while the runtime swims the player.
+fn strokes(s: link::Snapshot) -> Option<[f32; 3]> {
+    let it = &s.frame.intents;
+    let view = s.view?;
+    (it.flags & INT_SWIM != 0).then(|| crate::camera::basis().point_to_game(view.dir(Vec3::from(it.swim)) * view.world_per_meter).to_array())
+}
+
+/// The runtime's actions for the game's controls; while the arms swim with the stick let go, the
+/// game's joystick nudged the way the strokes go, as little as it reads. The game then knows the
+/// player swims that way (its movement flags): it plays its swimming and trains Athletics, as it
+/// does for any swimming. The step itself is the strokes' ([`crate::movement`]); straight up or
+/// down is "ahead" to the game.
+fn swimmer(s: &link::Snapshot) -> Intents {
+    /// The nudge (a share of the stick), and the strokes' speed (m/s) that's swimming.
+    const NUDGE: f32 = 0.02;
+    const STROKING: f32 = 0.15;
+    let mut it = s.frame.intents;
+    let v = Vec3::from(it.swim);
+    if it.flags & INT_SWIM == 0 || Vec2::from(it.move_xy).length() > 0.05 || v.length() < STROKING {
+        return it;
+    }
+    let f = Quat::from_array(s.frame.hmd.rot).normalize() * Vec3::Z;
+    let yaw = f.x.atan2(f.z);
+    let (ahead, right) = (Vec3::new(yaw.sin(), 0.0, yaw.cos()), Vec3::new(yaw.cos(), 0.0, -yaw.sin()));
+    let flat = Vec2::new(v.dot(right), v.dot(ahead));
+    let dir = if flat.length() > 0.3 * v.length() { flat.normalize() } else { Vec2::Y };
+    it.move_xy = (dir * NUDGE).to_array();
+    it
+}
+
+/// The player swims at the game's running pace: Always Run, or Run held.
+pub fn running(it: &Intents) -> bool {
+    game_controls().always_run || it.held & Action::Sprint.bit() != 0
 }
 
 /// Testing (`RUSTVR_OBLIVION_TRACE_MOVE=1`): for two seconds after the stick changes, the player's

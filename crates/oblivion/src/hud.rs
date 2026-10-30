@@ -15,8 +15,8 @@ fn element(role: u32, uv: [f32; 4]) -> HudElement {
 }
 
 /// The layout; `card`: where the game's card of a thing is on the HUD (`crate::hud_info`), for the
-/// thing in a hand.
-pub fn layout(card: Option<[f32; 4]>) -> HudLayout {
+/// thing in a hand; `meter`: where its breath meter is (`crate::swim`), once it has shown one.
+pub fn layout(card: Option<[f32; 4]>, meter: Option<[f32; 4]>) -> HudLayout {
     let mut elements = vec![
         // The bars, the equipped weapon and spell, the compass: on the off-hand wrist.
         element(HUD_STATUS, [0.0, 0.86, 0.5, 1.0]),
@@ -24,12 +24,16 @@ pub fn layout(card: Option<[f32; 4]>) -> HudLayout {
         element(HUD_CENTER, [0.3, 0.38, 0.7, 0.62]),
         // Spoken lines.
         element(HUD_SUBTITLES, [0.1, 0.62, 0.9, 0.86]),
-        // Messages ("You have learned..."), top left.
-        element(HUD_HINTS, [0.0, 0.0, 0.5, 0.16]),
+        // Messages ("You have learned..."), top left (as far as the breath meter, when it's there).
+        element(HUD_HINTS, [0.0, 0.0, meter.filter(|m| m[1] < 0.16).map_or(0.5, |m| m[0].clamp(0.2, 0.5)), 0.16]),
     ];
     // The card of what the crosshair's on (or what a hand has): over the thing in a hand.
     if let Some(uv) = card {
         elements.push(element(HUD_HELD, uv));
+    }
+    // The breath meter, under water: where the game has it, at the top of the view.
+    if let Some(uv) = meter {
+        elements.push(element(HUD_CENTER, uv));
     }
     HudLayout::new(HUDL_ADDITIVE | HUDL_REST_HIDDEN, &elements)
 }
