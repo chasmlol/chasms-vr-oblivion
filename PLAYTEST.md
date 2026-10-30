@@ -47,6 +47,19 @@ once; load the save again for another go. Design and research: `docs/research/me
 8. **The war axe and the warhammer:** a hard axe chop into a goblin or wood sticks (pull it out
    along the way it went in); the warhammer is very top-heavy (3.7 kg, its weight at its head).
 
+**A training dummy** (the user's first playtest: two goblins that fight at once leave no room to
+try a swing). The same save with these console lines (`-Commands`, `dummy.bat` in the worktree):
+
+```
+powershell -File tools\play.ps1 melee -Commands "ff000c49.disable|ff000c48.setrestrained 1|ff000c48.setav aggression 0|ff000c48.setav confidence 100|ff000c48.stopcombat|ff000c48.setav health 1000|ff000c48.resethealth|PlaceInFront ff000c48 1.3"
+```
+
+The save's goblins are the placed references `ff000c48` and `ff000c49` (the same in every load of
+it). One is put away; the other is restrained (the game's own hold on a prisoner: it doesn't move),
+won't start a fight (aggression 0), won't flee (confidence 100), has 1000 health so it lasts, and
+stands 1.3 m in front of the player, facing them. A hit is still the game's assault, so it may
+want to fight back; restrained, it shouldn't be able to.
+
 For a look at what's judged: set `RUSTVR_DEBUG_COMBAT=1` before starting; the runtime then logs
 every contact, swing, block and parry with its numbers, and draws the creatures' capsules and the
 weapon's damagers over the picture.
