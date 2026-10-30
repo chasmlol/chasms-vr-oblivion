@@ -4,10 +4,13 @@
 # (whichever worktree has it) and the player's settings back.
 #
 #   powershell -File tools\play.ps1                      the features there are
-#   powershell -File tools\play.ps1 archery [-Save rustvr-weye] [-At <cell>] [-Give "<id> <n>,..."]
+#   powershell -File tools\play.ps1 archery [-Save rustvr-weye] [-At <cell>] [-Give "<id> <n>,..."] [-Commands "a|b"]
 #   powershell -File tools\play.ps1 archery -Range
 #   powershell -File tools\play.ps1 -Close
-param([string]$Feature = "", [string]$Save = "", [string]$At = "", [string]$Give = "", [switch]$Range, [switch]$Close)
+#
+# -Commands runs console lines once the save is loaded ("showracemenu", "player.setav sneak 100"):
+# in VR the real keyboard doesn't reach the game, so its console can't be typed into.
+param([string]$Feature = "", [string]$Save = "", [string]$At = "", [string]$Give = "", [string]$Commands = "", [switch]$Range, [switch]$Close)
 $ErrorActionPreference = "Continue"
 $worktrees = "<worktrees>"
 $builds = "<builds>"
@@ -42,6 +45,12 @@ if ($Range) {
     "the test range from $Feature's build is up (rustvr-play --wait)"
     exit 0
 }
+# Steam's DRM starts the game only for a signed-in Steam: signed out, the game stops at an
+# "Application load error" box on the desktop, out of the headset's sight.
+if (-not (Get-ItemProperty "HKCU:\Software\Valve\Steam\ActiveProcess" -ErrorAction SilentlyContinue).ActiveUser) {
+    "Steam isn't signed in: sign in to Steam, then run this again"
+    exit 1
+}
 Stop-Ranges
 if (-not $Save) {
     # The save the feature's PLAYTEST.md names first (a line "Save: rustvr-..."), else the city.
@@ -49,4 +58,4 @@ if (-not $Save) {
     $Save = if ($named) { $named.Matches[0].Groups[1].Value.Trim('`', '"') } else { "rustvr-city" }
 }
 "$Feature : $Save$(if ($At) { " at $At" })"
-& "$wt\tools\oblivion.ps1" -NoBuild -Save $Save -At $At -Give $Give
+& "$wt\tools\oblivion.ps1" -NoBuild -Save $Save -At $At -Give $Give -Commands $Commands

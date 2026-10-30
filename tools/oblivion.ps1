@@ -112,6 +112,12 @@ if ($Close) {
     exit 0
 }
 
+# Steam's DRM starts the game only for a signed-in Steam: signed out, the game stops at an
+# "Application load error" box (or, with Steam just starting, the first process dies in the adapter).
+if (-not (Get-ItemProperty "HKCU:\Software\Valve\Steam\ActiveProcess" -ErrorAction SilentlyContinue).ActiveUser) {
+    "Steam isn't signed in: sign in to Steam, then run this again"
+    exit 1
+}
 Take-Lock
 # (A game left for the headset keeps the lock until -Close; anything else gives it back.)
 $keepLock = $false
