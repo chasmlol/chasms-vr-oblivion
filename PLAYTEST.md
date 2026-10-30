@@ -21,7 +21,10 @@ trigger to click. The right stick scrolls, and B closes.
      from them. Any active effects stack above the compass.
    - Look at Jensine: the game's card of what you're looking at (her name) floats just under the
      point you're looking at, just in front of her. It eases after your head instead of being
-     fixed to it. It's the same card that says "Open Door" or gives an item's numbers.
+     fixed to it. It's the same card that says "Open Door".
+   - Look at a thing you can take (in the chest's room, anything on a shelf): no card, only the
+     game's hand icon (red if taking it is stealing). Pick it up and its card (name, value, weight)
+     floats over it in your hand.
    - The flat game's crosshair is gone. Where the head looks, only the game's icon of what can be
      activated shows (a hand, a door; red when taking it would be stealing).
 2. **The chest (looting).** Look at the chest and pull the trigger with an empty right hand.
@@ -112,6 +115,12 @@ What you said, and what changed:
   - The main menu and loading screens get them too.
 - **The flat game's crosshair** was still showing in this branch's HUD. It's gone now, the same way
   as on the riding branch.
+
+Then: **"I don't like the HUD popup for every single item I look at. It should only say it when I
+pick it up."** The card no longer comes up for a thing that can be taken (the same test the gloves
+use for what they can pull). It still shows over the thing once a hand has it. I kept it for what
+can't be picked up, since there's nothing to hold: a person's name, "Open Door", a container. The
+hand icon stays for things, because it turns red when taking one would be stealing.
 
 ## What was checked in the game (emulated headset, captures)
 

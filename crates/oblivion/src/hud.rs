@@ -38,7 +38,7 @@
 //! | the compass | `hud_main_menu.xml` | up the forearm from the bars |
 //! | the spells and potions working on the player | `hud_main_menu.xml` | up the forearm from the compass |
 //! | what the reticle can activate (its crosshair is hidden, [`crate::reticle`]), the sneak eye | `hud_reticle.xml` | where the head looks |
-//! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing; over the thing while a hand has one |
+//! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing, for a person, a door, a container (not a thing that can be taken); over the thing while a hand has one |
 //! | a foe's health | `hud_reticle.xml` | over the foe |
 //! | spoken lines | `hud_subtitle_menu.xml` | the caption strip |
 //! | notices ("Iron Arrow added"), a region's name | `hud_subtitle_menu.xml`, `hud_main_menu.xml` | over the captions |
@@ -589,6 +589,10 @@ mod win {
             if crate::hud_info::holding() {
                 // (Over the thing in a hand.)
                 l.push(HudElement::new(HUD_HELD, uv));
+            } else if crosshair != 0 && crate::items::takeable_ref(crosshair).is_some() {
+                // A thing that can be taken says what it is only once a hand has it (the card over
+                // it then): a card for every thing looked at is too much. Its activate icon stays
+                // (red when taking it would be stealing).
             } else {
                 let below = reticle.map_or(0.0, |r| (r[3] - r[1]) * 0.5 / h) + (uv[3] - uv[1]) * 0.5 + 0.01;
                 let above_middle = reticle.map_or([0.0; 3], offset);

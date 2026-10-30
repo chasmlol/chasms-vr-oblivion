@@ -433,7 +433,7 @@ mod game {
     }
 
     /// A reference the player could take now: its base form's kind, if so.
-    fn takeable_ref(refr: usize) -> Option<u8> {
+    pub fn takeable_ref(refr: usize) -> Option<u8> {
         let flags = mem::at::<u32>(refr + FORM_FLAGS)?;
         if flags & (DELETED | DISABLED) != 0 || mem::deref(refr + REFR_NODE) == 0 {
             return None;
