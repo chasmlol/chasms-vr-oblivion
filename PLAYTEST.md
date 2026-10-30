@@ -18,20 +18,20 @@ the Swimming row of `docs/OBLIVION.md`.
    under you: legs hanging, thighs a little forward, kicking slowly. Put your hands in the water and
    look at them: you see them under the surface, a little of the water's colour over them.
 2. **Catch the water and pull.** Put a hand under the water and squeeze its grip: that hand holds
-   the water (a little pulse says so). Pull it and you're pulled past it the other way, about
-   four times as fast as your hand goes. Let go, reach out again (an open hand goes through the
+   the water (a little pulse says so). Pull it and you're pulled past it the other way, several
+   times as fast as your hand goes (light strokes most of all). Let go, reach out again (an open hand goes through the
    water freely), catch and pull again. Between strokes you glide.
-   - At the surface a relaxed breaststroke (hands wide out, back and in over most of a second)
-     swims about 2.3 times the game's swim speed, a firm one 3 times. One firm stroke from still
-     carries you about 17 m.
+   - Light strokes swim well: you needn't push hard. At the surface a light breaststroke (hands a
+     little out and back) swims about 1.7 times the game's swim speed, a relaxed one (wide out,
+     back and in over most of a second) 2.6 times, a firm one 3 times.
    - Both hands make one stroke together: their sweeps out and in cancel, and their pull back
      carries you. One hand alone pulls half as hard. The grip needn't be timed exactly: the stroke
      pulls only while your hands go on away from where it started (or turned back), once they're
-     15 cm from there. Squeeze a little before the reach ends, or let go a little after your hands
+     10 cm from there. Squeeze a little before the reach ends, or let go a little after your hands
      start back, and it just slips.
    - The next stroke never takes your glide's speed: it only adds to it, and turns it its way, so
-     uneven hands don't leave you drifting sideways. Only a stroke back against your glide, 25 cm
-     or longer, slows you: that's how to stop.
+     uneven hands don't leave you drifting sideways. Only a stroke back against your glide, 20 cm
+     or longer, slows you: that's how to stop, and keep going back.
    - Pulling down as well as back takes you up as well as ahead (at the surface the game holds
      you there): to swim level under the water, pull straight back.
    - A pull slower than you already go just slips.
@@ -171,6 +171,19 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't catc
      other: relaxed 2.3 times the game's speed, firm 3 (1.3 and 1.8 before); speed lost at the
      catch beyond the glide's own: none (most of it before); a firm stroke from still carries
      17 m. Strokes back against the glide stop you in about half a second and take you back.
+10. **"I need way more speed for lighter strokes: I have to push way too hard. And I can barely go
+    backwards now."** (This run's log was replaced by the next feature's playtest before it was
+    kept.)
+    - The pull's pace grew in step with your hands' speed, and the first 15 cm of every stroke
+      counted for nothing: half of a light, short stroke. Going backwards from a glide, a stroke
+      had to be 25 cm long to count, and only stopped you; a short push forward from still lost
+      its first 15 cm too.
+    - Now the pace grows with your hands' speed to the 0.4th power: 3 game swim speeds with your
+      hands at 1 m/s, still 1.9 at 0.3 m/s. A stroke counts from 10 cm, a stroke against the glide
+      from 20 cm.
+    - Simulated (gripped early, let go late): a light breaststroke 1.7 times the game's speed (0.9
+      before), relaxed 2.6 (2.2), firm 3 (3.1). A light stroke backwards from still, -4.6 m/s
+      (-2.6); gliding ahead at 4 m/s, strokes backwards have you going back within a second (two).
 
 ## Checked in the game (emulated headset, `tools/oblivion.ps1`)
 
@@ -239,14 +252,15 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't catc
     nothing else, and lets go below 0.35. Its velocity is against the head.
   - The hands holding the water make one stroke: their velocities' sum over two (one stroke since
     playtest 8, the sum since playtest 9, so one hand alone pulls half). It takes you the other way
-    at 2 game swim speeds for each m/s of its pace, in about 0.08 s.
+    in about 0.08 s, at 3 game swim speeds with the hands at 1 m/s, growing with their speed to the
+    0.4th power (since playtest 10): 1.9 game speeds at 0.3 m/s, 4 at 2 m/s.
   - It pulls only while it goes on away from the point of the stroke it's furthest from, once
-    15 cm from it (since playtest 7), so a grip squeezed early or let go late doesn't throw you
+    10 cm from it (since playtest 7), so a grip squeezed early or let go late doesn't throw you
     backwards, and a breaststroke's sweeps out and in cancel.
   - Gliding (faster than 1 m/s), a stroke never takes your speed (since playtest 9): it speeds you
     up to its pace along your glide (a slower one slips), and turns your glide its way (by e in
     0.25 s, as fast as it's strong against your speed), as a swimmer's streamlined body follows
-    the stroke. Only a stroke back against the glide (more than 120 degrees from it), once 25 cm
+    the stroke. Only a stroke back against the glide (more than 120 degrees from it), once 20 cm
     long, slows you. Nearly still, a stroke takes you its way at its pace.
   - At the surface (your head out) a stroke's rise is lost into the surface, as the game holds
     you there.

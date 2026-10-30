@@ -47,7 +47,7 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Left stick click (sprint) | Run, when Always Run is off |
 | Right stick click, or its down flick, or ducking | Crouch/Sneak (kept in step with the game's sneaking) |
 | A (either hand) | Jump (out of the water too, at a ledge) |
-| Empty hands in the water, grip squeezed | Swim: the hands hold the water and the player is pulled past them, about four times their pace, then glides; down to rise, up to dive (the stick swims too, where the head looks) |
+| Empty hands in the water, grip squeezed | Swim: the hands hold the water and the player is pulled past them, several times their pace, then glides; down to rise, up to dive (the stick swims too, where the head looks) |
 | Trigger, empty hand | Activate (what the head looks at); held: Rest/Wait. The off hand, with a spell ready: charge it, let go (or touch, for a touch spell) to cast |
 | Off hand's B | Menu Mode (inventory, magic, map, journal); held: the Quick Menu (hotkeys) |
 | B on a menu, or the menu button | Escape (closes the menu; in the world, the pause menu) |
