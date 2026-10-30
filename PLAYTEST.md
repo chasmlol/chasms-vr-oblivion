@@ -72,9 +72,9 @@ note. The inn's own patrons walk about further in. The research and the design a
 11. **Steal something lying about.** Pick up something of the inn's from a table or a shelf (a
     plate, a bottle): its card over your hand has the red hand and the word **Steal** over its name.
     Something that's nobody's (or yours) has no such line.
-12. **Walk right up to someone** (round 9). Step up to Bruce in the room (not with the stick): your
-    body stops where it would touch his, without shoving him, and your head goes on, leaning into
-    his space. With the stick you still bump him along, as in the game.
+12. **Walk right up to someone** (rounds 9 and 10). Walk up to Bruce, with the stick or stepping
+    in the room: you come chest to chest with him (your body and his each as round as a torso),
+    and he isn't shoved. Leaning in the room, your head goes on into his space.
 
 The game's flat pickpocket menu is still there: the trigger on someone while sneaking opens it. A
 hand in a pocket doesn't activate anything with its trigger.
@@ -112,7 +112,8 @@ Not checked:
 - Anything in the real headset: how the ticks, the brush and the heartbeat feel; whether 4 cm per
   thing is right for a real hand; the four trouser pockets (round 6) by hand; the card's steady
   size and its red line coming and going with it (round 6); a card on each hand (round 8); coming
-  close to people (round 9).
+  close to people (rounds 9 and 10: the game's own capsule radii, and how its controller takes a
+  new size, are read from the code, not seen).
 - The heartbeat itself (only the awareness values: 0, 0.5 noticed, 1 seen, read from the NPC's own
   detection list).
 - The game's success message and sound (the call is the menu's own, with its message flag).
@@ -209,9 +210,24 @@ Not checked:
   `TRK_FOLLOW`), and the game's character controllers push each other: walked into someone, the body
   shoved them. Now, while the body is walked after the head, its step stops where its controller
   would touch theirs (each controller's own radius, as the game's `SetSize` sets it), and
-  the head goes on alone, as far as room-scale lets it from the body (60 cm): right up to them. The
-  stick still walks into people as the game does. The adapter's log says where the body stopped
-  (`movement: walked after the head, the body stops at ...`).
+  the head goes on alone, as far as room-scale lets it from the body (60 cm): right up to them.
+- **As close as a body** (round 10: still not close enough, "as close as my body physically is").
+  The round-9 log had no stop at all: Bruce was walked into with the stick, which round 9 left to
+  the game, and shoved again. And the game's capsules are rounder than the bodies they hold (each
+  sized from its model's bound: the game's default bound is 25 to 33 cm round, a torso
+  17), so even stopped at the touch, chests were a hand or two apart. Now:
+  - Every step of the player's on the ground, the stick's too, stops where its capsule would touch
+    someone's: nobody is shoved by walking into them any more (you go round them, or wait, where
+    one stands in a doorway).
+  - In VR, the player's capsule, and those of the people (NPCs, not creatures) within 3 m, are a
+    torso's round (0.17 m, the one the hands meet on others), as the game's own `SetSize` makes
+    them (the console's `SetSize`/`CSize`, "Shrink/Grow an actor": the controller's radius at
+    the size asked, which it grows or shrinks to over its next updates). A metre further off, people have
+    their own again; out of VR, the player too. People only count within a person's height (128
+    units) up or down: not someone on the floor above.
+  - The adapter's log says so: `movement: the player's capsule is a body's round ...`,
+    `movement: 0x... near the player is a body's round ...` (each with the game's own radius), and
+    where the body stopped (`movement: the body stops at ...`).
 
 ## Not done, known issues
 

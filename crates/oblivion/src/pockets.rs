@@ -76,7 +76,7 @@ pub fn body_frame(s: &Skeleton) -> Option<(Vec3, Vec3, Vec3)> {
 }
 
 /// How far the body's surface is round the spine: its capsule's radius (`combat`'s torso).
-const BODY: f32 = 0.17;
+pub(crate) const BODY: f32 = 0.17;
 
 /// How far round the body from a hip's side a front or back pocket is (degrees), and how far round
 /// its middle a hand is in it (metres): together, the hip's surface from near the middle of the

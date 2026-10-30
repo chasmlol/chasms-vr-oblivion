@@ -254,6 +254,25 @@ const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
     ("Bip01 R Calf", "Bip01 R Foot", 0.06, PART_LEG, MAT_FLESH),
 ];
 
+/// The game's actors it's fully processing now (not the player), from its list as it is: for what's
+/// done with them outside the frame they were sent in, when some may be gone.
+#[cfg(target_arch = "x86")]
+pub(crate) fn actors_now() -> Vec<usize> {
+    let player = engine::player();
+    let mut out = Vec::new();
+    let mut node = PROCESS_MANAGER + ACTORS_LIST;
+    let mut guard = 0;
+    while node != 0 && guard < 256 {
+        guard += 1;
+        let actor = mem::deref(node);
+        node = mem::deref(node + 4);
+        if actor != player && is_actor(actor) {
+            out.push(actor);
+        }
+    }
+    out
+}
+
 /// The actors near the player and, by id, where each is in the game's memory.
 pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
     let mut table: Box<Actors> = bytemuck::zeroed_box();

@@ -67,7 +67,13 @@ pub fn before_update() {
     }
     // The player's step on the ground is the stick's (crate::movement).
     #[cfg(target_arch = "x86")]
-    crate::movement::set_stick(snap.filter(|_| vr).map(|s| (s.frame.intents.move_xy, s.frame.tracking.flags & rustvr_protocol::TRK_FOLLOW != 0)));
+    crate::movement::set_stick(snap.filter(|_| vr).map(|s| s.frame.intents.move_xy));
+    // Out of VR, the player's capsule is its own again (in VR it's a body's round, set once the
+    // world's actors are read: crate::render).
+    #[cfg(target_arch = "x86")]
+    if !vr {
+        crate::hooks::guard_void("player's capsule", || crate::movement::fit_people(false));
+    }
     let mut v = input::Virtual::default();
     if let Some(s) = snap {
         if let Some(b) = bridge().as_mut() {
