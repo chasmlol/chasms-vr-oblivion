@@ -141,6 +141,7 @@ mod win {
             crate::console::tick();
             crate::player::before_update();
             crate::items::frame(link::now());
+            crate::pockets::frame(link::now());
         });
         unsafe { real(this) }
     }
@@ -243,6 +244,7 @@ mod win {
         crate::player::trace_frame(now, &snap, &game);
         use crate::timing::{Part, time};
         time(Part::Combat, crate::combat::publish);
+        time(Part::Combat, || hooks::guard_void("pockets", crate::pockets::publish));
         time(Part::Collision, || hooks::guard_void("collision", || crate::collision::update(now)));
         if let Some(view) = snap.view.as_ref() {
             let head = glam::Vec3::from(snap.frame.hmd.pos);

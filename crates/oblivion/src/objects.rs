@@ -1,6 +1,7 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
-//! ([`crate::weapons`]) and the game's things lying about near the player ([`crate::items`]), each
-//! owner's entries kept apart and written together.
+//! ([`crate::weapons`]), the game's things lying about near the player ([`crate::items`]) and the
+//! things in the pockets of the people near a sneaking player ([`crate::pockets`]), each owner's
+//! entries kept apart and written together; and the cards of what they are, the same way.
 
 use rustvr_protocol::*;
 
@@ -9,6 +10,7 @@ use rustvr_protocol::*;
 pub enum Owner {
     Weapons,
     Items,
+    Pockets,
 }
 
 /// The owners' entries (pure: no link), merged into a table.
@@ -16,6 +18,7 @@ pub enum Owner {
 pub struct Parts {
     weapons: Vec<ObjectDesc>,
     items: Vec<ObjectDesc>,
+    pockets: Vec<ObjectDesc>,
     seq: u32,
 }
 
@@ -26,11 +29,12 @@ impl Parts {
         let mine = match owner {
             Owner::Weapons => &mut self.weapons,
             Owner::Items => &mut self.items,
+            Owner::Pockets => &mut self.pockets,
         };
         mine.clear();
         mine.extend(descs.iter().filter(|d| d.id != 0));
         table.descs.fill(bytemuck::Zeroable::zeroed());
-        let all: Vec<&ObjectDesc> = self.weapons.iter().chain(&self.items).take(MAX_OBJECTS).collect();
+        let all: Vec<&ObjectDesc> = self.weapons.iter().chain(&self.items).chain(&self.pockets).take(MAX_OBJECTS).collect();
         for (i, d) in all.iter().enumerate() {
             table.descs[i] = **d;
         }
@@ -52,6 +56,30 @@ pub fn publish(owner: Owner, descs: &[ObjectDesc], adapter: &rustvr_adapter::Ada
     let t = t.get_or_insert_with(|| Table { parts: Parts::default(), table: bytemuck::zeroed_box() });
     t.parts.set(owner, descs, &mut t.table);
     adapter.write_objects(&t.table)
+}
+
+/// The owners' cards (what their objects are), merged into one table as their objects are.
+struct Infos {
+    items: Vec<ItemInfo>,
+    pockets: Vec<ItemInfo>,
+    table: Box<ItemInfos>,
+}
+static INFOS: std::sync::Mutex<Option<Infos>> = std::sync::Mutex::new(None);
+
+/// Replaces `owner`'s cards and writes them all to the runtime (at most [`MAX_ITEM_INFOS`], the
+/// things lying about first).
+pub fn publish_infos(owner: Owner, infos: &[ItemInfo], adapter: &rustvr_adapter::Adapter) -> bool {
+    let mut t = INFOS.lock().unwrap();
+    let t = t.get_or_insert_with(|| Infos { items: Vec::new(), pockets: Vec::new(), table: bytemuck::zeroed_box() });
+    match owner {
+        Owner::Items => t.items = infos.to_vec(),
+        Owner::Pockets => t.pockets = infos.to_vec(),
+        Owner::Weapons => return true,
+    }
+    let all: Vec<ItemInfo> = t.items.iter().chain(&t.pockets).take(MAX_ITEM_INFOS).copied().collect();
+    t.table.count = all.len() as u32;
+    t.table.infos[..all.len()].copy_from_slice(&all);
+    adapter.write_item_infos(&t.table)
 }
 
 #[cfg(test)]

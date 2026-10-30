@@ -15,6 +15,8 @@
 //! * **Combat** ([`combat`], [`weapons`]): the game's creatures and spells to the runtime, the
 //!   equipped weapon as the object in the hand (the game's own model), and what the hands did
 //!   (hits, casts) done by the game.
+//! * **Pockets** ([`pockets`]): the people near a sneaking player wear their own things in pockets
+//!   on their skeletons; a hand that takes one out, or puts one in, is the game's own pickpocketing.
 //!
 //! The rest is plumbing: the DLL proxy ([`proxy`]), the game's addresses ([`engine`]), hooking
 //! ([`hooks`], [`iat`]), the game window ([`window`]), the game's settings ([`game_settings`]) and
@@ -50,6 +52,7 @@ pub mod menus;
 pub mod movement;
 pub mod objects;
 pub mod player;
+pub mod pockets;
 pub mod proxy;
 pub mod render;
 pub mod resolution;
