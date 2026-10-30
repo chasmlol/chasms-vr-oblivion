@@ -34,6 +34,29 @@ const BOUND_RADIUS: usize = 0x2C;
 /// A reference's 3D (`TESObjectREFR` +0x3C): the player's, their body as seen in third person.
 const REFR_NODE: usize = 0x3C;
 
+/// Under the big four the interface's own 3D holds a figure of the player (as big as a person:
+/// its bound is about 88 units across), drawn with the menus' own camera into the UI, which the
+/// flat game shows beside its inventory. In VR it lands in the HUD texture under the floating
+/// pages, a dark silhouette behind them, so it's culled while the UI is drawn (`hide` as the UI
+/// starts, after the eyes; not, at Present, once it's drawn). Under any other menu (the race
+/// menu's face) it's the game's as ever.
+pub fn hide_menu_3d(hide: bool) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use crate::engine::av::{APP_CULLED, FLAGS};
+    /// It was culled here, and wasn't before.
+    static CULLED: AtomicBool = AtomicBool::new(false);
+    let ui3d = mem::deref(mem::deref(INTERFACE_MANAGER) + MENU_3D);
+    let Some(flags) = (ui3d != 0).then(|| mem::at::<u16>(ui3d + FLAGS)).flatten() else { return };
+    if hide {
+        if flags & APP_CULLED == 0 && crate::tiles::top_menu() == crate::tiles::BIG_FOUR {
+            unsafe { ((ui3d + FLAGS) as *mut u16).write(flags | APP_CULLED) };
+            CULLED.store(true, Ordering::Relaxed);
+        }
+    } else if CULLED.swap(false, Ordering::Relaxed) {
+        unsafe { ((ui3d + FLAGS) as *mut u16).write(flags & !APP_CULLED) };
+    }
+}
+
 /// Testing what's drawn behind an open menu besides the world: how big the interface's own 3D is
 /// (None or 0: it draws nothing), and whether the player's body is hidden (in first person it
 /// should be).

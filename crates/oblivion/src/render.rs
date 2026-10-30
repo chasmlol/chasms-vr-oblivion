@@ -266,6 +266,7 @@ mod win {
             // The menus are drawn next: alone over clear, with their alpha, they're the HUD layer.
             let _ = unsafe { dev.Clear(0, std::ptr::null(), D3DCLEAR_TARGET as u32, 0, 1.0, 0) };
             d3d9::ui_pass(&dev, true);
+            crate::menus::hide_menu_3d(true);
             *EYES.lock().unwrap() = Some(Eyes { snap, captured, depth, near_far: (game.frustum[4], game.frustum[5]) });
         });
         result
@@ -318,6 +319,7 @@ mod win {
             _ => menu(&dev, aspect),
         }
         d3d9::ui_pass(&dev, false);
+        hooks::guard_void("menu 3D", || crate::menus::hide_menu_3d(false));
     }
 
     fn stereo(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, e: &Eyes, aspect: f32) {

@@ -160,19 +160,17 @@ red there for someone else's thing hasn't been seen: worth a look on a shelf in 
   stack upwards as you see them (bars nearest the wrist), instead of along the back of the forearm,
   which faces down once the palm is up. The palm is read from the controller's grip pose (OpenXR's
   grip: its +X is out of a left hand's palm), so a left-handed player gets it on the right wrist.
-- **"When I opened my inventory I can see an axe in the back, bleeding in behind the menu."** Not
-  found yet. What I ruled out:
-  - The inventory itself draws no 3D: its layout (`menus\main\inventory_menu.xml`) is only
-    images and text, and hovering an item shows the game's 2D pop-up of its numbers.
-  - The game's first-person arms (holding your Fine Iron War Axe) are hidden while each eye is
-    drawn, and the world under a menu is drawn the same way as outside it.
-  - The axe in your hand is drawn by the runtime over the menu, never under it.
-  - What's left: the game draws a 3D scene of its own under its menus (`Menu3DRoot`, whenever it
-    holds anything), or the game's world draws your character's body there. Half a second after a
-    menu opens, the adapter's log now says "menus: under the menu, the game's own 3D (Menu3DRoot) is
-    X across; the player's body hidden Y". Anything other than 0 (or None) across, or the body not
-    hidden, is where the axe comes from. It could also be an axe in the room showing through the
-    menu (the pickaxe you threw earlier).
+- **"When I opened my inventory I can see an axe in the back, bleeding in behind the menu."** Then:
+  "a dark silhouette of my character behind it, the exact model that pops up in the flat game's
+  inventory." Found and fixed. The game's menus draw a 3D scene of their own before the pages
+  (`Menu3DRoot`). Under the big four it holds a figure of the player, about 88 game units across in
+  your 16:41 run's log (nothing there under the pause menu). It's drawn with the menus' own camera
+  into the UI, so in VR it landed in the HUD texture and showed through the floating pages. That
+  scene is now culled while the UI is drawn under the big four, and only there: the race menu's
+  face, at the start of a new game, is drawn as the game draws it. Not seen in the headset yet.
+  What I ruled out on the way: the inventory's own layout has no 3D, the game's first-person arms
+  are hidden while each eye is drawn, the axe in your hand is drawn over the menu, and your
+  character's body in the world stays hidden (the log says so).
 - **From the 15:50 run's log (see-through):** the inventory's pieces came out solid (covered 1.00
   at their middles). The dialogue's didn't: its two pieces were 0.22 and 0.57 at their middles the
   first time, 0.77 and 0.95 the second, and 0.51 and 0.00 the third. The runtime makes anything
