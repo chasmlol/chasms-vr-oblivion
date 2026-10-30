@@ -387,11 +387,11 @@ mod game {
 
     /// The player takes it, as activating it does (the game's own pick-up: stealing, the message,
     /// the sound); one with a script is activated by the player, its script deciding.
-    fn take(refr: usize, id: u32) -> bool {
+    fn take(refr: usize) -> bool {
         let base = mem::deref(refr + REFR_BASE);
         let scriptable = cast(base, RTTI_SCRIPTABLE);
         if scriptable != 0 && mem::deref(scriptable + 4) != 0 {
-            return crate::console::run_script(&format!("{id:08X}.Activate player 1"));
+            return crate::world::activate(refr);
         }
         type PickUp = unsafe extern "thiscall" fn(usize, usize, i32, i32) -> i32;
         let player = engine::player();
@@ -404,7 +404,7 @@ mod game {
     }
 
     /// The loaded cells near the player: the interior, or the exterior grid's middle 3 by 3.
-    fn cells() -> Vec<usize> {
+    pub(crate) fn cells() -> Vec<usize> {
         let tes = mem::deref(TES);
         if tes == 0 {
             return Vec::new();
@@ -433,7 +433,7 @@ mod game {
     }
 
     /// A reference the player could take now: its base form's kind, if so.
-    fn takeable_ref(refr: usize) -> Option<u8> {
+    pub(crate) fn takeable_ref(refr: usize) -> Option<u8> {
         let flags = mem::at::<u32>(refr + FORM_FLAGS)?;
         if flags & (DELETED | DISABLED) != 0 || mem::deref(refr + REFR_NODE) == 0 {
             return None;
@@ -562,7 +562,7 @@ mod game {
                 if item.taken_at.is_some() {
                     continue;
                 }
-                let ok = takeable_ref(item.refr).is_some() && take(item.refr, id);
+                let ok = takeable_ref(item.refr).is_some() && take(item.refr);
                 tracing::info!("items: {} ({id:#010x}) put in a slot: {}", item.info.name(), if ok { "taken" } else { "not taken" });
                 item.taken_at = Some(now);
             }
@@ -637,7 +637,8 @@ mod game {
             s.infos.count += 1;
         }
         let descs: Vec<ObjectDesc> = items.iter().map(|i| i.desc).collect();
-        let ok = crate::link::with_adapter(|a| a.write_game_hulls(&s.hulls) && a.write_item_infos(&s.infos) && crate::objects::publish(crate::objects::Owner::Items, &descs, a)).unwrap_or(false);
+        let hulls = &s.hulls.hulls[..s.hulls.count as usize];
+        let ok = crate::link::with_adapter(|a| crate::objects::publish_hulls(crate::objects::Owner::Items, hulls, a) && a.write_item_infos(&s.infos) && crate::objects::publish(crate::objects::Owner::Items, &descs, a)).unwrap_or(false);
         if ok {
             s.logged = now;
             tracing::info!(
@@ -755,7 +756,8 @@ mod game {
                     s.poses.count += 1;
                 }
             }
-            crate::link::with_adapter(|a| a.write_game_poses(&s.poses));
+            let poses = &s.poses.poses[..s.poses.count as usize];
+            crate::link::with_adapter(|a| crate::objects::publish_poses(crate::objects::Owner::Items, poses, a));
         });
     }
 }

@@ -147,6 +147,8 @@ mod win {
             crate::items::frame(link::now());
             crate::archery::frame(link::now());
             crate::grabs::apply(link::now());
+            crate::world::frame(link::now());
+            crate::props::frame(link::now());
         });
         unsafe { real(this) }
     }
@@ -316,6 +318,8 @@ mod win {
             time(Part::Items, || hooks::guard_void("items", || crate::items::place(view, now)));
             time(Part::Items, || hooks::guard_void("torch", || crate::torch::place(view)));
             time(Part::Items, || hooks::guard_void("magic", || crate::magic::place(view)));
+            time(Part::Items, || hooks::guard_void("world", || crate::world::place(now)));
+            time(Part::Items, || hooks::guard_void("props", || crate::props::place(view, now)));
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))

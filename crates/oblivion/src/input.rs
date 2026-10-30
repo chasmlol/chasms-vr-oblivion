@@ -69,6 +69,9 @@ pub struct Virtual {
     pub buttons: u8,
     /// The joystick's X and Y axes (-100..100; Y negative forward): walking.
     pub stick: [i32; 2],
+    /// The mouse's movement this frame (its own counts; Y negative up): the lock's pick pushed up
+    /// ([`crate::lock`]).
+    pub mouse: [i32; 2],
 }
 
 /// The joystick axis the game walks (or runs) at full speed at.
@@ -221,7 +224,7 @@ mod win {
         told_buttons: u8,
         sequence: u32,
     }
-    static STATE: Mutex<State> = Mutex::new(State { v: super::Virtual { keys: Vec::new(), buttons: 0, stick: [0; 2] }, told_keys: Vec::new(), told_buttons: 0, sequence: 0x4000_0000 });
+    static STATE: Mutex<State> = Mutex::new(State { v: super::Virtual { keys: Vec::new(), buttons: 0, stick: [0; 2], mouse: [0; 2] }, told_keys: Vec::new(), told_buttons: 0, sequence: 0x4000_0000 });
 
     /// `OSGlobals*` (+0x20 its `OSInputGlobals*`), and the game's poll of its devices (thiscall on
     /// the input globals); the first joystick's state in them.
@@ -376,6 +379,13 @@ mod win {
                     unsafe { *data.add(k as usize) = 0x80 };
                 }
             } else if dev as usize == MOUSE.load(Acquire) && size >= 16 {
+                // (`DIMOUSESTATE`: its movement, then its buttons.)
+                if s.v.mouse != [0; 2] {
+                    unsafe {
+                        (data as *mut i32).write_unaligned(s.v.mouse[0]);
+                        (data.add(4) as *mut i32).write_unaligned(s.v.mouse[1]);
+                    }
+                }
                 for b in 0..((size - MOUSE_BUTTON0) as usize).min(8) {
                     if s.v.buttons & (1 << b) != 0 {
                         unsafe { *data.add(MOUSE_BUTTON0 as usize + b) = 0x80 };

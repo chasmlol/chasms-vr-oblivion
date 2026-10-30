@@ -3,12 +3,14 @@
 //!     oblivion-extract [--game <Oblivion folder>] check <prefix>...
 //!     oblivion-extract export [--out <folder>] <prefix>...
 //!     oblivion-extract preview <model> <png>
+//!     oblivion-extract anims <prefix>...
 //!
 //! `check` parses every model under the prefixes and reports which it can't read (a test of the
 //! model reader against the real files). `export` writes every model under the prefixes, and the
 //! textures they use, into the runtime's cache (`local_assets/oblivion`, see
 //! `oblivion_assets::export`; a `textures/...` prefix brings every texture under it, e.g. the races'
-//! skins). `preview` draws one converted model from three sides.
+//! skins). `preview` draws one converted model from three sides. `anims` lists each model's animations
+//! and what each moves (a door's leaf turned about its hinge, a lever's handle, a gate slid up).
 
 use anyhow::Result;
 use oblivion_assets::export::{self, Part};
@@ -55,6 +57,45 @@ fn main() -> Result<()> {
             for path in &args[1..] {
                 let nif = Nif::parse(&archives.read(path)?)?;
                 dump(&nif);
+            }
+        }
+        Some("anims") => {
+            // Each model's animations: what each moves, from where it starts to where it ends (a
+            // door's leaf turned about its hinge, an activator's lever, a gate slid up), or to the
+            // farthest it goes when it comes back (a button pushed in and out again).
+            let prefixes: Vec<String> = args[1..].iter().map(|p| oblivion_assets::bsa::normalise(p)).collect();
+            let names: Vec<String> = archives.names().filter(|n| n.ends_with(".nif") && prefixes.iter().any(|p| n.starts_with(p.as_str()))).map(str::to_owned).collect();
+            for name in names {
+                let Ok(nif) = archives.read(&name).and_then(|d| Nif::parse(&d)) else { continue };
+                let seqs = nif.sequences();
+                if seqs.is_empty() {
+                    continue;
+                }
+                println!("{name}{}", nif.stopped_at.as_ref().map(|k| format!(" (stopped at {k})")).unwrap_or_default());
+                for s in seqs {
+                    let (t0, t1) = nif.sequence_span(s);
+                    let poses: Vec<_> = (0..=32).map(|k| (t0 + (t1 - t0) * k as f32 / 32.0, nif.sequence_pose(s, t0 + (t1 - t0) * k as f32 / 32.0))).collect();
+                    let moved: Vec<String> = (0..poses[0].1.len())
+                        .filter_map(|n| {
+                            let a = &poses[0].1[n].1;
+                            let moved = |b: &oblivion_assets::nif::Transform| {
+                                let turn = glam::Quat::from_mat3(&(b.rotation * a.rotation.transpose()));
+                                let (axis, angle) = turn.to_axis_angle();
+                                (angle.to_degrees(), axis, b.translation - a.translation)
+                            };
+                            let far = poses.iter().max_by(|x, y| {
+                                let (ax, _, sx) = moved(&x.1[n].1);
+                                let (ay, _, sy) = moved(&y.1[n].1);
+                                (ax + sx.length()).total_cmp(&(ay + sy.length()))
+                            })?;
+                            let (angle, axis, slid) = moved(&poses.last()?.1[n].1);
+                            let (far_angle, _, far_slid) = moved(&far.1[n].1);
+                            let back = (far_angle > angle + 1.0 || far_slid.length() > slid.length() + 0.5).then(|| format!(" (farthest at {:.2}: {far_angle:.0} deg, slid {far_slid:.1?})", far.0)).unwrap_or_default();
+                            (far_angle > 1.0 || far_slid.length() > 0.5).then(|| format!("'{}' {angle:.0} deg about {axis:.2?} slid {slid:.1?}{back}", poses[0].1[n].0))
+                        })
+                        .collect();
+                    println!("  {} {:.2}..{:.2}: {}", s.name, s.start, s.stop, moved.join("; "));
+                }
             }
         }
         Some("export") => export(&archives, &args[1..])?,
@@ -351,7 +392,16 @@ fn dump(nif: &Nif) {
                 println!("{i:3} {pad}shape '{}' {n} skin {skin} props {:?} bounds {bounds}", av.name, av.properties);
             }
             Block::SourceTexture { file } => println!("{i:3} texture {file}"),
-            Block::RigidBody(r) => println!("{i:3} rigid body shape {} mass {} centre {:?} layer {}", r.shape, r.mass, r.center, r.layer),
+            Block::RigidBody(r) => println!("{i:3} rigid body{} shape {} mass {} centre {:?} translation {:?} layer {} motion {}", if r.transformed { " (T)" } else { "" }, r.shape, r.mass, r.center, r.translation, r.layer, r.motion),
+            Block::Sequence(s) => {
+                println!("{i:3} sequence '{}' {}..{} text keys {:?}", s.name, s.start, s.stop, nif.get(s.text_keys));
+                for (name, a, b) in nif.sequence_ends(s) {
+                    let turn = glam::Quat::from_mat3(&(b.rotation * a.rotation.transpose()));
+                    let (axis, angle) = turn.to_axis_angle();
+                    println!("      '{name}': {:?} -> {:?}, turned {:.1} deg about {axis:.3?}", a.translation, b.translation, angle.to_degrees());
+                }
+            }
+            Block::Keyframes(k) => println!("{i:3} keys: {} rotations, xyz {:?}, {} translations, span {:?}", k.rotations.len(), k.xyz.iter().map(Vec::len).collect::<Vec<_>>(), k.translations.len(), k.span()),
             Block::StringExtra { name, value } => println!("{i:3} string '{name}' = '{value}'"),
             Block::IntegerExtra { name, value } => println!("{i:3} int '{name}' = {value:#x}"),
             Block::MorphData { morphs } => {
