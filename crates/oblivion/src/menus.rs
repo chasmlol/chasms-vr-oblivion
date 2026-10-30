@@ -28,6 +28,49 @@ pub const MENU_RACE_SEX: u32 = 0x40C;
 const PLAYER: usize = 0x00B3_33C4;
 const PARENT_CELL: usize = 0x40;
 
+/// The interface's own 3D scene (`InterfaceManager` +4, "Menu3DRoot"): its render (0x57F170)
+/// draws it under the menus whenever its bound isn't empty.
+const MENU_3D: usize = 4;
+/// `NiAVObject`'s world bound's radius.
+const BOUND_RADIUS: usize = 0x2C;
+/// A reference's 3D (`TESObjectREFR` +0x3C): the player's, their body as seen in third person.
+const REFR_NODE: usize = 0x3C;
+
+/// Under the big four the interface's own 3D holds a figure of the player (as big as a person:
+/// its bound is about 88 units across), drawn with the menus' own camera into the UI, which the
+/// flat game shows beside its inventory. In VR it lands in the HUD texture under the floating
+/// pages, a dark silhouette behind them, so it's culled while the UI is drawn (`hide` as the UI
+/// starts, after the eyes; not, at Present, once it's drawn). Under any other menu (the race
+/// menu's face) it's the game's as ever.
+#[cfg(all(windows, target_arch = "x86"))]
+pub fn hide_menu_3d(hide: bool) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use crate::engine::av::{APP_CULLED, FLAGS};
+    /// It was culled here, and wasn't before.
+    static CULLED: AtomicBool = AtomicBool::new(false);
+    let ui3d = mem::deref(mem::deref(INTERFACE_MANAGER) + MENU_3D);
+    let Some(flags) = (ui3d != 0).then(|| mem::at::<u16>(ui3d + FLAGS)).flatten() else { return };
+    if hide {
+        if flags & APP_CULLED == 0 && crate::tiles::top_menu() == crate::tiles::BIG_FOUR {
+            unsafe { ((ui3d + FLAGS) as *mut u16).write(flags | APP_CULLED) };
+            CULLED.store(true, Ordering::Relaxed);
+        }
+    } else if CULLED.swap(false, Ordering::Relaxed) {
+        unsafe { ((ui3d + FLAGS) as *mut u16).write(flags & !APP_CULLED) };
+    }
+}
+
+/// Testing what's drawn behind an open menu besides the world: how big the interface's own 3D is
+/// (None or 0: it draws nothing), and whether the player's body is hidden (in first person it
+/// should be).
+pub fn log_drawn_under() {
+    let ui3d = mem::deref(mem::deref(INTERFACE_MANAGER) + MENU_3D);
+    let radius = (ui3d != 0).then(|| mem::at::<f32>(ui3d + BOUND_RADIUS)).flatten();
+    let body = mem::deref(mem::deref(PLAYER) + REFR_NODE);
+    let hidden = (body != 0).then(|| mem::at::<u16>(body + crate::engine::av::FLAGS)).flatten().map(|f| f & crate::engine::av::APP_CULLED != 0);
+    tracing::info!("menus: under the menu, the game's own 3D (Menu3DRoot) is {radius:?} across; the player's body hidden {hidden:?}");
+}
+
 /// The menu of this type is open (`kMenuType_*`).
 pub fn menu_open(kind: u32) -> bool {
     tile_menu(kind) != 0
@@ -59,6 +102,22 @@ pub fn menu_mode() -> bool {
     false
 }
 
+/// The pause menu and its own (options and their pages, load, save; the main menu): Escape closes
+/// them. Any other menu (a container, dialogue, the big four...) closes with Menu Mode, and Escape
+/// would open the pause menu over it.
+const ESCAPE_CLOSES: [u32; 10] = [0x3F5, 0x3F7, 0x3F9, 0x3FA, 0x3FB, 0x3FC, 0x3FD, 0x40E, 0x40F, MENU_MAIN];
+
+/// A menu in the world is on top, one the game's Menu Mode closes.
+#[cfg(target_arch = "x86")]
+pub fn tab_closes() -> bool {
+    menu_mode() && in_world() && !ESCAPE_CLOSES.contains(&crate::tiles::top_menu())
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn tab_closes() -> bool {
+    false
+}
+
 /// Where a point on the screen (0..1 from the top left) is in menu units (x, height).
 pub fn menu_point(uv: [f32; 2], width: f32, height: f32) -> (f32, f32) {
     let (w, h) = if height >= width { (1280.0, height / width * 1280.0) } else { (width / height * 960.0, 960.0) };
@@ -76,6 +135,21 @@ pub fn point(uv: [f32; 2]) {
     unsafe {
         ((node + NODE_X) as *mut f32).write(x);
         ((node + NODE_HEIGHT) as *mut f32).write(z);
+    }
+    hover_tick();
+}
+
+/// The tile the game's cursor is over (`InterfaceManager` +0x98), as the game worked it out.
+const ACTIVE_TILE: usize = 0x98;
+
+/// A light tick in the laser's hand as the game's own hover moves onto another thing (a row, a tab,
+/// a button): the laser is felt crossing what it can click, as the game shows it.
+fn hover_tick() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static LAST: AtomicUsize = AtomicUsize::new(0);
+    let active = mem::deref(mem::deref(INTERFACE_MANAGER) + ACTIVE_TILE);
+    if LAST.swap(active, Ordering::Relaxed) != active && active != 0 {
+        crate::link::with_adapter(|a| a.haptic(rustvr_protocol::HAPTIC_FIRING_HAND, 0.008, 200.0, 0.12));
     }
 }
 

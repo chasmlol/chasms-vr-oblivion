@@ -7,6 +7,16 @@
 //!
 //! Outside the world (the main menu, loading screens) the render isn't called: the whole picture
 //! goes to the runtime as a menu panel.
+//!
+//! **Under the game's menus the world goes on.** Opening most menus, the game renders the world once
+//! into a texture and from then on draws that frozen picture behind them ([`world_picture`]); in VR
+//! the head goes on moving, so the picture isn't taken and the world is rendered for both eyes every
+//! frame, as the game itself does under dialogue. The menus float in it ([`crate::hud`]).
+//!
+//! **The UI has real alpha.** The back buffer is made with an alpha channel ([`crate::d3d9`]); it's
+//! cleared to clear after the eyes, and while the game draws its UI over it the alpha is blended
+//! as coverage ([`crate::d3d9::ui_pass`]): the HUD texture is the UI as the game drew it,
+//! premultiplied, over nothing.
 
 #[cfg(all(windows, target_arch = "x86"))]
 pub use win::*;
@@ -126,9 +136,40 @@ mod win {
         unsafe { real(this) }
     }
 
+    /// The world's frozen picture behind the game's menus (0x40D160, thiscall on `OSGlobals`), which
+    /// the frame takes on opening a menu (the call at 0x40DA62; at 0x40DEF5 for sleep and wait):
+    /// rendered once into a texture (0xB333E8), it's what 0x40D4D0 draws behind the menus from
+    /// then on (while 0xB33397 says it's there) instead of rendering the world. In VR it isn't
+    /// taken: with it never there, 0x40D4D0 renders the world, both eyes, every frame. (Its other
+    /// callers, a door's or a save's picture, are the game's as ever.)
+    const WORLD_PICTURE: usize = 0x0040_D160;
+    const WORLD_PICTURE_CALLS: [(usize, [u8; 5]); 2] = [(0x0040_DA62, [0xE8, 0xF9, 0xF6, 0xFF, 0xFF]), (0x0040_DEF5, [0xE8, 0x66, 0xF2, 0xFF, 0xFF])];
+
+    unsafe extern "thiscall" fn world_picture(this: *mut c_void) {
+        if link::last().is_some_and(|s| s.view.is_some()) {
+            static SAID: std::sync::Once = std::sync::Once::new();
+            SAID.call_once(|| tracing::info!("render: a menu opened: the world goes on being rendered under it (no frozen picture)"));
+            return;
+        }
+        let real: unsafe extern "thiscall" fn(*mut c_void) = unsafe { std::mem::transmute(WORLD_PICTURE) };
+        unsafe { real(this) }
+    }
+
+    fn patch_world_picture() {
+        let ours = world_picture as *const () as usize;
+        let mut done = 0;
+        for (at, expect) in WORLD_PICTURE_CALLS {
+            debug_assert_eq!(i32::from_le_bytes([expect[1], expect[2], expect[3], expect[4]]), WORLD_PICTURE as i32 - (at as i32 + 5));
+            let rel = (ours as i32).wrapping_sub(at as i32 + 5).to_le_bytes();
+            done += mem::patch_code(at, &expect, &[0xE8, rel[0], rel[1], rel[2], rel[3]]) as u32;
+        }
+        tracing::info!("render: the menus' frozen picture of the world is skipped in VR ({done} of 2 calls)");
+    }
+
     pub fn install() {
         set_lock(true, true);
         patch_lock();
+        patch_world_picture();
         hooks::install_into(ACTOR_SHADOWS as *const (), actor_shadows as *const (), "actor shadows", &REAL_SHADOWS);
         hooks::install_into(engine::FRAME as *const (), frame_hook as *const (), "Main::Frame", &REAL_FRAME);
         hooks::install_into(engine::RENDER as *const (), render_hook as *const (), "Main::Render", &REAL_RENDER);
@@ -165,6 +206,10 @@ mod win {
             unsafe { real(this, arg) }
         } else {
             crate::timing::render_start();
+            // (The world's own blending, not the UI's.)
+            if let Some(dev) = d3d9::device(engine::device() as *mut c_void) {
+                d3d9::ui_pass(&dev, false);
+            }
             let r = unsafe { render_stereo(this, arg, real) };
             crate::timing::render_end();
             r
@@ -263,8 +308,10 @@ mod win {
             unsafe { ((outside + engine::av::FLAGS) as *mut u16).write(f) };
         }
         hooks::guard_void("Render end", || {
-            // The menus are drawn next: alone on black, they're the HUD layer.
+            // The menus are drawn next: alone over clear, with their alpha, they're the HUD layer.
             let _ = unsafe { dev.Clear(0, std::ptr::null(), D3DCLEAR_TARGET as u32, 0, 1.0, 0) };
+            d3d9::ui_pass(&dev, true);
+            crate::menus::hide_menu_3d(true);
             *EYES.lock().unwrap() = Some(Eyes { snap, captured, depth, near_far: (game.frustum[4], game.frustum[5]), mirror: mirror_done });
         });
         result
@@ -349,6 +396,8 @@ mod win {
             Some(e) if e.captured == [true, true] => stereo(&dev, &e, aspect),
             _ => menu(&dev, aspect),
         }
+        d3d9::ui_pass(&dev, false);
+        hooks::guard_void("menu 3D", || crate::menus::hide_menu_3d(false));
     }
 
     fn stereo(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, e: &Eyes, aspect: f32) {
@@ -395,11 +444,23 @@ mod win {
                 info.depth_flags = DEPTH_LINEAR;
             }
             info.hud_aspect = aspect;
-            static LAYOUT_SENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-            // (Again when the game's card of a thing has moved on its HUD.)
-            let card_moved = hooks::guard("hud info", None, crate::hud_info::moved).is_some();
-            if have_hud && (!LAYOUT_SENT.swap(true, Ordering::AcqRel) || card_moved) {
-                a.write_hud_layout(&crate::hud::layout(crate::hud_info::last()));
+            // What the HUD and the menus are, piece by piece (again whenever it changes).
+            if have_hud && let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(crate::hud::layout())) {
+                a.write_hud_layout(&layout);
+            }
+            // (The layout this picture's HUD was drawn with: the runtime cuts it by that one, not the
+            // one before or after.)
+            if have_hud {
+                info.hud_layout = a.hud_layout_seq();
+                // (Testing what the runtime gets: how solid a menu's pieces are, once it's open.)
+                if let Some(l) = crate::hud::measure_due() {
+                    for (i, e) in l.entries().iter().enumerate().filter(|(_, e)| e.group != 0) {
+                        if let Some((mean, least)) = d3d9::coverage(&gpu, e.uv) {
+                            tracing::info!("hud: piece {i} (group {}) is covered {mean:.2} at its middle (least {least:.2})", e.group);
+                        }
+                    }
+                    crate::menus::log_drawn_under();
+                }
             }
             a.submit(info);
         });
@@ -423,6 +484,10 @@ mod win {
             let mut info: SlotInfo = bytemuck::Zeroable::zeroed();
             info.flags = SLOT_MENU | SLOT_HUD;
             info.hud_aspect = aspect;
+            if let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(crate::hud::outside())) {
+                a.write_hud_layout(&layout);
+            }
+            info.hud_layout = a.hud_layout_seq();
             a.submit(info);
         });
     }

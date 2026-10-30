@@ -15,11 +15,15 @@ pub struct Settings {
     /// headset's own, as the runtime last reported it.
     pub eye_width: u32,
     pub eye_height: u32,
+    /// How opaque the menus' backgrounds (their parchment) are as they float in the world, of what
+    /// the game makes them (1: solid, as the game draws them); under 1 the world shows through
+    /// them, the text and icons on them staying as the game has them (`crate::hud`).
+    pub menu_background: f32,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { d3d9on12: true, background: false, eye_width: 0, eye_height: 0 }
+        Settings { d3d9on12: true, background: false, eye_width: 0, eye_height: 0, menu_background: 1.0 }
     }
 }
 

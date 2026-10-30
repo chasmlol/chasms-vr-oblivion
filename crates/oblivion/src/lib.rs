@@ -72,6 +72,7 @@ pub mod riding;
 pub mod scene;
 pub mod settings;
 pub mod shapes;
+pub mod tiles;
 pub mod timing;
 pub mod torch;
 pub mod weapons;

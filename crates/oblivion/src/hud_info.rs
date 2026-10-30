@@ -3,32 +3,14 @@
 //! their icons: value, weight, damage, armour, condition, uses, quality, a lock), drawn by the game
 //! in its font at the screen's bottom right. While a hand has one of the game's things
 //! ([`crate::items`]), it's that thing's: the game's own setting of its target (0x5A4980, called
-//! as the crosshair's target changes) is given the held thing instead. Where the card is on the
-//! HUD is read from the game's own layout of it (its tiles' places and sizes), so the runtime can
-//! put that piece of the HUD over the held thing ([`rustvr_protocol::HUD_HELD`]).
+//! as the crosshair's target changes) is given the held thing instead. A thing that can be taken,
+//! only looked at, is given as nothing: it has no card until a hand has it. Where the card is on
+//! the HUD is read from the game's own layout of it (its tiles' places and sizes), so the runtime
+//! can put that piece of the HUD over the held thing ([`rustvr_protocol::HUD_HELD`]).
 //!
-//! Tiles (xOBSE's `GameTiles.h`): a tile's values at +0x14 (a list: +4 its first node; a node is
-//! next, previous, the value), a value's number at +4 and its id at +0x18 (u16); its children at
-//! +0x30 (the same list). Ids: visible 0xFA1 (1 no, 2 yes), locus 0xFA6, y 0xFAC, x 0xFAD, height
-//! 0xFCA, width 0xFCB. A tile's place is from its nearest ancestor with `locus` (the menu itself).
+//! Its tiles are read as [`crate::tiles`] reads any menu's.
 
-/// A box `[x0, y0, x1, y1]` grown to take in another.
-pub fn grow(b: Option<[f32; 4]>, r: [f32; 4]) -> Option<[f32; 4]> {
-    Some(match b {
-        None => r,
-        Some(b) => [b[0].min(r[0]), b[1].min(r[1]), b[2].max(r[2]), b[3].max(r[3])],
-    })
-}
-
-/// A box in the screen's units as the part of the HUD it is (0..1), a little margin round it.
-pub fn uv_of(b: [f32; 4], screen: (f32, f32), margin: f32) -> Option<[f32; 4]> {
-    let (w, h) = screen;
-    if !(w > 0.0 && h > 0.0) || b[2] <= b[0] || b[3] <= b[1] {
-        return None;
-    }
-    let uv = [(b[0] - margin) / w, (b[1] - margin) / h, (b[2] + margin) / w, (b[3] + margin) / h];
-    Some(uv.map(|v| v.clamp(0.0, 1.0)))
-}
+pub use crate::tiles::{grow, uv_of};
 
 #[cfg(all(windows, target_arch = "x86"))]
 pub use win::*;
@@ -36,117 +18,71 @@ pub use win::*;
 #[cfg(all(windows, target_arch = "x86"))]
 mod win {
     use crate::mem;
-    use std::sync::Mutex;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     const SET_TARGET: usize = 0x005A_4980;
     const HUD_INFO_MENU: usize = 0x00B3_B33C;
-    const INTERFACE: usize = 0x0058_2160;
-    const MENU_ROOT: usize = 0x68;
     const MENU_TILE: usize = 0x4;
-    const TILE_VALUES: usize = 0x14;
-    const TILE_CHILDREN: usize = 0x30;
-    const LIST_FIRST: usize = 0x4;
-    const NODE_NEXT: usize = 0x0;
-    const NODE_DATA: usize = 0x8;
-    const VALUE_NUM: usize = 0x4;
-    const VALUE_ID: usize = 0x18;
-    const VISIBLE: u16 = 0xFA1;
-    const LOCUS: u16 = 0xFA6;
-    const Y: u16 = 0xFAC;
-    const X: u16 = 0xFAD;
-    const HEIGHT: u16 = 0xFCA;
-    const WIDTH: u16 = 0xFCB;
-    const TRUE: f32 = 2.0;
-    /// `TileRect`'s kind.
-    const TILE_RECT: u32 = 0x385;
 
     static REAL: AtomicUsize = AtomicUsize::new(0);
     /// The thing a hand has (a reference), or 0.
     static HELD: AtomicUsize = AtomicUsize::new(0);
-    /// Where the card was last found on the HUD.
-    static LAST: Mutex<Option<[f32; 4]>> = Mutex::new(None);
-
-    fn list(at: usize) -> Vec<usize> {
-        let mut out = Vec::new();
-        let mut node = mem::deref(at + LIST_FIRST);
-        while node != 0 && out.len() < 256 {
-            let data = mem::deref(node + NODE_DATA);
-            if data != 0 {
-                out.push(data);
-            }
-            node = mem::deref(node + NODE_NEXT);
-        }
-        out
-    }
-
-    fn value(tile: usize, id: u16) -> Option<f32> {
-        list(tile + TILE_VALUES).into_iter().find(|&v| mem::at::<u16>(v + VALUE_ID) == Some(id)).and_then(|v| mem::at::<f32>(v + VALUE_NUM)).filter(|v| v.is_finite())
-    }
-
-    /// The box of what's shown under `tile` (its place from `origin`, its locus's). `drawn`: only
-    /// the tiles that draw something (images and text, not the rects that lay them out, which may
-    /// reach past them: the race menu's for dragging the player round).
-    fn shown(tile: usize, origin: (f32, f32), depth: u32, drawn: bool, out: &mut Option<[f32; 4]>) {
-        if depth > 8 || value(tile, VISIBLE).is_some_and(|v| v != TRUE) {
-            return;
-        }
-        let (x, y) = (origin.0 + value(tile, X).unwrap_or(0.0), origin.1 + value(tile, Y).unwrap_or(0.0));
-        let (w, h) = (value(tile, WIDTH).unwrap_or(0.0), value(tile, HEIGHT).unwrap_or(0.0));
-        if w > 0.0 && h > 0.0 && !(drawn && type_of(tile) == TILE_RECT) {
-            *out = super::grow(*out, [x, y, x + w, y + h]);
-        }
-        let inner = if value(tile, LOCUS) == Some(TRUE) { (x, y) } else { origin };
-        for c in list(tile + TILE_CHILDREN) {
-            shown(c, inner, depth + 1, drawn, out);
-        }
-    }
-
-    /// A tile's kind (`Tile::GetTypeID`, its vtable's fourth).
-    fn type_of(tile: usize) -> u32 {
-        let f = mem::deref(mem::deref(tile) + 0x0C);
-        if f == 0 {
-            return 0;
-        }
-        unsafe { std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> u32>(f)(tile) }
-    }
+    /// What the crosshair is on, as the game set it (0: nothing); the card may be another's.
+    static ASKED: AtomicUsize = AtomicUsize::new(0);
+    /// The last thing the crosshair was on could be taken.
+    static LAST_TAKEABLE: AtomicBool = AtomicBool::new(false);
+    /// The card's target (`HUDInfoMenu` +0x54), for when the setting of it isn't hooked.
+    const TARGET: usize = 0x54;
 
     /// Where the game's card is on its HUD now (the part of it, 0..1), if it shows one.
     pub fn card_uv() -> Option<[f32; 4]> {
-        type Interface = unsafe extern "C" fn(u8, u8) -> usize;
-        let menu = mem::deref(HUD_INFO_MENU);
-        let tile = mem::deref(menu + MENU_TILE);
-        let ui = unsafe { std::mem::transmute::<usize, Interface>(INTERFACE)(0, 1) };
-        let root = mem::deref(ui + MENU_ROOT);
-        if tile == 0 || root == 0 {
-            return None;
-        }
-        let screen = (value(root, WIDTH)?, value(root, HEIGHT)?);
-        let mut b = None;
-        shown(tile, (0.0, 0.0), 0, false, &mut b);
-        super::uv_of(b?, screen, 6.0)
+        let tile = mem::deref(mem::deref(HUD_INFO_MENU) + MENU_TILE);
+        let screen = crate::tiles::screen()?;
+        super::uv_of(crate::tiles::Tree::read(tile).shown()?, screen, 6.0)
     }
 
     /// Where an open menu (`kMenuType_*`) is on the game's picture (the part of it, 0..1): the box of
-    /// its tiles that show.
+    /// its tiles that draw something (images and text, not the rects that lay them out, which may
+    /// reach past them: the race menu's for dragging the player round).
     pub fn menu_uv(kind: u32) -> Option<[f32; 4]> {
-        type Interface = unsafe extern "C" fn(u8, u8) -> usize;
-        let tile = crate::menus::tile_menu(kind);
-        let ui = unsafe { std::mem::transmute::<usize, Interface>(INTERFACE)(0, 1) };
-        let root = mem::deref(ui + MENU_ROOT);
-        if tile == 0 || root == 0 {
-            return None;
-        }
-        let screen = (value(root, WIDTH)?, value(root, HEIGHT)?);
-        let mut b = None;
-        shown(tile, (0.0, 0.0), 0, true, &mut b);
-        super::uv_of(b?, screen, 8.0)
+        let tree = crate::tiles::Tree::read(crate::tiles::menu_tile(kind));
+        let top = tree.0.first()?;
+        super::uv_of(tree.drawn(&top.name)?, crate::tiles::screen()?, 8.0)
     }
 
     unsafe extern "C" fn set_target(target: usize, a: u8, force: u8) -> u8 {
         let real: unsafe extern "C" fn(usize, u8, u8) -> u8 = unsafe { std::mem::transmute(REAL.load(Ordering::Acquire)) };
+        ASKED.store(target, Ordering::Release);
+        let takeable = target != 0 && crate::items::takeable_ref(target).is_some();
+        if target != 0 {
+            LAST_TAKEABLE.store(takeable, Ordering::Release);
+        }
+        // A thing that can be taken gets no card while it's only looked at, not even for a moment:
+        // the game fades its card out over 0.15 s once the crosshair leaves, so a card left to the
+        // HUD's cutting flashes up as the gaze passes over things.
         let held = HELD.load(Ordering::Acquire);
-        unsafe { real(if held != 0 { held } else { target }, a, force) }
+        unsafe { real(if held != 0 { held } else if takeable { 0 } else { target }, a, force) }
+    }
+
+    /// What the crosshair is on (0: nothing), whatever the card is of.
+    pub fn looked_at() -> usize {
+        if REAL.load(Ordering::Acquire) == 0 {
+            return mem::deref(mem::deref(HUD_INFO_MENU) + TARGET);
+        }
+        ASKED.load(Ordering::Acquire)
+    }
+
+    /// Nothing of what the crosshair is on should show (no card, no activate icon): it's a thing
+    /// that can be taken, only looked at, or nothing just after one (while the game's icon of it
+    /// fades out).
+    pub fn quiet() -> bool {
+        let on = looked_at();
+        !holding() && if on == 0 { LAST_TAKEABLE.load(Ordering::Acquire) } else { crate::items::takeable_ref(on).is_some() }
+    }
+
+    /// A hand has one of the game's things (the card is its).
+    pub fn holding() -> bool {
+        HELD.load(Ordering::Acquire) != 0
     }
 
     /// The thing a hand has now (0: none): the card is its.
@@ -157,22 +93,6 @@ mod win {
                 real(refr, 0, 0);
             });
         }
-    }
-
-    /// The card's place on the HUD, when it has moved since it was last told (for the layout).
-    pub fn moved() -> Option<[f32; 4]> {
-        let now = card_uv()?;
-        let mut last = LAST.lock().unwrap();
-        let far = last.is_none_or(|l| l.iter().zip(now).any(|(a, b)| (a - b).abs() > 0.01));
-        if far {
-            *last = Some(now);
-            tracing::info!("hud: the game's card of a thing is at {now:.3?} of its HUD");
-        }
-        far.then_some(now)
-    }
-
-    pub fn last() -> Option<[f32; 4]> {
-        *LAST.lock().unwrap()
     }
 
     pub fn install() {
