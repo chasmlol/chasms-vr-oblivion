@@ -37,6 +37,7 @@ pub mod engine;
 pub mod entry;
 pub mod game_settings;
 pub mod gore;
+pub mod grabs;
 pub mod hooks;
 pub mod hud;
 pub mod hud_info;
@@ -62,6 +63,7 @@ pub mod reticle;
 #[cfg(target_arch = "x86")]
 pub mod scene;
 pub mod settings;
+pub mod shapes;
 pub mod timing;
 pub mod torch;
 pub mod weapons;

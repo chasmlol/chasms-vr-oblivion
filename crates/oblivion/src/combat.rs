@@ -2,7 +2,8 @@
 //!
 //! * **Its creatures** ([`actors`]): every actor the game is fully processing near the player
 //!   (its high-process list), as capsules on its own skeleton's bones (`Bip01 ...`): the head, the
-//!   spine, the arms and the legs.
+//!   spine, the arms, the hands, the legs and the feet, each as thick as what it wears
+//!   ([`crate::shapes`]).
 //! * **The player's spells** ([`spells`]): the spells, powers and lesser powers on the player's
 //!   own list, with how each is delivered (its effects' range), what it costs the player now
 //!   (the game's own cost), the colour of its first effect's light, which one is selected, and
@@ -44,7 +45,7 @@ const FORM_ID: usize = 0x0C;
 const ACTOR_VTABLES: [usize; 2] = [0x00A6_FC9C, 0x00A7_10F4];
 
 /// Whether `actor` is one of the game's actors as it stands (not the player).
-fn is_actor(actor: usize) -> bool {
+pub(crate) fn is_actor(actor: usize) -> bool {
     actor != 0 && ACTOR_VTABLES.contains(&mem::deref(actor))
 }
 /// `TESObjectREFR`: its base form, its 3D root.
@@ -235,7 +236,7 @@ fn attack_segment(actor: usize, b: &HashMap<String, usize>) -> Option<(Vec3, Vec
 }
 
 /// A node's world position, in the protocol's space.
-fn node_pos(node: usize) -> Option<Vec3> {
+pub(crate) fn node_pos(node: usize) -> Option<Vec3> {
     let p: [f32; 3] = mem::at(node + engine::av::WORLD_TRANSLATE)?;
     Some(camera::basis().point_from_game(Vec3::from(p)))
 }
@@ -250,7 +251,7 @@ pub(crate) fn actor_value(actor: usize, av: u32) -> i32 {
 }
 
 #[cfg(target_arch = "x86")]
-fn base_actor_value(actor: usize, av: u32) -> i32 {
+pub(crate) fn base_actor_value(actor: usize, av: u32) -> i32 {
     type F = unsafe extern "thiscall" fn(usize, u32) -> u32;
     unsafe { std::mem::transmute::<usize, F>(GET_BASE_AV)(actor, av) as i32 }
 }
@@ -261,12 +262,14 @@ pub(crate) fn actor_value(_actor: usize, _av: u32) -> i32 {
 }
 
 #[cfg(not(target_arch = "x86"))]
-fn base_actor_value(_actor: usize, _av: u32) -> i32 {
+pub(crate) fn base_actor_value(_actor: usize, _av: u32) -> i32 {
     0
 }
 
-/// The capsules of a humanoid skeleton: (from bone, to bone, radius, part, material).
-const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
+/// The capsules of a humanoid skeleton: (from bone, to bone, radius, part, material). Each is
+/// fitted to what the actor wears ([`crate::shapes`]); the radius here holds until it is, and where
+/// nothing's drawn on it. (A part's index here is its `game_part`.)
+pub(crate) const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
     // (The torso to the top of the chest: its round end stops short of the neck, which a blade can
     // cut through.)
     ("Bip01 Pelvis", "Bip01 Spine2", 0.17, PART_TORSO, MAT_LEATHER),
@@ -279,7 +282,16 @@ const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
     ("Bip01 L Calf", "Bip01 L Foot", 0.06, PART_LEG, MAT_FLESH),
     ("Bip01 R Thigh", "Bip01 R Calf", 0.08, PART_LEG, MAT_FLESH),
     ("Bip01 R Calf", "Bip01 R Foot", 0.06, PART_LEG, MAT_FLESH),
+    ("Bip01 L Hand", "Bip01 L Finger2", 0.045, PART_ARM, MAT_FLESH),
+    ("Bip01 R Hand", "Bip01 R Finger2", 0.045, PART_ARM, MAT_FLESH),
+    ("Bip01 L Foot", "Bip01 L Toe0", 0.05, PART_LEG, MAT_FLESH),
+    ("Bip01 R Foot", "Bip01 R Toe0", 0.05, PART_LEG, MAT_FLESH),
 ];
+
+/// The bone a part of a humanoid starts at (its `game_part`: its index in [`HUMANOID`]).
+pub(crate) fn part_bone(game_part: u32) -> Option<&'static str> {
+    HUMANOID.get(game_part as usize).map(|e| e.0)
+}
 
 /// The actors near the player and, by id, where each is in the game's memory.
 pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
@@ -310,23 +322,33 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
         let b = bones(root);
         let mut a: Actor = bytemuck::Zeroable::zeroed();
         a.id = id;
+        let fitted = crate::shapes::fitted(id, root, &b);
         for (part, &(from, to, r, kind, material)) in HUMANOID.iter().enumerate() {
             // (Not a limb the gore has cut off: a head goes with its neck.)
             if crate::gore::cut_off(id, from) || (kind == PART_HEAD && crate::gore::cut_off(id, to)) {
                 continue;
             }
             let (Some(p), Some(q)) = (b.get(from).and_then(|&n| node_pos(n)), b.get(to).and_then(|&n| node_pos(n))) else { continue };
-            // The head: from the neck up through the crown (while it's there).
-            let q = if kind == PART_HEAD && !crate::gore::cut_at(id, to) { q + (q - p).normalize_or(Vec3::Y) * 0.12 } else { q };
+            let along = (q - p).normalize_or(Vec3::Y);
+            // (A part cut at its end bone ends at the stump: nothing of it reaches past.)
+            let stump = crate::gore::cut_at(id, to);
+            let (p, q, r) = match fitted.get(part).copied().flatten() {
+                // As thick as what it wears, and on past its free ends to what's drawn there.
+                Some(f) => (p - along * f.start, if stump { q } else { q + along * f.end }, f.radius),
+                // The head: from the neck up through the crown (while it's there).
+                None if kind == PART_HEAD && !stump => (p, q + along * 0.12, r),
+                None => (p, q, r),
+            };
             let i = a.count as usize;
             a.parts[i] = ActorPart { a: p.to_array(), radius: r, b: q.to_array(), kind, material, game_part: part as u32, _pad: [0; 2] };
             a.count += 1;
         }
         if a.count == 0 {
-            // Not a humanoid (a creature): one capsule from its feet to its height.
+            // Not a humanoid (a creature): one capsule from its feet to its height (no bone of
+            // [`HUMANOID`]'s: its frame is along it).
             let Some(feet) = mem::at::<[f32; 3]>(actor + refr::POS) else { continue };
             let f = camera::basis().point_from_game(Vec3::from(feet));
-            a.parts[0] = ActorPart { a: (f + Vec3::Y * 0.3).to_array(), radius: 0.35, b: (f + Vec3::Y * 1.3).to_array(), kind: PART_TORSO, material: MAT_FLESH, game_part: 0, _pad: [0; 2] };
+            a.parts[0] = ActorPart { a: (f + Vec3::Y * 0.3).to_array(), radius: 0.35, b: (f + Vec3::Y * 1.3).to_array(), kind: PART_TORSO, material: MAT_FLESH, game_part: u32::MAX, _pad: [0; 2] };
             a.count = 1;
         }
         match current_action(actor) {
@@ -350,6 +372,7 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
         table.count += 1;
         by_id.insert(id, actor);
     }
+    crate::shapes::forget_others(&by_id);
     (table, by_id)
 }
 
@@ -618,6 +641,7 @@ pub fn publish() {
             crate::body::publish(a);
         }
         a.write_actors(&table);
+        crate::grabs::publish(a, &table, &k.actors);
         if let Some((s, by_id)) = spells_now {
             let key: Vec<(u32, u32, u32)> = s.spells[..s.count as usize].iter().map(|x| (x.id, x.flags, x.cost as u32)).collect();
             if k.sent.as_ref() != Some(&key) {
