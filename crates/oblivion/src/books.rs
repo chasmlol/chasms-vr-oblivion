@@ -1,13 +1,16 @@
-//! Books and notes read in the hands (`docs/research/books.md`): a book lying about, taken in one
-//! hand ([`crate::items`]), is opened by the other hand's grip on it ([`OBJF_OPENS`]), and Oblivion
-//! reads it exactly as activating it would (the reference's own `Activate` by the player): its
-//! book menu with the book's text laid out in pages by the game, its "Take" (with its stealing), a
-//! skill book's skill rise and message, a note's script, "you can't read in combat". The book menu then lies on the
-//! book in the hand ([`crate::hud`]: `ANCHOR_HELD`), its pages turned by the other hand (the game's
-//! own page turn, [`crate::input`]: `PageNext`, `PagePrev`).
+//! Books and notes read in the hands (`docs/research/books.md`): a book lying about, taken in a
+//! hand ([`crate::items`]), is read as soon as it's there, and Oblivion reads it exactly as
+//! activating it would (the reference's own `Activate` by the player): its book menu with the
+//! book's text laid out in pages by the game, its "Take" (with its stealing), a skill book's skill
+//! rise and message, a note's script, "you can't read in combat". The book menu then floats over the
+//! book in the hand, turned to the eyes ([`crate::hud`]: `ANCHOR_HELD`, `HELD_FACING`), its pages
+//! turned by a flick of the other hand (the game's own page turn, [`crate::input`]: `PageNext`,
+//! `PagePrev`).
 //!
-//! It's shut by the game's own Exit (`HandleClick(31)`): when the other hand grips it again, when
-//! it's let go of (or taken from the hand), or with B.
+//! It's read once while it's in the hands: shut by the game's own Exit (`HandleClick(31)`), with B,
+//! or refused by the game, it stays shut until it's been let go of and taken again. Let go of (or
+//! taken from the hand) while it's open, it's shut too. A magic scroll isn't read: the game takes
+//! one that's activated rather than reading it, so it would go straight to the pack.
 //!
 //! The book menu (xOBSE's `GameMenus.h`, `BookMenu`, menu type 0x402): the reference read at +0x30
 //! (0 from the inventory), the book at +0x34 (`TESObjectBOOK`: its flags +0x88, 1 a scroll).
@@ -23,6 +26,8 @@ const BOOK_FLAGS: usize = 0x88;
 /// The skill a book teaches (0xFF none: read, a skill book teaches nothing more).
 const BOOK_SKILL: usize = 0x89;
 const SCROLL: u8 = 1;
+/// The book's enchantment (`TESEnchantableForm` +0x60, its `EnchantmentItem` +4): a magic scroll's.
+const BOOK_ENCHANTMENT: usize = 0x64;
 /// A reference's base form.
 const REFR_BASE: usize = 0x1C;
 const VT_HANDLE_CLICK: usize = 3 * 4;
@@ -78,8 +83,9 @@ fn shut(menu: usize) {
 
 #[derive(Default)]
 struct State {
-    /// Each held thing's opens as last seen.
-    opens: Vec<(u32, u32)>,
+    /// The held books read since they came to the hands (their references): each is read once while
+    /// it's held, so its Exit, B or the game's refusal isn't undone the next frame.
+    read_held: Vec<usize>,
     /// The held book being read (its reference), while its menu's open.
     reading: Option<usize>,
     /// B's presses as last seen.
@@ -91,8 +97,8 @@ struct State {
 
 static STATE: std::sync::Mutex<Option<State>> = std::sync::Mutex::new(None);
 
-/// Once a game frame, where the game's scripts run: a held book opened or shut by the other hand,
-/// let go of while it's open, or shut with B.
+/// Once a game frame, where the game's scripts run: a book just taken in a hand read, one let go of
+/// while it's open shut, or one shut with B.
 pub fn frame() {
     let mut s = STATE.lock().unwrap();
     let s = s.get_or_insert_with(State::default);
@@ -113,29 +119,32 @@ pub fn frame() {
         shut(m);
         return;
     }
-    for h in held.iter().filter(|h| h.kind == crate::items::BOOK) {
-        let last = s.opens.iter().find(|(id, _)| *id == h.id).map(|&(_, n)| n);
-        if let Some(n) = last
-            && h.opens > n
-        {
-            match book {
-                Some((m, refr)) if refr == h.refr => {
-                    tracing::info!("books: shut by the other hand");
-                    shut(m);
-                }
-                None if !crate::menus::menu_mode() => {
-                    // Read as activating it does: the game's own book menu, skill rise and script.
-                    let id = mem::at::<u32>(h.refr + FORM_ID).unwrap_or(h.id);
-                    let base = mem::deref(h.refr + REFR_BASE);
-                    s.read = Some((base, mem::at::<u8>(base + BOOK_SKILL).unwrap_or(0xFF)));
-                    let ok = crate::items::activate(h.refr);
-                    tracing::info!("books: opened by the other hand ({id:08X}): {}", if ok { "read" } else { "not read" });
-                }
-                _ => {}
-            }
+    // Read once while it's in the hands (one brought to the hand by looking at it was read where it
+    // lay).
+    s.read_held.retain(|r| held.iter().any(|h| h.refr == *r));
+    if let Some((_, refr)) = book
+        && refr != 0
+        && held.iter().any(|h| h.refr == refr)
+        && !s.read_held.contains(&refr)
+    {
+        s.read_held.push(refr);
+    }
+    if book.is_none()
+        && !crate::menus::menu_mode()
+        && let Some(h) = held.iter().find(|h| h.kind == crate::items::BOOK && !s.read_held.contains(&h.refr))
+    {
+        s.read_held.push(h.refr);
+        let id = mem::at::<u32>(h.refr + FORM_ID).unwrap_or(h.id);
+        let base = mem::deref(h.refr + REFR_BASE);
+        if base != 0 && mem::deref(base + BOOK_ENCHANTMENT) != 0 {
+            tracing::info!("books: a magic scroll in the hand ({id:08X}): not read (the game would take it)");
+        } else {
+            // Read as activating it does: the game's own book menu, skill rise and script.
+            s.read = Some((base, mem::at::<u8>(base + BOOK_SKILL).unwrap_or(0xFF)));
+            let ok = crate::items::activate(h.refr);
+            tracing::info!("books: taken in the hand ({id:08X}): {}", if ok { "read" } else { "not read" });
         }
     }
-    s.opens = held.iter().map(|h| (h.id, h.opens)).collect();
     // Being read and let go of (or taken from the hand): shut.
     match book {
         Some((m, refr)) if refr != 0 => {

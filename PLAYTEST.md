@@ -12,41 +12,52 @@ Everything you read is the game's own book menu: its parchment, its fonts, its o
 the book's text and pictures, its page-turn sound, its Take and Exit. It's laid on the book in your
 hand instead of the flat screen.
 
+## Since the first headset play (2026-10-30)
+
+- **A book opens as soon as it's in your hand**: no grip with the other hand.
+- **Its pages face you** however you turn the book: they float over it, upright, turned to your eyes,
+  just in front of it.
+- **Flick to turn**: a quick flick of your free hand across the pages, anywhere over them or a
+  hand's breadth in front, turns a page. Right to left goes on, left to right goes back.
+- **The map is at your right hip**, the side the sword isn't on: the belt pouch at the front was too
+  small a place to find by feel.
+
 The flat game's crosshair is gone (taken from the menus branch, which has it from riding): where you
 look shows only the icon of what you can activate, red when taking it is stealing.
 
 ## What to try, in order
 
 1. **Read a book off a shelf, two ways.**
-   - **By hand:** grip a book (or point at it and flick the gloves, as anything else). It's the
-     game's own book, closed, in your hand. Then **grip it with your other hand** (the cover;
-     anywhere within a few centimetres) and let go again: the game opens it as activating it does,
-     and its open pages (the game's book art, both pages, tipped a little towards you about the
-     spine) lie on the cover turned towards you.
+   - **By hand:** grip a book (or point at it and flick the gloves, as anything else). As soon as
+     it's in your hand the game opens it as activating it does, and its open pages (the game's book
+     art, both pages, tipped a little towards you about the spine) float over it, turned to your
+     eyes. Turn the book any way: the pages stay facing you.
    - **By looking:** look at a book on a shelf and pull the trigger (the game's Activate). It flies
      into your **off hand** and opens there.
    - It's about as big as a large open book (38 by 28 cm): bring it nearer to read it bigger. Your
      other hand in front of the pages covers them, as a real hand would.
-2. **Turn a page.** Sweep your free hand across the pages, a few centimetres above them: from out on
-   the right page across the spine to the left page turns onwards; the other way turns back. Or pull
-   the trigger at a page's edge and pull it across. You feel a tick and hear the game's own page turn.
-   The right stick turns pages too.
+2. **Turn a page.** Flick your free hand across the pages, quickly, right to left: the page turns
+   onwards. Left to right turns back. It needn't start or end anywhere in particular, just over the
+   pages or a hand's breadth in front of them. Let the hand slow before the next flick; bringing it
+   back after a flick doesn't turn the page back. Or pull the trigger at a page's edge and pull it
+   across. You feel a tick and hear the game's own page turn. The right stick turns pages too.
 3. **Take it, or put it down.** The laser comes from your free hand while you hold a book:
    - point at **Take** and pull the trigger: the game takes it into your pack (it's the shop's: the
      owner reacts as the game has them react to a theft);
-   - **Exit**, or grip the book again with your free hand, or **B**: it shuts, back to the closed book
-     in your hand;
+   - **Exit**, or **B**: it shuts, back to the closed book in your hand. It stays shut until you let
+     go of it and take it again;
+   - your other hand's grip on the book takes it as anything else (from hand to hand);
    - let go of the book while it's open: it shuts and falls.
-4. **A skill book.** Open one in your hand (take *Proper Lock Design* out of your pack by dropping it,
-   or find one): opening it raises the skill exactly as the flat game does (the game's message shows
+4. **A skill book.** Take one in your hand (drop *Proper Lock Design* out of your pack and pick it
+   up, or find one): opening it raises the skill exactly as the flat game does (the game's message shows
    once it's shut).
 5. **From your pack.** Open your inventory (B on the left hand) and click the guide or the note:
    - it's held in your **off hand** like a sheet, by its left edge, always turned to your eyes;
    - turn the guide's pages the same way; the note is the game's scroll, rollers and all, in one
      piece (a sweep or the stick scrolls it);
    - B shuts it, back to the inventory.
-6. **The map.** Reach to the **belt pouch** (the front of your belt on your weapon hand's side) and
-   grip:
+6. **The map.** Reach to your **right hip**, at the belt (you feel a tick as your hand gets there),
+   and grip:
    - the game's map opens in your hand, held by its edge like a sheet of paper, turned to your eyes:
      the **local map** indoors, the **world map** outside (step out of the shop's door for it);
    - its tabs are under it (local map, world map, and the journal's three pages);
@@ -57,7 +68,7 @@ look shows only the icon of what you can activate, red when taking it is stealin
    - holding it in both hands, let go with the first: the other hand has it;
    - point at a place with the laser (it comes from your free hand) and pull the trigger: the game's
      own fast travel, its question and its rules;
-   - put it back at the belt pouch, or just let go of it: it goes back to the belt and the map shuts.
+   - put it back at the hip, or just let go of it: it goes back to the hip and the map shuts.
    - A journal tab sends the journal to float ahead, as before.
 
 ## What was checked in the game (emulated headset, captures)
@@ -93,17 +104,24 @@ look shows only the icon of what you can activate, red when taking it is stealin
 
 ## Decisions
 
-- **Opening by the other hand's grip, not a pull.** It's unmistakable and works from any side. The
-  same grip shuts it. A free hand within 8 cm of the book counts (the pages over the cover can stop
-  the hand a little short of it).
+- **A book opens as it's taken** (the first build waited for the other hand's grip). It's read once
+  while it's held: shut with Exit or B (or refused, as "you can't read that in combat"), it stays
+  shut until it's let go of and taken again, so it doesn't spring open again at once. A **magic
+  scroll** doesn't open: activating one makes the game take it into the pack (stealing it, in a
+  shop), so it stays a thing in the hand.
 - **The game reads it**: opening runs the book's own activation by the player (the reference's own
   `Activate`, as pressing Activate does), so a skill book's rise, a note's script, "you can't read
   that in combat" and Take's theft are the game's.
-- **Pages on the closed book.** Oblivion has no open book models, so the game's own book art (an open
-  book) lies on the closed book's cover, centred on it, big enough to read; the closed book is under
-  it. Turn the book over and the pages are on its other cover.
-- **Turning by a sweep** across the spine, or a trigger pinch pulled across. The way back after a turn
-  is shut for a second, so the hand coming back doesn't turn it back.
+- **Pages over the closed book, facing you.** Oblivion has no open book models, so the game's own book
+  art (an open book) floats over the closed book, centred on it, big enough to read, turned to your
+  eyes from its middle (the first build laid it on the cover, where it turned with the wrist), just
+  in front of the book and the fingers round it.
+- **Turning by a flick**: the free hand's speed across the pages, 0.6 m/s or more, anywhere over them
+  within 20 cm in front or 8 cm behind (a hand that goes through them). The first build's sweep had
+  to start well out on a page and cross the spine within a few centimetres; in the first play the
+  buttons turned the pages instead. A trigger pinch pulled across still turns one. The hand has to
+  slow before it flicks again, and the way back after a turn is shut for a second, so the hand
+  coming back doesn't turn it back.
 - **The game's own page turn**: a notch of its mouse wheel over the book (its wheel turns a book's
   pages, with its sound).
 - **Drawn with the body.** Pages and the map are drawn in the body's depth: a hand in front of a page
@@ -114,8 +132,11 @@ look shows only the icon of what you can activate, red when taking it is stealin
 - **A sheet faces you.** The map, and a book read from the pack, are always turned to your eyes from
   their middle, upright, a little smoothed (a sheet held at its edge swings far with a little turn of
   the wrist). A book in your hand isn't: its pages lie on it and move with it.
-- **The map lives in the belt pouch** (`map_slot` in `rustvr-oblivion.toml`: belt, hip_right,
-  hip_left, chest_left, chest_right); the holsters branch can give it another place.
+- **The map lives at the right hip** (`map_slot` in `rustvr-oblivion.toml`: hip_right, hip_left,
+  belt, chest_left, chest_right). The game's one-handed weapon is on the left hip, so the right is
+  free here, and a hip is a 13 cm place where the hand drops by itself; the belt pouch is 8.5 cm in
+  front of the belly with nothing to see there, and in the first play it wasn't found. The holsters
+  branch keeps food at the right hip, so the two will need sharing out when they're merged.
 - **The game is paused while a book or the map is open** (as in the flat game), but your hands aren't:
   you can move the book, hand it over, let it go, spread the map.
 
@@ -125,10 +146,11 @@ look shows only the icon of what you can activate, red when taking it is stealin
   (`MapMenu`'s local map builder, run when its tab is turned to); in VR its window stays
   blank. Its markers (your arrow, doors) show. The world map, a picture the game loads, shows.
 - **Pages on an upright book** sat a little low on it in the one test of a book brought to the hand
-  standing up (they're centred on the book's collision box, and its model's bound gave the same
-  middle, so the cause wasn't found); lying in the hand they sit on it.
-- **Magic scrolls**: Oblivion takes a magic scroll when it's activated rather than reading it, so
-  opening one in the hand takes it into the pack.
+  standing up (they were centred on the book's collision box, and its model's bound gave the same
+  middle, so the cause wasn't found). They're now over the book facing the eyes, centred on its
+  model; whether they still sit low hasn't been seen.
+- **Magic scrolls** aren't read in the hand: Oblivion takes a magic scroll when it's activated rather
+  than reading it.
 - **A book's own model when read from the pack**: none in the hand, just its pages.
 - **Testing aids** left in: `RUSTVR_TEST_TAKE=<hand>:<hex id>` (an object into a hand),
   `RUSTVR_HELD_FLAT=1` (held pages in the world, not with the body), `RUSTVR_SHEETS_SOLID=1..3`

@@ -527,15 +527,13 @@ mod game {
         held: Vec<Held>,
     }
 
-    /// A thing in a hand: its object, the game's reference, its kind, the hand, and how many times
-    /// the other hand has opened or shut it ([`OBJF_OPENS`]).
+    /// A thing in a hand: its object, the game's reference, its kind and the hand.
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct Held {
         pub id: u32,
         pub refr: usize,
         pub kind: u8,
         pub hand: usize,
-        pub opens: u32,
     }
 
     /// What the hands hold now.
@@ -595,12 +593,7 @@ mod game {
         let mass_inv = mem::at::<f32>(mem::deref(body + BODY_MOTION) + MOTION_MASS_INV).filter(|m| *m > 1e-4 && m.is_finite());
         // (The game's weight is about pounds: a kilogram is two.)
         let mass = mass_inv.map(|m| 1.0 / m).or(f.weight.map(|w| w * 0.45)).unwrap_or(1.0).clamp(0.05, 60.0);
-        let mut desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
-        // A book or a note opens in the hands: the other hand's grip on it reads it
-        // (`crate::books`).
-        if f.kind == BOOK {
-            desc.flags |= OBJF_OPENS;
-        }
+        let desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
         Some(Item { refr, node, body, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, filter: None, flying: None, taken_at: None })
     }
 
@@ -722,7 +715,7 @@ mod game {
                 .filter_map(|st| {
                     let it = s.items.get(&st.id).filter(|it| it.taken_at.is_none())?;
                     let kind = mem::at::<u8>(mem::deref(it.refr + REFR_BASE) + FORM_TYPE).unwrap_or(0);
-                    Some(Held { id: st.id, refr: it.refr, kind, hand: if st.flags & OS_HELD_LEFT != 0 { 0 } else { 1 }, opens: st.shots })
+                    Some(Held { id: st.id, refr: it.refr, kind, hand: if st.flags & OS_HELD_LEFT != 0 { 0 } else { 1 } })
                 })
                 .collect();
             for st in &s.states.states[..n] {

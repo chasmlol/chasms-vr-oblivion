@@ -16,7 +16,7 @@
 //! | a service from dialogue (spells, training, repair, recharge, persuasion) | beside the speaker | the menu, cut from the screen |
 //! | a thing's own (a lock being picked, an altar's enchanting or spellmaking, a sigil stone) | beside the thing | the menu, cut from the screen |
 //! | anything else | ahead of the player | the menu, cut from the screen |
-//! | a book or a note being read | on the book in the hand (or held in the off hand: one read from the inventory or a shelf) | a book's two pages, a note's scroll |
+//! | a book or a note being read | over the book in the hand, turned to the eyes (or held in the off hand: one read from the inventory or a shelf) | a book's two pages, a note's scroll |
 //! | the map drawn from the belt | held in the hand like paper | its page (the local or world map in its frame), its tabs |
 //!
 //! **Transparency**: the pieces are as opaque as the game draws them, and the rest of the screen is
@@ -360,19 +360,20 @@ mod win {
         Some(b)
     }
 
-    /// The book or note being read (`menus\book_menu.xml`), held: on the book in the hand when a
-    /// hand has it (its cover's face), else in the off hand like a sheet (one read from the
-    /// inventory, or from a shelf by looking at it). A book is its art's two halves, its pages,
-    /// tipped a little about the spine as an open book's are (the buttons, Take and Exit and the
-    /// page turns, are on its pages); a note is its scroll, rollers and all. Its pages turn by hand.
+    /// The book or note being read (`menus\book_menu.xml`), held: over the book in the hand when a
+    /// hand has it, turned to the eyes however the hand turns the book, else in the off hand like a
+    /// sheet (one read from the inventory, or from a shelf by looking at it until it's in the hand).
+    /// A book is its art's two halves, its pages, tipped a little about the spine as an open book's
+    /// are (the buttons, Take and Exit and the page turns, are on its pages); a note is its scroll,
+    /// rollers and all. Its pages turn by a flick of the free hand.
     fn book(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees) {
         let Some((menu, refr)) = crate::books::open() else { return };
         let scroll = crate::books::is_scroll(menu);
-        // (On the book in the hand; a book read where it lies comes to the off hand and opens there;
-        // one from the pack is held in the off hand as a sheet.)
+        // (Over the book in the hand; a book read where it lies comes to the off hand and opens
+        // there; one from the pack is held in the off hand as a sheet.)
         let (object, flags) = match (crate::books::held_book(), crate::books::lying_book()) {
-            (Some(id), _) => (id, HELD_FACE | HELD_PAGES),
-            (None, Some(id)) => (id, HELD_FACE | HELD_PAGES | HELD_BRING),
+            (Some(id), _) => (id, HELD_FACING | HELD_PAGES),
+            (None, Some(id)) => (id, HELD_FACING | HELD_PAGES | HELD_BRING),
             _ => (0, HELD_SHEET | HELD_PAGES),
         };
         // (Its pages centred on its model, not on its collision box, which can be off it.)
@@ -414,7 +415,7 @@ mod win {
         let mut said = SAID.lock().unwrap();
         if *said != id {
             *said = id;
-            tracing::info!("hud: {} being read, {} (its model's middle {model:.3?})", if scroll { "a note" } else { "a book" }, if object != 0 { "on the book in the hand" } else { "in the off hand" });
+            tracing::info!("hud: {} being read, {} (its model's middle {model:.3?})", if scroll { "a note" } else { "a book" }, if object != 0 { "over the book in the hand" } else { "in the off hand" });
         }
     }
 

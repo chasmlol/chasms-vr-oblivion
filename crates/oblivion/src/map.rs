@@ -1,5 +1,5 @@
 //! The map unfolded from the belt (`docs/research/books.md`): a folded map the player keeps in a
-//! body slot (the belt pouch by default, `map_slot` in `rustvr-oblivion.toml`), an object of the
+//! body slot (the right hip by default, `map_slot` in `rustvr-oblivion.toml`), an object of the
 //! adapter's own the runtime keeps there ([`OBJF_KEPT`]: let go anywhere, it goes back). Drawn from
 //! the belt, it opens the game's own map menu on the local map in an interior and the world map
 //! outside, and the map's page lies in the hand as a sheet of paper ([`crate::hud`]:
@@ -31,7 +31,7 @@ const VT_HANDLE_CLICK: usize = 3 * 4;
 const TES: usize = 0x00B3_33A0;
 const TES_INTERIOR: usize = 0x34;
 
-/// The folded map: small enough for the belt pouch, as light as paper. Nothing draws it: the game's
+/// The folded map: small enough for a pouch, as light as paper. Nothing draws it: the game's
 /// own map art is the map, when it's open.
 pub fn desc(slot: u32) -> ObjectDesc {
     let mut d: ObjectDesc = bytemuck::Zeroable::zeroed();
@@ -56,7 +56,8 @@ pub fn slot_named(name: &str) -> u32 {
         "hip_left" => SLOT_HIP_LEFT,
         "chest_left" => SLOT_CHEST_LEFT,
         "chest_right" => SLOT_CHEST_RIGHT,
-        _ => SLOT_BELT,
+        "belt" => SLOT_BELT,
+        _ => SLOT_HIP_RIGHT,
     }
 }
 
