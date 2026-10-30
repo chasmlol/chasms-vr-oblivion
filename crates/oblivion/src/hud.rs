@@ -351,7 +351,8 @@ mod win {
     /// and then each word in a column under it (the game's row would be 40 degrees wide), each word
     /// a piece of its own that the laser points at (`point`: not while a question is over them), so
     /// the game's own hover (the brush-stroke, its focus sound) and click do the rest. The box the
-    /// words take, if any show. (The flat main menu, with no place, isn't cut: it's its panel.)
+    /// logo and words take, if any show. (The flat main menu, with no place, isn't cut: it's its
+    /// panel.)
     fn main_menu(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees, point: bool) -> Option<[f32; 4]> {
         if !crate::worldmenu::up() {
             return None;
@@ -389,7 +390,8 @@ mod win {
             }
             top -= t + GAP;
         }
-        words.into_iter().fold(None, tiles::grow)
+        // (All it takes on the screen: what a question over it is moved clear of.)
+        logo.into_iter().chain(words).fold(None, tiles::grow)
     }
 
     /// The loading screen in VR: its bar alone, floating ahead, over the place held round the player
@@ -590,7 +592,7 @@ mod win {
     fn put_back() {
         let mut moved = MOVED.lock().unwrap();
         if let Some((tile, dy)) = moved.take()
-            && [MENU_CONTAINER, MENU_INVENTORY, MENU_STATS, MENU_MAGIC, MENU_MAP].iter().any(|&k| tiles::menu_tile(k) == tile)
+            && [MENU_CONTAINER, MENU_INVENTORY, MENU_STATS, MENU_MAGIC, MENU_MAP, crate::menus::MENU_MAIN].iter().any(|&k| tiles::menu_tile(k) == tile)
         {
             move_menu(tile, -dy);
         }
@@ -775,8 +777,14 @@ mod win {
                 // (Over the main menu in its place, its words stay where they float, under the
                 // question, and aren't pointed at: the question is the game's to answer first.)
                 if tiles::menu_tile(crate::menus::MENU_MAIN) != 0 && crate::worldmenu::up() {
-                    main_menu(&mut l, screen, &mut trees, false);
-                    add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);
+                    // (The question's box is drawn over the middle of the screen, across the main
+                    // menu's row of words: they're moved apart on the screen, as a menu in a game
+                    // is, so each piece is its own.)
+                    let under = main_menu(&mut l, screen, &mut trees, false);
+                    let popup = add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);
+                    if let (Some(u), Some(p)) = (under, popup) {
+                        make_room((tiles::menu_tile(crate::menus::MENU_MAIN), u), (tiles::menu_tile(top), p), screen);
+                    }
                 } else {
                     let under = if tiles::menu_tile(MENU_CONTAINER) != 0 { container(&mut l, &mut trees) } else { big_four(&mut l, &mut trees) };
                     let popup = add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);

@@ -206,8 +206,6 @@ mod win {
     /// grid (`TES` +8).
     const GRID_CELL: usize = 0x0048_2150;
     const TES: usize = 0x00B3_33A0;
-    /// The texture the game draws the world into behind its menus (`Main::Render`'s argument then).
-    const WORLD_TEXTURE: usize = 0x00B3_33E8;
     /// A reference's 3D (`TESObjectREFR` +0x3C): the player's third-person body.
     const PLAYER_3D: usize = 0x3C;
     static REAL_GRID_REDRAW: AtomicUsize = AtomicUsize::new(0);
@@ -228,19 +226,29 @@ mod win {
         unsafe { real(this) }
     }
 
-    /// The world's frozen picture behind the game's menus (0x40D160, thiscall on `OSGlobals`), which
-    /// the frame takes on opening a menu (the call at 0x40DA62; at 0x40DEF5 for sleep and wait):
-    /// rendered once into a texture (0xB333E8), it's what 0x40D4D0 draws behind the menus from
-    /// then on (while 0xB33397 says it's there) instead of rendering the world. In VR it isn't
-    /// taken: with it never there, 0x40D4D0 renders the world, both eyes, every frame. (Its other
-    /// callers, a door's or a save's picture, are the game's as ever.)
+    /// The world's frozen picture (0x40D160, thiscall on `OSGlobals`): rendered once into a texture
+    /// (0xB333E8), it's what 0x40D4D0 draws from then on (while 0xB33397 says it's there)
+    /// instead of rendering the world. The frame takes it on opening a menu (the call at 0x40DA62; at
+    /// 0x40DEF5 for sleep and wait), a cell's load as it starts (0x4455FF indoors, 0x445A32 outdoors:
+    /// the picture behind the loading screen's fade), a question box over the load's fade (0x5BCB78)
+    /// and 0x44E789. In VR it's never taken: with it never there, 0x40D4D0 renders the world, both
+    /// eyes, every frame it can, and while it can't the runtime holds the last picture of it. (Taken,
+    /// it went into the game's texture while the eyes were read from the back buffer, black: the
+    /// place held through a door was black.)
     const WORLD_PICTURE: usize = 0x0040_D160;
-    const WORLD_PICTURE_CALLS: [(usize, [u8; 5]); 2] = [(0x0040_DA62, [0xE8, 0xF9, 0xF6, 0xFF, 0xFF]), (0x0040_DEF5, [0xE8, 0x66, 0xF2, 0xFF, 0xFF])];
+    const WORLD_PICTURE_CALLS: [(usize, [u8; 5]); 6] = [
+        (0x0040_DA62, [0xE8, 0xF9, 0xF6, 0xFF, 0xFF]),
+        (0x0040_DEF5, [0xE8, 0x66, 0xF2, 0xFF, 0xFF]),
+        (0x0044_55FF, [0xE8, 0x5C, 0x7B, 0xFC, 0xFF]),
+        (0x0044_5A32, [0xE8, 0x29, 0x77, 0xFC, 0xFF]),
+        (0x0044_E789, [0xE8, 0xD2, 0xE9, 0xFB, 0xFF]),
+        (0x005B_CB78, [0xE8, 0xE3, 0x05, 0xE5, 0xFF]),
+    ];
 
     unsafe extern "thiscall" fn world_picture(this: *mut c_void) {
         if link::last().is_some_and(|s| s.view.is_some()) {
             static SAID: std::sync::Once = std::sync::Once::new();
-            SAID.call_once(|| tracing::info!("render: a menu opened: the world goes on being rendered under it (no frozen picture)"));
+            SAID.call_once(|| tracing::info!("render: the game's frozen picture of the world skipped (a menu, a load): the world goes on being rendered, or held"));
             return;
         }
         let real: unsafe extern "thiscall" fn(*mut c_void) = unsafe { std::mem::transmute(WORLD_PICTURE) };
@@ -255,7 +263,7 @@ mod win {
             let rel = (ours as i32).wrapping_sub(at as i32 + 5).to_le_bytes();
             done += mem::patch_code(at, &expect, &[0xE8, rel[0], rel[1], rel[2], rel[3]]) as u32;
         }
-        tracing::info!("render: the menus' frozen picture of the world is skipped in VR ({done} of 2 calls)");
+        tracing::info!("render: the game's frozen picture of the world is skipped in VR ({done} of {} calls)", WORLD_PICTURE_CALLS.len());
     }
 
     pub fn install() {
@@ -296,11 +304,11 @@ mod win {
     unsafe extern "thiscall" fn render_hook(this: *mut c_void, arg: i32) -> i32 {
         let real: RenderFn = unsafe { std::mem::transmute(REAL_RENDER.load(Ordering::Acquire)) };
         // A picture of the world into a texture of the game's own making (a save's picture, taken
-        // as an autosave goes through a door) is the game's, drawn as it draws it: two eyes drawn
-        // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
-        // menus goes into its world texture.)
+        // as an autosave goes through a door; the frozen picture, out of VR) is the game's, drawn as
+        // it draws it: two eyes drawn into it, read back at its size, crashed it, and the eyes read
+        // from the back buffer then aren't the world's. (The frame's own render passes 0.)
         d3d9::rendering(true);
-        let result = if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
+        let result = if arg != 0 {
             unsafe { real(this, arg) }
         } else {
             crate::timing::render_start();
