@@ -26,14 +26,15 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | Combat | Hits are the game's own hit with the equipped weapon (damage, skill, enchantments). A blow met by the weapon or shield is the game's block. Spells charge in the palm and go off as the game's own cast: target spells from the palm along the aim, touch spells into what the hand touches, self spells on the player. | `combat.rs` |
 | Things in the world | Everything the player can take near them (weapons, armour, clothes, books, potions, ingredients, keys, soul gems, sigil stones, apparatus, carriable lights, clutter) is the hands' to take or pull with the gloves: its collision its own Havok shape, its weight its Havok mass, drawn by the game where the hand has it (a candle still burns), and let go, the game's again, flying on with the throw. A card beside it says what it is: its name, damage or armour, weight, value, condition, and whether it's stolen. Let go in any body slot (a hip, a shoulder, the chest, the belt), the player takes it: the game's own pick-up, with its stealing and its message. | `items.rs`, `objects.rs` |
 | Menus | While a menu is open it's a panel; the game's cursor follows the laser and the trigger clicks. | `menus.rs` |
-| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <id>`, `PlaceInFront <ref> <metres>`, or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
+| Riding | The game's horses near the player offer their saddles (measured on the game's `saddle.nif`, on each horse's live spine): a hand closing on one is the player's own activation of the horse, so the game's mount happens (whose horse, the crime of stealing it, its animation and sounds). Riding, the runtime's reins, stick and spurs give the game its own controls (the joystick's Y the pace, X the turn, Run the gallop, Jump the jump); the horse's turn carries the view round, the view's anchor is the rider's eye held steady on it, and the body sits in the saddle with its legs round the horse's own body. Getting off is the same activation. No fighting from the saddle (the game's rule). | `riding.rs`, `docs/design/riding.md` |
+| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <id>`, `PlaceInFront <ref> <metres>`, `PlayerHorse <base> [<metres>]` (a horse of the player's own beside them), or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
 
 ## Setting up
 
 The game's models are converted once into `local_assets/oblivion` (never committed):
 
 ```
-cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters meshes/creatures/horse
 ```
 
 Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
@@ -54,6 +55,12 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Grip on a thing in the world, or point and flick (the gloves) | Take it in the hand; let go in a body slot to take it into the inventory |
 | Swing | Attack (the game's hit; a fast committed swing is a power attack) |
 | Weapon or shield across a blow | Block |
+| Grip a horse's saddle | Get on (the game's own mount; someone else's horse is stealing it) |
+| Grip the reins (base of the neck) | Hold them, either hand or both |
+| One rein back, or both to one side / both back | Turn that way / slower, stop, back up |
+| Flick the reins, or the trigger of a rein hand | Spur on: walk, gallop |
+| Left stick (click: gallop), right stick, mounted | Ride and steer with the sticks |
+| Hold a free hand's trigger, or hold the pommel and lean out | Get off the horse |
 
 ## Settings (`rustvr-oblivion.toml` beside the DLL)
 
