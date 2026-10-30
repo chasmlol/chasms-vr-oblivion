@@ -18,11 +18,11 @@
 //! | anything else | ahead of the player | the menu, cut from the screen |
 //!
 //! **Transparency**: the pieces are as opaque as the game draws them, and the rest of the screen is
-//! clear. The menus' backgrounds (their parchment: each menu's image tiles named `..._background`)
-//! are drawn a little see-through (`menu_background` in `rustvr-oblivion.toml`, 0.8), so the world
-//! shows through them while the text and icons on them stay solid: the game's own `alpha` of each,
-//! set through the game's own update of a tile's value (so what it draws follows) whenever the
-//! game sets it afresh.
+//! clear, so the parchment is solid and cut out. The menus' backgrounds (each menu's image tiles
+//! named `..._background`) can be made see-through (`menu_background` in `rustvr-oblivion.toml`,
+//! 1 by default: solid), so the world shows through them while the text and icons on them stay
+//! solid: the game's own `alpha` of each, set through the game's own update of a tile's value (so
+//! what it draws follows) whenever the game sets it afresh.
 //!
 //! A piece is named by its tiles in the game's own menu file (`menus\container_menu.xml`...): its
 //! rectangle is the box of what the game shows under them now, so it follows the game (a button the
@@ -35,10 +35,10 @@
 //! | Piece | From | Where |
 //! |---|---|---|
 //! | the health, magicka and fatigue bars, the weapon and the spell | `hud_main_menu.xml` | the back of the off-hand wrist (Alyx's glove) |
-//! | the spells and potions working on the player | `hud_main_menu.xml` | up the forearm from the bars |
-//! | the compass | `hud_main_menu.xml` | low in front of the body |
+//! | the compass | `hud_main_menu.xml` | up the forearm from the bars |
+//! | the spells and potions working on the player | `hud_main_menu.xml` | up the forearm from the compass |
 //! | what the reticle can activate (its crosshair is hidden, [`crate::reticle`]), the sneak eye | `hud_reticle.xml` | where the head looks |
-//! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that; over the thing while a hand has one |
+//! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing; over the thing while a hand has one |
 //! | a foe's health | `hud_reticle.xml` | over the foe |
 //! | spoken lines | `hud_subtitle_menu.xml` | the caption strip |
 //! | notices ("Iron Arrow added"), a region's name | `hud_subtitle_menu.xml`, `hud_main_menu.xml` | over the captions |
@@ -196,6 +196,10 @@ mod win {
 
     /// `Tile::UpdateFloat(this, id, value)` (thiscall): sets a value and updates what's drawn from it.
     const UPDATE_FLOAT: usize = 0x0058_CEB0;
+    /// The laser in the colours of the game's own cursor (`textures\menus\misc\cursor.dds`, a gold
+    /// arrow): the cream of its highlight for the beam's thread, the gold of its blade for the glow
+    /// round it and its dot.
+    const POINTER: [u32; 2] = [0xFFF7_DEFF, 0xFFCB_39FF];
     /// `HUDInfoMenu`: what the crosshair is on (a reference).
     const HUD_INFO_MENU: usize = 0x00B3_B33C;
     const CROSSHAIR_REF: usize = 0x54;
@@ -446,6 +450,7 @@ mod win {
     /// The HUD and the menus this frame.
     pub fn layout() -> HudLayout {
         let mut l = HudLayout::new(HUDL_ALPHA | HUDL_REST_HIDDEN, &[]);
+        l.pointer = POINTER;
         let Some(screen) = tiles::screen() else { return l };
         // A line of the game's ordinary text (a list row's name: 38 units with its leading).
         l.text_height = 36.0 / screen.1;
@@ -545,16 +550,20 @@ mod win {
             l.push(HudElement::new(role, tiles::uv_of(b, screen, MARGIN)?));
             Some(b)
         };
+        // On the off-hand wrist, stacked up the forearm: the bars with the weapon and the spell, the
+        // compass, and the effects working on the player (which come and go, so they're last).
         let status = l.count as usize;
         piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("hudmain_statusbars"), From::Drawn("hudmain_Weapon_Icon"), From::Drawn("hudmain_Magic_Icon")]);
+        let compass = piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("hudmain_compass_layout")]).map(|_| l.count as usize - 1);
         piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("magic_icons")]);
         // (The bars and icons a little bigger than a watch's face: they're read at a glance.)
         for e in &mut l.elements[status..l.count as usize] {
             e.scale = 1.3;
         }
-        if let Some(i) = piece(l, trees, HUD_COMPASS, MENU_HUD, &[From::Drawn("hudmain_compass_layout")]).map(|_| l.count as usize - 1) {
-            // (A little bigger than the game's text: its heading letters are small.)
-            l.elements[i].scale = 1.4;
+        if let Some(i) = compass {
+            // (Its heading letters are small: on a wrist raised to the eyes, as big to them as when
+            // it floated in front.)
+            l.elements[i].scale = 1.8;
         }
         piece(l, trees, HUD_SUBTITLES, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_text")]);
         piece(l, trees, HUD_HINTS, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_icon"), From::Drawn("hudsubtitle_notice")]);
@@ -568,6 +577,14 @@ mod win {
             l.push(HudElement { role: HUD_GAZE, uv, offset: offset(b), ..Default::default() });
         }
         let crosshair = mem::deref(mem::deref(HUD_INFO_MENU) + CROSSHAIR_REF);
+        // (What they're about: they float just in front of it, a person's head or a thing's bound.)
+        if crosshair != 0
+            && let Some((centre, radius)) = bound(crosshair)
+        {
+            let (at, radius) = if is_actor(crosshair) { (head(crosshair).unwrap_or(centre), 0.12) } else { (centre, radius) };
+            l.gaze = at.to_array();
+            l.gaze_radius = radius.max(0.05);
+        }
         if let Some(uv) = crate::hud_info::card_uv() {
             if crate::hud_info::holding() {
                 // (Over the thing in a hand.)
@@ -593,12 +610,19 @@ mod win {
         }
     }
 
-    /// The layout, when it isn't what was last sent (or every two seconds, for a runtime that has
-    /// come back).
-    pub fn changed() -> Option<HudLayout> {
+    /// Out of the world (the main menu, loading): the game's screen whole, as before; only the
+    /// laser's colours said.
+    pub fn outside() -> HudLayout {
+        let mut l = HudLayout::new(0, &[]);
+        l.pointer = POINTER;
+        l
+    }
+
+    /// `l` ([`layout`] or [`outside`]), when it isn't what was last sent (or every two seconds, for
+    /// a runtime that has come back).
+    pub fn changed(l: HudLayout) -> Option<HudLayout> {
         static LAST: Mutex<Option<(HudLayout, f64)>> = Mutex::new(None);
         let now = crate::link::now();
-        let l = layout();
         let mut last = LAST.lock().unwrap();
         let same = last.as_ref().is_some_and(|(p, at)| bytemuck::bytes_of(p) == bytemuck::bytes_of(&l) && now - at < 2.0);
         if same {

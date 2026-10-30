@@ -355,8 +355,13 @@ mod win {
             }
             info.hud_aspect = aspect;
             // What the HUD and the menus are, piece by piece (again whenever it changes).
-            if have_hud && let Some(layout) = hooks::guard("hud layout", None, crate::hud::changed) {
+            if have_hud && let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(crate::hud::layout())) {
                 a.write_hud_layout(&layout);
+            }
+            // (The layout this picture's HUD was drawn with: the runtime cuts it by that one, not the
+            // one before or after.)
+            if have_hud {
+                info.hud_layout = a.hud_layout_seq();
             }
             a.submit(info);
         });
@@ -380,6 +385,10 @@ mod win {
             let mut info: SlotInfo = bytemuck::Zeroable::zeroed();
             info.flags = SLOT_MENU | SLOT_HUD;
             info.hud_aspect = aspect;
+            if let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(crate::hud::outside())) {
+                a.write_hud_layout(&layout);
+            }
+            info.hud_layout = a.hud_layout_seq();
             a.submit(info);
         });
     }
