@@ -130,9 +130,9 @@ push on top, and his face keeps its expression. Let be (about two seconds after 
 it measures again and follows you. The log says `the head tracking holds its look on the head ...`.
 
 Found while looking (not changed): Oblivion turns the upper spine itself (its look-at twist, a
-`bhkBlendCollisionObject` of its own kind on Spine, Spine1, Spine2) and draws those bones from the
-animation, so a push on the chest doesn't bend the chest itself; the head and arms swinging with it
-are what show.
+`bhkBlendCollisionObject` of its own kind on Spine, Spine1, Spine2), drawing those bones from their
+own turn and the twist. A spine bone pushed still bends: while its body is dynamic its own turn is
+the blend's (see playtest 5).
 
 ## What was checked in the game (emulated headset, captures and logs)
 
