@@ -14,8 +14,10 @@ note. The inn's own patrons walk about further in. The research and the design a
 
 1. **Sneak** (right stick click, or duck). Pockets only exist while you sneak, and only on people
    within 3 m who are alive and not fighting: whom the game would let you pickpocket.
-2. **Find a pocket by touch.** Turn to Bruce and put a hand at his right hip, where a belt pouch is.
-   You feel a soft brush going in, then a tick for the thing your fingers are on. Move the hand
+2. **Find a pocket by touch.** Turn to Bruce and lay your fingers on his hip, from the side or from
+   behind: a belt pouch hangs there on each side, a little behind the hip. Your hand stops on his
+   body; touching it there is being in the pocket. You feel a soft brush going in, then a tick for
+   the thing your fingers are on. Move the hand
    slowly inside: every 4 cm you're on the next thing, with another tick. Each kind of thing feels
    different: coins jingle (bright), a key clicks (sharp), glass rings (very short, high), paper
    rasps, cloth or food is a dull push, something hard knocks. An empty pocket is one dull brush.
@@ -145,6 +147,17 @@ Not checked:
 
   A thing out of a pocket says "Pickpocket" until the game has made it yours. A thing of the
   world's in your hand says "Steal" while it's someone's.
+- **A hand is in a pocket when its fingers or palm are** (round 2: no pocket was ever found). The
+  runtime's log showed every reach for Bruce's hips stopped by his body ("blocked") with the hand's
+  grip 13-24 cm from the pouches' middles: the grip is a hand's length behind the fingers that
+  touch, and the hands came from behind while the pouches were at the very sides. Now the test is
+  from the nearest of the hand (its collider: the palm and the fingers), and the pouches hang 30
+  degrees behind the sides of the hips, 11 cm round: fingers on the hip anywhere from its side to
+  most of the way round its back are in one.
+- **The card stands just over the thing** (round 2: too far above it). It stood 6 cm plus half its
+  height over the ball round the thing (a plate held flat counted as 15 cm tall). Now its bottom
+  edge is 1.5 cm over the top of the thing's box as it's turned now, the game's card as the
+  runtime's.
 
 ## Not done, known issues
 

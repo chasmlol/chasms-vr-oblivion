@@ -7,9 +7,9 @@
 //!   in combat: whom activating while sneaking would open the game's pickpocketing on. One that has
 //!   caught the player before is shut (its high process's flag, +0x168): the hand finds it so, and
 //!   the game says why (`sNoPickPocketAgain`).
-//! * **Where:** on its bones, every frame ([`places`]): the belt pouches at the hips, the purse at
-//!   the belt's front, an inner pocket at the chest, a bag on the back (only while there's
-//!   something big for it).
+//! * **Where:** on its bones, every frame ([`places`]): the belt pouches a little behind the hips,
+//!   the purse at the belt's front, an inner pocket at the chest, a bag on the back (only while
+//!   there's something big for it).
 //! * **What:** its inventory as the game's pickpocketing lists it: the game's own entries
 //!   (`GetInventoryItem`, 0x4D88F0) and its own filter (0x4854F0: nothing worn, nothing unplayable
 //!   or bound), shared out by kind ([`pocket_for`]). Each thing comes out as the game's own model
@@ -76,17 +76,24 @@ pub fn body_frame(s: &Skeleton) -> Option<(Vec3, Vec3, Vec3)> {
     Some((up, right, right.cross(up)))
 }
 
+/// How far the body's surface is round the spine: its capsule's radius (`combat`'s torso).
+const BODY: f32 = 0.17;
+
 /// Each pocket's opening, which way it faces and how far round it a hand is in it: the pouches
-/// at the sides of the belt, the purse at its front, the inner pocket at the left of the chest,
-/// the bag at the small of the back. They sit at the body's surface (its capsule, 17 cm round the
-/// spine), where a hand stopped by the body is in them.
+/// hanging at the belt a little behind the hips (felt from the side or from behind), the purse at
+/// its front, the inner pocket at the left of the chest, the bag at the small of the back. They sit
+/// at the body's surface, where the fingers of a hand stopped by the body are in them.
 pub fn places(s: &Skeleton) -> Option<[(Vec3, Vec3, f32); PLACES]> {
     let (up, right, fwd) = body_frame(s)?;
     let belt = s.pelvis + up * 0.05;
+    // (30 degrees behind the side: a hand in one is anywhere from the side of the hip round to
+    // most of the way to the back.)
+    let (side, back) = (30f32.to_radians().cos(), 30f32.to_radians().sin());
+    let (hip_r, hip_l) = (right * side - fwd * back, -right * side - fwd * back);
     Some([
-        (belt + right * 0.17 + fwd * 0.03, right, 0.1),
-        (belt - right * 0.17 + fwd * 0.03, -right, 0.1),
-        (belt + fwd * 0.17, fwd, 0.09),
+        (belt + hip_r * BODY, hip_r, 0.11),
+        (belt + hip_l * BODY, hip_l, 0.11),
+        (belt + fwd * BODY, fwd, 0.09),
         (s.spine2 + fwd * 0.15 - right * 0.08, fwd, 0.08),
         (s.spine1 - fwd * 0.18, -fwd, 0.11),
     ])
