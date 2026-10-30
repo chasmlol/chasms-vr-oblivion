@@ -67,18 +67,19 @@ impl Benches {
     }
 }
 
-/// Each triangle's connected part (the same number for triangles sharing a corner, corners welded
-/// at a tenth of a millimetre), over all the model's meshes, numbered from 0; and how many there are.
+/// Each triangle's connected part (the same number for triangles of a mesh sharing a corner,
+/// corners welded at a tenth of a millimetre; a mesh's parts are its own, even where it touches
+/// another: a pestle modelled apart from its bowl), numbered from 0; and how many there are.
 pub fn parts(model: &Model) -> (Vec<Vec<usize>>, usize) {
-    let weld = |p: [f32; 3]| p.map(|v| (v * 10_000.0).round() as i64);
-    let mut ids: HashMap<[i64; 3], usize> = HashMap::new();
+    let weld = |m: usize, p: [f32; 3]| (m, p.map(|v| (v * 10_000.0).round() as i64));
+    let mut ids: HashMap<(usize, [i64; 3]), usize> = HashMap::new();
     let mut tris: Vec<[usize; 3]> = Vec::new();
-    for m in &model.meshes {
+    for (mi, m) in model.meshes.iter().enumerate() {
         for t in m.indices.chunks_exact(3) {
             let mut c = [0; 3];
             for (k, &i) in t.iter().enumerate() {
                 let n = ids.len();
-                c[k] = *ids.entry(weld(m.vertices[i as usize].pos)).or_insert(n);
+                c[k] = *ids.entry(weld(mi, m.vertices[i as usize].pos)).or_insert(n);
             }
             tris.push(c);
         }
@@ -171,8 +172,15 @@ pub fn measure(model: &Model, path: &str) -> Option<(Bench, Model, Model)> {
     let across = |p: Vec3| Vec3::new(p.x - mid.x, 0.0, p.z - mid.z).length();
     let outer = mc.iter().map(|c| across(c.0)).fold(0.0f32, f32::max);
     let rim = hi.y;
-    let floor_y = mc.iter().filter(|(q, nrm)| nrm.y > 0.6 && across(*q) < outer * 0.5 && q.y < rim - 0.004).map(|c| c.0.y).fold(f32::MIN, f32::max);
-    if floor_y == f32::MIN {
+    // The floor: the highest point facing up inside the rim's inner edge (the rim's top faces up
+    // too, but it's the top). Some models' floors are a ring with nothing at the middle, and some
+    // say nothing of which way they face: then the highest point inside it below half way up.
+    let inner = mc.iter().filter(|c| c.0.y > rim - 0.01).map(|c| across(c.0)).fold(outer, f32::min);
+    let inside = |c: &&(Vec3, Vec3)| across(c.0) < inner * 0.95 && c.0.y < rim - 0.01;
+    let floor_y = mc.iter().filter(inside).filter(|c| c.1.y > 0.6).map(|c| c.0.y).fold(f32::MIN, f32::max);
+    let low_half = |c: &&(Vec3, Vec3)| c.0.y < (rim + lo.y) * 0.5;
+    let floor_y = if floor_y > f32::MIN { floor_y } else { mc.iter().filter(inside).filter(low_half).map(|c| c.0.y).fold(f32::MIN, f32::max) };
+    if floor_y == f32::MIN || floor_y <= lo.y + 0.002 {
         return None;
     }
     let depth = rim - floor_y;
