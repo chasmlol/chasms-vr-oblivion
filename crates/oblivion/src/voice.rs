@@ -130,6 +130,36 @@ fn time_of_day(hour: f32) -> &'static str {
     }
 }
 
+/// Who someone is, a paragraph from `data/bios.toml` (written from UESP), by the name the game
+/// gives them; none for most people yet.
+pub fn bio(name: &str) -> Option<&'static str> {
+    use std::collections::HashMap;
+    use std::sync::OnceLock;
+    static BIOS: OnceLock<HashMap<String, String>> = OnceLock::new();
+    let bios = BIOS.get_or_init(|| {
+        #[derive(serde::Deserialize)]
+        struct Entry {
+            bio: String,
+            #[serde(default)]
+            names: Vec<String>,
+        }
+        let entries: HashMap<String, Entry> = toml::from_str(include_str!("../data/bios.toml")).unwrap_or_else(|e| {
+            tracing::warn!("voice: data/bios.toml: {e}");
+            HashMap::new()
+        });
+        let mut bios = HashMap::new();
+        for (name, entry) in entries {
+            // (one paragraph: the file's lines are only its wrapping)
+            let bio = entry.bio.split_whitespace().collect::<Vec<_>>().join(" ");
+            for name in entry.names.iter().chain(std::iter::once(&name)) {
+                bios.insert(name.to_lowercase(), bio.clone());
+            }
+        }
+        bios
+    });
+    bios.get(&name.trim().to_lowercase()).map(String::as_str)
+}
+
 fn article(word: &str) -> &'static str {
     if word.starts_with(['A', 'E', 'I', 'O', 'U', 'a', 'e', 'i', 'o', 'u']) { "an" } else { "a" }
 }
@@ -530,6 +560,9 @@ mod win {
         let factions = factions(actor);
         if !factions.is_empty() {
             out += &format!(" {name} belongs to {}.", factions.join(", "));
+        }
+        if let Some(bio) = bio(&name) {
+            out += &format!("\n\n{bio}");
         }
         let disposition = vcall1(actor, VT_DISPOSITION, player) as i32;
         out += &format!(" {name} {} {player_name} ({disposition} out of 100).", feeling(disposition));
@@ -973,6 +1006,14 @@ mod tests {
         assert_eq!(emotion("Sadly"), (4, 50));
         assert_eq!(emotion("surprised"), (6, 50));
         assert_eq!(emotion(""), (0, 50));
+    }
+
+    #[test]
+    fn people_with_a_bio_have_one_paragraph_of_it() {
+        let gin = bio("Gin-Wulm").expect("Gin-Wulm's bio");
+        assert!(gin.starts_with("Gin-Wulm is the Argonian master smith") && !gin.contains('\n'));
+        assert_eq!(bio("sevarius atius"), bio("Severius Atius"), "by any of their names, any case");
+        assert!(bio("Imperial Watch").is_none());
     }
 
     #[test]

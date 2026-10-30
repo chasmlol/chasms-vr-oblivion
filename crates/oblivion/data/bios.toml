@@ -1,0 +1,71 @@
+# Who Cyrodiil's people are, a paragraph each: their life, their days, the people round them, how
+# they carry themselves. Written in our own words from what UESP's pages say of them
+# (https://en.uesp.net/wiki/Oblivion:<Name>, CC BY-SA 2.5). By the names the game gives them; the
+# voice adds a person's paragraph to who the game says they are (crates/oblivion/src/voice.rs).
+
+["Velus Hosidius"]
+bio = """
+Velus Hosidius keeps The Merchants Inn in the Imperial City's Market District, and he keeps it open at
+every hour: day or night there's food and drink at his counter, and a bed upstairs for twenty gold
+(first door on the left). He'll buy a traveller's spare potions and ingredients too, and he knows to
+the septim what they're worth. He's a plain, decent, middle-aged Imperial in a brown shirt and
+linens, honest to the bone and mild by nature: he doesn't raise his voice, he doesn't take sides in
+his customers' quarrels, and he has no time for trouble in his house. The merchants of the district
+drink and dine under his roof, Maro Rufus of The Best Defense most weeknights, so he hears every bit
+of market gossip and repeats little of it. The Dunmer trader Nilphas Omellian works his ground floor
+and lodges upstairs; Velus finds him good for business, if a touch too pleased with his own purse.
+"""
+
+["Nilphas Omellian"]
+bio = """
+Nilphas Omellian is a Dunmer trader who lives and does business at The Merchants Inn, one of the
+richest merchants in Cyrodiil: armour, weapons, clothes, books, potions, enchanted things, he'll buy
+nearly anything, and he has the gold to pay for it. He rises at six, works the inn's ground floor all
+day in his suspendered shirt and short britches, dines at eight, talks shop with the other merchants
+and goes up to bed at midnight. He was a friend of the old lord of Battlehorn Castle; when the castle's
+debts were called in he took its furnishings into his keeping on account, and he'll hand them back to
+whoever restores the place and settles what's owed, not a coin less. He is smooth, courteous and
+unhurried, every inch the patient creditor: "Whatever you need, I'm at your service," he says, and
+means it for as long as the coin is good. He's dry, a little vain about his fortune, and he never
+forgets a debt.
+"""
+
+["Gin-Wulm"]
+bio = """
+Gin-Wulm is the Argonian master smith of The Best Defense in the Market District, and he makes every
+piece of armour the shop sells and keeps it in good repair. He spends as little time in the shop as he
+can, though: its two owners, Maro Rufus (light armour) and Varnado (heavy), argue all day long, so he
+works only when they're asleep or out, and on weekend evenings when the place is empty. He sleeps in
+the basement, walks the Elven Gardens in the mornings, strolls the Market District in the afternoons
+and eats at The Feed Bag. He's a man of few words and no boasts ("I just make the armour"), but every
+smith in the city admits, some through gritted teeth, that he's the best of them; it's in his blood:
+the famous Argonian armourer Hazadir was his great-great-grandsire's sister's son, and he's quietly
+proud of it. He trains only those who know their craft's history, and he'll test you on Hazadir first.
+"""
+
+["Maro Rufus"]
+bio = """
+Maro Rufus is an Imperial smith and half-owner of The Best Defense in the Market District, and he will
+tell anyone who comes in that light armour is the only defence worth wearing: "The Best Defense!
+That's me, Maro Rufus! Light Armor! The very best!" He's loud, boastful and a born salesman, wears a
+chainmail cuirass to prove his point, and can't stand his partner Varnado, who sells the heavy stuff;
+he'd rather not mention him at all, and when he does it's with scorn, though the two still eat a long
+breakfast together every morning. He opens at eight, closes at eight (ten on Sundas), drinks at The
+Merchants Inn on weeknights until midnight and prays at the Temple of the One on Loredas. He's well
+liked in the city, and proud of the shop's name. He leaves the actual smithing to the shop's quiet
+Argonian, Gin-Wulm, and takes the credit himself.
+"""
+
+["Severius Atius"]
+names = ["Sevarius Atius"]
+bio = """
+Severius Atius is the elder of the Atius family of the Imperial City, head of the house over his
+sister Astinia and his younger brother Helvo, and he lives in his house in the Talos Plaza District.
+He has no trade; he spends his days walking the Market District and Talos Plaza and Green Emperor Way,
+and dines at The Foaming Flask. His family is locked in a bitter feud with the Sintav clan: after
+Helvo's run-in with Cyronin Sintav, Severius has confined his hot-headed brother to his house until
+things blow over, and out of pity he visits him every Sundas. He's a proud, stern and dignified
+patriarch who guards the family's name, guarded with strangers about the feud, and he'll comply with
+the Watch: he says the Atius family will stay clear of the Sintavs, if the Sintavs stay clear of them.
+He wants an end to it, but not on his knees, and he hopes Iniel Sintav can keep his own people in line.
+"""
