@@ -592,6 +592,37 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(filters * 4)?;
             Block::ListShape { shapes }
         }
+        // Collision made of triangles (much of the clutter): passed over, so the blocks after it (often
+        // the model itself) are read.
+        "bhkMoppBvTreeShape" => {
+            let _shape = r.i32()?;
+            r.skip(12 + 4)?; // unused, shape scale
+            let size = r.u32()? as usize;
+            r.skip(12 + 4 + size)?; // origin, scale, the MOPP code
+            Block::Other(kind.into())
+        }
+        "bhkPackedNiTriStripsShape" => {
+            let parts = r.u16()? as usize;
+            r.skip(parts * 12)?; // filter, vertices, material
+            r.skip(4 + 4 + 4 + 4 + 16 + 4 + 16)?; // user data, unused, radius, unused, scale, radius, scale
+            let _data = r.i32()?;
+            Block::Other(kind.into())
+        }
+        "hkPackedNiTriStripsData" => {
+            let triangles = r.u32()? as usize;
+            r.skip(triangles * 20)?; // corners, welding, normal
+            let vertices = r.u32()? as usize;
+            r.skip(vertices * 12)?;
+            Block::Other(kind.into())
+        }
+        "bhkNiTriStripsShape" => {
+            havok_material(r)?;
+            r.skip(4 + 20 + 4 + 16)?; // radius, unused, grow by, scale
+            let _strips = r.refs()?;
+            let filters = r.u32()? as usize;
+            r.skip(filters * 4)?;
+            Block::Other(kind.into())
+        }
         "bhkConvexTransformShape" | "bhkTransformShape" => {
             let shape = r.i32()?;
             havok_material(r)?;
