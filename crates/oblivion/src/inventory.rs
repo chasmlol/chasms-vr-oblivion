@@ -13,6 +13,12 @@
 //! anywhere but a slot is dropped by the game where it came to rest (its own drop: a thing in the
 //! world, to be picked up again). Either way it tells the runtime it has taken it back.
 //!
+//! A weapon or a torch drawn from a slot, and arrows while a bow is on, the game equips (as the
+//! inventory's click does), and its own takes the copy's place in the hand: the weapon, the
+//! burning torch, an arrow to nock. Arrows of the kind on the bow come out as the bow's own at once
+//! (the runtime makes them from the bow's arrows, `INV_ARROW`), from whichever slot they're kept
+//! in: there's no quiver of its own.
+//!
 //! The game's own slots: what heals at the belt in front of the off-hand hip (the sword hand
 //! fights), the arrows over the right shoulder where Oblivion wears its quiver, scrolls and
 //! poisons in the right chest pouch, food at the right hip.
@@ -23,7 +29,7 @@ use rustvr_protocol::*;
 
 /// The categories the slots draw from, as the runtime knows them (their names are what the
 /// player's slots remember).
-pub const CATEGORIES: [&str; 13] = ["Food", "Potions", "Poisons", "Ingredients", "Scrolls", "Arrows", "Weapons", "Soul Gems", "Keys", "Books", "Sigil Stones", "Apparatus", "Misc"];
+pub const CATEGORIES: [&str; 14] = ["Food", "Potions", "Poisons", "Ingredients", "Scrolls", "Arrows", "Weapons", "Soul Gems", "Keys", "Books", "Sigil Stones", "Apparatus", "Misc", "Torches"];
 pub const FOOD: u32 = 0;
 pub const POTIONS: u32 = 1;
 pub const POISONS: u32 = 2;
@@ -37,11 +43,13 @@ pub const BOOKS: u32 = 9;
 pub const SIGIL_STONES: u32 = 10;
 pub const APPARATUS: u32 = 11;
 pub const MISC: u32 = 12;
+pub const TORCHES: u32 = 13;
 
-use crate::items::{AMMO, APPARATUS as APPA, BOOK, INGREDIENT, KEY, MISC as MISC_FORM, POTION, SIGIL_STONE, SOUL_GEM, WEAPON};
+use crate::items::{AMMO, APPARATUS as APPA, BOOK, INGREDIENT, KEY, LIGHT, MISC as MISC_FORM, POTION, SIGIL_STONE, SOUL_GEM, WEAPON};
 
 /// The category of a thing of form type `kind` (food, a poison and a scroll as the game tells
-/// them); None: not one the slots hand out (apparel, lights).
+/// them); None: not one the slots hand out (apparel). A light in the inventory is one that's
+/// carried: a torch.
 pub fn category(kind: u8, food: bool, poison: bool, scroll: bool) -> Option<u32> {
     Some(match kind {
         POTION if poison => POISONS,
@@ -58,6 +66,7 @@ pub fn category(kind: u8, food: bool, poison: bool, scroll: bool) -> Option<u32>
         SIGIL_STONE => SIGIL_STONES,
         APPA => APPARATUS,
         MISC_FORM => MISC,
+        LIGHT => TORCHES,
         _ => return None,
     })
 }
@@ -67,6 +76,7 @@ pub fn use_flags(category: u32, kind: u8) -> u32 {
     match category {
         POISONS => INV_COAT,
         SCROLLS => INV_READ,
+        ARROWS => INV_ARROW,
         _ if kind == POTION => INV_DRINK,
         _ if kind == INGREDIENT => INV_EAT,
         _ => 0,
@@ -413,8 +423,9 @@ mod game {
         });
         let status = unsafe { std::mem::transmute::<usize, Status>(STATUS)(r.entry) };
         let equipped = unsafe { std::mem::transmute::<usize, Flag>(IS_EQUIPPED)(r.entry, 0) } != 0;
-        // (The weapon on is the hands' own already, at the hip: not one of the slots' things.)
-        if equipped && kind == WEAPON {
+        // (The weapon and the torch on are the hands' own already, in their holsters: not the
+        // slots' things.)
+        if equipped && matches!(kind, WEAPON | LIGHT) {
             return None;
         }
         let quest = mem::at::<u32>(form + FORM_FLAGS).is_some_and(|f| f & QUEST_ITEM != 0);
@@ -553,14 +564,25 @@ mod game {
         }
     }
 
-    /// A weapon drawn from a slot equipped, as the inventory's click equips it (its own sound); its
-    /// copy `copy` in the hand is to be its place. True once the game has it on.
-    fn equip_weapon(player: usize, form: usize, list: usize, copy: u32) -> bool {
+    /// A weapon, arrows or a torch drawn from a slot equipped, as the inventory's click equips it
+    /// (its own sound; arrows the whole stack, as the click does); its copy `copy` in the hand is to
+    /// be its place, the game's own taking it (`crate::weapons`, `crate::archery`, `crate::torch`).
+    /// True once the game has it on.
+    fn equip(player: usize, form: usize, list: usize, copy: u32, kind: u8) -> bool {
         type Equip = unsafe extern "thiscall" fn(usize, usize, i32, usize, u8, u8);
-        unsafe { std::mem::transmute::<usize, Equip>(EQUIP)(player, form, 1, list, 0, 0) };
-        let on = crate::weapons::equipped().is_some_and(|e| e.form == form);
+        let count = if kind == AMMO { crate::archery::inventory_count(form).unwrap_or(1).max(1) as i32 } else { 1 };
+        unsafe { std::mem::transmute::<usize, Equip>(EQUIP)(player, form, count, list, 0, 0) };
+        let on = match kind {
+            WEAPON => crate::weapons::equipped().is_some_and(|e| e.form == form),
+            AMMO => crate::archery::equipped_arrows().is_some_and(|a| a.form == form),
+            _ => crate::torch::equipped().is_some_and(|(f, _)| f == form),
+        };
         if on {
-            crate::weapons::replacing(form, copy);
+            match kind {
+                WEAPON => crate::weapons::replacing(form, copy),
+                AMMO => crate::archery::replacing(form, copy),
+                _ => crate::torch::replacing(form, copy),
+            }
         }
         tracing::info!("inventory: {} drawn from a slot and equipped: {on}", name_of(form));
         on
@@ -636,11 +658,15 @@ mod game {
                     if st.shots > uses {
                         take = use_one(player, form, list, flags);
                     }
-                    // A weapon in a hand: the game equips it, and its own weapon takes the copy's
-                    // place in that hand (`crate::weapons`; the runtime lets the copy go then).
+                    // A weapon, a torch, or arrows while a bow is on, in a hand: the game equips it,
+                    // and its own takes the copy's place in that hand (`crate::weapons`,
+                    // `crate::torch`, `crate::archery`: an arrow to nock; the runtime lets the copy
+                    // go then). Arrows with no bow on are things like any other.
                     let mut equipped = false;
-                    if !take && st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0 && mem::at::<u8>(form + FORM_TYPE) == Some(WEAPON) {
-                        equipped = equip_weapon(player, form, list, st.id);
+                    let kind = mem::at::<u8>(form + FORM_TYPE).unwrap_or(0);
+                    let bow_on = crate::weapons::equipped().is_some_and(|e| e.kind == crate::archery::BOW);
+                    if !take && st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0 && (matches!(kind, WEAPON | LIGHT) || (kind == AMMO && bow_on)) {
+                        equipped = equip(player, form, list, st.id, kind);
                         take = equipped;
                     }
                     let free = st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT | OS_PULLED | OS_TRACKING) == 0;

@@ -1,7 +1,10 @@
-//! The player's torch, in the hand: the equipped torch is an object on the body (at the right hip,
-//! [`TORCH_SLOT`]) that either hand draws, waves about, holsters and drops, and the game draws it
-//! where the runtime has it, burning: its own model, its own flame and its own light, flickering as
-//! the game flickers a torch (docs/research/torches.md, "The player's torch").
+//! The player's torch, in the hand: the equipped torch is an object on the body as the equipped
+//! weapon is, that either hand draws, waves about, holsters (in any holster it fits) and drops, and
+//! the game draws it where the runtime has it, burning: its own model, its own flame and its own
+//! light, flickering as the game flickers a torch (docs/research/torches.md, "The player's torch").
+//! A torch drawn from one of the body's slots (`crate::inventory`) is equipped by the game, and
+//! this one takes the copy's place in the hand; one equipped from the game's own menu starts at the
+//! right hip ([`TORCH_SLOT`]), as a sword starts at the left.
 //!
 //! The game's own equipped torch is the first-person viewmodel's (and never shows in VR), so the
 //! torch the hand has is a copy of its model from the game's model cache, hung where the game
@@ -13,9 +16,9 @@
 //! It crackles with the game's own held-torch loop (`ITMTorchHeldLP`, the process's own: its
 //! virtual 0xD2 plays it on the actor, 0xD1 stops its sound slot 1).
 //!
-//! Holstered, it still burns: a light at the hip with both hands free. Let go anywhere else, it
-//! falls and lies burning where it lands (the runtime's physics on the game's collision); left
-//! behind, it's back at the hip. Unequipped in the inventory, it's gone.
+//! Holstered, it still burns: a light on the body with both hands free. Let go anywhere else, it
+//! falls and lies burning where it lands (the runtime's physics on the game's collision), as a
+//! sword let go lies. Unequipped in the inventory, it's gone.
 //!
 //! Forms: `MiddleHighProcess::equippedLightData` (+0xE8 of the player's process) is the equipped
 //! light's inventory entry (its form at +8, a `TESObjectLIGH`: type 0x1A, its model's path at
@@ -28,11 +31,9 @@ use rustvr_protocol::*;
 /// The torch's object id. (The adapter's own objects each have their own: the weapon and shield
 /// 1 and 2, the arrows 4, the map 5.)
 pub const TORCH_ID: u32 = 0x0B1E_0003;
-/// Where the torch hangs on the body (a `SLOT_*`): the right hip, across from the weapon at the
-/// left, for the off hand to draw (section 6's holsters will place it).
+/// Where a torch the game's own menu equips starts on the body (a `SLOT_*`): the right hip, across
+/// from the weapon at the left, for the off hand to draw.
 pub const TORCH_SLOT: u32 = SLOT_HIP_RIGHT;
-/// Left further than this from the player (metres), it's back at the hip.
-pub const LEFT_BEHIND: f32 = 15.0;
 
 const PROCESS: usize = 0x58;
 const EQUIPPED_LIGHT: usize = 0xE8;
@@ -110,12 +111,11 @@ mod game {
     use crate::{camera, scene};
     use std::sync::Mutex;
 
-    /// The torch the hand has: the game's model and light, and its object.
+    /// The torch the hand has: the game's model and light.
     struct Held {
         form: usize,
         node: usize,
         light: Option<scene::FormLight>,
-        desc: ObjectDesc,
         /// How it was held when last logged.
         logged: Option<u32>,
         /// When its crackle is looked at next.
@@ -145,6 +145,16 @@ mod game {
     }
 
     /// Once a game frame (in the world): the equipped torch made into the hand's, or taken away.
+    /// A torch drawn from one of the body's slots and equipped by the game (`crate::inventory`): its
+    /// form, and the runtime's copy of it in a hand, whose place it takes as it's registered.
+    static REPLACING: Mutex<Option<(usize, u32)>> = Mutex::new(None);
+
+    /// The torch of `form`, equipped from the runtime's copy `copy` in a hand: it takes that copy's
+    /// place in the hand when it's registered.
+    pub fn replacing(form: usize, copy: u32) {
+        *REPLACING.lock().unwrap() = Some((form, copy));
+    }
+
     pub fn publish(a: &rustvr_adapter::Adapter) {
         with_state(|s| {
             let now = equipped();
@@ -185,7 +195,11 @@ mod game {
                 // Where its flame is, in its own space (the runtime's axes, metres).
                 let flame = nodes::find(node, "AttachLight").or_else(|| nodes::find(node, "FlameNode1")).and_then(|n| mem::at::<[f32; 3]>(n + crate::engine::av::LOCAL_TRANSLATE)).map(|t| camera::basis().point_from_game(Vec3::from(t)).z);
                 s.seq = s.seq.wrapping_add(1).max(1);
-                let desc = object_desc(&model, flame, weight(form), s.seq);
+                let mut desc = object_desc(&model, flame, weight(form), s.seq);
+                if let Some((_, copy)) = REPLACING.lock().unwrap().take_if(|(f, _)| *f == form) {
+                    desc.replaces = copy;
+                    tracing::info!("torch: drawn from a slot: it takes the place of its copy {copy:#x} in the hand");
+                }
                 tracing::info!(
                     "torch: {path} (model {key}) in the game at {node:#x}, its light {:?}, flame at {flame:?} m, handle {:?}, {:.2} kg, at the hip (slot {TORCH_SLOT})",
                     light.as_ref().map(|l| format!("{:#x} {} radius {:?}", l.light(), nodes::class(l.light()), mem::at::<f32>(l.light() + 0xF8))),
@@ -194,9 +208,10 @@ mod game {
                 );
                 descs.push(desc);
                 crackle(true);
-                s.torch = Some(Held { form, node, light, desc, logged: None, next_crackle: 0.0 });
+                s.torch = Some(Held { form, node, light, logged: None, next_crackle: 0.0 });
             }
-            crate::objects::publish(crate::objects::Owner::Torch, &descs, &[], a);
+            let sounds: Vec<(u32, String)> = s.torch.as_ref().and_then(|t| crate::sounds::kind(t.form)).map(|set| (TORCH_ID, set)).into_iter().collect();
+            crate::objects::publish(crate::objects::Owner::Torch, &descs, &sounds, a);
         });
     }
 
@@ -240,16 +255,6 @@ mod game {
                     OS_PULLED => "flying to the hand",
                     _ => "in the hand",
                 }, t.light.as_ref().and_then(|l| nodes::world_pos(l.light())));
-            }
-            // Left behind, lying somewhere: back to the hip.
-            let free = st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT | OS_HOLSTERED | OS_PULLED) == 0;
-            let me = mem::at::<[f32; 3]>(engine::player() + engine::refr::POS).map(|p| camera::basis().point_from_game(Vec3::from(p)));
-            if free && me.is_some_and(|m| m.distance(pos) > LEFT_BEHIND) {
-                s.seq = s.seq.wrapping_add(1).max(1);
-                t.desc.spawn_seq = s.seq;
-                let desc = t.desc;
-                tracing::info!("torch: left behind at {pos:.2?}: back at the hip");
-                crate::link::with_adapter(|a| crate::objects::publish(crate::objects::Owner::Torch, &[desc], &[], a));
             }
         });
     }

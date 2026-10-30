@@ -288,6 +288,17 @@ mod game {
         None
     }
 
+    /// Arrows drawn from one of the body's slots and put on the bow by the game
+    /// (`crate::inventory`): their form, and the runtime's copy of one in a hand, whose place one of
+    /// the bow's own arrows takes as they're registered.
+    static REPLACING: Mutex<Option<(usize, u32)>> = Mutex::new(None);
+
+    /// The arrows of `form`, equipped from the runtime's copy `copy` in a hand: one of them takes
+    /// that copy's place when they're registered.
+    pub fn replacing(form: usize, copy: u32) {
+        *REPLACING.lock().unwrap() = Some((form, copy));
+    }
+
     pub fn equipped_arrows() -> Option<Arrows> {
         let entry = process_entry(VT_AMMO_ENTRY);
         let form = mem::deref(entry + ENTRY_FORM);
@@ -622,7 +633,14 @@ mod game {
             // arrows with it.
             let akey = variant_key(&ar.model, "arrow");
             match rustvr_asset::load_model(&dir, &akey) {
-                Ok(m) => descs.push(arrow_object(&m, &akey, ARROWS_ID, ar.count)),
+                Ok(m) => {
+                    let mut d = arrow_object(&m, &akey, ARROWS_ID, ar.count);
+                    if let Some((_, copy)) = REPLACING.lock().unwrap().take_if(|(form, _)| *form == ar.form) {
+                        d.replaces = copy;
+                        tracing::info!("archery: {} put on the bow from a slot: one takes the place of its copy {copy:#x}", ar.name);
+                    }
+                    descs.push(d);
+                }
                 Err(err) => tracing::warn!("archery: {} have no extracted model ({}#arrow, {akey}: {err:#}); run oblivion-extract export meshes/weapons", ar.name, ar.model),
             }
         }
