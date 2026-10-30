@@ -194,6 +194,7 @@ mod win {
             crate::books::frame();
             crate::inventory::frame(link::now());
             crate::slot_menu::frame();
+            crate::pockets::frame(link::now());
         });
         unsafe { real(this) }
     }
@@ -231,6 +232,7 @@ mod win {
         let Some((snap, game, cam)) = stereo else { return unsafe { real(this, arg) } };
         let view = snap.view.expect("prepared with a view");
         hooks::guard_void("reticle", crate::reticle::hide_crosshair);
+        hooks::guard_void("hud info action", crate::hud_info::keep_action);
         let Some(dev) = d3d9::device(engine::device() as *mut c_void) else { return unsafe { real(this, arg) } };
         let mut result = 0;
         let mut captured = [false; 2];
@@ -366,6 +368,8 @@ mod win {
         crate::player::trace_frame(now, &snap, &game);
         use crate::timing::{Part, time};
         time(Part::Combat, crate::combat::publish);
+        time(Part::Combat, || hooks::guard_void("people's capsules", || crate::movement::fit_people(true)));
+        time(Part::Combat, || hooks::guard_void("pockets", crate::pockets::publish));
         time(Part::Collision, || hooks::guard_void("collision", || crate::collision::update(now)));
         if let Some(view) = snap.view.as_ref() {
             let head = glam::Vec3::from(snap.frame.hmd.pos);
@@ -448,6 +452,10 @@ mod win {
                 info.depth_flags = DEPTH_LINEAR;
             }
             info.hud_aspect = aspect;
+            // The game's card of the things on the hands: which it's of now (`crate::hud_info`).
+            hooks::guard_void("hud info", || {
+                crate::hud_info::moved();
+            });
             // What the HUD and the menus are, piece by piece (again whenever it changes).
             if have_hud && let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(crate::hud::layout())) {
                 a.write_hud_layout(&layout);

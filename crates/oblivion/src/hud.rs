@@ -44,7 +44,7 @@
 //! | the compass | `hud_main_menu.xml` | over the bars |
 //! | the spells and potions working on the player | `hud_main_menu.xml` | over the compass |
 //! | what the reticle can activate (its crosshair is hidden, [`crate::reticle`]; nothing for a thing that can be taken until a hand has it), the sneak eye | `hud_reticle.xml` | where the head looks |
-//! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing, for a person, a door, a container (not a thing that can be taken); over the thing while a hand has one |
+//! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing, for a person, a door, a container (not a thing that can be taken); over each hand's thing while hands have them (a picture of the card for each, `HudLayout::card_of`; a thing under the fingers in a pocket too) |
 //! | a foe's health | `hud_reticle.xml` | over the foe |
 //! | spoken lines | `hud_subtitle_menu.xml` | the caption strip |
 //! | notices ("Iron Arrow added"), a region's name | `hud_subtitle_menu.xml`, `hud_main_menu.xml` | over the captions |
@@ -570,6 +570,9 @@ mod win {
     pub fn layout() -> HudLayout {
         let mut l = HudLayout::new(HUDL_ALPHA | HUDL_REST_HIDDEN, &[]);
         l.pointer = POINTER;
+        // (The thing on a hand the game's card is of now: the runtime keeps a picture of it for that
+        // hand, `crate::hud_info`.)
+        l.card_of = crate::hud_info::told();
         let Some(screen) = tiles::screen() else { return l };
         // A line of the game's ordinary text (a list row's name: 38 units with its leading).
         l.text_height = 36.0 / screen.1;

@@ -803,6 +803,8 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(filters * 4)?;
             Block::ListShape { shapes }
         }
+        // Collision made of triangles (much of the clutter): passed over, so the blocks after it (often
+        // the model itself) are read.
         "bhkConvexTransformShape" | "bhkTransformShape" => {
             let shape = r.i32()?;
             havok_material(r)?;

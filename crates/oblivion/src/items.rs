@@ -233,6 +233,12 @@ mod game {
     const RTTI_DAMAGE: usize = 0x00B0_5D48;
     const RTTI_ENCHANTABLE: usize = 0x00B0_3718;
     const RTTI_SCRIPTABLE: usize = 0x00B0_331C;
+    const RTTI_MODEL: usize = 0x00B0_3304;
+    /// `TESBipedModelForm` in armour and clothing (+0x64, +0x5C); its male ground model's path (the
+    /// model it has lying about: `groundModel[0]` +0x38, its path +4).
+    const ARMOR_BIPED: usize = 0x64;
+    const CLOTHING_BIPED: usize = 0x5C;
+    const GROUND_MODEL_PATH: usize = 0x3C;
 
     /// `BaseExtraList::GetExtra(type)` and `GetCount` (thiscall); `ExtraHealth` (0x2B) health +0xC.
     const GET_EXTRA: usize = 0x0041_E210;
@@ -279,27 +285,51 @@ mod game {
 
     pub fn facts(refr: usize) -> Facts {
         let base = mem::deref(refr + REFR_BASE);
-        let kind = mem::at::<u8>(base + FORM_TYPE).unwrap_or(0);
-        let part = |rtti| cast(base, rtti);
-        let name = part(RTTI_FULL_NAME);
-        let health = part(RTTI_HEALTH);
+        let health = cast(base, RTTI_HEALTH);
         let most = (health != 0).then(|| mem::at::<i32>(health + 4)).flatten().filter(|h| *h > 0);
         let now = extra(refr, EXTRA_HEALTH);
         let condition = most.map(|m| if now != 0 { mem::at::<f32>(now + 0xC).unwrap_or(m as f32) / m as f32 } else { 1.0 });
+        Facts { count: count(refr), condition, stolen: stolen(refr), ..form_facts(base) }
+    }
+
+    /// What the game says about a base form (a thing in an inventory: no reference of its own, at
+    /// its full condition), as [`facts`] says it of one lying about.
+    pub fn form_facts(base: usize) -> Facts {
+        let kind = mem::at::<u8>(base + FORM_TYPE).unwrap_or(0);
+        let part = |rtti| cast(base, rtti);
+        let name = part(RTTI_FULL_NAME);
         let enchant = part(RTTI_ENCHANTABLE);
         Facts {
             name: if name != 0 { crate::combat::read_str(mem::deref(name + 4)) } else { String::new() },
             kind,
-            count: count(refr),
+            count: 1,
             value: Some(part(RTTI_VALUE)).filter(|&v| v != 0).and_then(|v| mem::at::<i32>(v + 4)),
             weight: Some(part(RTTI_WEIGHT)).filter(|&w| w != 0).and_then(|w| mem::at::<f32>(w + 4)),
             damage: Some(part(RTTI_DAMAGE)).filter(|&d| d != 0).and_then(|d| mem::at::<u16>(d + 4)),
             armor: (kind == ARMOR).then(|| mem::at::<u16>(base + ARMOR_RATING)).flatten(),
-            condition,
+            condition: (part(RTTI_HEALTH) != 0).then_some(1.0),
             enchanted: enchant != 0 && mem::deref(enchant + 4) != 0,
-            stolen: stolen(refr),
+            stolen: false,
             quest: mem::at::<u32>(base + FORM_FLAGS).is_some_and(|f| f & QUEST_ITEM != 0),
         }
+    }
+
+    /// The model a base form has lying about: armour's and clothing's ground model, anything
+    /// else's own.
+    pub fn model_of(base: usize) -> Option<String> {
+        let path = match mem::at::<u8>(base + FORM_TYPE)? {
+            ARMOR => mem::deref(base + ARMOR_BIPED + GROUND_MODEL_PATH),
+            CLOTHING => mem::deref(base + CLOTHING_BIPED + GROUND_MODEL_PATH),
+            _ => {
+                let model = cast(base, RTTI_MODEL);
+                if model == 0 {
+                    return None;
+                }
+                mem::deref(model + 4)
+            }
+        };
+        let s = crate::combat::read_str(path);
+        (path != 0 && !s.is_empty()).then_some(s)
     }
 
     /// The Havok body of a thing's 3D (its root's, or a child's): `hkRigidBody*`, or 0.
@@ -388,7 +418,7 @@ mod game {
 
     /// The player takes it, as activating it does (the game's own pick-up: stealing, the message,
     /// the sound); one with a script is activated by the player, its script deciding.
-    fn take(refr: usize) -> bool {
+    pub fn take(refr: usize) -> bool {
         let base = mem::deref(refr + REFR_BASE);
         let scriptable = cast(base, RTTI_SCRIPTABLE);
         if scriptable != 0 && mem::deref(scriptable + 4) != 0 {
@@ -564,6 +594,25 @@ mod game {
         }))
     }
 
+    /// A thing of base form `base` just put in the world at `at` (the runtime's world): set moving
+    /// at `lin` and turning at `ang` (m/s, rad/s, the runtime's world), as a thing let go of is, once
+    /// the game has given it its 3D and its Havok body. False until then.
+    pub fn throw_new(base: usize, at: Vec3, lin: Vec3, ang: Vec3) -> bool {
+        let found = nearby(at, 0.6).into_iter().find(|&(r, _, _)| mem::deref(r + REFR_BASE) == base);
+        let Some((refr, _, _)) = found else { return false };
+        let body = body_of(mem::deref(refr + REFR_NODE));
+        if body == 0 {
+            return false;
+        }
+        launch(body, lin, ang);
+        true
+    }
+
+    /// The reference of the thing offered as object `id`, while it's offered.
+    pub fn reference(id: u32) -> Option<usize> {
+        with_state(|s| s.items.get(&id).filter(|i| i.taken_at.is_none()).map(|i| i.refr))
+    }
+
     /// A thing as an object: its pose, its Havok shape in its own space, its mass, its card.
     fn make(refr: usize, id: u32, seq: u32) -> Option<Item> {
         let node = mem::deref(refr + REFR_NODE);
@@ -677,7 +726,8 @@ mod game {
         let descs: Vec<ObjectDesc> = items.iter().map(|i| i.desc).collect();
         let sounds: Vec<(u32, String)> = items.iter().filter_map(|i| Some((i.desc.id, i.sound.clone()?))).collect();
         let hulls = &s.hulls.hulls[..s.hulls.count as usize];
-        let ok = crate::link::with_adapter(|a| crate::objects::publish_hulls(crate::objects::Owner::Items, hulls, a) && a.write_item_infos(&s.infos) && crate::objects::publish(crate::objects::Owner::Items, &descs, &sounds, a)).unwrap_or(false);
+        let infos = &s.infos.infos[..s.infos.count as usize];
+        let ok = crate::link::with_adapter(|a| crate::objects::publish_hulls(crate::objects::Owner::Items, hulls, a) && crate::objects::publish_infos(crate::objects::Owner::Items, infos, a) && crate::objects::publish(crate::objects::Owner::Items, &descs, &sounds, a)).unwrap_or(false);
         if ok {
             s.logged = now;
             tracing::info!(
@@ -792,8 +842,9 @@ mod game {
                 }
                 true
             });
-            // The game's card of a thing is the held thing's.
-            crate::hud_info::set_held(s.items.values().find(|i| i.owned && i.taken_at.is_none()).map_or(0, |i| i.refr));
+            // The game's card of a thing is the held things'.
+            let held = s.items.iter().filter(|(_, i)| i.owned && i.taken_at.is_none()).map(|(&id, i)| crate::hud_info::Thing { key: id, refr: i.refr, from: 0, world: true });
+            crate::hud_info::set_world(held.collect());
             s.poses.count = 0;
             for it in s.items.values().filter(|i| !i.owned && i.flying.is_none() && i.taken_at.is_none()) {
                 let i = s.poses.count as usize;

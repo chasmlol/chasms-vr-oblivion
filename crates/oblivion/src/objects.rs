@@ -1,9 +1,10 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
 //! ([`crate::weapons`]), their torch ([`crate::torch`]), their map ([`crate::map`]), the limbs cut off the game's creatures
 //! ([`crate::gore`]), the game's things lying about near the player ([`crate::items`]), the
+//! things in the pockets of the people near a sneaking player ([`crate::pockets`]), the
 //! world's moving parts, its doors and levers ([`crate::world`]), and its loose Havok bodies, its
-//! hanging chains ([`crate::props`]), each owner's entries kept apart and written together; with
-//! them, the sound set each sounds like (the game's sound pack, [`crate::sounds`]). The same for
+//! hanging chains ([`crate::props`]), each owner's entries kept apart and written together (and the
+//! cards of what they are, the same way); with them, the sound set each sounds like (the game's sound pack, [`crate::sounds`]). The same for
 //! the regions that go with the table: where the game has its own objects ([`GamePoses`]) and their
 //! convex collision ([`GameHulls`]).
 
@@ -19,12 +20,14 @@ pub enum Owner {
     World,
     Props,
     Map,
+    Pockets,
 }
 
-const OWNERS: usize = 7;
+const OWNERS: usize = 8;
 
 /// Where an owner's entries go in the table: the player's own things first, then the limbs cut
-/// off (so they're never the ones the table's size leaves out), then what lies about.
+/// off (so they're never the ones the table's size leaves out), then what lies about and what's in
+/// people's pockets.
 fn index(owner: Owner) -> usize {
     match owner {
         Owner::Weapons => 0,
@@ -32,8 +35,9 @@ fn index(owner: Owner) -> usize {
         Owner::Map => 2,
         Owner::Gore => 3,
         Owner::Items => 4,
-        Owner::World => 5,
-        Owner::Props => 6,
+        Owner::Pockets => 5,
+        Owner::World => 6,
+        Owner::Props => 7,
     }
 }
 
@@ -142,6 +146,25 @@ pub fn publish_hulls(owner: Owner, hulls: &[GameHull], adapter: &rustvr_adapter:
         t.regions.set_hulls(owner, hulls, &mut t.hulls);
         adapter.write_game_hulls(&t.hulls)
     })
+}
+
+/// The owners' cards (what their objects are), merged into one table as their objects are.
+struct Infos {
+    infos: [Vec<ItemInfo>; OWNERS],
+    table: Box<ItemInfos>,
+}
+static INFOS: std::sync::Mutex<Option<Infos>> = std::sync::Mutex::new(None);
+
+/// Replaces `owner`'s cards and writes them all to the runtime (at most [`MAX_ITEM_INFOS`], in
+/// [`index`]'s order: the things lying about before the pockets').
+pub fn publish_infos(owner: Owner, infos: &[ItemInfo], adapter: &rustvr_adapter::Adapter) -> bool {
+    let mut t = INFOS.lock().unwrap();
+    let t = t.get_or_insert_with(|| Infos { infos: Default::default(), table: bytemuck::zeroed_box() });
+    t.infos[index(owner)] = infos.to_vec();
+    let all: Vec<ItemInfo> = t.infos.iter().flatten().take(MAX_ITEM_INFOS).copied().collect();
+    t.table.count = all.len() as u32;
+    t.table.infos[..all.len()].copy_from_slice(&all);
+    adapter.write_item_infos(&t.table)
 }
 
 #[cfg(test)]

@@ -154,6 +154,23 @@ pub(crate) fn read_str(p: usize) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// `NiObject` vtable +0x8: the object as an `NiNode` (itself for one, else 0; +0xC is the same for a
+/// shape). Only nodes have children: what's at a node's children's place in a shape (or a light,
+/// a camera) is something else, and walked as children it's garbage that used up the walk before
+/// the spine and legs.
+const VT_AS_NODE: usize = 0x08;
+
+#[cfg(target_arch = "x86")]
+fn is_node(obj: usize) -> bool {
+    let f = mem::deref(mem::deref(obj) + VT_AS_NODE);
+    (0x0040_1000..0x00A3_0000).contains(&f) && unsafe { std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> usize>(f)(obj) } == obj
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn is_node(_obj: usize) -> bool {
+    false
+}
+
 /// The named nodes under `root` that are bones (named `Bip01...`), and a few named attachments.
 pub(crate) fn bones(root: usize) -> HashMap<String, usize> {
     let mut out = HashMap::new();
@@ -171,7 +188,7 @@ pub(crate) fn bones(root: usize) -> HashMap<String, usize> {
         if name.starts_with("Bip01") || name == "Weapon" || name == "Shield" {
             out.insert(name, node);
         }
-        if !descend {
+        if !descend || !is_node(node) {
             continue;
         }
         let data = mem::deref(node + NODE_CHILDREN);
@@ -701,7 +718,8 @@ fn log_actors(table: &Actors) {
     tracing::info!("combat: {} creatures: {}", list.len(), list.join("; "));
 }
 
-/// The creatures published last (by id: where each is in the game's memory).
+/// The creatures published last (by id: where each is in the game's memory; check it's still an
+/// actor, [`is_actor`], before using it).
 pub fn known_actors() -> HashMap<u32, usize> {
     KNOWN.lock().unwrap().as_ref().map(|k| k.actors.clone()).unwrap_or_default()
 }

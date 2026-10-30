@@ -18,6 +18,8 @@
 //! * **The world** ([`items`], [`world`], [`lock`]): the things lying about, to take in the hands;
 //!   the doors and levers, worked by hand with the game's own activation; the game's lock, its pick
 //!   in the hand.
+//! * **Pockets** ([`pockets`]): the people near a sneaking player wear their own things in pockets
+//!   on their skeletons; a hand that takes one out, or puts one in, is the game's own pickpocketing.
 //! * **Riding** ([`riding`]): the game's horses, got on by the saddle, ridden by the reins, the
 //!   player's body in the game's own seat on them.
 //!
@@ -65,6 +67,7 @@ pub mod movement;
 pub mod nodes;
 pub mod objects;
 pub mod player;
+pub mod pockets;
 pub mod props;
 pub mod proxy;
 pub mod render;
