@@ -28,9 +28,7 @@ pub fn init(gpu: Gpu, w: u32, h: u32) {
     if a.is_none() {
         let mut cfg = AdapterConfig::new("oblivion");
         cfg.request = request(w, h);
-        let mut adapter = Adapter::new(gpu, cfg);
-        adapter.tracking.set_body_radius(crate::movement::BODY_RADIUS);
-        *a = Some(adapter);
+        *a = Some(Adapter::new(gpu, cfg));
     }
 }
 
@@ -79,6 +77,9 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     let adapter = guard.as_mut()?;
     let frame = adapter.poll()?;
     let view = g.eye.and_then(|eye| {
+        // (Up against something the game's body is held up on, the view goes on: crate::movement.)
+        #[cfg(all(windows, target_arch = "x86"))]
+        adapter.tracking.set_lead(crate::movement::lead(eye, g.dt, g.now));
         let anchor = Anchor { eye, base_eye: eye, look_yaw: g.look_yaw, scripted: false };
         adapter.tracking.update(&frame, &anchor, g.now, g.dt)
     });

@@ -199,6 +199,24 @@ pub fn floor_under(tris: &[[Vec3; 3]], at: Vec3) -> Option<f32> {
     best
 }
 
+/// How far along `dir` (a unit length) from `from` the ray meets the triangle `t`, either side.
+pub fn ray_triangle(from: Vec3, dir: Vec3, t: &[Vec3; 3]) -> Option<f32> {
+    let (e1, e2) = (t[1] - t[0], t[2] - t[0]);
+    let p = dir.cross(e2);
+    let det = e1.dot(p);
+    if det.abs() < 1e-9 {
+        return None;
+    }
+    let s = from - t[0];
+    let u = s.dot(p) / det;
+    let q = s.cross(e1);
+    let v = dir.dot(q) / det;
+    if u < 0.0 || v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+    Some(e2.dot(q) / det).filter(|d| *d >= 0.0)
+}
+
 #[cfg(all(windows, target_arch = "x86"))]
 pub use win::*;
 
@@ -560,6 +578,28 @@ mod win {
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);
+
+    /// How far the world's fixed things are along `dir` (unit length) from the nearest of the
+    /// points `from` (the runtime's world, metres), within `look`: of the bodies whose triangles
+    /// have been worked out (all of them near the player).
+    pub fn nearest_along(from: &[Vec3], dir: Vec3, look: f32) -> Option<f32> {
+        let st = STATE.lock().unwrap();
+        let s = st.as_ref()?;
+        let (lo, hi) = from.iter().fold((Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)), |(lo, hi), p| (lo.min(*p), hi.max(*p)));
+        let (lo, hi) = (lo.min(lo + dir * look), hi.max(hi + dir * look));
+        let apart = |a: Vec3, b: Vec3| b.cmplt(lo).any() || a.cmpgt(hi).any();
+        let mut best: Option<f32> = None;
+        for b in s.bodies.values().filter(|b| !apart(b.lo, b.hi)) {
+            for t in b.tris.iter().flatten().filter(|t| !apart(t[0].min(t[1]).min(t[2]), t[0].max(t[1]).max(t[2]))) {
+                for p in from {
+                    if let Some(d) = ray_triangle(*p, dir, t).filter(|d| *d <= look && best.is_none_or(|b| *d < b)) {
+                        best = Some(d);
+                    }
+                }
+            }
+        }
+        best
+    }
 
     /// Once per game frame in the world: keeps the runtime's collision around the player current.
     pub fn update(now: f64) {

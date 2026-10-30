@@ -116,27 +116,39 @@ with the unit tests of every crate touched passing. Look out for:
   of ingredient that's under a second. If you hear menu sounds repeating while it does, or the game
   stutters, say so.
 
-## Up against the tables (and anything else)
+## Up against things, all over the game
 
-The game's body is wider than yours: 30 cm round you, where you're about 12 cm from your eyes to
-your front. It used to stop your view 35 cm from a table's edge, with your hands and IK body short
-of touching it. Now, pushing on against what stopped it, your view carries on inside the game's
-body until your front is at its edge: up against the table.
+The game's body is wider than yours: 30 cm round you, where your front is a few centimetres ahead
+of your eyes. Everywhere in the game, it stopped your view 30 to 35 cm from a table, a counter or a
+wall, with your hands and IK body short of what you walked up to. (The second playtest's version
+only carried the view on when the game's body stopped dead: push a little off square and the body
+slid along the edge instead, and the view went no closer. Then only 17 cm more.)
 
-- **With the stick:** walk into a table and keep pushing. The body stops as before, then the view
-  goes on about 17 cm more, at walking pace, and stops. Let go and walk away as usual.
-- **On your feet:** step up to a table. The game's body follows you and stops at it; the last 17 cm
-  of your step are taken off how far your head is from that body. That means you can also lean
-  17 cm further over the table before the view is held back.
-- **Walls too:** walk into a wall with the stick. You stop with your eyes about 12 cm from it, and
-  the view shouldn't fade (it fades when your head goes into a wall).
-- **Look out for:** the view jumping as you push into something or walk away from it, the view
-  creeping on while you walk slowly in the open (it shouldn't), and anything you can now see into
-  or through.
+Now whatever of your step the game's body doesn't go (stopped, or sliding along something), your
+view goes on, at your own pace, as far as your body has room that way:
+- **Something low** (a table, a counter, a bench, a bed): until your front is at its edge, about
+  5 cm ahead of your eyes, your head over it. Up to about 28 cm past where the game's body stops.
+- **A wall** (or anything at your head's height): until your eyes are 12 cm from it, so the view
+  doesn't fade.
+- **What isn't the world's fixed things** (a door, a person, a creature): your head stays 12 cm
+  inside the game's body, about 17 cm on.
+
+Walking on freely, the view comes back onto the game's body over the next metre or so. With your
+feet (roomscale), stepping up to a table works the same: the game's body is walked after you and
+stops, and what it didn't go comes off how far your head is from it, so you can lean that much
+further over the table too.
+
+- **Try:** walk into the tables with the stick, straight on and at a slant; walk along a wall
+  rubbing it; walk into a door, the cupboard, the beds, and the fireplace. Step up to a table on
+  your feet and lean over it.
+- **Look out for:** the view jumping as you push into something or walk away from it; the view
+  drifting while you walk in the open; your view going into or through anything; the view fading at
+  walls. The adapter's log says, every 2 s while the view leads, how far and how much room it
+  found ("movement: the view ... m past the game's body").
 
 Nothing of this was checked in the game: built, with the adapter's and the Oblivion adapter's unit
-tests passing. It changes the framework's tracking mapping, so it's in every game the framework
-runs, but only for a game whose adapter gives the body's size (only Oblivion does).
+tests passing. It's in the framework's tracking mapping (`set_lead`) and Oblivion's adapter
+(`movement.rs`, `collision.rs`), so it's everywhere in Oblivion, every save.
 
 ## What was checked of the row of tables
 
@@ -282,12 +294,21 @@ Each of these was checked with scripted hands, in captures and logs:
   times the actor's scale, plus Havok's 0.7 units round that, so at least 0.30 m. Making the
   player's shape thinner would let the game's body itself get close, but its bottom is a cone sized
   to that radius that lets it climb steps, so thinning it would change how stairs are climbed, which
-  I couldn't check without the game. So the game's body stays as it is. The view may lead it by up
-  to 0.29 - 0.12 = 0.17 m, inside it, towards a push it was held up on: moving slower than 10 cm/s
-  along a push of at least a fifth of the stick. It goes on at 1 m/s for a full push. When the body
-  is walked after your head, the view stays where your head is and the lead comes off how far your
-  head is from the body. A jump of the body (more than 25 cm in a frame: a load, a door) or a
-  recentre puts the view back on the body.
+  I couldn't check without the game. So the game's body stays as it is, and the view leads it:
+  - **How far it goes:** the step the stick asked of the body (`Actor::Move`, turned to the world)
+    less the step the body took, every frame; walking on, it comes back onto the body by a fifth
+    of the way walked. Only steps the player asked count: falling, swimming or being pushed, the
+    game moves the body and the view stays on it. A jump of the body (more than 25 cm in a frame:
+    a load, a door) puts it back on.
+  - **How far it may go:** the world's fixed things (the collision the hands already meet) that
+    way from the eyes' line, looked for every 2.5 cm of height (a table's top is a few centimetres
+    thick) and 12 cm either side. Something below the head nearer than anything at it is low: the
+    eyes may go to 5 cm from it (your front at it), and never more than the game's body reaches.
+    Anything at the head's height: the eyes stay 12 cm from it (the runtime fades the view as a head
+    that round goes into a wall). Nothing found, so the body met something that isn't the world's
+    (a door, someone): the head stays 12 cm inside the game's body.
+  - **With your feet:** the runtime walks the game's body after your head; what it doesn't go
+    comes off how far your head is from it, so the view stays where your head is.
 - **Set out at every boot, not saved.** I can't run the game to make a new save, so the set-out is
   console lines run as the save loads (`tools/alchemy-row.txt`). Two console test commands are new
   for it:
@@ -323,5 +344,5 @@ Each of these was checked with scripted hands, in captures and logs:
 - **The body walked after your head while it's held up.** Standing at a table with your head more
   than 5 cm past where the view leads the body, the game still walks its body into the table, as
   before (its walk, and its footsteps if it makes any).
-- **Merging:** the view's lead is in the framework's `tracking.rs` (`set_body_radius`, the lead in
-  `update`), which other branches may also change.
+- **Merging:** the view's lead is in the framework's `tracking.rs` (`set_lead`, and where `update`
+  applies it), which other branches may also change.
