@@ -36,6 +36,27 @@ game's own image quality and stutter: `docs/research/oblivion-image-quality.md`.
 8. **The frame rate.** Tell me if any of this costs too much (the runtime's log has the pictures a
    second); each piece can be turned off.
 
+## The game's own install (every playtest runs with it now)
+
+Set up in the game's folder at your request, for the stutter and the distance:
+- **The 4GB patch.** `Oblivion.exe` may use 4 GB of memory instead of 2. The original is kept beside
+  it as `Oblivion.exe.rustvr-original`. Once the patch is in effect, the timing line in the game's
+  log (`rustvr-oblivion.log`) ends "address space N of 4095 MB free"; before, it said "of 2047".
+- **xOBSE 22.14**, the script extender that Oblivion Stutter Remover needs. After a run, an
+  `obse.log` in the game's folder means it loaded.
+- **The distant objects, regenerated** from your game's own data (xEdit's TES4LODGen) into
+  `Data\DistantLOD`. A few castle walls, gates and towers (Skingrad's, Bravil's, Leyawiin's) that the
+  game's own lists miss now stand in the distance too. The generator also makes every shrub a far
+  card, which doubled the far cards around the Imperial City; those are left out, as the game leaves
+  them.
+- `undo-stutter-setup.bat` puts all three back. If Steam verifies or updates the game, it puts the
+  original exe back (only the 4GB patch is lost).
+
+9. **It starts and plays as before.** If it doesn't, or something misbehaves, run
+   `undo-stutter-setup.bat` and tell me.
+10. **The far castles.** Skingrad's castle and the walls and towers of the towns should stand in the
+    distance, not come in as you get near.
+
 ## `playtest-rain.bat`
 
 The rain comes in over a few seconds.
@@ -93,8 +114,8 @@ below is in both.)
 - Your `Oblivion.ini` has the grass distance under `[Display]`, where the game doesn't read it: the
   grass reaches 43 m (`[Grass]`'s 3000). Raising `[Grass] fGrassEndDistance` grows it further, at a
   cost (it's now all round you).
-- Mods (Oblivion Stutter Remover, the 4GB patch, LOD regeneration) need files from outside and
-  changes to your game's install: set out in the research, not done here.
+- Oblivion Stutter Remover, and sharper far land (tes4ll and TES4qLOD regenerate the land's far
+  textures at 2048 or 4096 instead of 1024): Nexus downloads, which need your login. Not done yet.
 - The ghosting on moving people: not found in the game's picture (the saved pictures, taken before
   the runtime moves them, show none). It's after: Virtual Desktop's spacewarp, the runtime's
   smoothing, or the frames the game misses at 120 Hz. The tests above will tell which.
