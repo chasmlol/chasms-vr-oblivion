@@ -43,7 +43,13 @@ locked display cases: a lid on a hinge).
      and the game breaks a pick (a jolt);
    - A is Auto Attempt, B closes the lock.
    Pick all five and the gate opens: the game swings it, and your hand meets it.
-8. **A door the game's scripts keep shut, or a locked door without picks**, rattles in its frame and
+8. **Ayleid switch stones.** `play.ps1 world -Save rustvr-ruin -At Vilverin03`: in its halls, the
+   switch stones stacked on pillars (glowing gems) push into the pillar with a palm, 25 cm; at the
+   bottom of the push the game's Activate (its script, its stone's grinding), and they come back out
+   as slowly as the game's own animation brings them.
+9. **Chorrol's houses** (`-At ChorrolNorthernGoodsAndTrade`, `-At ChorrolFireAndSteel`) and the
+   Gottshaw Inn (`-At GottshawInnTavern`): ordinary house doors, wood on iron hinges.
+10. **A door the game's scripts keep shut, or a locked door without picks**, rattles in its frame and
    the game says why ("locked", the rattle sound), and opens nothing.
 
 ## What was checked in the game, and what wasn't
@@ -61,6 +67,9 @@ Checked, each once, with the emulated headset (the logs and captures are the evi
   runtime following it.
 - The trigger at gaze on the cave door: the game's own Activate and animation, the runtime's leaf
   following it open (and saying when the game stopped moving it).
+- Vilverin's Ayleid switch stones: one pushed in with a palm (0 to 0.23 of its 0.25 m), the game's
+  Activate at 88% (its script ran, its sound played), springing back out when let go; seen pushed in
+  on its pillar.
 - Cell changes (Chorrol's guilds, back and forth, then `TestTraps`): the world's parts dropped
   before the cell went and offered again in the new one, no crash; the double cave door's two leaves
   each on their own hinge.
@@ -109,8 +118,8 @@ Not checked in the game:
 
 - **The pick drawn in the hand at the keyhole** (the game's `lockpicking\*.nif` models posed by the
   menu's state), and the lock placed at the door rather than as the menu's panel.
-- **Ayleid switches** (`ARSwitch01`, all over the Ayleid ruins: Vilverin's): their models are an
-  older NIF version (10.2) the model reader doesn't read, so they stay the game's Activate.
+- The Ayleid wall switches (`ARWallSwitch01`) and a few other older models whose animations go
+  through blocks the model reader doesn't read yet: they stay the game's Activate.
 - **Drawers, chests' lids, buttons and pull chains** in vanilla: Oblivion's containers have no lid
   animations (the 538 animated containers are hanging corpses), and its buttons and chains are mostly
   traps' or the Shivering Isles'; buttons that slide in (the Shivering Isles' ruins) should work as
