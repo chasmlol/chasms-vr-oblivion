@@ -52,6 +52,16 @@ the game's props and only asked the game to push it out, and a chain on its cons
 - A piece offered stays so until it's 4 m from you (offered within 3), so a chain swinging across
   the edge isn't dropped and offered again under the hand.
 
+## Round 3 (30 October): the crash
+
+Your notes: the hanging things work, but the game crashed. The adapter's log (`playtest-3`) has
+an access violation in the creatures' scan (`combat::bones`, which finds a creature's bones for the
+hands to meet), as TestTraps' two goblins came to life and walked towards you. It read a mesh's
+fields near a creature's root as if they were its children, and followed garbage into freed memory.
+Not this feature's code: the gore branch hit the same crash and fixed it (`9d1fc7e`, only into
+nodes, by the game's own type information). The same change is here now, so either branch merges
+the same lines.
+
 ## What to try, in order
 
 1. **Push the cave door open.** Walk up to the planked door ahead (it's big and heavy, about
