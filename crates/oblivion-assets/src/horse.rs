@@ -21,6 +21,9 @@ pub const SADDLE: &str = "meshes\\creatures\\horse\\saddle.nif";
 pub const BODY: &str = "meshes\\creatures\\horse\\horse.nif";
 pub const HEAD: &str = "meshes\\creatures\\horse\\horsehead.nif";
 pub const TACK: &str = "textures\\creatures\\horse\\tack.dds";
+/// The horses' manes (each in its colours, the same shapes): they lie on the neck's crest, and the
+/// reins lie on them.
+pub const MANES: [&str; 3] = ["meshes\\creatures\\horse\\mane.nif", "meshes\\creatures\\horse\\manelong.nif", "meshes\\creatures\\horse\\maneroman.nif"];
 pub const SKELETON: &str = "meshes\\creatures\\horse\\skeleton.nif";
 /// The bone the saddle sits on: the middle of the three spine bones it's skinned to.
 pub const BONE: &str = "Bip02 Spine2";
@@ -31,8 +34,11 @@ pub const NECK_BONES: [&str; 5] = ["Bip02 Neck", "Bip02 Neck1", "Bip02 Neck2", "
 /// The head's cross-sections: this far along it from its bone towards the muzzle (game units).
 const HEAD_ALONG: [f32; 4] = [1.0, 10.0, 19.0, 28.0];
 /// A cross-section is the model's vertices this near its plane (either side, game units), its
-/// ellipse fitted to the top of it this deep (the neck's, the head's: as deep as reins go on them).
+/// ellipse fitted to the top of it this deep (the neck's, the head's: as deep as reins go on them),
+/// from outside: a vertex outside the ellipse costs `OUTSIDE` times one inside, so the reins laid
+/// on it lie on the model, not in it.
 const SLAB: f32 = 2.5;
+const OUTSIDE: f32 = 200.0;
 const NECK_DEPTH: f32 = 16.0;
 const HEAD_DEPTH: f32 = 24.0;
 /// The bridle's plain strap in `Tack.dds`: its cheek piece, a straight stretch of the leather
@@ -97,7 +103,7 @@ pub struct Saddle {
 
 /// A cross-section of the neck or head on one of its bones (in that bone's frame, game units): an
 /// ellipse round its top, at `centre`, as wide either way as `side` is long and as high either way
-/// as `up` (its top on the crest).
+/// as `up` (its top on the crest, or a little over a flat one).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Section {
     pub bone: String,
@@ -113,7 +119,7 @@ pub struct Section {
 /// as wide as its belly's lowest). The head (`head`, in its bone's frame: +X to the muzzle, +Y down
 /// to the jaw, Z across): the corners of the mouth, where the bit is. The tack's texture (`tack`):
 /// its smallest mip, its own average colour.
-pub fn measure(saddle: &Nif, skeleton: &Nif, body: &Nif, head: &Nif, tack: Option<&rustvr_asset::Texture>) -> Option<Saddle> {
+pub fn measure(saddle: &Nif, skeleton: &Nif, body: &Nif, head: &Nif, manes: &[Nif], tack: Option<&rustvr_asset::Texture>) -> Option<Saddle> {
     let middle: Vec<Vec3> = vertices(saddle).into_iter().filter(|p| p.x.abs() < MIDDLE).collect();
     let top: Vec<Vec3> = middle.iter().copied().filter(|v| !middle.iter().any(|o| (o.y - v.y).abs() < TOP_SPAN && o.z > v.z + 1e-3)).collect();
     let pommel = top.iter().copied().max_by(|a, b| a.z.total_cmp(&b.z))?;
@@ -144,21 +150,22 @@ pub fn measure(saddle: &Nif, skeleton: &Nif, body: &Nif, head: &Nif, tack: Optio
     let chain: Vec<i32> = NECK_BONES.iter().chain([&HEAD_BONE]).map(|n| skeleton.find(n)).collect::<Option<_>>()?;
     let at: Vec<Vec3> = chain.iter().map(|&b| skeleton.world(b, &parents).translation).collect();
     let mut neck = Vec::new();
-    let body_vertices = vertices(body);
+    // (The manes are made on the skeleton as the body is: their vertices are where they lie on it.)
+    let body_vertices: Vec<Vec3> = vertices(body).into_iter().chain(manes.iter().flat_map(vertices)).collect();
     for (i, name) in NECK_BONES.iter().enumerate() {
         let axis = (at[i + 1] - at[i.saturating_sub(1)]).normalize();
         let up = (Vec3::Z - axis * axis.dot(Vec3::Z)).normalize();
         let slab: Vec<(f32, f32)> = body_vertices.iter().filter(|v| (**v - at[i]).dot(axis).abs() < SLAB).map(|v| ((*v - at[i]).x, (*v - at[i]).dot(up))).collect();
-        let Some((crest, half_w, half_h)) = fit_top(&slab, NECK_DEPTH) else { continue };
+        let Some((top, half_w, half_h)) = fit_top(&slab, NECK_DEPTH) else { continue };
         let to_bone = skeleton.world(chain[i], &parents).inverse();
-        let centre = at[i] + up * (crest - half_h);
+        let centre = at[i] + up * (top - half_h);
         let vector = |v: Vec3| (to_bone.apply(centre + v) - to_bone.apply(centre)).to_array();
         neck.push(Section { bone: (*name).into(), centre: to_bone.apply(centre).to_array(), side: vector(Vec3::X * half_w), up: vector(up * half_h) });
     }
     for x in HEAD_ALONG {
         let slab: Vec<(f32, f32)> = face.iter().filter(|v| (v.x - x).abs() < SLAB).map(|v| (v.z, -v.y)).collect();
-        let Some((crest, half_w, half_h)) = fit_top(&slab, HEAD_DEPTH) else { continue };
-        neck.push(Section { bone: HEAD_BONE.into(), centre: [x, -(crest - half_h), 0.0], side: [0.0, 0.0, half_w], up: [0.0, -half_h, 0.0] });
+        let Some((top, half_w, half_h)) = fit_top(&slab, HEAD_DEPTH) else { continue };
+        neck.push(Section { bone: HEAD_BONE.into(), centre: [x, -(top - half_h), 0.0], side: [0.0, 0.0, half_w], up: [0.0, -half_h, 0.0] });
     }
     Some(Saddle {
         bone: BONE.into(),
@@ -177,32 +184,35 @@ pub fn measure(saddle: &Nif, skeleton: &Nif, body: &Nif, head: &Nif, tack: Optio
 }
 
 /// The ellipse round the top of a cross-section (its points: across, up), fitted to its outline
-/// down to `depth` below its crest: the crest, and the ellipse's half width and half height (its
-/// middle that far below the crest). Least squares over a grid, each point's distance across from
-/// the ellipse at its height (none below the ellipse).
+/// down to `depth` below its crest, from outside (see [`OUTSIDE`]): its top (on the crest or a
+/// little over it, for a flat top), and its half width and half height (its middle that far below
+/// its top). Least squares over a grid, each point's distance across from the ellipse at its height
+/// (none below the ellipse).
 fn fit_top(points: &[(f32, f32)], depth: f32) -> Option<(f32, f32, f32)> {
     let crest = points.iter().map(|p| p.1).max_by(f32::total_cmp)?;
     let near: Vec<(f32, f32)> = points.iter().filter(|p| p.1 >= crest - depth).map(|p| (p.0.abs(), crest - p.1)).collect();
     if near.len() < 4 {
         return None;
     }
-    let mut best = (f32::MAX, 0.0, 0.0);
-    for hh in (6..=48).map(|k| k as f32 * 0.5) {
-        for hw in (4..=100).map(|k| k as f32 * 0.25) {
-            let err: f32 = near
-                .iter()
-                .map(|&(across, down)| {
-                    let y = (down - hh) / hh;
-                    let w = hw * (1.0 - y * y).max(0.0).sqrt();
-                    (w - across).powi(2)
-                })
-                .sum();
-            if err < best.0 {
-                best = (err, hw, hh);
+    let mut best = (f32::MAX, 0.0, 0.0, 0.0);
+    for lift in (0..=8).map(|k| k as f32 * 0.5) {
+        for hh in (6..=90).map(|k| k as f32 * 0.5) {
+            for hw in (4..=100).map(|k| k as f32 * 0.25) {
+                let err: f32 = near
+                    .iter()
+                    .map(|&(across, down)| {
+                        let y = (down + lift - hh) / hh;
+                        let w = hw * (1.0 - y * y).max(0.0).sqrt();
+                        (w - across).powi(2) * if across > w { OUTSIDE } else { 1.0 }
+                    })
+                    .sum();
+                if err < best.0 {
+                    best = (err, crest + lift, hw, hh);
+                }
             }
         }
     }
-    Some((crest, best.1, best.2))
+    Some((best.1, best.2, best.3))
 }
 
 /// A texture's own average colour (linear RGB): its smallest mip, one block-compressed colour block.
@@ -255,7 +265,8 @@ pub fn save(root: &Path, s: &Saddle) -> anyhow::Result<()> {
          # and ankle go round the horse's body ({BODY}), in the frame of the bone it rides on (game units);\n\
          # the bit's left ring on its head ({HEAD}) in its head bone's frame, and its tack's colour ({TACK});\n\
          # the tack's leather (the saddle's material) and the bridle's strap in its texture, which the reins are cut\n\
-         # from; and the neck and head as cross-sections round their top, on their bones, for the reins to lie on.\n\
+         # from; and the neck (with its manes) and head as cross-sections round their top, on their bones, for the\n\
+         # reins to lie on.\n\
          # Written by `oblivion-extract export meshes/creatures/horse`.\n{}",
         toml::to_string(s)?
     );
