@@ -22,8 +22,8 @@
 //! NPCs meet it where it's drawn). Swung back into its frame, the game's Activate again: closed,
 //! its close sound, latched. The game opening or closing it itself (the trigger's Activate at gaze,
 //! an NPC, a script) plays its animation, and the runtime's leaf follows. A door that slides (a
-//! ruin's stone door, a portcullis) is too heavy for a hand: a tug on it is the game's Activate,
-//! and the game's animation moves it.
+//! ruin's stone door, a portcullis) is too heavy for a hand: taking it in a hand (or a tug on it) is
+//! the game's Activate, and the game's animation moves it.
 //!
 //! **Activators.** The lever, switch, button or chain moves by hand along its own "Forward"
 //! travel; at its end ([`FIRE_AT`]), the game's Activate (its script does what it does). One whose
@@ -1325,7 +1325,9 @@ mod game {
                 let most = t.parts.iter().map(|p| p.at / p.far.max(1e-4)).fold(0.0f32, f32::max);
                 match t.kind {
                     Kind::Door | Kind::HeavyDoor if !t.open => {
-                        let tug = t.parts.iter().any(|p| p.at >= LATCH_PLAY.min(p.far) * TUG);
+                        // (A heavy door slides only the way its animation takes it, often down: taken
+                        // in a hand at all, it's tugged.)
+                        let tug = t.parts.iter().any(|p| p.at >= LATCH_PLAY.min(p.far) * TUG || (t.kind == Kind::HeavyDoor && p.held));
                         if tug && ready && t.armed {
                             t.pending = true;
                             t.armed = false;
