@@ -119,6 +119,16 @@ while it measures, then the pushed one back). It turns his head to look at you a
 anyway, and your push sits on top of that. His face keeps its expression. The log says which heads
 (`grabs: the heads the hands have` and `the head tracking measures the head ... from its animation`).
 
+## Playtest 5 (real headset)
+
+The head didn't move again. The log shows the hook working on his head bone, so its "animated" turn
+wasn't: once a bone's body is dynamic, its blend object writes the bone's own turn as well (flag 8,
+set by the game as the body's motion changes), so the push was in it too and the head
+tracking still turned it back. Now, while a hand has his head, the head tracking holds its look as
+it was (its measure skipped for that head): he keeps looking where he looked (at you), with the
+push on top, and his face keeps its expression. Let be (about two seconds after the last touch),
+it measures again and follows you. The log says `the head tracking holds its look on the head ...`.
+
 Found while looking (not changed): Oblivion turns the upper spine itself (its look-at twist, a
 `bhkBlendCollisionObject` of its own kind on Spine, Spine1, Spine2) and draws those bones from the
 animation, so a push on the chest doesn't bend the chest itself; the head and arms swinging with it
