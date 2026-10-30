@@ -110,7 +110,7 @@ mod game {
     /// go of, it's being shut; brought back, it would leap into the other hand and stay there).
     pub fn lying_book() -> Option<u32> {
         let (_, refr) = open()?;
-        (refr != 0 && HELD_OPEN.load(Ordering::Relaxed) != refr).then(|| crate::items::offered(refr)).flatten()
+        (refr != 0 && HELD_OPEN.load(Ordering::Relaxed) != refr).then(|| crate::items::offered_object(refr)).flatten()
     }
 
     /// The reference of the book being read, once a hand has had it open (until its menu shuts).

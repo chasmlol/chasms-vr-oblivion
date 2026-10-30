@@ -1,7 +1,8 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
 //! ([`crate::weapons`]), their torch ([`crate::torch`]), their map ([`crate::map`]), the limbs cut off the game's creatures
 //! ([`crate::gore`]), the game's things lying about near the player ([`crate::items`]), the
-//! things in the pockets of the people near a sneaking player ([`crate::pockets`]), the
+//! things in the pockets of the people near a sneaking player ([`crate::pockets`]), the pestles of
+//! the mortars among the things lying about ([`crate::alchemy`]), the
 //! world's moving parts, its doors and levers ([`crate::world`]), and its loose Havok bodies, its
 //! hanging chains ([`crate::props`]), each owner's entries kept apart and written together (and the
 //! cards of what they are, the same way); with them, the sound set each sounds like (the game's sound pack, [`crate::sounds`]). The same for
@@ -21,13 +22,14 @@ pub enum Owner {
     Props,
     Map,
     Pockets,
+    Alchemy,
 }
 
-const OWNERS: usize = 8;
+const OWNERS: usize = 9;
 
 /// Where an owner's entries go in the table: the player's own things first, then the limbs cut
-/// off (so they're never the ones the table's size leaves out), then what lies about and what's in
-/// people's pockets.
+/// off (so they're never the ones the table's size leaves out), then what lies about (and the
+/// pestles of its mortars) and what's in people's pockets.
 fn index(owner: Owner) -> usize {
     match owner {
         Owner::Weapons => 0,
@@ -35,9 +37,10 @@ fn index(owner: Owner) -> usize {
         Owner::Map => 2,
         Owner::Gore => 3,
         Owner::Items => 4,
-        Owner::Pockets => 5,
-        Owner::World => 6,
-        Owner::Props => 7,
+        Owner::Alchemy => 5,
+        Owner::Pockets => 6,
+        Owner::World => 7,
+        Owner::Props => 8,
     }
 }
 

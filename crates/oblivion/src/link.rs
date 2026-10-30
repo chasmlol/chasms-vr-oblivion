@@ -90,6 +90,10 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
                 adapter.tracking.recenter();
             }
         }
+        // (Up against something the game's body is held up on, the view goes on: crate::movement.
+        // Not on a horse: the view is the rider's eye over the saddle.)
+        #[cfg(all(windows, target_arch = "x86"))]
+        adapter.tracking.set_lead(if ride.is_some() { Vec3::ZERO } else { crate::movement::lead(eye, g.dt, g.now) });
         let anchor = Anchor {
             eye: ride.as_ref().map_or(eye, |c| c.eye),
             base_eye: ride.as_ref().map_or(eye, |c| c.base_eye),

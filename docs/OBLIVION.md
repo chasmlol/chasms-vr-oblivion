@@ -41,7 +41,8 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | The holsters' editor | A menu of the game's own UI (menu type 1050, its factory hooked; an XML of its prefabs, rows, icons, buttons and fonts read by its own `ReadXML`), floating ahead in three strips: the slots, the categories of the one picked (in and out, earlier and later), and buttons (the order inside, an empty slot's tick, size, reach, worn first, Move by hand, New, Remove, Ok). Opened by a grip held in a slot or RustVR's Holsters button; B closes it. | `slot_menu.rs`, `hud.rs` |
 | Sounds | Every sound the runtime makes for the hands is one of Oblivion's own sound records (their files, levels and variations), as a sound pack (`oblivion-extract sounds`, `oblivion_assets::sounds`). A thing taken, put away or dropped plays the inventory's sound of a thing of its kind and knocks into the world with the game's collision sound for its Havok material and mass, both as the game picks them (its own functions asked for each thing); the weapon on the body draws and sheathes with its type's draw and sheathe (an enchanted one's draw with its ring); the gravity gloves flick with a big weapon's swish, quiet, and fly with Telekinesis's travel (Mysticism's), and what they pull lands as anything taken does; each bite or gulp at the mouth is the game's chewing or swallowing; a slot found and RustVR's menu, the menus' focus and OK. Drawing from the body's slots, putting back and stowing are the game's own inventory sounds, so the runtime plays nothing there. | `sounds.rs`, `objects.rs` |
 | Pockets | While the player sneaks, the NPCs within 3 m (alive, not fighting) wear pockets on their own bones: belt pouches at the hips, a purse at the belt's front, an inner pocket at the chest, a bag on the back for bigger things. In them is their inventory as the game's pickpocketing lists it (its own entries and filter: nothing worn), shared out by kind. A thing pulled out is the game's own attempt: its chance (both Sneaks with Luck, the value taken) against its roll, then its own transfer (stolen, its message) or its own crime and reaction (bounty, disposition, the victim's alarm, never robbable again). The session is the game's menu: closed with nothing tried, its rummaging check and a use of Sneak; with things taken, its check for witnesses. Planting is the game's rule (weightless things only). A thing out of a pocket is drawn from the game's model with the game's own card over it. `docs/research/pickpocket.md` | `pockets.rs` |
-| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <name or id>`, `EquipAll <id>`, `PlaceInFront <ref> <metres>`, `PlayerHorse <base> [<metres>]` (a horse of the player's own beside them), or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
+| Alchemy | Every mortar and pestle near the player is a bench: the runtime draws it as two pieces from the game's model (the mortar, a bowl the hands use; the pestle, the hands' own), the game's own model hidden. Up to four ingredients go into the bowl, each kind once (the game's menu's rules), and lie in it as themselves, shrinking as the pestle grinds them; the alembic, calcinator and retort within 75 cm count, the best of each kind. Whenever what's in the bowl changes, the game's own alchemy menu is made for a moment and gone again (no menu mode) to work out what it would make, shown on a card of its own art, icons and fonts over the mortar. All ground, its Create makes the potion (the ingredients picked up and used, the skill, the message, the sound) and the bottle rises out of the mortar to be taken; with no effect shared, the game's own failure words and sound, the ingredients lost. Not in combat (the game's rule). See [research/alchemy.md](research/alchemy.md). | `alchemy.rs` |
+| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <name or id>`, `EquipAll <id>`, `PlaceInFront <ref> <metres>`, `PlayerHorse <base> [<metres>]` (a horse of the player's own beside them), `PlaceAt <base> <ahead> <right> <up> [<turn>]` (a new one of a base form there, level, the player's own, settled where it falls: a bench set out), `Place <base> <x> <y> <z> [<angle>]` (the same at a place in the cell, game units: a set-out that stays put however the player stands), `RunFile <path>` (a file of timed lines in the test file's format, queued in one go: the alchemy playtest's row of tables, `tools/alchemy-row.txt`), or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
 
 ## Setting up
 
@@ -65,6 +66,14 @@ Bows are written bent too (`#bent`, from their morph), arrows alone (`#arrow`: t
 the whole model, quiver and all) and their quivers worn on the skeleton (`#quiver0` ..
 `#quiver5`), with `bows.toml` (the limbs' spring, from the player's bow animation); the reticle is
 the bow's optional crosshair.
+
+For alchemy, the mortars and pestles split and measured, and the game's fonts and menu art for its
+cards and its note (the book menu's scroll):
+
+```
+cargo run --release -p oblivion-assets --bin oblivion-extract -- bench meshes/clutter/magesguild/mortarpestle
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export-ui fonts textures/menus/alchemy textures/menus/book textures/menus/icons/magic textures/menus/icons/clutter
+```
 
 Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
 
@@ -96,6 +105,7 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Grip held still in a slot (1.5 s) | The holsters' editor |
 | Sneaking, a hand into someone's pocket; grip, pull out | Feel what's there (a tick per thing as the hand moves), take one: the game's pickpocketing |
 | A thing let go in someone's pocket | Plant it (the game's rule: weightless things only) |
+| An ingredient let go over a mortar; the pestle worked round in it | Into the bowl; ground, the game makes the potion and its bottle rises out of the mortar |
 | Swing | Attack (the game's hit; a fast committed swing is a power attack) |
 | Grip over the left shoulder (a bow equipped) | Take the bow by its grip, in either hand |
 | Grip in the slot the arrows are kept in (over the right shoulder to begin with), the bow on | One of the bow's arrows to nock (let go there, it goes back in) |

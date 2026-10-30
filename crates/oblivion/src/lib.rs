@@ -30,6 +30,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(linker_messages)]
 
+pub mod alchemy;
 pub mod archery;
 pub mod body;
 pub mod books;

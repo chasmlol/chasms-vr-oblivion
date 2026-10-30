@@ -3,6 +3,7 @@
 //! Nothing here is ever written back into the game; what's extracted goes to `local_assets/`
 //! (git-ignored: the files are the game's).
 
+pub mod bench;
 pub mod bsa;
 pub mod dds;
 pub mod export;
@@ -11,3 +12,4 @@ pub mod horse;
 pub mod nif;
 pub mod preview;
 pub mod sounds;
+pub mod ui;
