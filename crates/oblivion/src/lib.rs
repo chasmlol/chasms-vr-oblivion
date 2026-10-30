@@ -60,3 +60,4 @@ pub mod settings;
 pub mod timing;
 pub mod weapons;
 pub mod window;
+pub mod xobse;
