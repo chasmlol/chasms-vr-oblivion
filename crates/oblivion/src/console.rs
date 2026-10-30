@@ -194,6 +194,10 @@ pub fn run(line: &str) -> bool {
         let up = it.next().and_then(|u| u.parse::<f32>().ok()).unwrap_or(0.0);
         return place_in_front(r, m, up);
     }
+    #[cfg(all(windows, target_arch = "x86"))]
+    if let Some(p) = line.strip_prefix("Wear ") {
+        return p.trim().parse::<f32>().is_ok_and(crate::repair::wear);
+    }
     if let Some(rest) = line.strip_prefix("OnNewest ") {
         let Some((base, script)) = rest.trim().split_once(' ') else { return false };
         return on_newest(base, script.trim());

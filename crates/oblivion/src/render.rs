@@ -193,6 +193,7 @@ mod win {
             crate::riding::frame(link::now());
             crate::books::frame();
             crate::inventory::frame(link::now());
+            crate::repair::frame();
             crate::slot_menu::frame();
             crate::pockets::frame(link::now());
             crate::alchemy::frame(link::now());
@@ -384,6 +385,7 @@ mod win {
             hooks::guard_void("map", || crate::map::place(now));
             time(Part::Items, || hooks::guard_void("alchemy", || crate::alchemy::place(view, now)));
             time(Part::Items, || hooks::guard_void("lock", || crate::lock::place(view, &snap.frame, now)));
+            time(Part::Items, || hooks::guard_void("repair", || crate::repair::place(view, &snap.frame, now)));
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))

@@ -15,9 +15,9 @@
 //! * **Combat** ([`combat`], [`weapons`], [`archery`]): the game's creatures and spells to the
 //!   runtime, the equipped weapon as the object in the hand (the game's own model; a bow and its
 //!   arrows), and what the hands did (hits, casts, arrows loosed) done by the game.
-//! * **The world** ([`items`], [`world`], [`lock`]): the things lying about, to take in the hands;
-//!   the doors and levers, worked by hand with the game's own activation; the game's lock, its pick
-//!   in the hand.
+//! * **The world** ([`items`], [`world`], [`lock`], [`repair`]): the things lying about, to take in
+//!   the hands; the doors and levers, worked by hand with the game's own activation; the game's lock,
+//!   picked at the lock; the game's repair, a hammer's strike at a time.
 //! * **Pockets** ([`pockets`]): the people near a sneaking player wear their own things in pockets
 //!   on their skeletons; a hand that takes one out, or puts one in, is the game's own pickpocketing.
 //! * **Riding** ([`riding`]): the game's horses, got on by the saddle, ridden by the reins, the
@@ -72,6 +72,7 @@ pub mod pockets;
 pub mod props;
 pub mod proxy;
 pub mod render;
+pub mod repair;
 pub mod resolution;
 pub mod reticle;
 pub mod riding;

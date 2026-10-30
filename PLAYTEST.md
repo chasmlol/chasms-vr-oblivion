@@ -42,3 +42,35 @@ held thing). The game's lock logic is unchanged (its own cursor, mouse and click
 
 What I couldn't: anything in the game (I never run it). Not tried: a locked door (the same code: any
 locked door or container's collision), an owned lock's crime, the Skeleton Key.
+
+## 2. Repairing with the hammer — `playtest-repair.bat`
+
+Boots into rustvr-base (a Nord in iron armour) with ten repair hammers, an iron longsword and an iron
+shield equipped, everything you have on worn down to 40%, and saves as `rustvr-repair`.
+
+Try, in order:
+
+1. **Draw a hammer** with the right hand from the front of the belt on the right ("Hammers", a new
+   slot): the game's repair hammer in the hand.
+2. **Draw the sword** with the left hand and hold it out; **strike its blade** with the hammer's head.
+   Each strike is the game's own repair: its clang, Armorer used, a little health back (the sword's
+   card over the left hand shows its condition). Both hands feel it.
+3. **The shield**: take it from over the left shoulder and strike its face.
+4. **Armour you're wearing**: strike your left forearm or hand (the gauntlets), your chest (the
+   cuirass), your thigh (the greaves), your head (the helmet): each is repaired where it's worn.
+5. **Lift the hammer off between strikes**: a strike needs the head to arrive at speed (1.2 m/s),
+   and the next one needs it lifted 8 cm off first. Pressing or rubbing does nothing.
+6. **Keep going** until the hammer breaks (the game's chance by your Armorer): its own break sound,
+   one hammer fewer.
+7. **In combat** (attack someone first): a strike gets the game's own "You cannot repair items during
+   combat!".
+
+Tell me especially: does a strike register when you'd expect it to (too easy, too hard)? Does the
+head feel like it's where the hammer's head is drawn?
+
+What I checked: builds; unit tests (the hammer's head across the far end of its model, lines against
+boxes and limbs). The repair itself is the game's own menu click on the struck thing's row.
+
+What I couldn't: anything in the game. Not tried: an enchanted thing below Journeyman (the game's
+message), an Expert's repair past 100%, armour carried but not worn (not struck in the hand: put it
+on, or use the hammer from the inventory as ever).

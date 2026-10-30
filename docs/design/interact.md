@@ -123,3 +123,74 @@ Calls made:
 * The world stays stopped while picking, as in the game (its menu can't run off the stack).
 * The lock's tumblers are the menu's own models, not a new lock: a cutaway at the keyhole, as the
   game's own menu is a cutaway.
+
+## 2. Repairing with the hammer
+
+### How VR games do it
+
+* **The strike is the input.** VR smithing (the anvil games, sandbox forge mods, the
+  crafting in *The Walking Dead: Saints & Sinners*) has the player swing a real hammer at the thing:
+  a strike counts when the head arrives fast enough, and each strike is answered at once with a
+  clang, a spark of feedback and a jolt in both hands.
+* **The work piece is held or set down where the player can hit it**, never a list. Holding a blade
+  in one hand and hammering it with the other is the gesture players reach for first.
+* **Repeated strikes, small gains**: the satisfaction is in the rhythm, each strike doing a little.
+
+### Oblivion's repair
+
+* **The hammer**: a misc item ("Repair Hammer", `Clutter\RepairHammer.NIF`;
+  the game's own form). Using one from the inventory (the misc item's use) is
+  refused in combat ("You cannot repair items during combat!", `iAllowRepairDuringCombat`,
+  the game's own check) and otherwise opens the `RepairMenu` in its hammer mode.
+* **The `RepairMenu`** (`Data\Menus\repair_menu.xml`, made for one of its modes)
+  is the game's one list of the player's things to pick from: its mode is
+  1 the player's hammers, 2 a merchant's repair for gold, 3 alchemy's, 4 and 5 the enchanting
+  menu's item and soul gem, 6 the Sigil Stone's item. It counts the hammers the player has. Its rows
+  (ids from 51) carry the thing's place in the player's inventory (value 4025, 0xFB9; the player's
+  inventory makes a copy of that entry by its place: its form, its extra
+  data lists, freed again with the game's own free).
+* **A strike is a click on a row** (`HandleClick`, an id from 51 and the row's tile). In
+  the hammer mode:
+  * an enchanted thing needs a Journeyman armorer ("Only a journeyman armorer or higher may repair
+    magic items."); no hammers left, its own message;
+  * what a strike restores is the game's (the Armorer skill with `fRepairArmorerBase`,
+    `fRepairArmorerMult`), up to the thing's full health, or a quarter past it for an Expert or
+    Master (Armorer mastery 3 or more); one of a stack is split off to be repaired;
+  * the hammer may break (`fRepairSkillBreakBase`, `fRepairSkillBreakMult`,
+    `fRepairBreakApprenticeMult`; never for a Master): `UIArmorWeaponRepairBreak`, one hammer
+    removed from the player, and the menu shuts with none left;
+  * Armorer is used (`UseSkill(12)`), the player's equipment is updated, the list
+    made again, and `UIArmorWeaponRepair` plays.
+* **Health**: a thing's health percent is its inventory entry's own.
+* **Worn things** are the player's inventory entries (`ExtraContainerChanges`) with an extra data list
+  marked worn (`ExtraWorn` 0x1B, `ExtraWornLeft` 0x1C); an armour's slots are its
+  `TESBipedModelForm`'s: head 0x1, upper body 0x4, lower body 0x8, hands 0x10, feet
+  0x20, shield 0x2000.
+
+### Design
+
+The game's hammer repair stays the whole of the repair: each strike is one click of its own
+`RepairMenu` in its hammer mode on the thing struck, made for that moment and gone again in the
+same frame (as alchemy's menu is): its skill, what it restores, its cap, its break chance and the
+hammer removed, its sounds, its messages, its refusal in combat. Only how a strike is made changes:
+
+* **The hammer in the hand**: a repair hammer drawn from the body (the Hammers slot, the front of the
+  belt on the right), the game's model. Its head is the end of its model away from the hand.
+* **What it strikes**: what the player holds or wears, where it is:
+  * the weapon in a hand (the equipped weapon, drawn), anywhere on its model's box;
+  * the shield on the arm;
+  * armour worn, struck on the body where it's worn: the helmet at the head, the cuirass on the
+    chest, the greaves on the thighs and shins, the boots at the feet, the gauntlets on the other
+    hand and forearm.
+* **A strike** is the head arriving at one of them at 1.2 m/s or more (its fastest in the last tenth
+  of a second: held things are solid to each other, so a hammer on a held blade stops there); the
+  next needs the head lifted off again. Each strike is felt in both hands, the hammer hand harder.
+* **What it says**: the game's own messages (the journeyman rule, the combat rule, out of hammers)
+  and sounds. The thing's card over the hand (its condition) shows the gain.
+
+Calls made:
+
+* Armour that's carried, not worn, isn't struck in the hand: the holsters don't hand out apparel
+  (its model is the ground model, which the slots don't draw yet). Put it on to repair it, or use the
+  hammer from the inventory as ever (the game's own menu stays).
+* The world doesn't stop for a strike (the game's menu would stop it: it's made and gone at once).
