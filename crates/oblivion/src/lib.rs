@@ -24,6 +24,7 @@
 #![allow(linker_messages)]
 
 pub mod body;
+pub mod books;
 pub mod camera;
 pub mod clock;
 pub mod collision;
@@ -45,6 +46,7 @@ pub mod launcher;
 pub mod lighting;
 pub mod link;
 pub mod log;
+pub mod map;
 pub mod mem;
 pub mod menus;
 pub mod movement;

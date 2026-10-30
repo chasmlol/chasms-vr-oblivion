@@ -16,6 +16,8 @@
 //! | a service from dialogue (spells, training, repair, recharge, persuasion) | beside the speaker | the menu, cut from the screen |
 //! | a thing's own (a lock being picked, an altar's enchanting or spellmaking, a sigil stone) | beside the thing | the menu, cut from the screen |
 //! | anything else | ahead of the player | the menu, cut from the screen |
+//! | a book or a note being read | on the book in the hand (or held in the off hand: one read from the inventory or a shelf) | a book's two pages, a note's scroll |
+//! | the map drawn from the belt | held in the hand like paper | its page (the local or world map in its frame), its tabs |
 //!
 //! **Transparency**: the pieces are as opaque as the game draws them, and the rest of the screen is
 //! clear. The menus' backgrounds (their parchment: each menu's image tiles named `..._background`)
@@ -187,6 +189,7 @@ mod win {
     const MENU_SPELLMAKING: u32 = 0x411;
     const MENU_ENCHANTMENT: u32 = 0x412;
     const MENU_SIGIL_STONE: u32 = 0x418;
+    const MENU_BOOK: u32 = crate::books::MENU_BOOK;
     /// Menus a thing in the world opens as it's activated (a lock, an altar, a sigil stone): they
     /// float beside it.
     const THINGS_OWN: [u32; 4] = [MENU_LOCKPICK, MENU_SPELLMAKING, MENU_ENCHANTMENT, MENU_SIGIL_STONE];
@@ -276,6 +279,13 @@ mod win {
     /// A menu nobody has cut yet: the whole of what it draws, as one piece.
     const WHOLE: &[Piece] = &[Piece::of(&[From::All], true)];
 
+    /// The map drawn from the belt, in the hand: its page (the local or the world map in its frame,
+    /// on its parchment) and its tabs; the big four's switcher stays behind.
+    const MAP_HELD: &[Piece] = &[Piece::of(&[From::Drawn("map_background")], true), Piece::of(MAP_TABS, true)];
+
+    /// How far an open book's two pages tip towards the eye about its spine (radians).
+    const BOOK_FOLD: f32 = 0.12;
+
     /// The menus' trees, each read once a frame as it's needed.
     #[derive(Default)]
     struct Trees(HashMap<u32, tiles::Tree>);
@@ -335,6 +345,64 @@ mod win {
         boxes.into_iter().fold(None, tiles::grow)
     }
 
+    /// Menu `kind`'s pieces as a group held in the hands, as `held` says.
+    fn add_held_group(layout: &mut HudLayout, group: HudGroup, held: HudHeld, kind: u32, pieces: &[Piece], screen: (f32, f32), trees: &mut Trees) -> Option<[f32; 4]> {
+        let b = add_group(layout, group, kind, pieces, screen, trees)?;
+        let n = layout.group_count as usize;
+        layout.groups[n - 1].anchor = ANCHOR_HELD;
+        layout.held[n - 1] = held;
+        Some(b)
+    }
+
+    /// The book or note being read (`menus\book_menu.xml`), held: on the book in the hand when a
+    /// hand has it (its cover's face), else in the off hand like a sheet (one read from the
+    /// inventory, or from a shelf by looking at it). A book is its art's two halves, its pages,
+    /// tipped a little about the spine as an open book's are (the buttons, Take and Exit and the
+    /// page turns, are on its pages); a note is its scroll, rollers and all. Its pages turn by hand.
+    fn book(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees) {
+        let Some((menu, refr)) = crate::books::open() else { return };
+        let scroll = crate::books::is_scroll(menu);
+        let (object, flags) = match crate::books::held_book() {
+            Some(id) => (id, HELD_FACE | HELD_PAGES),
+            None => (0, HELD_SHEET | HELD_PAGES),
+        };
+        let held = HudHeld { object, hand: HELD_OFF_HAND, flags, fold: if scroll { 0.0 } else { BOOK_FOLD } };
+        let id = MENU_BOOK ^ refr as u32 ^ object.rotate_left(8) ^ if scroll { 0x5C } else { 0 };
+        let group = HudGroup { id, ..Default::default() };
+        let tree = trees.get(MENU_BOOK);
+        let h = screen.1.max(1.0);
+        let boxes: Vec<[f32; 4]> = if scroll {
+            tree.drawn("book_background_scroll").into_iter().collect()
+        } else {
+            // (Its two pages, split down the spine: nothing between them.)
+            tree.rect("book_background")
+                .map(|b| {
+                    let mid = (b[0] + b[2]) * 0.5;
+                    vec![[b[0], b[1], mid, b[3]], [mid, b[1], b[2], b[3]]]
+                })
+                .unwrap_or_default()
+        };
+        let Some(all) = boxes.iter().copied().fold(None, tiles::grow) else { return };
+        let centre = ((all[0] + all[2]) * 0.5, (all[1] + all[3]) * 0.5);
+        let n = l.add_held(group, held);
+        if n == 0 {
+            return;
+        }
+        for b in boxes {
+            let margin = if scroll { MARGIN } else { 0.0 };
+            if let Some(uv) = tiles::uv_of(b, screen, margin) {
+                let offset = [((b[0] + b[2]) * 0.5 - centre.0) / h, -((b[1] + b[3]) * 0.5 - centre.1) / h, 0.0];
+                l.push(HudElement::piece(n, uv, offset, HUDE_POINT));
+            }
+        }
+        static SAID: Mutex<u32> = Mutex::new(0);
+        let mut said = SAID.lock().unwrap();
+        if *said != id {
+            *said = id;
+            tracing::info!("hud: {} being read, {}", if scroll { "a note" } else { "a book" }, if object != 0 { "on the book in the hand" } else { "in the off hand" });
+        }
+    }
+
     /// A menu moved on the screen to make room for a pop-up over it: its top tile, and how far down.
     static MOVED: Mutex<Option<(usize, f32)>> = Mutex::new(None);
 
@@ -386,12 +454,11 @@ mod win {
     /// The menu's backgrounds a little see-through (see the module's notes): each time the game sets
     /// a background's alpha afresh, it's set to that much of it.
     fn see_through(tree: &tiles::Tree) {
-        static OURS: Mutex<Vec<(usize, f32)>> = Mutex::new(Vec::new());
         let k = crate::settings::get().menu_background.clamp(0.0, 1.0);
         if k >= 1.0 {
             return;
         }
-        let mut ours = OURS.lock().unwrap();
+        let mut ours = SEE_THROUGH.lock().unwrap();
         for p in tree.0.iter().filter(|p| p.kind == tiles::KIND_IMAGE && p.shown && is_background(&p.name)) {
             let Some(a) = p.alpha.filter(|&a| a > 0.0) else { continue };
             if ours.iter().any(|&(t, v)| t == p.tile && (v - a).abs() < 0.5) {
@@ -405,6 +472,24 @@ mod win {
                 ours.remove(0);
             }
             ours.push((p.tile, v));
+        }
+    }
+
+    /// The backgrounds made see-through ([`see_through`]): each tile, and the alpha it was given.
+    static SEE_THROUGH: Mutex<Vec<(usize, f32)>> = Mutex::new(Vec::new());
+
+    /// A menu's backgrounds as opaque as the game made them again (the map, drawn from the belt
+    /// after it floated ahead: a sheet of paper isn't see-through).
+    fn solid(tree: &tiles::Tree) {
+        let k = crate::settings::get().menu_background.clamp(0.01, 1.0);
+        let mut ours = SEE_THROUGH.lock().unwrap();
+        for p in tree.0.iter().filter(|p| p.kind == tiles::KIND_IMAGE && is_background(&p.name)) {
+            let Some(i) = ours.iter().position(|&(t, _)| t == p.tile) else { continue };
+            let (_, v) = ours.remove(i);
+            if p.alpha.is_some_and(|a| (a - v).abs() < 0.5) {
+                type Update = unsafe extern "thiscall" fn(usize, u32, f32);
+                crate::hooks::guard_void("menu background", || unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(p.tile, tiles::ALPHA as u32, (v / k).min(255.0)) });
+            }
         }
     }
 
@@ -476,6 +561,11 @@ mod win {
         let big_four = |l: &mut HudLayout, trees: &mut Trees| {
             // (All four are there, hidden, from when a game loads: the one that shows.)
             let kind = [MENU_INVENTORY, MENU_STATS, MENU_MAGIC, MENU_MAP].into_iter().find(|&k| tiles::shows(k))?;
+            // The map drawn from the belt: in the hand, its own page and tabs.
+            if kind == MENU_MAP && crate::map::held_open() {
+                let held = HudHeld { object: crate::map::MAP_ID, flags: HELD_SHEET | HELD_DRAG, ..Default::default() };
+                return add_held_group(l, HudGroup { id: BIG_FOUR ^ crate::map::MAP_ID, ..Default::default() }, held, kind, MAP_HELD, screen, trees).map(|b| (kind, b));
+            }
             let pieces = match kind {
                 MENU_INVENTORY => INVENTORY,
                 MENU_MAGIC => MAGIC,
@@ -501,6 +591,7 @@ mod win {
             BIG_FOUR => {
                 big_four(&mut l, &mut trees);
             }
+            MENU_BOOK => book(&mut l, screen, &mut trees),
             MENU_QUANTITY | MENU_MESSAGE | MENU_NEGOTIATE => {
                 // A count, a question or a haggle over another menu: where the eyes look, the menu
                 // under it where it was.
@@ -531,9 +622,15 @@ mod win {
                 add_group(&mut l, group, kind, WHOLE, screen, &mut trees);
             }
         }
-        // (A pop-up stays solid: what's behind it in the world is the menu it's over.)
-        for (_, tree) in trees.0.iter().filter(|(k, _)| !matches!(**k, MENU_QUANTITY | MENU_MESSAGE | MENU_NEGOTIATE)) {
-            see_through(tree);
+        // (A pop-up stays solid: what's behind it in the world is the menu it's over. So does what's
+        // held in the hands: a book's pages, a map.)
+        let held_map = crate::map::held_open();
+        for (k, tree) in trees.0.iter() {
+            if matches!(*k, MENU_QUANTITY | MENU_MESSAGE | MENU_NEGOTIATE | MENU_BOOK) || (*k == MENU_MAP && held_map) {
+                solid(tree);
+            } else {
+                see_through(tree);
+            }
         }
         l
     }

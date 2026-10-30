@@ -507,6 +507,24 @@ mod game {
         logged: f64,
         /// Things just let go: logged as they fly (until when, next log).
         trace: Vec<(u32, f64, f64)>,
+        /// What the hands hold now (as the runtime last said).
+        held: Vec<Held>,
+    }
+
+    /// A thing in a hand: its object, the game's reference, its kind, the hand, and how many times
+    /// the other hand has opened or shut it ([`OBJF_OPENS`]).
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct Held {
+        pub id: u32,
+        pub refr: usize,
+        pub kind: u8,
+        pub hand: usize,
+        pub opens: u32,
+    }
+
+    /// What the hands hold now.
+    pub fn held() -> Vec<Held> {
+        with_state(|s| s.held.clone())
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -525,6 +543,7 @@ mod game {
             infos: bytemuck::zeroed_box(),
             logged: 0.0,
             trace: Vec::new(),
+            held: Vec::new(),
         }))
     }
 
@@ -544,7 +563,12 @@ mod game {
         let mass_inv = mem::at::<f32>(mem::deref(body + BODY_MOTION) + MOTION_MASS_INV).filter(|m| *m > 1e-4 && m.is_finite());
         // (The game's weight is about pounds: a kilogram is two.)
         let mass = mass_inv.map(|m| 1.0 / m).or(f.weight.map(|w| w * 0.45)).unwrap_or(1.0).clamp(0.05, 60.0);
-        let desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
+        let mut desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
+        // A book or a note opens in the hands: the other hand's grip on it reads it
+        // (`crate::books`).
+        if f.kind == BOOK {
+            desc.flags |= OBJF_OPENS;
+        }
         Some(Item { refr, node, body, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, filter: None, flying: None, taken_at: None })
     }
 
@@ -653,12 +677,22 @@ mod game {
     pub fn place(view: &rustvr_adapter::View, now: f64) {
         with_state(|s| {
             if s.items.is_empty() {
+                s.held.clear();
                 return;
             }
             if !crate::link::with_adapter(|a| a.read_object_states(&mut s.states)).unwrap_or(false) {
                 return;
             }
             let n = (s.states.count as usize).min(MAX_OBJECTS);
+            s.held = s.states.states[..n]
+                .iter()
+                .filter(|st| st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0)
+                .filter_map(|st| {
+                    let it = s.items.get(&st.id).filter(|it| it.taken_at.is_none())?;
+                    let kind = mem::at::<u8>(mem::deref(it.refr + REFR_BASE) + FORM_TYPE).unwrap_or(0);
+                    Some(Held { id: st.id, refr: it.refr, kind, hand: if st.flags & OS_HELD_LEFT != 0 { 0 } else { 1 }, opens: st.shots })
+                })
+                .collect();
             for st in &s.states.states[..n] {
                 let Some(it) = s.items.get_mut(&st.id) else { continue };
                 if it.taken_at.is_some() {
