@@ -94,8 +94,24 @@ Only if a difference isn't clear: the sky on the game's camera, the people's bod
 drawn for the left eye, and no anisotropic filtering, as before this branch. (The runtime's change
 below is in both.)
 
+## Round 8: which shadows draw the streak (two short runs)
+
+The streak is the ground drawn again with a shadow's texture laid on it. That's the game's shadow
+pass, whose texture coordinates go off to infinity at the edge of what the shadow covers, and your
+eyes see that edge differently, so it moves as your head does. Two passes do that, so one run each:
+- `playtest-nocanopy.bat`: the trees' canopy shadows off.
+- `playtest-noshadows.bat`: people's shadows off (yours too).
+
+Look where you usually see the streak and tell me which run (if either) has it gone. Each one closes
+and puts your settings back like `playtest.bat`.
+
 ## What changed
 
+- **Round 8, frame rate.** Your last run made 75..90 frames a second, down from 110..135: the longer
+  distances doubled what the game draws for each eye. The grass, all round you at 86 m, was the
+  heaviest: it's back to 57 m (still beyond the 43 m before). The rest stays. The headset is at
+  120 Hz, which the game doesn't reach in the open now, so every frame it misses repeats (judder).
+  Setting Virtual Desktop to 90 Hz would give it 11 ms a frame instead of 8.
 - **Round 7, pop-in.** Your `Oblivion.ini` now loads a 7x7 grid of cells around you, not 5x5
   (`uGridsToLoad=7`, its cell buffer 64; your old file is `Oblivion.ini.rustvr-before-grids`). That
   one stays when you play flat too: a save made at 7 can crash the game if it's loaded at 5. While in
