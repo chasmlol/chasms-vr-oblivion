@@ -150,6 +150,41 @@ Nothing of this was checked in the game: built, with the adapter's and the Obliv
 tests passing. It's in the framework's tracking mapping (`set_lead`) and Oblivion's adapter
 (`movement.rs`, `collision.rs`), so it's everywhere in Oblivion, every save.
 
+## Height, sitting or standing
+
+You were floating. The view's height was your head's over where it was when the view was last
+recentred, and that's the first moment of VR (the game loaded) or the Recenter button: with the
+headset on the desk or in your hands then, or put on sitting after it started standing, the view
+stayed too high for good. Your body is drawn from the same height, so its feet hung over the
+floor.
+
+Now your upright head height (standing, or sat up in your chair) is always the game character's
+eye height, whenever the view was recentred:
+- **Putting the headset on:** once it's been still on your head a second and a half, your height
+  is taken from there. Before that the view stays at the character's eye height.
+- **Standing up, sitting down:** held higher for a second, your upright height rises there over a
+  moment (the view comes back down to the character's height); a moment higher (a stretch, on
+  tiptoe) doesn't count. Lower, it settles slowly (a slouch in a few seconds, a crouch hardly at
+  all, so ducking still crouches when you're not in seated mode).
+- **Recenter** (the runtime's menu) takes your height as it is right then.
+- **Seated mode** (Body tab) works: sat up in your chair, you see from the character's standing
+  height, and leaning or ducking doesn't crouch the game (the stick's click does). Without it,
+  sitting also puts you at the character's height, but ducking 35 cm crouches.
+
+**Your height setting:** the Body tab says 1.37 m, probably measured sitting. It sets your hands'
+size (they're drawn 8.1 cm wrist to knuckle) and, with "Play at my real height", the view's
+height. Set it with the slider, or measure it standing up straight ("Measure my height" now refuses
+eyes under 1.35 m: a grown-up sitting).
+
+- **Try:** start the .bat with the headset on the desk, then put it on sitting; play a while,
+  stand up, sit down; turn seated mode on and off; press Recenter.
+- **Look out for:** floating or sinking that lasts, the view sliding up or down by itself, your
+  body's feet off the floor, ducking not crouching (seated mode off) or crouching when you lean
+  (seated mode on). The Body tab shows "eyes at" your upright height as the runtime has it.
+
+Nothing of this was checked in the game: built, with the runtime's unit tests passing (physical
+crouch's among them). It's in the framework's runtime (`mechanics.rs`), so it's every game's.
+
 ## What was checked of the row of tables
 
 Nothing in the game, emulated or real: it was set out after the second playtest and only compiled,
