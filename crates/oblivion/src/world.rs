@@ -54,9 +54,13 @@ pub const LATCH_PLAY: f32 = 0.035;
 pub const TUG: f32 = 0.8;
 /// A door within this of its frame (radians) is shut: the game's Activate closes it.
 pub const SHUT: f32 = 0.012;
-/// An activator worked this far along its travel (of the whole) fires; it's ready again once it's
-/// back within [`REARM`] of where it started (or, a two-way lever, of the other end).
-pub const FIRE_AT: f32 = 0.88;
+/// An activator worked to the end of its travel fires: a lever pushed all the way over (this much of
+/// the whole: at its stop, give or take). A button or a switch stone that springs back fires pushed
+/// in [`PRESS_AT`] of the way: a palm bottoms out on the stone's surround a little short of the
+/// stone's own end (the checks had the switch stones in to 0.92 of theirs). Either is ready again
+/// once it's back within [`REARM`] of where it started (or, a two-way lever, of the other end).
+pub const FIRE_AT: f32 = 0.97;
+pub const PRESS_AT: f32 = 0.88;
 pub const REARM: f32 = 0.35;
 /// How hard a lever's two positions hold it (newtons at the end of its handle): more than a hand
 /// resting on it, less than a deliberate push.
@@ -471,7 +475,7 @@ mod game {
     }
 
     /// A node's children that are nodes.
-    fn child_nodes(node: usize) -> Vec<usize> {
+    pub(crate) fn child_nodes(node: usize) -> Vec<usize> {
         let data = deref(node + NODE_CHILDREN);
         let n = mem::at::<u16>(node + NODE_COUNT).unwrap_or(0).min(256) as usize;
         if data == 0 || !mem::is_readable(data as *const u8, n * 4) {
@@ -1398,7 +1402,8 @@ mod game {
                     Kind::Activator if t.owned => {
                         let back = t.anims.0.returns || !t.open;
                         // (Out to its far end, or a two-way lever that's on, back to its start.)
-                        let fire = if back { most >= FIRE_AT } else { most <= 1.0 - FIRE_AT };
+                        let at = if t.anims.0.returns { PRESS_AT } else { FIRE_AT };
+                        let fire = if back { most >= at } else { most <= 1.0 - at };
                         if fire && ready && t.armed {
                             t.pending = true;
                             t.armed = false;
