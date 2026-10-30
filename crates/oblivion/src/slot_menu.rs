@@ -726,7 +726,8 @@ mod game {
             return;
         }
         let ask = s.body.edit_seq;
-        let asked = s.edit_seq.is_some_and(|seen| seen != ask);
+        // (A runtime started again counts from 0: not an ask.)
+        let asked = ask != 0 && s.edit_seq.is_some_and(|seen| seen != ask);
         s.edit_seq = Some(ask);
         let open_now = OPEN.load(Ordering::Acquire) != 0;
         if asked && crate::menus::in_world() {
