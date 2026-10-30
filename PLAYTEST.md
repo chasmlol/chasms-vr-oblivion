@@ -34,6 +34,24 @@ Your notes, and what was done (logs in `<builds>\world\playtest-1`):
   body pulls: the part comes along the way it moves, as fast as the controller goes. The way it
   can't go (off its hinge), the hand lets go after 30 cm (was 50).
 
+## Round 2 (30 October): what changed
+
+Your notes: the doors, the lever and walking backwards are good; the hanging things still let the
+hands through and can't be taken. (The adapter's log is in `playtest-2`; the runtime's was replaced
+by the next game's.) The log showed the hands did reach them (30 to 36 pieces offered, the two
+chain dolls and the rope rock, and pushes given to the game), but the runtime let a hand into one of
+the game's props and only asked the game to push it out, and a chain on its constraints barely gives.
+
+- **Solid to the hands.** The game's bodies on its own constraints are a new kind of prop to the
+  runtime (`OBJF_CONSTRAINED`): solid to the hands, as a door's leaf is. A hand rests on one and
+  pushes it, as fast as its controller goes on into it and harder the deeper the controller is.
+- **Taken like anything else**, with the game's own grab (what holding Activate on a thing does):
+  a spring on its body, pulled every frame to where your hand would have it, at the game's grab's
+  strength. Your hand stays on it where the game has it, so a chain taut on its anchor holds the
+  hand back (the ghost shows the controller), and pulled 30 cm further the hand comes off it.
+- A piece offered stays so until it's 4 m from you (offered within 3), so a chain swinging across
+  the edge isn't dropped and offered again under the hand.
+
 ## What to try, in order
 
 1. **Push the cave door open.** Walk up to the planked door ahead (it's big and heavy, about
@@ -62,8 +80,9 @@ Your notes, and what was done (logs in `<builds>\world\playtest-1`):
    work it as well (that was the game's Activate at gaze). Pull it all the way back to work it again.
 7. **The hanging things.** In the same cell: the roots hanging from the ceiling, the two chain dolls,
    the rope with the bucket, the rope of skulls (and a trap's chain once it's sprung). Push them with
-   a hand, or swat them: they swing off it and back, the game's own physics (they can't be taken in
-   a hand yet).
+   a hand, or swat them: the hand doesn't go in, they swing off it and back, the game's own physics.
+   Grip one anywhere: the hand holds it where it is, and it comes with the hand as far as its chain
+   lets it; pull further and the hand is held back, then comes off. Let go mid-swing: it swings on.
 8. **The lock.** `play.ps1 world -At WarehouseLock -Give "0000000A 20"`. Push or pull one of the
    locked gates: the game's own lock opens (the same menu as on a flat screen, as a panel). Your right
    hand is the pick:
@@ -134,8 +153,9 @@ Not checked in the game:
 - The door sounds: they're the game's own (the animation's text keys, else the door form's sounds),
   played through the game's sound system; not listened to (the emulated headset has no ears).
 - Haptics: sent, not felt.
-- Round 1's changes in the game (built and unit-tested only): the body pulling a door along, the
-  lever firing at its stop, the trigger quiet on a lever, the hanging things pushed.
+- Round 2's changes in the game (built and unit-tested only): the hanging things solid to the hands,
+  taken with the game's grab, the grab's strength (the game's own: tell me if a chain doll is too
+  heavy to swing about), the hand coming off a taut chain.
 
 ## Decisions made
 
@@ -188,9 +208,13 @@ Not checked in the game:
   the chest, 48 at most) in a Havok world, neither fixed nor keyframed (Havok's own
   `isFixedOrKeyframed`), that isn't an item's or a creature's, is a game prop to the runtime: the
   hands go into it and push it, and each push is given to its body as the impulse its point lacks
-  (`applyPointImpulse`, the facts the npcs branch found), so it swings on its own constraints. Not
-  taken in a hand yet: holding a chain link would want the game's own grab (a mouse spring on the
-  body), as the npcs branch holds a ragdoll.
+  (`applyPointImpulse`, the facts the npcs branch found), so it swings on its own constraints.
+- **They're solid to the hands and taken with the game's own grab** (round 2): the runtime's
+  `OBJF_CONSTRAINED` (the hand rests on it, pushes it by how far its controller is in, holds it
+  where the game has it; the gloves don't pull it). Held, the game's `bhkMouseSpringAction` on the
+  body, made as the game's own grab makes it, so its strength and damping are the game's; it pulls
+  the piece's middle (not the exact point in the hand: a link is small) to where the hand would have
+  it. The hand lets go pulled 30 cm off it, as off a door.
 
 ## Not done
 
