@@ -14,22 +14,22 @@ note. The inn's own patrons walk about further in. The research and the design a
 
 1. **Sneak** (right stick click, or duck). Pockets only exist while you sneak, and only on people
    within 3 m who are alive and not fighting: whom the game would let you pickpocket.
-2. **Find a pocket by touch.** Turn to Bruce and lay your fingers on his hip, from the side or from
-   behind: a belt pouch hangs there on each side, a little behind the hip. Your hand stops on his
-   body; touching it there is being in the pocket. You feel a soft brush going in, then a tick for
-   the thing your fingers are on. Move the hand
-   slowly inside: every 4 cm you're on the next thing, with another tick. Each kind of thing feels
+2. **Find a pocket by touch.** Turn to Bruce and lay your fingers on one of his hips, from in front,
+   from the side or from behind: everyone has one pocket at each hip, and all of the hip at his belt
+   is it, from the middle of his front round to the middle of his back. Your hand stops on his body;
+   touching it there is being in the pocket. You feel a soft brush going in, then a tick for the
+   thing your fingers are on. Move the hand slowly over it: every 4 cm you're on the next thing,
+   with another tick. Each kind of thing feels
    different: coins jingle (bright), a key clicks (sharp), glass rings (very short, high), paper
    rasps, cloth or food is a dull push, something hard knocks. An empty pocket is one dull brush.
    **You see what you're on:** the game's card of the thing under your fingers floats over your
    hand (its name, value and weight), changing as you move on to the next thing. Over the name, in
    the game's stealing red, is the reticle's red hand and the word **Pickpocket**.
    His pockets:
-   - the right belt pouch: the potion and the apples;
-   - the left belt pouch: the key and the lockpicks;
-   - the purse, at the front of his belt: all his gold;
-   - the inner pocket, at the left of his chest: the note;
-   - a bag on his back, only when someone carries something big (weapons, armour, clothes).
+   - the right hip: the potion, the apples and the note (potions, food, books and notes, and
+     anything big: weapons, armour, clothes);
+   - the left hip: all his gold, the key and the lockpicks (gold, keys, lockpicks, rings, amulets
+     and gems).
 3. **Take one.** Squeeze the grip: the thing (the game's own model) is in your hand, with the game's
    own card over it (its name, value and weight), still with the red hand and **Pickpocket**. It's
    still his while your hand is in the pocket: let go there and it's back, nothing tried.
@@ -42,10 +42,10 @@ note. The inn's own patrons walk about further in. The research and the design a
    - **Caught:** a hard jolt and the thing is gone from your hand. Then the game's own reaction:
      the pickpocketing crime (bounty 25), his disposition, his alarm or attack, and he can never be
      robbed again (his pockets feel shut, and the game says so).
-5. **The purse** at the front of his belt is all his gold at once: 120 coins cost 12 points of
+5. **His gold** (in his left hip pocket) comes out all at once, a purse: 120 coins cost 12 points of
    chance. Gold is drawn as the game draws gold, one coin, so it hides in the fist; the card says
    how much ("Gold (120)").
-6. **Plant something.** Hold something weightless you took (the purse, the key, a lockpick) and let
+6. **Plant something.** Hold something weightless you took (the gold, the key, a lockpick) and let
    go of it in one of his pockets: it's his. Something with weight (the potion) gets the game's own
    "You cannot place items in a container while pickpocketing." and stays yours. This is the game's
    own rule: Oblivion has no chance for planting, only that rule.
@@ -58,10 +58,10 @@ note. The inn's own patrons walk about further in. The research and the design a
    thing in the world where you let go, flying on as it left your hand (Havok), to pick up again.
 9. **The patrons.** Walk in (sneaking) and try the people moving about. Their pockets hold what
    they carry but don't wear, as the game's pickpocketing lists it, and that's often nothing: an
-   empty pocket is one dull brush and no card. In the round 3 run: Velus Hosidius had only 10 gold,
-   in the purse at the front of his belt; Nilphas Omellian nothing at all; Audens Avidius two keys
-   in his left belt pouch, 31 gold in his purse, and a silver warhammer and clothes in a bag on his
-   back. Follow a walking one: the pockets move with them.
+   empty pocket is one dull brush and no card. In the round 3 run: Velus Hosidius had only 10 gold
+   (now in his left hip pocket); Nilphas Omellian nothing at all; Audens Avidius two keys and 31 gold
+   (left hip) and a silver warhammer and clothes (right hip). Follow a walking one: the pockets move
+   with them.
 10. **Watch the sneak eye** (at your gaze; the flat game's crosshair is hidden in VR, its activate
     icons stay). While a hand is in the pocket of someone who sees you, you feel a slow heartbeat
     in that hand (a strong beat as they first notice you). Being seen doesn't change the per-item
@@ -105,8 +105,7 @@ With the emulated headset, from the logs and captures:
 Not checked:
 
 - Anything in the real headset: how the ticks, the brush and the heartbeat feel; whether 4 cm per
-  thing and the pocket sizes (9-11 cm) are right for a real hand; reaching around someone to their
-  purse.
+  thing is right for a real hand; the hip pockets (round 4) from in front and from the side.
 - The heartbeat itself (only the awareness values: 0, 0.5 noticed, 1 seen, read from the NPC's own
   detection list).
 - The game's success message and sound (the call is the menu's own, with its message flag).
@@ -130,9 +129,14 @@ Not checked:
   at once as a thing is taken out or planted; closed 0.75 s after the hands are away from them all.
   A quicker look is only feeling and the game has no part in it. Someone who caught the player
   before has no menu at all, only the game's refusal (`sNoPickPocketAgain`), so no second check.
-- **Pockets are where clothes would have them**, the same on everyone (Oblivion's clothes have no
-  pockets of their own): hips, belt front, inside the coat, a bag on the back only when there's
-  something big. Shared out by kind (`pocket_for`).
+- **A pocket at each hip, reached from in front or behind** (round 4: asked for in place of the
+  front, chest and back pockets), the same on everyone (Oblivion's clothes have no pockets of their
+  own). Each is a ball 18 cm round a point 5 cm in from the side of the hip at the belt: on the
+  body's 17 cm capsule, that's the hip's surface from the middle of the front round to the middle of
+  the back (where the other hip's begins), 13 cm up and down it at the side, and a hand up to 6 cm
+  off it. Shared out by kind (`pocket_for`): the left has the gold, keys, lockpicks, rings, amulets
+  and gems; the right everything else (potions, food, books, notes, and anything big). Twelve to a
+  pocket; more go in the other.
 - **Planting a thing lying about** (a thing to take, not yet yours) first takes it with the game's
   own pick-up, then plants it, if it's weightless; otherwise it falls out of the pocket.
 - **Templates and a card reference.** Each kind of thing is a template object drawn from the game's
@@ -159,9 +163,8 @@ Not checked:
   runtime's log showed every reach for Bruce's hips stopped by his body ("blocked") with the hand's
   grip 13-24 cm from the pouches' middles: the grip is a hand's length behind the fingers that
   touch, and the hands came from behind while the pouches were at the very sides. Now the test is
-  from the nearest of the hand (its collider: the palm and the fingers), and the pouches hang 30
-  degrees behind the sides of the hips, 11 cm round: fingers on the hip anywhere from its side to
-  most of the way round its back are in one.
+  from the nearest of the hand (its collider: the palm and the fingers); the pouches hung 30 degrees
+  behind the sides of the hips in round 3, and since round 4 the hip pockets wrap the whole hip.
 - **The card stands just over the thing** (round 2: too far above it). It stood 6 cm plus half its
   height over the ball round the thing (a plate held flat counted as 15 cm tall). Now its bottom
   edge is 1.5 cm over the top of the thing's box as it's turned now, the game's card as the

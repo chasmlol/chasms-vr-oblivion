@@ -7,9 +7,9 @@
 //!   in combat: whom activating while sneaking would open the game's pickpocketing on. One that has
 //!   caught the player before is shut (its high process's flag, +0x168): the hand finds it so, and
 //!   the game says why (`sNoPickPocketAgain`).
-//! * **Where:** on its bones, every frame ([`places`]): the belt pouches a little behind the hips,
-//!   the purse at the belt's front, an inner pocket at the chest, a bag on the back (only while
-//!   there's something big for it).
+//! * **Where:** on its bones, every frame ([`places`]): a pocket at each hip, reached from in
+//!   front or from behind, the hip's surface from the middle of the front round its side to the
+//!   middle of the back.
 //! * **What:** its inventory as the game's pickpocketing lists it: the game's own entries
 //!   (`GetInventoryItem`, 0x4D88F0) and its own filter (0x4854F0: nothing worn, nothing unplayable
 //!   or bound), shared out by kind ([`pocket_for`]). Each thing comes out as the game's own model
@@ -17,7 +17,7 @@
 //! * **Taking** is the game's: its own chance (0x546660: both Sneaks with their Luck, 0x547B90, and
 //!   the value taken) against its own roll, then its own `RemoveItem` into the player's things
 //!   (marked stolen) or its own crime and reaction when caught (`PlayerCharacter` vtable +0x23C),
-//!   as its container menu does them. Gold comes out as the whole purse.
+//!   as its container menu does them. Gold comes out all at once (a purse).
 //! * **The session** is the game's menu: opened once a hand has been in the pockets a moment (a
 //!   quicker look is only feeling), or as it takes or plants a thing; closed once the hands are
 //!   away. Closed having tried nothing, the game's own rummaging check (a Sneak use, then its
@@ -32,14 +32,11 @@
 use glam::Vec3;
 use rustvr_protocol::*;
 
-/// The pockets on a person, each its own place on the skeleton.
-pub const POUCH_RIGHT: usize = 0;
-pub const POUCH_LEFT: usize = 1;
-pub const PURSE: usize = 2;
-pub const CHEST: usize = 3;
-pub const BAG: usize = 4;
-pub const PLACES: usize = 5;
-pub const NAMES: [&str; PLACES] = ["the right belt pouch", "the left belt pouch", "the purse", "the inner pocket", "the bag on the back"];
+/// The pockets on a person: one at each hip, each its own place on the skeleton.
+pub const HIP_RIGHT: usize = 0;
+pub const HIP_LEFT: usize = 1;
+pub const PLACES: usize = 2;
+pub const NAMES: [&str; PLACES] = ["the right hip pocket", "the left hip pocket"];
 
 /// People further than this from the player (metres) have no pockets: out of a hand's reach.
 pub const REACH: f32 = 3.0;
@@ -63,8 +60,6 @@ pub const GOLD: u32 = 0xF;
 #[derive(Clone, Copy, Debug)]
 pub struct Skeleton {
     pub pelvis: Vec3,
-    pub spine1: Vec3,
-    pub spine2: Vec3,
     pub neck: Vec3,
     pub thigh_l: Vec3,
     pub thigh_r: Vec3,
@@ -78,46 +73,35 @@ pub fn body_frame(s: &Skeleton) -> Option<(Vec3, Vec3, Vec3)> {
     Some((up, right, right.cross(up)))
 }
 
-/// How far the body's surface is round the spine: its capsule's radius (`combat`'s torso).
-const BODY: f32 = 0.17;
+/// Each hip pocket's middle, in from the side of the hip at the belt, and how far round it a hand
+/// is in it. The body's surface there is its capsule, 17 cm round the spine (`combat`'s torso), and
+/// a hand stops on it: from 5 cm in, 18 cm takes in the hip's surface from the middle of the front
+/// round its side to the middle of the back (where the other's begins), 13 cm up and down it at the
+/// side and less towards the front and back, and a hand up to 6 cm off it.
+const HIP_IN: f32 = 0.05;
+const HIP_REACH: f32 = 0.18;
 
-/// Each pocket's opening, which way it faces and how far round it a hand is in it: the pouches
-/// hanging at the belt a little behind the hips (felt from the side or from behind), the purse at
-/// its front, the inner pocket at the left of the chest, the bag at the small of the back. They sit
-/// at the body's surface, where the fingers of a hand stopped by the body are in them.
+/// Each pocket's middle, which way it faces and how far round it a hand is in it: one at each
+/// hip, reached from in front or from behind.
 pub fn places(s: &Skeleton) -> Option<[(Vec3, Vec3, f32); PLACES]> {
-    let (up, right, fwd) = body_frame(s)?;
+    let (up, right, _) = body_frame(s)?;
     let belt = s.pelvis + up * 0.05;
-    // (30 degrees behind the side: a hand in one is anywhere from the side of the hip round to
-    // most of the way to the back.)
-    let (side, back) = (30f32.to_radians().cos(), 30f32.to_radians().sin());
-    let (hip_r, hip_l) = (right * side - fwd * back, -right * side - fwd * back);
-    Some([
-        (belt + hip_r * BODY, hip_r, 0.11),
-        (belt + hip_l * BODY, hip_l, 0.11),
-        (belt + fwd * BODY, fwd, 0.09),
-        (s.spine2 + fwd * 0.15 - right * 0.08, fwd, 0.08),
-        (s.spine1 - fwd * 0.18, -fwd, 0.11),
-    ])
+    Some([(belt + right * HIP_IN, right, HIP_REACH), (belt - right * HIP_IN, -right, HIP_REACH)])
 }
 
 /// Rings and amulets (`TESBipedModelForm` slot bits: right ring, left ring, amulet).
 const SMALL_SLOTS: u16 = (1 << 6) | (1 << 7) | (1 << 8);
 
-/// Which pocket a thing goes in, by what it is: gold in the purse; keys, lockpicks, rings, amulets,
-/// gems and soul gems at the left of the belt; potions, food and small things at the right; books,
-/// notes and scrolls inside the coat; anything bigger (weapons, armour, clothes, apparatus, arrows,
-/// heavy clutter) in the bag on the back.
+/// Which pocket a thing goes in, by what it is: gold, keys, lockpicks, rings, amulets, gems and soul
+/// gems at the left hip; potions, food, books, notes, scrolls and anything bigger (weapons, armour,
+/// clothes, apparatus, arrows, clutter) at the right.
 pub fn pocket_for(kind: u8, form_id: u32, weight: f32, slots: u16) -> usize {
     match kind {
-        _ if form_id == GOLD => PURSE,
-        KEY | SOUL_GEM | SIGIL_STONE => POUCH_LEFT,
-        CLOTHING if slots & SMALL_SLOTS != 0 => POUCH_LEFT,
-        MISC if weight <= 0.5 => POUCH_LEFT,
-        POTION | INGREDIENT => POUCH_RIGHT,
-        MISC if weight <= 2.0 => POUCH_RIGHT,
-        BOOK => CHEST,
-        _ => BAG,
+        _ if form_id == GOLD => HIP_LEFT,
+        KEY | SOUL_GEM | SIGIL_STONE => HIP_LEFT,
+        CLOTHING if slots & SMALL_SLOTS != 0 => HIP_LEFT,
+        MISC if weight <= 0.5 => HIP_LEFT,
+        _ => HIP_RIGHT,
     }
 }
 
@@ -974,9 +958,7 @@ mod game {
                 }
                 let b = combat::bones(root);
                 let at = |name: &str| b.get(name).and_then(|&n| combat::node_pos(n));
-                let (Some(pelvis), Some(spine1), Some(spine2), Some(neck), Some(thigh_l), Some(thigh_r)) =
-                    (at("Bip01 Pelvis"), at("Bip01 Spine1"), at("Bip01 Spine2"), at("Bip01 Neck"), at("Bip01 L Thigh"), at("Bip01 R Thigh"))
-                else {
+                let (Some(pelvis), Some(neck), Some(thigh_l), Some(thigh_r)) = (at("Bip01 Pelvis"), at("Bip01 Neck"), at("Bip01 L Thigh"), at("Bip01 R Thigh")) else {
                     static SAID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
                     if SAID.swap(id, std::sync::atomic::Ordering::Relaxed) != id {
                         let mut names: Vec<&String> = b.keys().collect();
@@ -985,12 +967,11 @@ mod game {
                     }
                     continue;
                 };
-                let Some(places) = places(&Skeleton { pelvis, spine1, spine2, neck, thigh_l, thigh_r }) else { continue };
+                let Some(places) = places(&Skeleton { pelvis, neck, thigh_l, thigh_r }) else { continue };
                 let aware = awareness(detection_of_player(p.actor));
                 for (k, &(centre, mouth, radius)) in places.iter().enumerate() {
                     let things: Vec<&Thing> = p.things.iter().filter(|t| t.pocket == k).collect();
-                    // The bag's there only while there's something big for it.
-                    if (k == BAG && things.is_empty()) || table.count as usize >= MAX_POCKETS {
+                    if table.count as usize >= MAX_POCKETS {
                         continue;
                     }
                     let mut pk: Pocket = bytemuck::Zeroable::zeroed();
