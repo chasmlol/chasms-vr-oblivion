@@ -507,6 +507,38 @@ mod game {
         logged: f64,
         /// Things just let go: logged as they fly (until when, next log).
         trace: Vec<(u32, f64, f64)>,
+        /// What the hands hold now (as the runtime last said).
+        held: Vec<Held>,
+    }
+
+    /// A thing in a hand: its object, the game's reference, its kind and the hand.
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct Held {
+        pub id: u32,
+        pub refr: usize,
+        pub kind: u8,
+        pub hand: usize,
+    }
+
+    /// What the hands hold now.
+    pub fn held() -> Vec<Held> {
+        with_state(|s| s.held.clone())
+    }
+
+    /// The middle of what's seen of a thing (its model's bound) in its own space (its object's: the
+    /// runtime's axes, metres), by its reference.
+    pub fn visual_centre(refr: usize) -> Option<Vec3> {
+        let node = mem::deref(refr + REFR_NODE);
+        // (As its collision is put in its own space: world size, its turn undone.)
+        let (m, t, _) = world_of(node)?;
+        let b: [f32; 4] = mem::at(node + 0x20)?;
+        let c = camera::basis().point_from_game(m.transpose() * (Vec3::new(b[0], b[1], b[2]) - t));
+        (c.is_finite() && c.length() < 1.0).then_some(c)
+    }
+
+    /// The object of a thing lying about that's offered to the hands, by its reference.
+    pub fn offered(refr: usize) -> Option<u32> {
+        with_state(|s| s.items.values().find(|i| i.refr == refr && i.taken_at.is_none()).map(|i| i.desc.id))
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -525,6 +557,7 @@ mod game {
             infos: bytemuck::zeroed_box(),
             logged: 0.0,
             trace: Vec::new(),
+            held: Vec::new(),
         }))
     }
 
@@ -654,12 +687,22 @@ mod game {
     pub fn place(view: &rustvr_adapter::View, now: f64) {
         with_state(|s| {
             if s.items.is_empty() {
+                s.held.clear();
                 return;
             }
             if !crate::link::with_adapter(|a| a.read_object_states(&mut s.states)).unwrap_or(false) {
                 return;
             }
             let n = (s.states.count as usize).min(MAX_OBJECTS);
+            s.held = s.states.states[..n]
+                .iter()
+                .filter(|st| st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0)
+                .filter_map(|st| {
+                    let it = s.items.get(&st.id).filter(|it| it.taken_at.is_none())?;
+                    let kind = mem::at::<u8>(mem::deref(it.refr + REFR_BASE) + FORM_TYPE).unwrap_or(0);
+                    Some(Held { id: st.id, refr: it.refr, kind, hand: if st.flags & OS_HELD_LEFT != 0 { 0 } else { 1 } })
+                })
+                .collect();
             for st in &s.states.states[..n] {
                 let Some(it) = s.items.get_mut(&st.id) else { continue };
                 if it.taken_at.is_some() {

@@ -191,6 +191,7 @@ mod win {
             crate::world::frame(link::now());
             crate::props::frame(link::now());
             crate::riding::frame(link::now());
+            crate::books::frame();
         });
         unsafe { real(this) }
     }
@@ -373,6 +374,7 @@ mod win {
             time(Part::Items, || hooks::guard_void("world", || crate::world::place(now)));
             time(Part::Items, || hooks::guard_void("props", || crate::props::place(view, now)));
             hooks::guard_void("riding", || crate::riding::publish(view, now));
+            hooks::guard_void("map", || crate::map::place(now));
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))

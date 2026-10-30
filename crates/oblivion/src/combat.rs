@@ -662,6 +662,7 @@ pub fn publish() {
     crate::link::with_adapter(|a| {
         crate::weapons::publish(a);
         crate::torch::publish(a);
+        crate::map::publish(a);
         // (Every frame while the race menu changes the body and the face as the player watches.)
         if k.frame % 30 == 3 || crate::menus::menu_open(crate::menus::MENU_RACE_SEX) {
             crate::body::publish(a);

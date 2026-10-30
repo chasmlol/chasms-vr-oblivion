@@ -88,8 +88,9 @@ pub fn before_update() {
         }
         log_movement_toggles();
         trace_movement(mv);
-        // The laser on the game's menus moves the game's cursor.
-        if s.frame.intents.flags & rustvr_protocol::INT_CURSOR != 0 {
+        // The laser on the game's menus moves the game's cursor (out of them a fingertip on a book's
+        // pages is the book's, `crate::books`).
+        if s.frame.intents.flags & rustvr_protocol::INT_CURSOR != 0 && s.frame.intents.flags & rustvr_protocol::INT_MENU_MODE != 0 {
             crate::menus::point(s.frame.intents.cursor_uv);
         }
         // The game's lock, open: the hand is its pick.
@@ -232,7 +233,7 @@ fn log_once(yaw: f32) {
 /// The game's state the controls depend on.
 fn game_controls() -> input::GameControls {
     let p = engine::player();
-    input::GameControls { always_run: p != 0 && mem::at::<u8>(p + engine::pc::ALWAYS_RUN).unwrap_or(0) != 0, tab_closes: crate::menus::tab_closes() }
+    input::GameControls { always_run: p != 0 && mem::at::<u8>(p + engine::pc::ALWAYS_RUN).unwrap_or(0) != 0, tab_closes: crate::menus::tab_closes(), reading: crate::books::reading() }
 }
 
 /// The player sneaks (its process's movement flags: `GetMovementFlags`, vtable +0x2C0; sneaking

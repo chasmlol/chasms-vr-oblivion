@@ -120,6 +120,8 @@ pub struct GameControls {
     /// Mode closes it (its Escape would open the pause menu over it). The pause menu and its own
     /// (options, load, save) close with Escape.
     pub tab_closes: bool,
+    /// A book is open on top (its own Exit shuts it with B: `crate::books`).
+    pub reading: bool,
 }
 
 /// A press holds its key this long.
@@ -192,8 +194,9 @@ impl Bridge {
         if jump && !pressed(&counts, Action::Jump) {
             self.pulses.push((self.binding("Jump"), now + PULSE));
         }
-        // The laser's trigger on the game's menus: the left mouse button.
-        if it.flags & rustvr_protocol::INT_CURSOR_DOWN != 0 {
+        // The laser's trigger on the game's menus: the left mouse button. (Out of them a fingertip on
+        // a book's pages is the book's, `crate::books`: the button would swing.)
+        if it.flags & rustvr_protocol::INT_CURSOR_DOWN != 0 && it.flags & rustvr_protocol::INT_MENU_MODE != 0 {
             v.buttons |= 1;
         }
         // Scrolling a menu: the mouse wheel, a notch at a time as the stick's rate adds up.
@@ -207,8 +210,8 @@ impl Bridge {
         } else {
             self.wheel = 0.0;
         }
-        // B on a menu in the world: Menu Mode, which closes it.
-        if game.tab_closes && pressed(&counts, Action::MenuBack) {
+        // B on a menu in the world: Menu Mode, which closes it (a book shuts itself).
+        if game.tab_closes && !game.reading && pressed(&counts, Action::MenuBack) {
             self.pulses.push((self.binding("Menu Mode"), now + PULSE));
         }
         // The menu button, and B on a menu (the runtime's "back"): Escape, which closes the game's
@@ -550,8 +553,8 @@ mod tests {
         assert_eq!(b.update(&it, GameControls::default(), 0.1).keys, vec![0x1D]);
         assert!(b.update(&it, GameControls::default(), 0.3).keys.is_empty());
         it.held = Action::Sprint.bit();
-        assert_eq!(b.update(&it, GameControls { always_run: false, tab_closes: false }, 0.4).keys, vec![0x2A]);
-        assert!(b.update(&it, GameControls { always_run: true, tab_closes: false }, 0.5).keys.is_empty());
+        assert_eq!(b.update(&it, GameControls { always_run: false, ..Default::default() }, 0.4).keys, vec![0x2A]);
+        assert!(b.update(&it, GameControls { always_run: true, ..Default::default() }, 0.5).keys.is_empty());
     }
 
     #[test]

@@ -100,8 +100,9 @@ pub fn equip_all(_id: u32) -> bool {
 /// front of the player (and that far over their feet), facing them (tests), `GoreCut <bone>` cuts a
 /// limb off the nearest creature as a killing blow would (`crate::gore`, tests), `PlayerHorse <base
 /// hex id> [<metres>]` puts a horse that far beside them and makes it theirs
-/// (`crate::riding::give_horse`), anything else is compiled and run as a line of script. True if it
-/// ran.
+/// (`crate::riding::give_horse`), `ActivateRef <ref hex id>` has the player activate a reference
+/// (tests: a book on a shelf read), anything else is compiled and run as a line of script. True if
+/// it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
@@ -137,7 +138,24 @@ pub fn run(line: &str) -> bool {
         let up = it.next().and_then(|u| u.parse::<f32>().ok()).unwrap_or(0.0);
         return place_in_front(r, m, up);
     }
+    if let Some(id) = line.strip_prefix("ActivateRef ") {
+        return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(activate_ref);
+    }
     run_script(line)
+}
+
+/// The player activates the reference with form id `id`, as their own Activate does (a line of
+/// script can't name a reference that isn't persistent: most things lying about).
+#[cfg(target_arch = "x86")]
+fn activate_ref(id: u32) -> bool {
+    type Lookup = unsafe extern "C" fn(u32) -> usize;
+    let refr = unsafe { std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(id) };
+    refr != 0 && crate::world::activate(refr)
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn activate_ref(_id: u32) -> bool {
+    false
 }
 
 /// Puts the reference `r` (its hex form id) `metres` in front of the player, `up` over their feet

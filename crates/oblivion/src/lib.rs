@@ -30,6 +30,7 @@
 
 pub mod archery;
 pub mod body;
+pub mod books;
 pub mod camera;
 pub mod clock;
 pub mod collision;
@@ -55,6 +56,7 @@ pub mod link;
 pub mod lock;
 pub mod log;
 pub mod magic;
+pub mod map;
 pub mod mem;
 pub mod menus;
 pub mod mirror_spell;

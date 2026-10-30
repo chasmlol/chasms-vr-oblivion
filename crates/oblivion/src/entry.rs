@@ -40,6 +40,7 @@ fn startup() {
     crate::clock::install();
     #[cfg(target_arch = "x86")]
     crate::movement::install();
+    crate::books::install();
     #[cfg(target_arch = "x86")]
     crate::hud_info::install();
     crate::combat::install();

@@ -23,7 +23,7 @@ use glam::{Mat3, Quat, Vec3};
 use rustvr_protocol::*;
 
 /// The arrow template's object id (the bow is [`crate::weapons::WEAPON_ID`]).
-pub const ARROWS_ID: u32 = 0x0B1E_0003;
+pub const ARROWS_ID: u32 = 0x0B1E_0004;
 /// What the bow and its arrows share (the runtime fits arrows to the bow by it).
 pub const ARROW_AMMO: u32 = 0x0A77_0001;
 /// `TESObjectWEAP::type` of a bow.

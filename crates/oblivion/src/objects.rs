@@ -1,5 +1,5 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
-//! ([`crate::weapons`]), their torch ([`crate::torch`]), the limbs cut off the game's creatures
+//! ([`crate::weapons`]), their torch ([`crate::torch`]), their map ([`crate::map`]), the limbs cut off the game's creatures
 //! ([`crate::gore`]), the game's things lying about near the player ([`crate::items`]), the
 //! world's moving parts, its doors and levers ([`crate::world`]), and its loose Havok bodies, its
 //! hanging chains ([`crate::props`]), each owner's entries kept apart and written together. The
@@ -17,9 +17,10 @@ pub enum Owner {
     Items,
     World,
     Props,
+    Map,
 }
 
-const OWNERS: usize = 6;
+const OWNERS: usize = 7;
 
 /// Where an owner's entries go in the table: the player's own things first, then the limbs cut
 /// off (so they're never the ones the table's size leaves out), then what lies about.
@@ -27,10 +28,11 @@ fn index(owner: Owner) -> usize {
     match owner {
         Owner::Weapons => 0,
         Owner::Torch => 1,
-        Owner::Gore => 2,
-        Owner::Items => 3,
-        Owner::World => 4,
-        Owner::Props => 5,
+        Owner::Map => 2,
+        Owner::Gore => 3,
+        Owner::Items => 4,
+        Owner::World => 5,
+        Owner::Props => 6,
     }
 }
 

@@ -25,7 +25,8 @@ use crate::{engine, mem, nodes};
 use glam::{Mat3, Quat, Vec3};
 use rustvr_protocol::*;
 
-/// The torch's object id.
+/// The torch's object id. (The adapter's own objects each have their own: the weapon and shield
+/// 1 and 2, the arrows 4, the map 5.)
 pub const TORCH_ID: u32 = 0x0B1E_0003;
 /// Where the torch hangs on the body (a `SLOT_*`): the right hip, across from the weapon at the
 /// left, for the off hand to draw (section 6's holsters will place it).
