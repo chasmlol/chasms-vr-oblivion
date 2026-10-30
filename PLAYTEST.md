@@ -74,6 +74,8 @@ Each of these was checked with scripted hands, in captures and logs:
   were inside it. It was set back down, and turned over it spilled.
 - After the bench's own uses of the menu, the game's alchemy menu still opened from the inventory
   (equipping the Apprentice Mortar & Pestle).
+- The Novice Mortar & Pestle dropped from the pack (the game's own drop) became a bench, with its
+  own pestle, where it fell.
 - No stall on the first ingredient. The game's menu takes about 2 ms to make and work out, because
   it's warmed when a bench appears; its first reading of the menu file was a 37 ms hitch before that.
 - The unit tests of every crate touched pass.
@@ -92,8 +94,7 @@ Each of these was checked with scripted hands, in captures and logs:
   - a duplicate refused;
   - a master's single-ingredient potion;
   - combat refusing a potion;
-  - dropping apparatus from the pack;
-  - the novice and apprentice mortars;
+  - grinding in the novice and apprentice mortars (measured as the journeyman's is);
   - saving and loading with things in the bowl.
 
 ## Decisions

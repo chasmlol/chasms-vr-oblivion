@@ -17,13 +17,14 @@
 //! A mix with no shared effect has nothing to make: the game's own failure message and sound, and
 //! the ingredients are lost, as the message says. See `docs/research/alchemy.md`.
 //!
-//! Forms: `TESObjectAPPA` model path +0x34, quality +0x74, kind +0x78 (0 mortar and pestle,
-//! 1 alembic, 2 calcinator, 3 retort); `IngredientItem` icon +0x5C.
+//! Forms: `TESObjectAPPA` model path +0x34, icon +0x4C, weight +0x6C, quality +0x74, kind +0x78
+//! (0 mortar and pestle, 1 alembic, 2 calcinator, 3 retort); `IngredientItem` icon +0x5C.
 
 use glam::{Quat, Vec3};
 use rustvr_protocol::*;
 
-/// Apparatus (and ingredients) within this far of the mortar (metres) are the bench's.
+/// Apparatus within this far of the mortar (metres) count at its bench, and ingredients within
+/// twice it may go into it.
 pub const REACH: f32 = 0.75;
 /// The game's alchemy menu has four ingredient slots.
 pub const MAX_INGREDIENTS: u32 = 4;
