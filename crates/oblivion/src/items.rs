@@ -691,12 +691,6 @@ mod game {
         takeable_ref(refr).is_some() && take(refr, id)
     }
 
-    /// Its Havok body's mass (kilograms), if it has one.
-    pub fn mass_of(refr: usize) -> Option<f32> {
-        let body = body_of(mem::deref(refr + REFR_NODE));
-        mem::at::<f32>(mem::deref(body + BODY_MOTION) + MOTION_MASS_INV).filter(|m| *m > 1e-4 && m.is_finite()).map(|m| 1.0 / m)
-    }
-
     /// The newest reference (the last made) of a base form in the loaded cells.
     pub fn newest_of(base: usize) -> Option<usize> {
         let mut best: Option<(u32, usize)> = None;

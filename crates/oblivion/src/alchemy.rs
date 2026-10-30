@@ -67,6 +67,9 @@ pub struct Shown {
     pub effects: Vec<(String, String)>,
     /// What's in the bowl: each ingredient's icon (under `textures\`) and name.
     pub ingredients: Vec<(String, String)>,
+    /// The apparatus it's made with (the mortar, and the alembic, calcinator and retort that count):
+    /// each one's icon.
+    pub apparatus: Vec<String>,
 }
 
 /// The card's fonts: the potion's name (the menu's font 1) and the effects (its font 3).
@@ -89,12 +92,16 @@ pub fn texture_name(path: &str) -> String {
     format!("oblivion/{}", oblivion_assets::export::texture_key(path))
 }
 
+/// How wide the card is in the world (metres).
+pub const CARD_WIDTH: f32 = 0.2;
+
 /// The card beside the mortar: the menu's effects box, the potion's name at its top, each effect
-/// as the menu lists it (its icon, the game's words), and what's in the bowl along its foot (each
-/// ingredient's icon).
+/// as the menu lists it (its icon, the game's words), and along its foot what's in the bowl (each
+/// ingredient's icon) and what it's made with (each apparatus's icon, smaller, at the right).
 pub fn card(anchor: u32, revision: u32, shown: &Shown, fonts: &Fonts) -> Card {
     let mut c = Card::new(anchor, CARD_SIZE);
     c.revision = revision;
+    c.world_width = CARD_WIDTH;
     c.push(CardPiece::image(&texture_name(ART), [0.0, 0.0, CARD_SIZE[0], CARD_SIZE[1]], ART_UV));
     let mut y = 14.0;
     if !shown.name.is_empty() {
@@ -107,7 +114,10 @@ pub fn card(anchor: u32, revision: u32, shown: &Shown, fonts: &Fonts) -> Card {
         y += 42.0;
     }
     for (k, (icon, _)) in shown.ingredients.iter().take(MAX_INGREDIENTS as usize).enumerate() {
-        c.push(CardPiece::image(&texture_name(icon), [16.0 + 52.0 * k as f32, CARD_SIZE[1] - 60.0, 44.0, 44.0], [0.0, 0.0, 1.0, 1.0]));
+        c.push(CardPiece::image(&texture_name(icon), [14.0 + 40.0 * k as f32, CARD_SIZE[1] - 52.0, 36.0, 36.0], [0.0, 0.0, 1.0, 1.0]));
+    }
+    for (k, icon) in shown.apparatus.iter().take(4).enumerate() {
+        c.push(CardPiece::image(&texture_name(icon), [CARD_SIZE[0] - 42.0 - 32.0 * k as f32, CARD_SIZE[1] - 46.0, 28.0, 28.0], [0.0, 0.0, 1.0, 1.0]));
     }
     c
 }
@@ -356,7 +366,9 @@ mod game {
     const FORM_ID: usize = 0xC;
     const REFR_BASE: usize = 0x1C;
     const REFR_NODE: usize = 0x3C;
+    const APPA_ICON: usize = 0x4C;
     const APPA_MODEL: usize = 0x34;
+    const APPA_WEIGHT: usize = 0x6C;
     const APPA_QUALITY: usize = 0x74;
     const APPA_KIND: usize = 0x78;
     const INGR_ICON: usize = 0x5C;
@@ -402,7 +414,7 @@ mod game {
         set_name(&mut d.name, &format!("oblivion/{}", b.mortar));
     }
 
-    struct Bench_ {
+    struct Station {
         refr: usize,
         node: usize,
         bench: &'static Bench,
@@ -438,7 +450,7 @@ mod game {
     }
 
     struct State {
-        benches: HashMap<u32, Bench_>,
+        benches: HashMap<u32, Station>,
         rising: Option<Rising>,
         jobs: Vec<Job>,
         states: Box<ObjectStates>,
@@ -499,7 +511,7 @@ mod game {
     }
 
     /// Hides (or shows again) a mortar's game model: the runtime draws its pieces.
-    fn hide(b: &mut Bench_, hidden: bool) {
+    fn hide(b: &mut Station, hidden: bool) {
         let at = b.node + av::FLAGS;
         if !mem::is_readable(at as *const u8, 2) {
             return;
@@ -571,6 +583,7 @@ mod game {
             name: brewed.as_ref().filter(|b| !b.effects.is_empty()).map(|b| b.name.clone()).unwrap_or_default(),
             effects: brewed.as_ref().map(|b| b.effects.iter().map(|(icon, words)| (format!("textures\\menus\\{icon}"), words.clone())).collect()).unwrap_or_default(),
             ingredients,
+            apparatus: apparatus.iter().filter(|&&f| f != 0).map(|&f| format!("textures\\menus\\icons\\{}", crate::combat::read_str(mem::deref(f + APPA_ICON)))).collect(),
         };
         tracing::info!(
             "alchemy: {} in the mortar ({:#x}; alembic {:#x}, calcinator {:#x}, retort {:#x}): the game would make {:?}, {:?}, weight {:.2}, value {}",
@@ -664,7 +677,7 @@ mod game {
                     let seq = s.next_seq;
                     s.next_seq += 1;
                     let node = mem::deref(o.refr + REFR_NODE);
-                    let mut b = Bench_ { refr: o.refr, node, bench, seq, contents: Vec::new(), shown: None, revision: 1, strokes: 0, done: false, flags: None };
+                    let mut b = Station { refr: o.refr, node, bench, seq, contents: Vec::new(), shown: None, revision: 1, strokes: 0, done: false, flags: None };
                     hide(&mut b, true);
                     let f = items::facts(o.refr);
                     tracing::info!("alchemy: {} ({:#x}{}) is a bench: its pestle out of it, its bowl the hands'", f.name, o.id, if f.stolen { ", someone else's" } else { "" });
@@ -749,7 +762,9 @@ mod game {
             }
             recs.push(r);
             if let Some(pose) = node_pose(b.node) {
-                let mass = items::mass_of(b.refr).unwrap_or(0.45) * pestle_share(b.bench);
+                // (The game's weight is about pounds: a kilogram is two.)
+                let weight = mem::at::<f32>(mem::deref(b.refr + REFR_BASE) + APPA_WEIGHT).filter(|w| w.is_finite() && *w > 0.0).unwrap_or(1.0);
+                let mass = weight * 0.45 * pestle_share(b.bench);
                 pestles.push(pestle_desc(*id, pose, b.bench, mass, b.seq));
             }
             if let Some(shown) = b.shown.as_ref().filter(|_| !b.contents.is_empty()) {
