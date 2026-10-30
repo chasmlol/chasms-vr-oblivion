@@ -44,18 +44,27 @@ Set up in the game's folder at your request, for the stutter and the distance:
   log (`rustvr-oblivion.log`) ends "address space N of 4095 MB free"; before, it said "of 2047".
 - **xOBSE 22.14**, the script extender that Oblivion Stutter Remover needs. After a run, an
   `obse.log` in the game's folder means it loaded.
+- **Oblivion Stutter Remover 4.1.37** (`Data\OBSE\Plugins`), set for VR. Kept from it: its locks,
+  which stop the game's threads queueing behind each other; its bigger lookup tables; and its
+  replacement for the game's memory heap (512 MB). Off: its frame limiter and timer, because the
+  headset and the adapter pace and time the frames. Also off: its fast exit, which would save the VR
+  settings into your `Oblivion.ini`. One lock it normally removes is kept, because in VR the
+  game's loader runs between the eyes. Its log, `sr_Oblivion_Stutter_Remover.log` beside it, says it
+  loaded. If the game crashes more than before, set `bReplaceHeap = 0` in its `.ini` first.
 - **The distant objects, regenerated** from your game's own data (xEdit's TES4LODGen) into
   `Data\DistantLOD`. A few castle walls, gates and towers (Skingrad's, Bravil's, Leyawiin's) that the
   game's own lists miss now stand in the distance too. The generator also makes every shrub a far
   card, which doubled the far cards around the Imperial City; those are left out, as the game leaves
   them.
-- `undo-stutter-setup.bat` puts all three back. If Steam verifies or updates the game, it puts the
+- `undo-stutter-setup.bat` puts all of it back. If Steam verifies or updates the game, it puts the
   original exe back (only the 4GB patch is lost).
 
 9. **It starts and plays as before.** If it doesn't, or something misbehaves, run
    `undo-stutter-setup.bat` and tell me.
 10. **The far castles.** Skingrad's castle and the walls and towers of the towns should stand in the
     distance, not come in as you get near.
+11. **Stutter again.** With Stutter Remover in, the hitches crossing cells (check 1) should be fewer
+    again. Tell me about any new crash, and when it happened (loading, crossing cells, quitting).
 
 ## `playtest-rain.bat`
 
@@ -114,8 +123,10 @@ below is in both.)
 - Your `Oblivion.ini` has the grass distance under `[Display]`, where the game doesn't read it: the
   grass reaches 43 m (`[Grass]`'s 3000). Raising `[Grass] fGrassEndDistance` grows it further, at a
   cost (it's now all round you).
-- Oblivion Stutter Remover, and sharper far land (tes4ll and TES4qLOD regenerate the land's far
-  textures at 2048 or 4096 instead of 1024): Nexus downloads, which need your login. Not done yet.
+- The far land is the game's own. TES4qLOD's colour maps at 2048 or 4096 aren't sharper: it
+  colours from one 4x4-pixel average of each ground texture, so above 1024 it only blurs between the
+  land's points. tes4ll's meshes failed to fill on this install (a few hundred to two thousand
+  points a quad, against the game's thousands), so they aren't installed.
 - The ghosting on moving people: not found in the game's picture (the saved pictures, taken before
   the runtime moves them, show none). It's after: Virtual Desktop's spacewarp, the runtime's
   smoothing, or the frames the game misses at 120 Hz. The tests above will tell which.
