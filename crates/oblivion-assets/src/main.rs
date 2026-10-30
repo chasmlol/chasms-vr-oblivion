@@ -3,12 +3,18 @@
 //!     oblivion-extract [--game <Oblivion folder>] check <prefix>...
 //!     oblivion-extract export [--out <folder>] <prefix>...
 //!     oblivion-extract preview <model> <png>
+//!     oblivion-extract bench <prefix>...
+//!     oblivion-extract export-ui <prefix>...
 //!
 //! `check` parses every model under the prefixes and reports which it can't read (a test of the
 //! model reader against the real files). `export` writes every model under the prefixes, and the
 //! textures they use, into the runtime's cache (`local_assets/oblivion`, see
 //! `oblivion_assets::export`; a `textures/...` prefix brings every texture under it, e.g. the races'
-//! skins). `preview` draws one converted model from three sides.
+//! skins). `preview` draws one converted model from three sides. `bench` splits each mortar and pestle
+//! under the prefixes into its two pieces and measures them (`oblivion_assets::bench`: the pieces in
+//! the cache, the measurements in its `bench.toml`). `export-ui` writes the game's fonts and menu
+//! art under the prefixes for the runtime to paint (`oblivion_assets::ui`: `fonts\...` and
+//! `textures\menus\...`, the art as RGBA).
 
 use anyhow::Result;
 use oblivion_assets::export::{self, Part};
@@ -58,6 +64,8 @@ fn main() -> Result<()> {
             }
         }
         Some("export") => export(&archives, &args[1..])?,
+        Some("bench") => bench(&archives, &args[1..])?,
+        Some("export-ui") => export_ui(&archives, &args[1..])?,
         Some("preview") if args.len() == 3 => {
             let skeletons = Skeletons::load(&archives)?;
             let path = oblivion_assets::bsa::normalise(&args[1]);
@@ -184,6 +192,99 @@ fn export(archives: &Archives, args: &[String]) -> Result<()> {
     index.items = items.into_values().collect();
     std::fs::write(&index_path, toml::to_string(&index)?)?;
     println!("{models} models ({failed} unreadable), {wrote} new textures ({missing} missing) in {}", out.display());
+    Ok(())
+}
+
+/// Splits and measures every mortar and pestle under the prefixes (`oblivion_assets::bench`).
+fn bench(archives: &Archives, args: &[String]) -> Result<()> {
+    use oblivion_assets::bench::{self, Benches};
+    let out = rustvr_asset::default_root().join("oblivion");
+    let prefixes: Vec<String> = args.iter().map(|p| oblivion_assets::bsa::normalise(p)).collect();
+    let mut benches = Benches::load(&out).unwrap_or_default();
+    let index_path = out.join("index.toml");
+    let mut index: rustvr_asset::Index = std::fs::read_to_string(&index_path).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
+    let names: Vec<String> = archives.names().filter(|n| n.ends_with(".nif") && prefixes.iter().any(|p| n.starts_with(p.as_str()))).map(str::to_owned).collect();
+    let mut textures = std::collections::BTreeSet::new();
+    for path in names {
+        let nif = Nif::parse(&archives.read(&path)?)?;
+        let c = export::convert(&nif, &path, None, Part::All, &|p| archives.contains(p));
+        let Some((b, mortar, pestle)) = bench::measure(&c.model, &path) else {
+            println!("{path}: no pestle of its own");
+            continue;
+        };
+        textures.extend(c.textures);
+        let rel = export::normalise(&path, "meshes\\");
+        for (key, name, model) in [(&b.mortar, format!("{rel}#mortar"), &mortar), (&b.pestle, format!("{rel}#pestle"), &pestle)] {
+            rustvr_asset::save_model(&out, key, model)?;
+            index.items.retain(|i| &i.key != key);
+            index.items.push(rustvr_asset::Item { key: key.clone(), kind: rustvr_asset::ItemKind::Prop, name, rig: None, hands: None, mag_size: None });
+        }
+        println!(
+            "{path}: bowl floor {:.3?} radius {:.3} depth {:.3} wall {:.3}; pestle {:.3} long, {:.3} thick, tip {:.3} at {:.3?}",
+            b.floor, b.radius, b.depth, b.wall, b.pestle_half * 2.0, b.pestle_radius, b.tip_radius, b.pestle_pos
+        );
+        // (`RUSTVR_BENCH_PREVIEW=<folder>`: each piece drawn from three sides, to look at.)
+        if let Some(dir) = std::env::var_os("RUSTVR_BENCH_PREVIEW") {
+            let stem = rel.rsplit('\\').next().unwrap_or("bench").trim_end_matches(".nif").to_owned();
+            preview::save(&mortar, &std::path::Path::new(&dir).join(format!("{stem}_mortar.png")))?;
+            preview::save(&pestle, &std::path::Path::new(&dir).join(format!("{stem}_pestle.png")))?;
+        }
+        benches.benches.retain(|x| x.model != b.model);
+        benches.benches.push(b);
+    }
+    for path in &textures {
+        let key = export::texture_key(path);
+        if !out.join("textures").join(format!("{key}.{}", rustvr_asset::TEXTURE_EXT)).is_file()
+            && let Ok(t) = archives.read(path).and_then(|d| oblivion_assets::dds::parse(&d, path))
+        {
+            rustvr_asset::save_texture(&out, &key, &t)?;
+        }
+    }
+    benches.benches.sort_by(|a, b| a.model.cmp(&b.model));
+    std::fs::write(out.join(bench::FILE), toml::to_string(&benches)?)?;
+    index.items.sort_by(|a, b| a.key.cmp(&b.key));
+    std::fs::write(&index_path, toml::to_string(&index)?)?;
+    println!("{} benches in {}", benches.benches.len(), out.join(bench::FILE).display());
+    Ok(())
+}
+
+/// The game's fonts and menu art under the prefixes, for the runtime to paint (`oblivion_assets::ui`):
+/// each font with its atlas, each texture as RGBA.
+fn export_ui(archives: &Archives, args: &[String]) -> Result<()> {
+    let out = rustvr_asset::default_root().join("oblivion");
+    let prefixes: Vec<String> = args.iter().map(|p| oblivion_assets::bsa::normalise(p)).collect();
+    let names: Vec<String> = archives.names().filter(|n| prefixes.iter().any(|p| n.starts_with(p.as_str()))).map(str::to_owned).collect();
+    let (mut fonts, mut images, mut failed) = (0, 0, 0);
+    for path in names {
+        let done = if path.ends_with(".fnt") {
+            (|| -> Result<()> {
+                let atlas_path = oblivion_assets::ui::atlas_path(&path);
+                let atlas = oblivion_assets::ui::atlas(&archives.read(&atlas_path)?, &atlas_path)?;
+                let atlas_key = export::texture_key(&atlas_path);
+                rustvr_asset::save_texture(&out, &atlas_key, &atlas)?;
+                let font = oblivion_assets::ui::font(&archives.read(&path)?, &path, &atlas_key)?;
+                rustvr_asset::save_font(&out, &export::font_key(&path), &font)?;
+                fonts += 1;
+                Ok(())
+            })()
+        } else if path.ends_with(".dds") {
+            (|| -> Result<()> {
+                let t = oblivion_assets::dds::to_rgba(&oblivion_assets::dds::parse(&archives.read(&path)?, &path)?)?;
+                rustvr_asset::save_texture(&out, &export::texture_key(&path), &t)?;
+                images += 1;
+                Ok(())
+            })()
+        } else {
+            Ok(())
+        };
+        if let Err(e) = done {
+            failed += 1;
+            if failed <= 10 {
+                eprintln!("{path}: {e:#}");
+            }
+        }
+    }
+    println!("{fonts} fonts, {images} pieces of art ({failed} failed) in {}", out.display());
     Ok(())
 }
 

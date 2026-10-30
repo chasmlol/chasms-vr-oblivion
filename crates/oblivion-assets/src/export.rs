@@ -75,6 +75,11 @@ pub fn variant_key(path: &str, variant: &str) -> String {
     format!("m{:08x}", fnv1a(&format!("{}#{variant}", normalise(path, "meshes\\"))))
 }
 
+/// A font's key (`f` and the hash of its path, `fonts\...`; [`crate::ui`]).
+pub fn font_key(path: &str) -> String {
+    format!("f{:08x}", fnv1a(&normalise(path, "")))
+}
+
 /// The cache key of the texture at `path` (under `textures\`).
 pub fn texture_key(path: &str) -> String {
     format!("t{:08x}", fnv1a(&normalise(path, "textures\\")))
