@@ -31,10 +31,12 @@ pub const MAX_INGREDIENTS: u32 = 4;
 pub const GRIND_WORK: f32 = 0.45;
 /// A pestle's id: its mortar's, in a range of its own (`0xFE`, a plugin slot nothing loads).
 pub const PESTLE: u32 = 0xFE00_0000;
-/// How long the bottle takes to rise out of the mortar (seconds), and how far over the rim it
-/// stops (metres).
+/// How long the bottle takes to rise out of the mortar (seconds), and how far over the rim its
+/// middle stops (metres: the game's bottle is about 23 cm tall, its middle its origin).
 pub const RISE_TIME: f64 = 0.9;
-pub const RISE_ABOVE: f32 = 0.08;
+pub const RISE_ABOVE: f32 = 0.12;
+/// How long a new bottle may take to be among the things to take (seconds) before it's left be.
+pub const FIND_TIME: f64 = 2.0;
 /// Seconds the bottle waits over the mortar for a hand before it's the game's again (it settles
 /// on the table).
 pub const WAIT: f64 = 45.0;
@@ -599,7 +601,9 @@ mod game {
             return;
         }
         // The ingredients come out of the bowl into the player's things (the game's own pick-up,
-        // stealing and all): the game's Create uses them up from there.
+        // stealing and all): the game's Create uses them up from there. (No card of anything held
+        // meanwhile: the game's card would read what's being taken.)
+        crate::hud_info::set_held(0);
         let taken: Vec<usize> = contents.iter().filter_map(|id| offered.iter().find(|o| o.id == *id)).map(|o| o.refr).collect();
         for &r in &taken {
             items::pick_up(r);
@@ -710,7 +714,8 @@ mod game {
                 let held = items::in_hand(r.refr);
                 let t = ((now - r.t0) / RISE_TIME).clamp(0.0, 1.0) as f32;
                 let k = t * t * (3.0 - 2.0 * t);
-                if held || now - r.t0 > WAIT || !items::offered().iter().any(|o| o.refr == r.refr) {
+                let lost = now - r.t0 > FIND_TIME && !items::offered().iter().any(|o| o.refr == r.refr);
+                if held || now - r.t0 > WAIT || lost {
                     if !held {
                         items::release(r.refr);
                     }
@@ -759,13 +764,30 @@ mod game {
                 s.receptacles.count += 1;
             }
             if crate::link::with_adapter(|a| a.write_receptacles(&s.receptacles)).unwrap_or(false) {
+                // What may go into each bowl, and where it is from the mortar (metres east, up,
+                // north).
+                for r in &recs {
+                    let Some(m) = s.benches.get(&r.id).and_then(|b| game_pos(b.refr)) else { continue };
+                    let near: Vec<String> = r
+                        .accepts()
+                        .iter()
+                        .filter_map(|id| offered.iter().find(|o| o.id == *id))
+                        .filter_map(|o| Some((items::facts(o.refr).name, (game_pos(o.refr)? - m) / camera::UNITS_PER_METER)))
+                        .map(|(n, d)| format!("{n} {:.2?}", [d.x, d.z, d.y]))
+                        .collect();
+                    tracing::info!("alchemy: into the mortar {:#x} may go: {}", r.id, near.join(", "));
+                }
                 s.sent_receptacles = recs;
             }
         }
         let mut ids: Vec<(u32, u32)> = pestles.iter().map(|p| (p.id, p.spawn_seq)).collect();
         ids.sort();
         if ids != s.sent_pestles && crate::link::with_adapter(|a| crate::objects::publish(crate::objects::Owner::Alchemy, &pestles, a)).unwrap_or(false) {
-            tracing::info!("alchemy: {} pestles the hands' own", pestles.len());
+            for p in &pestles {
+                let (at, q) = (Vec3::from_array(p.spawn_pose.pos), Quat::from_array(p.spawn_pose.rot));
+                let half = p.half_extents[1] + p.radius;
+                tracing::info!("alchemy: a pestle the hands' own ({:#x}): its handle's end at {:.3?}, its tip at {:.3?}", p.id, at + q * Vec3::Y * half, at - q * Vec3::Y * half);
+            }
             s.sent_pestles = ids;
         }
         let mut keys: Vec<(u32, u32)> = cards.iter().map(|c| (c.anchor, c.revision)).collect();

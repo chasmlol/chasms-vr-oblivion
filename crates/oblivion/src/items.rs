@@ -484,8 +484,11 @@ mod game {
         desc: ObjectDesc,
         info: ItemInfo,
         hull: Vec<Vec3>,
-        /// A hand has it (held or pulled): the game's object goes where the runtime has it.
+        /// A hand has it (held or pulled), or it lies in a bowl: the game's object goes where the
+        /// runtime has it.
         owned: bool,
+        /// A hand has it (the game's card of a thing is its).
+        held: bool,
         /// Its body's own collision filter, while a hand has it (it's out of the way meanwhile).
         filter: Option<u32>,
         /// Let go and still moving (since when, still since when): the runtime simulates it, on the
@@ -555,7 +558,7 @@ mod game {
         let mut desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
         // A mortar and pestle: the runtime's pieces of it ([`crate::alchemy`]).
         crate::alchemy::dress(refr, &mut desc);
-        Some(Item { refr, node, body, kind: f.kind, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, filter: None, flying: None, taken_at: None, scale: None, kept: None })
+        Some(Item { refr, node, body, kind: f.kind, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, held: false, filter: None, flying: None, taken_at: None, scale: None, kept: None })
     }
 
     /// Once a game frame, where its scripts run: things put in a slot taken into the inventory;
@@ -672,12 +675,19 @@ mod game {
 
     /// A hand has this reference.
     pub fn in_hand(refr: usize) -> bool {
-        with_state(|s| s.items.values().any(|i| i.refr == refr && i.owned))
+        with_state(|s| s.items.values().any(|i| i.refr == refr && i.held))
     }
 
-    /// The player takes this reference, as activating it does.
+    /// The player takes this reference, as activating it does. It's taken from then on: nothing
+    /// touches its 3D again.
     pub fn pick_up(refr: usize) -> bool {
         let Some(id) = mem::at::<u32>(refr + FORM_ID) else { return false };
+        let now = crate::link::now();
+        with_state(|s| {
+            for it in s.items.values_mut().filter(|i| i.refr == refr) {
+                it.taken_at = Some(now);
+            }
+        });
         takeable_ref(refr).is_some() && take(refr, id)
     }
 
@@ -805,9 +815,13 @@ mod game {
                     if let Some(f) = it.kept.take() {
                         set_filter(it.body, f);
                     }
-                    if !it.owned {
+                    let hand = st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT | OS_PULLED) != 0;
+                    if hand && !it.held {
                         tracing::info!("items: {} taken in hand ({:#x})", it.info.name(), st.flags);
+                    } else if !hand && !it.owned {
+                        tracing::info!("items: {} into a bowl ({:#x})", it.info.name(), st.flags);
                     }
+                    it.held = hand;
                     if !it.owned && it.body != 0 {
                         // Out of everything's way while a hand has it (the player walks into it
                         // otherwise): Havok's layer for things nothing meets.
@@ -821,6 +835,7 @@ mod game {
                 } else if it.owned && it.body != 0 {
                     // Let go: Havok's again at once, moving as it left the hand.
                     it.owned = false;
+                    it.held = false;
                     let dir = |v: [f32; 3]| if tracking { view.dir(Vec3::from_array(v)) } else { Vec3::from_array(v) };
                     let (v, w) = (dir(st.lin_vel), dir(st.ang_vel));
                     put(it.node, pos, rot.normalize());
@@ -839,6 +854,7 @@ mod game {
                     let speed = Vec3::from_array(st.lin_vel).length();
                     if it.owned {
                         it.owned = false;
+                        it.held = false;
                         it.flying = Some((now, None));
                         tracing::info!("items: {} let go at {pos:.2?}, {speed:.2} m/s", it.info.name());
                     }
@@ -868,7 +884,7 @@ mod game {
                 true
             });
             // The game's card of a thing is the held thing's.
-            crate::hud_info::set_held(s.items.values().find(|i| i.owned && i.taken_at.is_none()).map_or(0, |i| i.refr));
+            crate::hud_info::set_held(s.items.values().find(|i| i.held && i.taken_at.is_none()).map_or(0, |i| i.refr));
             s.poses.count = 0;
             for it in s.items.values().filter(|i| !i.owned && i.flying.is_none() && i.taken_at.is_none()) {
                 let i = s.poses.count as usize;
