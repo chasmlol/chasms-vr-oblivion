@@ -26,6 +26,8 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | Combat | Hits are the game's own hit with the equipped weapon (damage, skill, enchantments). A blow met by the weapon or shield is the game's block. Spells charge in the palm and go off as the game's own cast: target spells from the palm along the aim, touch spells into what the hand touches, self spells on the player. | `combat.rs` |
 | Things in the world | Everything the player can take near them (weapons, armour, clothes, books, potions, ingredients, keys, soul gems, sigil stones, apparatus, carriable lights, clutter) is the hands' to take or pull with the gloves: its collision its own Havok shape, its weight its Havok mass, drawn by the game where the hand has it (a candle still burns), and let go, the game's again, flying on with the throw. A card beside it says what it is: its name, damage or armour, weight, value, condition, and whether it's stolen. Let go in any body slot (a hip, a shoulder, the chest, the belt), the player takes it: the game's own pick-up, with its stealing and its message. | `items.rs`, `objects.rs` |
 | Menus | The world goes on being rendered under menus (the game's frozen picture of it is skipped), and every menu floats in it in pieces of its own UI, read from its tiles: a container's list, tabs and buttons beside the container; barter beside the merchant; dialogue at the speaker (the name over their head, the line under their face, the topics beside them); the big four ahead of the player with the HUD's switcher; questions and counts where the eyes look; services from dialogue beside the speaker; anything else ahead, cut out of the screen. The parchment is a little see-through. The game's cursor follows the laser (with a tick in the hand as the game's hover moves onto another thing), the trigger clicks, the right stick turns its mouse wheel. See `docs/research/menus.md`. | `hud.rs`, `tiles.rs`, `menus.rs`, `render.rs` |
+| Holsters | The player's things in slots on the body: the inventory read with the game's own rows, in categories (food, potions, poisons, ingredients, scrolls, arrows, weapons, soul gems, keys, books, sigil stones, apparatus, misc), each with what its effects restore, its value, weight and damage as the inventory shows them, and its model (`meshes\clutter` exported). A hand squeezing in a slot takes its first thing (by the slot's categories and order: most healing first, most valuable...) as the game's model in the fist, with the inventory's own sound. Held at the mouth it's eaten or drunk (the game's own `EquipItem`: its effects, swallow or chew, potion limit); a scroll held up to the eyes is read (the player's scroll use); a poison touched to the weapon in the other hand goes on it (the game's poisoning, without its box); a weapon is equipped and the hand has the game's weapon; let go in a slot it goes back; let go anywhere else the game drops it where it comes to rest. The game's own slots: healing in front of the left hip, arrows over the right shoulder, scrolls and poisons on the chest, food at the right hip. See `docs/research/holsters.md`. | `inventory.rs` |
+| The holsters' editor | A menu of the game's own UI (menu type 1050, its factory hooked; an XML of its prefabs, rows, icons, buttons and fonts read by its own `ReadXML`), floating ahead in three strips: the slots, the categories of the one picked (in and out, earlier and later), and buttons (the order inside, an empty slot's tick, size, reach, worn first, Move by hand, New, Remove, Ok). Opened by a grip held in a slot or RustVR's Holsters button; B closes it. | `slot_menu.rs`, `hud.rs` |
 | Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <id>`, `PlaceInFront <ref> <metres>`, or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
 
 ## Setting up
@@ -33,7 +35,7 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 The game's models are converted once into `local_assets/oblivion` (never committed):
 
 ```
-cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters meshes/clutter
 ```
 
 Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
@@ -54,6 +56,9 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Right stick on a menu | The game's mouse wheel (scrolls the list under the laser) |
 | Grip at the left hip / over a shoulder | Draw the weapon / take the shield |
 | Grip on a thing in the world, or point and flick (the gloves) | Take it in the hand; let go in a body slot to take it into the inventory |
+| Grip in a slot on the body (belt, hips, chest, over the right shoulder) | Its first thing in the hand; let go in a slot to put it back |
+| A thing held at the mouth / a scroll held up before the eyes / a poison touched to the weapon in the other hand | Eaten or drunk / read and cast / put on the weapon |
+| Grip held still in a slot (1.5 s) | The holsters' editor |
 | Swing | Attack (the game's hit; a fast committed swing is a power attack) |
 | Weapon or shield across a blow | Block |
 

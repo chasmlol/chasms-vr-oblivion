@@ -1,166 +1,230 @@
-# Playtest: floating menus and HUD
+# Playtest: holsters and inventory
 
-Save: rustvr-menus
+Save: rustvr-holsters
 
-`tools\play.ps1 menus` boots this build into **rustvr-menus**: Jensine's Good as New Merchandise in
-the Imperial City Market District at noon. A test chest full of everything is on the floor in front
-of you, and Jensine is at her counter to your right. `tools\play.ps1 -Close` puts it all away.
+`tools\play.ps1 holsters` boots this build into **rustvr-holsters**: where `rustvr-weye` starts
+(a house), with things to try added to your pack:
 
-Every menu now floats in the world as pieces of Oblivion's own UI (its parchment, fonts, icons and
-buttons). The world is still drawn around and behind it, your hands too, and the game still runs
-its own selection, scrolling and clicks. Point with the laser in your right hand and pull the
-trigger to click. The right stick scrolls, and B closes.
+- healing potions (strong, ordinary and weak) and a Potion of Sorcery;
+- food (cheese wheels and wedges, apples, bread, the house's leek and ale);
+- arrows (iron and steel);
+- two Strong Poisons of Severing and three Electric Shell scrolls;
+- an Iron Dagger and a Steel Shortsword.
+
+You start with the Fine Iron War Axe at your left hip and the shield on your back.
+`tools\play.ps1 -Close` puts it all away.
+
+Your things now live in slots on your body. Reach into one and squeeze the grip, and its first thing
+comes out in your fist as the game's own model. Bring food or a drink to your mouth to eat or drink
+it. Let go of something in any slot to put it back. Let go anywhere else and it drops into the
+world.
+
+## The slots you start with (right-handed; mirrored for a left hand)
+
+| Slot | Where | Gives out |
+|---|---|---|
+| Healing | the belt, in front of your left hip (your off hand reaches it while the sword hand fights) | potions and food, what heals most first; then what restores magicka or fatigue; never a potion that restores nothing |
+| Arrows | over your right shoulder, behind your head (where Oblivion wears its quiver) | arrows, the ones you have equipped first, then the strongest |
+| Scrolls | high on your chest, on the right | scrolls, then poisons, the most valuable first |
+| Food | at your right hip | food, what restores the most fatigue first (most of Oblivion's food restores fatigue, not health) |
 
 ## What to try, in order
 
-1. **Look around (the HUD).**
-   - Glance down: the compass sits low in front of you and turns with your body.
-   - Raise your left hand and look at the back of your wrist: the health, magicka and fatigue bars
-     and your weapon and spell icons are there, like a watch. Any active effects stack above them.
-   - Look at Jensine: the game's card of what you're looking at (her name) floats just under the
-     point you're looking at. It's the same card that says "Open Door" or gives an item's numbers.
-2. **The chest (looting).** Look at the chest and pull the trigger with an empty right hand.
-   - Its list floats above the chest, at about the chest's distance and a little under your eye
-     line.
-   - It comes as three strips: the list (with its column heads, scroll bar, your gold and weight
-     under it), the category tabs, and the buttons (Take All, the switch to your own things, Exit).
-   - The parchment is a little see-through; the text on it isn't.
-   - Point at a row and the game highlights it, with a light tick in your hand each time the
-     highlight moves to another row, tab or button. Pull the trigger to take it.
-   - Push the right stick to scroll. Dragging the scroll bar with the trigger held should work too.
-   - Click a tab, Take All, or the switch icon to put your own things in.
-   - B closes the chest, as Exit does.
-3. **Counts and questions.**
-   - Click the switch icon to see your own things, then click the arrows: the game's "How Many?"
-     pops up where you're looking, nearer than the list. The list stays behind it.
-   - Any yes/no question pops up the same way.
-4. **Your own menus (the big four).** Press B on your left hand.
-   - The page floats about a metre ahead, 8 degrees under your eyes, with its tabs under it.
-   - Under the tabs is the HUD's own switcher, which works as in the flat game:
-     - the bars open the character page;
-     - the weapon opens the inventory;
-     - the spell opens magic;
-     - the compass opens the map and journal.
-   - Point at something on the character page: its description pops up over the page.
-   - It all stays where it was opened. Turn more than about 65 degrees and it glides round to
-     where you face.
-   - B closes it.
-5. **Talking (dialogue).** Look at Jensine and pull the trigger.
-   - Her name floats over her head, and while she speaks her line floats under her face.
-   - Then her topics float beside her head on the right, with the service icons under them
-     (persuade, barter, goodbye).
-6. **Bartering.** In the dialogue, click the barter icon (the second one).
-   - Her wares float beside her, in the same three strips as the chest, now with her name and gold
-     and the Haggle button.
-   - Haggle pops up over them like a count does.
-   - B or Exit goes back.
-   - Other services from dialogue (spells, training, repair, recharge, persuasion) float beside
-     the person offering them.
-7. **Pause.** Press the menu button. The game's pause menu floats ahead, with RustVR's own
-   settings beside it on the right.
-8. **A thing's own menu** floats beside the thing: picking a lock beside the locked door or chest,
-   an altar's enchanting or spellmaking beside the altar, a sigil stone beside it.
-9. **Everything else** floats ahead of you as one piece, cut out of the flat screen: sleep and
-   wait, books, the level-up, alchemy, repair with a hammer and the race menu.
+1. **Find the slots.** Move a hand slowly round your belt, chest and right shoulder.
+   - Entering a slot gives a tick in that hand.
+   - An empty slot gives a fainter tick.
+2. **Drink a healing potion.**
+   - Put your left hand in front of your left hip, at the belt, and squeeze: a Strong Potion of
+     Healing comes out, upright in your fist, with the game's sound of taking a potion out.
+   - Bring it to your mouth, just under your nose, and hold it there. You feel gulps in your hand,
+     then a thud, and the game drinks it: its swallow, its effect, one fewer in your inventory.
+   - Hold it there only briefly, or wave it past your face, and nothing happens.
+   - Draw again: the next is another strong one, then the ordinary ones, then the weak ones.
+   - Drink too many in a row and the game says you can't drink more right now. The potion stays in
+     your hand.
+3. **Eat.** Squeeze at your right hip: the Leek, the Ale, an apple or some cheese comes out. At your
+   mouth you feel bites, then it's eaten, with the game's chew.
+4. **Put something back.** Draw a potion and let go of it in any slot, its own or another, or a
+   holster: it goes back, with the game's sound of putting it away.
+5. **Drop something.** Draw a potion and let go of it in front of you, or throw it. It falls, and
+   where it comes to rest the game drops it into the world. You can pick it up again like anything
+   lying about, and put it in a slot to take it back.
+6. **Read a scroll.** Squeeze high on the right of your chest: a scroll (the most valuable first:
+   the save's Flash Bolt or an Electric Shell). Hold it up in front of your eyes, about a forearm
+   away. After a moment it's read and the game casts it: Flash Bolt where you look, Electric Shell
+   as a shield on you.
+7. **Poison your axe.**
+   - Draw the war axe from your left hip with your right hand, and swap it into your left.
+   - Draw a poison from the chest pouch with your right hand. The scrolls come first, so read them
+     all, or reorder the slot (step 9).
+   - Touch the bottle to the axe. The game says "Strong Poison of Severing used." and the axe is
+     poisoned.
+   - With no weapon in the other hand, a weapon that's already poisoned, or a staff, you get the
+     game's own refusal.
+8. **Draw an arrow.** Reach over your right shoulder and squeeze: an iron arrow, the equipped
+   kind. Let go of it over the shoulder to put it back.
+9. **The holsters' editor.** Squeeze in a slot and keep the grip held, without moving your hand, for
+   a second and a half. You feel a firm pulse. Whatever came out goes back, and the editor floats
+   in front of you. It's made of Oblivion's own parchment, rows, icons and buttons, in three
+   strips: the slots, the categories, the buttons. Point with the laser and pull the trigger:
+   - **A slot** on the left picks it. Under its name is what it gives out now.
+   - **A category** in the middle puts it in the slot, last. Its place in the order shows on the
+     right of the row, and the picked one shows as `< 2 >`. Pick it again to take it out of the
+     slot.
+   - **Earlier / Later** move the picked category up or down the slot's order.
+   - **The order** button cycles through: healing first, magicka first, fatigue first, most
+     valuable, heaviest, lightest, newest, by name, most of, strongest, and my own order (what you
+     last put back in the slot comes out first).
+   - **Empty** sets what an empty slot does: a tick, nothing, or anything (the order's first of
+     everything you have).
+   - **Size** and **Reach** set how big the slot is (what you let go in it goes back in) and how
+     far out you can still take from it.
+   - **Worn first**: the things you have on (the equipped arrows) come first.
+   - **Move**: reach where you want the slot on your body and squeeze either grip. It's there now.
+     Behind your head, it only counts there (over a shoulder).
+   - **New slot**: a new, empty slot, placed at once by your next squeeze. Then give it
+     categories.
+   - **Remove** takes the picked slot away.
+   - **Ok**, or B, closes it.
 
-## What was checked in the game (emulated headset, captures)
+   Every change is kept at once, in your RustVR settings for Oblivion. The editor also opens from
+   **Holsters** at the bottom of RustVR's own settings, beside the pause menu.
+10. **Swap weapons from a slot.**
+    - Make a slot with Weapons in it: New slot, squeeze where you want it (your right thigh, say),
+      then pick Weapons.
+    - Reach there and squeeze: the dagger or the shortsword comes out. The game equips it (its
+      sound), and your weapon in that hand is now it, with its own reach and damage.
+    - Let go at your left hip and it hangs there.
+    - The war axe is in the weapons slot now, to draw back.
 
-- **The chest.**
-  - Its list floats above it, with the world live behind it and the parchment see-through.
-  - The laser hovers rows with the game's own highlight.
-  - The right stick scrolls the list (the game's own wheel).
-  - The switch icon showed the player's own things.
-  - B closes it.
-  - Clicking the arrows brought up "How Many?", which floated in front of the list with no copy
-    of it left in the list.
-- **The big four.**
-  - The character page, its tabs and the HUD switcher float ahead.
-  - The switcher's weapon icon opened the inventory, and its compass opened the map.
-  - Pointing at the birthsign brought up its description over the page.
-- **Dialogue** with a copy of Jensine.
-  - Her name was over her head, her greeting under her face, and the topics and service icons
-    beside her.
-  - The barter icon opened her wares beside her. The copy has no stock, so the list was empty;
-    the real Jensine in the save has stock.
-- **A message box** (the console's `messagebox`) popped up ahead, and the laser hovered "Yes".
-- **The hover tick**: 20 haptic pulses in a run of pointing at and scrolling the chest's list.
-- **The pause menu**, with the RustVR settings beside it.
-- **The HUD outside menus**: the compass low in front, the bars and icons on the left wrist, and
-  the card of what's looked at under the gaze point.
+Under the Hands tab of RustVR's settings: how long to hold something at the mouth (0.5 s), how long
+to hold a scroll up (0.8 s), and how long a grip held in a slot takes to open the editor (1.5 s; 0
+turns it off).
+
+## What was checked in the game (emulated headset, captures and logs)
+
+- **Drinking.** A Potion of Healing drawn from the healing slot and held at the mouth: the game
+  drank it (4 to 3 in the inventory), and the copy in the hand went.
+- **The healing order.** On the playtest save the slot held: strong (heals 50), ordinary (35),
+  weak (20), then a Potion of Sorcery (magicka 75). The strong one came out first and was drunk.
+- **Eating.** Food from the right hip (the Leek: the most fatigue, then the most valuable) eaten at
+  the mouth (1 to 0).
+- **Dropping.** A potion let go in front of the chest fell. At rest the game dropped it there (3 to
+  2), and it was offered to the hands again at exactly that place.
+- **Arrows.** An iron arrow drawn from over the right shoulder, held along the fist.
+- **Reading.** A Flash Bolt scroll drawn from the chest pouch and held up in front of the eyes: the
+  game used the scroll and cast it (1 to 0).
+- **Poison.** The axe drawn from the left hip into the left hand, a poison from the chest pouch
+  touched to it: the game's own "Strong Poison of Severing used." and the poison gone (1 to 0).
+- **The editor.**
+  - It opened from a grip held in the food slot, the first time in one piece and now in three
+    strips with the title over them.
+  - The laser's clicks went through the game's own click to the editor:
+    - Books put into the food slot, second in its order;
+    - the order cycled from fatigue to most valuable;
+    - the runtime saved both into the settings.
+  - Move: the food slot was placed by the left hand's squeeze at the left thigh, and saved there.
+  - New slot: a fifth slot, placed by the right hand's squeeze at the chest.
+  - B closed it.
+- **Weapons from a slot.** A slot of weapons at the right hip:
+  - the Iron Longsword drawn from it was equipped by the game and became the weapon in the hand;
+  - let go at the left hip, it hung there;
+  - drawn again from the slot, the war axe replaced it.
 
 ## What wasn't checked
 
-- **The real headset.** Text size (a line of the game's text is 1.5 degrees), distances, the feel
-  of the laser, and comfort over a long session.
-- **Never seen:**
-  - sleep and wait;
-  - the magic page and its spell descriptions;
-  - haggling;
-  - a foe's health bar over the foe;
-  - lockpicking, the level-up and the race menu;
-  - spellmaking, enchanting and alchemy;
-  - books;
-  - a service menu beside a speaker;
-  - a lock's, an altar's or a sigil stone's menu beside it (the console can't name the test's
-    locked chest, so no lock was picked);
-  - the real Jensine's stock;
-  - a container that's tall enough for its list to go to its side (the side placement was only
-    seen with a merchant).
-- **A crash once while loading a save** (in the game's own load, before any menu): it also
-  happened on 28 October before this work, so it isn't from it, but it's there.
-- **Performance** in a big exterior with a menu open. The world is now rendered every frame under
-  menus, where it used to be a frozen picture.
+- **Your real headset.** Whether the mouth, the slots' sizes and the hold times feel right; how the
+  bites and gulps feel on Quest controllers; reading the editor's text; comfort over a long
+  session.
+- **Never tried in the game:**
+  - the potion limit's refusal (the copy should stay in the hand with a fail pulse after 1.5 s);
+  - eating a quest item (refused by the game the same way);
+  - the poison's refusals;
+  - Earlier and Later (clicks reach them the same way as the rest);
+  - the Empty, Size, Reach and Worn first buttons;
+  - my own order (what's put back comes out first);
+  - Remove;
+  - Ok (B was used to close);
+  - the Holsters button in RustVR's menu;
+  - a left-handed player (the game's slots mirrored);
+  - a slot placed behind the head.
+- **Drop rotation.** A dropped thing lands where its copy came to rest, but facing the way you
+  face, not the way the copy lay (the game's drop turns it to you), so it may turn a little as the
+  game takes over.
 
 ## Decisions
 
-- **The world stays live under menus.** On opening a menu, Oblivion renders a frozen picture of the
-  world to draw behind it. In VR your head keeps moving, so that picture is skipped and the world
-  is rendered for both eyes every frame. The game is still paused.
-- **Real transparency.** The game draws its UI into an alpha render target of ours instead of its
-  back buffer, so each piece is exactly as opaque as the game's own art and the rest is clear. Each
-  piece's cut edges fade over a few texels.
-- **See-through parchment.** The menus' background images (the game's own `..._background`
-  tiles) are drawn at 80% of their alpha, through the game's own tile update, so the text and icons
-  stay solid. Pop-ups stay solid. This is `menu_background` in `rustvr-oblivion.toml`.
-- **Size from the game's text.** Every piece is sized so a line of the game's text is 1.5 degrees
-  tall wherever it floats. The research figure is 1.2 to 1.4; Oblivion's serif font reads harder,
-  hence 1.5.
-- **Runtime settings** live in `%LOCALAPPDATA%\RustVR\settings.toml` under `[ui]`:
-  - `menu_text_deg` (1.5);
-  - `menu_opacity` (0.94, the whole piece);
-  - `menu_scroll` (wheel notches a second at full stick).
-- **Where things go.** Everything stays put in the world once placed.
+- **Food restores fatigue in Oblivion.** The game is the source of truth: 33 of its 36 food
+  ingredients restore fatigue first. So "what heals" is what restores health first. Then come
+  things that restore magicka or fatigue, so cheese comes out of the healing slot only once the
+  healing potions are gone. Things that restore nothing (a Potion of Feather) never come out of a
+  healing slot. The food slot orders by fatigue.
+- **The order is the categories' first, then the rule.** A restoring rule puts everything that
+  restores its own stat ahead of the rest, whatever the category (healing food before a magicka
+  potion).
+- **Eating and drinking take half a second at the mouth,** with bites (food) or gulps (drink) felt
+  every 0.16 s, never while the hand moves faster than 1.2 m/s or is held back by a wall.
+  - The mouth is generous: within 9 cm of a point 7.5 cm under and 5 cm in front of your eyes.
+    A small mouth is a common complaint in VR games.
+  - The game does the rest: the drink or the chew, the effects, the potion limit, quest items.
+- **Scrolls are read, not eaten:** held up in front of the eyes, 12 to 55 cm away, within 23
+  degrees of where you look, for 0.8 s. The game casts it as the player's own scroll use, where you
+  look.
+- **Poisons go on the weapon in your other hand by touch** (0.3 s), doing the game's own steps
+  without its yes/no box: the touch is the yes. You get the game's own refusals and its message.
+- **Let go anywhere but a slot and the game drops it** where it comes to rest. Your thing really
+  leaves the inventory and lies in the world. The alternative, springing back to its slot, was
+  rejected: players hate auto-returns they didn't ask for, and a dropped potion should be a
+  potion on the floor.
+- **Weapons drawn from a slot are equipped** (the game's own equip and sound). The game's own
+  weapon object takes the copy's place in the hand (`ObjectDesc::replaces`). The weapon you have on
+  isn't one of the slots' things: it's at your hip already.
+- **The editor is a menu of our own made of the game's UI:**
+  - its own menu type, 1050, which the game's factory doesn't have, so it's hooked;
+  - its XML is made of Oblivion's prefabs and textures and the inventory's row look (the equipped
+    marker for what's in, the worn highlight under the laser);
+  - the categories' icons are the game's own (a thing you have in each, else the game's icon of
+    its kind);
+  - the button labels are ours, in the game's fonts. "Ok" is the game's own word, from its
+    message box.
+- **The editor opens on a grip held still in a slot** (VRIK's hold-to-move, which players found
+  the easiest customisation), and from RustVR's menu beside the pause menu. Move places a slot by
+  your own hand on your body, not with sliders.
+- **Slots are kept per game** in `%LOCALAPPDATA%\RustVR\settings.toml` under
+  `[[holsters.games.oblivion]]`. The game's own four are used until you change anything. The
+  settings file is the player's, so it's per player, not per save.
+- **Default places** keep clear of the holsters the game's weapon and shield hang in. The healing
+  slot is in front of the left hip, not at it: the left hip is the sword's. The arrows slot is over
+  the right shoulder: if a two-handed weapon hangs there, the weapon comes first.
+- **Keys don't draw:** the game's key model (`clutter\key\key.nif`) is an old NIF version the
+  extractor can't read yet, so keys (and lockpicks) have no model and aren't handed out. Two cave
+  ingredients have the same problem.
 
-  | Menu | Where |
-  |---|---|
-  | a container's or merchant's | at the thing's distance (0.9 to 1.4 m), 10 degrees under the eyes; to the thing's side only if it would cover it (a chest on the floor never does) |
-  | your own | 1.1 m ahead |
-  | pop-ups | 0.8 m ahead, where you're looking |
-- **Pop-ups are moved apart on the screen.** In the flat game, a count or a question sits over the
-  middle of the menu it's for, so cut out, it would show twice. While it's up, the menu under it is
-  moved down the game's screen and the pop-up into the room above, through the game's own tile
-  update. Both still float where they belong in the world.
-- **B closes menus with the game's Menu Mode (Tab).** In Oblivion, Escape opens the pause menu over
-  an open menu instead of closing it. The pause menu and its options, load and save pages still
-  close with Escape.
-- **Dialogue.** The speaker's name floats over their head (the flat game shows it in a corner).
-- **The crosshair card** under where you look is fixed to your gaze, because it says what looking
-  there does.
-- **Only the pause menu gets RustVR's settings beside it.** They used to open next to every game menu,
-  a chest's list included.
-- **The pointer.** The laser's dot is the pointer (the game's cursor goes where it points), and the
-  game's own hover highlight shows what it's on. In the captures the game's own arrow didn't show.
+## Archery (the `overnight/archery` branch), when the two are merged
+
+- **Archery has its own quiver.** It's a set of zones over the shoulder and at the hip
+  (`rig::zones::quiver_zones`) that hand out the bow's `OBJ_ARROW` templates while the other hand
+  holds a bow. Here the arrows are a slot like any other, giving the game's arrows as things
+  (props) in the hand.
+- **How they should meet:**
+  - In `Rig::update_hover`, check the quiver before the slots while the other hand holds a bow by
+    its grip: there an arrow is for nocking.
+  - Give the quiver's zones from the slots that hold Arrows (`pockets::zones` of each slot whose
+    categories include the game's arrows), not fixed places. Then moving the Arrows slot in the
+    editor moves the quiver, and archery's `Quiver` setting (shoulder, hip, both) becomes the
+    default Arrows slots.
+  - With no bow in the other hand, the Arrows slot hands out an arrow as now.
+- **The protocol:** archery's region (`OFF_BOWS`) is under the old end of the mapping, and
+  this branch's regions (`OFF_INVENTORY` on) are in the 64 KB the mapping grew by. Both
+  bump `VERSION` to 12: make it 13 when merging.
 
 ## Not done
 
-- **Most menus aren't cut into pieces.** Everything except the container, barter, dialogue, the
-  big four, pop-ups and pause floats as one piece cut out of the screen. The map's journal pages are
-  its page as a whole.
-- **Typing** (naming a spell or a potion, `TextEditMenu`) still needs the keyboard: there's no
-  keyboard in VR yet.
-- **The race menu** shows the player's face in the flat game; in VR the world is live and nothing
-  looks at your face (that's the mirror, overnight feature 15).
-- **Loading screens and the main menu** are as before: a panel in the runtime's room, since there's
-  no world to float them in.
-- **Tile dumps.** To cut another menu, set `RUSTVR_OBLIVION_DUMP_TILES=1` and the adapter logs its
-  tiles with their boxes. Each menu's pieces are a few lines in `crates/oblivion/src/hud.rs`.
+- **No ghost of what's in a slot.** You find a slot by its tick and learn what it holds by drawing,
+  or in the editor, which shows each slot's first thing.
+- **Slots don't move with the body's crouch or lean:** they hang off the head-following anchor the
+  holsters always have, as the research recommends.
+- **Torches** aren't a category (section 5's). **Apparel** isn't either.
+- **No renaming slots:** there's no keyboard in VR. New slots are "Slot 5", "Slot 6"...
+- **No bite-by-bite eating:** Oblivion eats a thing whole, so one hold eats one.
+- **Books** can be put in a slot and drawn, but reading one is section 10's (the book held open).
