@@ -7,14 +7,30 @@
 //!   own list, with how each is delivered (its effects' range), what it costs the player now
 //!   (the game's own cost), the colour of its first effect's light, which one is selected, and
 //!   the player's magicka.
-//! * **What the hands did** ([`apply`], on the game's thread before its frame):
+//!   Its weapon (always) and its shield go as its guard ([`PART_SHIELD`] parts: what blades stop
+//!   on), with its weapon's Havok mass, whether its attack is a power attack (its weapon sequence's
+//!   group, 22..26) and how many of its blows have landed on the player (`Actor::Hit` finding the
+//!   player in its hit cone, 0x6156C0, as it lands a blow).
+//! * **What the hands did** ([`apply`], on the game's thread before its frame;
+//!   `docs/research/melee.md`):
 //!   * A melee hit is the game's own hit: the player's hit routine (`Actor` vtable 0x3AC,
 //!     0x5FEBF0) on that creature, the way the attack animation would land it. That brings the
 //!     game's damage formula, skills, sneak attacks, enchantments, blocking, sounds, blood, the
-//!     OnHit scripts and the stagger. A power hit is its power attack. A glancing blow lands
-//!     nothing.
+//!     OnHit scripts and the stagger. The swing scales it: while it runs the weapon's damage
+//!     (0x547070) is that share of the game's, from the game's own weakest hit (an exhausted
+//!     one's, `fFatigueBase - fFatigueMult`) at the weakest swing to the game's own at a full one.
+//!     A power hit is its power attack: the flag, and the player's weapon sequence set to the
+//!     power attack the swing's direction asks for while the hit runs (the side ones once the
+//!     weapon's skill is Journeyman, the back one Expert, the forward one Master, standing while
+//!     sneaking: what the game itself lets the player do), so its bonus, knockback, knockdown,
+//!     disarm and paralysis are the game's. A glancing blow is a weak hit; a blow on a blocking
+//!     creature's guard is the game's hit, which the game's own block takes.
+//!   * A swing as hard as a full hit costs the game's own attack fatigue (0x5E4010, five times
+//!     for a power attack).
 //!   * A block (the hand's weapon meeting a creature's swing) is the game's own block: its Block
-//!     control held through the blow, so the game's block rules, skill and sounds decide it.
+//!     control held through the blow, so the game's block rules, skill and sounds decide it. A
+//!     parry knocks the blow aside at once: the attacker's own recoil (0x5F4F00), and the block's
+//!     Master disarm (0x5FC2B0).
 //!   * A cast is the game's own cast, at once: the caster's usability check (enough magicka, not
 //!     silenced), its cost, and an immediate cast (0x69BE90: no casting animation, the hand
 //!     already did that). The projectile leaves the palm along the hand's aim: the projectile
@@ -57,6 +73,7 @@ const VT_HIT: usize = 0x3AC;
 const GET_BASE_AV: usize = 0x005F_1910;
 const AV_HEALTH: u32 = 8;
 const AV_MAGICKA: u32 = 9;
+const AV_FATIGUE: u32 = 10;
 /// `PlayerCharacter::GetActiveMagicItem` (thiscall): the selected spell's `MagicItem*` (inside its
 /// spell at +0x18).
 const ACTIVE_MAGIC_ITEM: usize = 0x0065_D4A0;
@@ -101,6 +118,50 @@ const BLOCK_HOLD: f64 = 0.5;
 
 /// Spell types the hand casts: a spell, a power, a lesser power.
 const CASTABLE_TYPES: [u32; 3] = [0, 2, 3];
+
+/// The process's equipped shield (`MiddleHighProcess` +0xF0: an inventory entry, its form at +8;
+/// an armour's male model path at +0x70).
+const EQUIPPED_SHIELD: usize = 0xF0;
+const ARMOR_MODEL: usize = 0x70;
+/// An actor's animation data (vtable +0x164, thiscall) and the group its weapon sequence plays (the
+/// low byte of the word at +0x42): 22 a standing power attack, 23 forward, 24 back, 25 left, 26 right.
+const VT_ANIM_DATA: usize = 0x164;
+const WEAPON_GROUP: usize = 0x42;
+const GROUP_POWER: u8 = 22;
+const GROUP_POWER_FORWARD: u8 = 23;
+const GROUP_POWER_BACK: u8 = 24;
+const GROUP_POWER_LEFT: u8 = 25;
+const GROUP_POWER_RIGHT: u8 = 26;
+/// The game's weapon damage (cdecl: skill, luck, strength, fatigue, damage, condition, multiplier,
+/// no fatigue), its target in a blow's hit cone (cdecl: attacker, reach), `Actor::Hit` itself, an
+/// attack's fatigue (thiscall: actor, power), a recoil (thiscall: actor), the block's Master disarm
+/// (thiscall: blocker, attacker).
+const WEAPON_DAMAGE: usize = 0x0054_7070;
+const HIT_TARGET: usize = 0x0061_56C0;
+const HIT: usize = 0x005F_EBF0;
+const ATTACK_FATIGUE: usize = 0x005E_4010;
+const RECOIL: usize = 0x005F_4F00;
+const BLOCK_DISARM: usize = 0x005F_C2B0;
+/// The skill each weapon type uses (actor values, by `TESObjectWEAP::type`).
+const WEAPON_SKILLS: usize = 0x00B0_86A0;
+/// Game settings: `fFatigueBase`, `fFatigueMult` (the fatigue term of a blow's damage), and the
+/// skill levels (`iSkillJourneymanMin`, `iSkillExpertMin`, `iSkillMasterMin`).
+const F_FATIGUE_BASE: usize = 0x00B3_7530;
+const F_FATIGUE_MULT: usize = 0x00B3_7538;
+const I_SKILL_JOURNEYMAN: usize = 0x00B3_A500;
+const I_SKILL_EXPERT: usize = 0x00B3_A508;
+const I_SKILL_MASTER: usize = 0x00B3_A510;
+/// A creature's guard: its weapon's thickness; a shield's disc as two capsules side by side, each
+/// this share of its radius thick.
+const GUARD_RADIUS: f32 = 0.03;
+const SHIELD_HALF: f32 = 0.5;
+
+/// The share of the game's damage the adapter's own hit asks for while it runs (f32 bits; 0: no hit
+/// of ours is running), and the creatures whose blows have landed on the player (form id: how many).
+static OUR_SHARE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+static LANDED: Mutex<Option<HashMap<u32, u32>>> = Mutex::new(None);
+/// The creature whose `Actor::Hit` is running now (0: none).
+static HITTING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 pub(crate) fn read_str(p: usize) -> String {
     let mut out = Vec::new();
@@ -223,6 +284,94 @@ fn base_actor_value(_actor: usize, _av: u32) -> i32 {
     0
 }
 
+/// One of the player's actor values (0 without a player).
+pub fn player_value(av: u32) -> i32 {
+    let p = engine::player();
+    if p == 0 { 0 } else { actor_value(p, av) }
+}
+
+/// An actor's animation data, if any (vtable +0x164).
+#[cfg(target_arch = "x86")]
+fn anim_data(actor: usize) -> usize {
+    let f = mem::deref(mem::deref(actor) + VT_ANIM_DATA);
+    if actor == 0 || !(0x0040_1000..0x00A3_0000).contains(&f) {
+        return 0;
+    }
+    type F = unsafe extern "thiscall" fn(usize) -> usize;
+    unsafe { std::mem::transmute::<usize, F>(f)(actor) }
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn anim_data(_actor: usize) -> usize {
+    0
+}
+
+/// The group an actor's weapon sequence plays (its attack), if it has one.
+fn weapon_group(actor: usize) -> Option<u8> {
+    let data = anim_data(actor);
+    (data != 0).then(|| mem::at::<u8>(data + WEAPON_GROUP)).flatten()
+}
+
+/// An actor's equipped weapon's form, if it has one.
+fn equipped_weapon(actor: usize) -> usize {
+    let form = mem::deref(mem::deref(mem::deref(actor + 0x58) + EQUIPPED_WEAPON) + 8);
+    if form != 0 && mem::at::<u8>(form + 4) == Some(0x21) { form } else { 0 }
+}
+
+/// What an actor's equipped weapon weighs (its Havok mass, kg).
+fn weapon_mass(actor: usize) -> f32 {
+    let form = equipped_weapon(actor);
+    if form == 0 {
+        return 0.0;
+    }
+    crate::havok::body(&read_str(mem::deref(form + 0x34))).map_or(0.0, |b| b.mass)
+}
+
+/// An actor's equipped shield's disc (its model's, from the asset cache): its centre and its radius
+/// in the model's space (metres), cached by model path.
+fn shield_disc(actor: usize) -> Option<(Vec3, f32)> {
+    static DISCS: Mutex<Option<HashMap<String, Option<(Vec3, f32)>>>> = Mutex::new(None);
+    let form = mem::deref(mem::deref(mem::deref(actor + 0x58) + EQUIPPED_SHIELD) + 8);
+    if form == 0 || mem::at::<u8>(form + 4) != Some(0x14) {
+        return None;
+    }
+    let path = read_str(mem::deref(form + ARMOR_MODEL));
+    let mut cache = DISCS.lock().unwrap();
+    *cache.get_or_insert_with(HashMap::new).entry(path.clone()).or_insert_with(|| {
+        let key = oblivion_assets::export::model_key(&path);
+        let m = rustvr_asset::load_model(&rustvr_asset::default_root().join("oblivion"), &key).ok()?;
+        let (lo, hi) = (Vec3::from_array(m.bounds_min), Vec3::from_array(m.bounds_max));
+        Some(((lo + hi) * 0.5, ((hi.x - lo.x).min(hi.y - lo.y) * 0.5).max(0.1)))
+    })
+}
+
+/// A creature's guard as capsules (protocol space): its weapon along its `Weapon` node, and its
+/// shield's disc on its `Shield` node (the disc across the model's X and Y, the game's X and Z).
+fn guard_parts(actor: usize, b: &HashMap<String, usize>) -> Vec<(Vec3, Vec3, f32)> {
+    let mut out = Vec::new();
+    let axes = |node: usize| -> Option<[Vec3; 3]> {
+        let rot: [f32; 9] = mem::at(node + engine::av::WORLD_ROTATE)?;
+        Some([0, 1, 2].map(|k| camera::basis().dir_from_game(Vec3::new(rot[k], rot[3 + k], rot[6 + k])).normalize_or_zero()))
+    };
+    if let (Some(&node), Some(len)) = (b.get("Weapon"), weapon_length(actor))
+        && let (Some(at), Some(ax)) = (node_pos(node), axes(node))
+    {
+        out.push((at, at + ax[1] * len, GUARD_RADIUS));
+    }
+    if let (Some(&node), Some((centre, r))) = (b.get("Shield"), shield_disc(actor))
+        && let (Some(at), Some(ax)) = (node_pos(node), axes(node))
+    {
+        // The model's (x, y, z) is the game's (x, z, y).
+        let c = at + (ax[0] * centre.x + ax[2] * centre.y + ax[1] * centre.z);
+        let up = ax[2] * r * (1.0 - SHIELD_HALF);
+        for side in [-1.0, 1.0] {
+            let off = ax[0] * (side * r * SHIELD_HALF);
+            out.push((c + off - up, c + off + up, r * SHIELD_HALF));
+        }
+    }
+    out
+}
+
 /// The capsules of a humanoid skeleton: (from bone, to bone, radius, part, material).
 const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
     ("Bip01 Pelvis", "Bip01 Neck", 0.17, PART_TORSO, MAT_LEATHER),
@@ -281,6 +430,15 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
             a.parts[0] = ActorPart { a: (f + Vec3::Y * 0.3).to_array(), radius: 0.35, b: (f + Vec3::Y * 1.3).to_array(), kind: PART_TORSO, material: MAT_FLESH, game_part: 0, _pad: [0; 2] };
             a.count = 1;
         }
+        // Its guard: what blades stop on (and, while it holds it up, a hit on it is a blocked one).
+        for (p, q, r) in guard_parts(actor, &b) {
+            let i = a.count as usize;
+            if i >= MAX_ACTOR_PARTS {
+                break;
+            }
+            a.parts[i] = ActorPart { a: p.to_array(), radius: r, b: q.to_array(), kind: PART_SHIELD, material: MAT_PLATE, game_part: i as u32, _pad: [0; 2] };
+            a.count += 1;
+        }
         match current_action(actor) {
             ACTION_ATTACK | ACTION_ATTACK_FOLLOW => {
                 if let Some((wa, wb, r)) = attack_segment(actor, &b) {
@@ -289,10 +447,15 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
                     a.weapon_b = wb.to_array();
                     a.weapon_radius = r;
                 }
+                if weapon_group(actor).is_some_and(|g| (GROUP_POWER..=GROUP_POWER_RIGHT).contains(&g)) {
+                    a.flags |= ACT_POWER_ATTACK;
+                }
             }
             ACTION_BLOCK => a.flags |= ACT_BLOCKING,
             _ => {}
         }
+        a.weapon_mass = weapon_mass(actor);
+        a.blows = LANDED.lock().unwrap().as_ref().and_then(|l| l.get(&id)).copied().unwrap_or(0);
         let health = actor_value(actor, AV_HEALTH);
         let most = base_actor_value(actor, AV_HEALTH).max(1);
         a.flags |= if health > 0 { ACT_ALIVE } else { 0 };
@@ -422,30 +585,107 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
             CE_HIT => {
                 // (Gone since it was published: the game's frame ran in between.)
                 let Some(&target) = actors.get(&ev.actor).filter(|&&a| is_actor(a)) else { continue };
-                // (The game's damage is its own: any clean hit is a hit, a fast one its power
-                // attack; a blow at a bad angle glances off.)
-                if ev.flags & CEF_GLANCING != 0 {
-                    tracing::info!("combat: a glancing blow on {:#x}: nothing lands", ev.actor);
-                    continue;
-                }
+                // The game's own hit, as strong as the swing: a weak one (a tap, a glancing blow
+                // with the flat) its weakest, a full one its own, a power one its power attack
+                // (the one the swing's direction is, as far as the skill has learned).
                 let power = ev.flags & CEF_POWER != 0;
-                type Hit = unsafe extern "thiscall" fn(usize, u8, usize, usize);
+                let share = damage_share(ev.strength);
+                let group = power.then(|| power_group(player, ev.swing));
+                type Hit = unsafe extern "thiscall" fn(usize, u32, usize, usize);
                 let f = mem::deref(mem::deref(player) + VT_HIT);
-                tracing::info!("combat: the player hits {:#x} (strength {:.2}{})", ev.actor, ev.strength, if power { ", a power attack" } else { "" });
+                tracing::info!(
+                    "combat: the player hits {:#x} (strength {:.2}: {:.0}% of the game's damage{}{}{}, the swing {})",
+                    ev.actor,
+                    ev.strength,
+                    share * 100.0,
+                    group.map(|g| format!(", a power attack (group {g})")).unwrap_or_default(),
+                    if ev.flags & CEF_GLANCING != 0 { ", glancing" } else { "" },
+                    if ev.flags & CEF_GUARD != 0 { ", on its guard" } else { "" },
+                    ev.swing
+                );
                 if f != 0 {
-                    unsafe { std::mem::transmute::<usize, Hit>(f)(player, power as u8, 0, target) };
+                    as_our_hit(player, share, group, || unsafe { std::mem::transmute::<usize, Hit>(f)(player, power as u32, 0, target) });
                 }
+            }
+            CE_SWING => {
+                // The game's own attack: its fatigue (a power attack's five times).
+                let power = ev.flags & CEF_POWER != 0;
+                let before = actor_value(player, AV_FATIGUE);
+                type Fatigue = unsafe extern "thiscall" fn(usize, u32);
+                unsafe { std::mem::transmute::<usize, Fatigue>(ATTACK_FATIGUE)(player, power as u32) };
+                tracing::info!(
+                    "combat: a swing ({:.2} of a full hit{}, the swing {}, {}): fatigue {before} -> {}",
+                    ev.strength,
+                    if power { ", a power attack" } else { "" },
+                    ev.swing,
+                    if ev.actor != 0 { "it hit" } else { "it missed" },
+                    actor_value(player, AV_FATIGUE)
+                );
             }
             CE_CAST => {
                 let Some(&spell) = spells.get(&ev.what) else { continue };
                 cast(player, spell, ev, actors);
             }
             CE_BLOCK => {
-                tracing::info!("combat: the player blocks {:#x}{}", ev.actor, if ev.flags & CEF_PARRY != 0 { " (a parry)" } else { "" });
+                let parry = ev.flags & CEF_PARRY != 0;
+                tracing::info!("combat: the player blocks {:#x}{} (the guard {:.2} of the blow)", ev.actor, if parry { ", a parry" } else { "" }, ev.strength);
                 crate::player::hold_control("Block", BLOCK_HOLD);
+                // A parry knocks the blow aside before it lands: the attacker's own recoil, and the
+                // block's Master disarm.
+                if parry && let Some(&attacker) = actors.get(&ev.actor).filter(|&&a| is_actor(a)) {
+                    type Recoil = unsafe extern "thiscall" fn(usize) -> u32;
+                    type Disarm = unsafe extern "thiscall" fn(usize, usize) -> u8;
+                    unsafe { std::mem::transmute::<usize, Recoil>(RECOIL)(attacker) };
+                    let disarmed = unsafe { std::mem::transmute::<usize, Disarm>(BLOCK_DISARM)(player, attacker) } != 0;
+                    tracing::info!("combat: {:#x} recoils from the parry{}", ev.actor, if disarmed { " and drops its weapon" } else { "" });
+                }
             }
             _ => {}
         }
+    }
+}
+
+/// The share of the game's damage a hit of `strength` (1: a full hit) does: from the game's own
+/// weakest hit (an exhausted fighter's, `fFatigueBase - fFatigueMult` of a rested one's) at the
+/// weakest to its own at a full one.
+fn damage_share(strength: f32) -> f32 {
+    let (base, mult) = (mem::at::<f32>(F_FATIGUE_BASE).unwrap_or(1.0), mem::at::<f32>(F_FATIGUE_MULT).unwrap_or(0.5));
+    let weakest = if base > 0.05 && base.is_finite() && mult.is_finite() { ((base - mult) / base).clamp(0.05, 1.0) } else { 0.5 };
+    weakest + (1.0 - weakest) * strength.clamp(0.0, 1.0)
+}
+
+/// The power attack (its animation group) a swing going `swing` is for the player, as the game lets
+/// the player do them: the side ones from Journeyman in the weapon's skill, the back one (a rising
+/// swing) from Expert, the forward one (a thrust) at Master; else, and always while sneaking, the
+/// standing one (a chop).
+fn power_group(player: usize, swing: u32) -> u8 {
+    let (group, level) = match swing {
+        SWING_LEFT => (GROUP_POWER_LEFT, I_SKILL_JOURNEYMAN),
+        SWING_RIGHT => (GROUP_POWER_RIGHT, I_SKILL_JOURNEYMAN),
+        SWING_UP => (GROUP_POWER_BACK, I_SKILL_EXPERT),
+        SWING_THRUST => (GROUP_POWER_FORWARD, I_SKILL_MASTER),
+        _ => return GROUP_POWER,
+    };
+    let form = equipped_weapon(player);
+    let skill = if form != 0 { mem::at::<u32>(WEAPON_SKILLS + 4 * mem::at::<u32>(form + 0x90).unwrap_or(0).min(5) as usize) } else { None };
+    let (Some(skill), Some(needed)) = (skill, mem::at::<i32>(level)) else { return GROUP_POWER };
+    if crate::player::sneaking() || actor_value(player, skill) < needed { GROUP_POWER } else { group }
+}
+
+/// Runs the player's hit `f` as the adapter's: the weapon's damage that share of the game's, and the
+/// player's weapon sequence that power attack's group, while it runs.
+fn as_our_hit(player: usize, share: f32, group: Option<u8>, f: impl FnOnce()) {
+    use std::sync::atomic::Ordering;
+    let data = anim_data(player);
+    let old = (data != 0).then(|| mem::at::<u8>(data + WEAPON_GROUP)).flatten();
+    if let (Some(_), Some(g)) = (old, group) {
+        unsafe { ((data + WEAPON_GROUP) as *mut u8).write(g) };
+    }
+    OUR_SHARE.store(share.to_bits(), Ordering::Relaxed);
+    f();
+    OUR_SHARE.store(0, Ordering::Relaxed);
+    if let (Some(o), Some(_)) = (old, group) {
+        unsafe { ((data + WEAPON_GROUP) as *mut u8).write(o) };
     }
 }
 
@@ -523,6 +763,11 @@ pub fn publish() {
     let k = known.get_or_insert_with(|| Known { actors: HashMap::new(), spells: HashMap::new(), sent: None, frame: 0 });
     k.actors = actors;
     k.frame += 1;
+    // (The game frame they're from: the runtime times their motion by it. Their blows are taken at
+    // the share of the game's speed the player's own swings are.)
+    let mut table = table;
+    table.frame = k.frame;
+    table.blow_scale = crate::weapons::to_hand();
     if k.frame % 60 == 2 {
         log_actors(&table);
     }
@@ -548,6 +793,15 @@ pub fn publish() {
             k.spells = by_id;
         }
     });
+}
+
+/// A creature's blow just landed on the player: counted (the runtime feels it in the hands).
+fn landed(attacker: usize) {
+    let Some(id) = mem::at::<u32>(attacker + FORM_ID) else { return };
+    let mut l = LANDED.lock().unwrap();
+    let n = l.get_or_insert_with(HashMap::new).entry(id).or_insert(0);
+    *n = n.wrapping_add(1);
+    tracing::info!("combat: {id:#x}'s blow lands on the player{}", if weapon_group(attacker).is_some_and(|g| (GROUP_POWER..=GROUP_POWER_RIGHT).contains(&g)) { " (a power attack)" } else { "" });
 }
 
 /// The creatures published, where each is from the player (metres, the protocol's axes).
@@ -583,8 +837,65 @@ mod hook {
     static REAL: AtomicUsize = AtomicUsize::new(0);
     type Spawn = unsafe extern "C" fn(u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) -> u32;
 
+    static REAL_DAMAGE: AtomicUsize = AtomicUsize::new(0);
+    static REAL_HIT: AtomicUsize = AtomicUsize::new(0);
+    static REAL_TARGET: AtomicUsize = AtomicUsize::new(0);
+    type Damage = unsafe extern "C" fn(i32, i32, i32, f32, i32, f32, f32, u32) -> f32;
+    type Hit = unsafe extern "thiscall" fn(usize, u32, usize, usize);
+    type Target = unsafe extern "C" fn(usize, f32) -> usize;
+
     pub fn install() {
         crate::hooks::install_into(super::SPAWN_PROJECTILE as *const (), spawn as *const (), "MagicProjectile spawn", &REAL);
+        crate::hooks::install_into(super::WEAPON_DAMAGE as *const (), damage as *const (), "weapon damage", &REAL_DAMAGE);
+        crate::hooks::install_into(super::HIT as *const (), hit as *const (), "Actor::Hit", &REAL_HIT);
+        crate::hooks::install_into(super::HIT_TARGET as *const (), target as *const (), "the hit cone's target", &REAL_TARGET);
+    }
+
+    /// The weapon's damage: while the adapter's own hit runs, the share of it the swing asks for
+    /// (on its multiplier, the power attack's bonus, so the game's formula is the rest).
+    #[allow(clippy::too_many_arguments)]
+    unsafe extern "C" fn damage(skill: i32, luck: i32, strength: i32, fatigue: f32, base: i32, condition: f32, mult: f32, no_fatigue: u32) -> f32 {
+        let real: Damage = unsafe { std::mem::transmute(REAL_DAMAGE.load(Ordering::Acquire)) };
+        // (Only the hit's own weapon damage, the first it works out: what the creature hit does in
+        // answer, weighing its own weapon, is its own.)
+        let share = f32::from_bits(super::OUR_SHARE.swap(0, Ordering::Relaxed));
+        let mult = if share > 0.0 { mult * share } else { mult };
+        let out = unsafe { real(skill, luck, strength, fatigue, base, condition, mult, no_fatigue) };
+        if share > 0.0 {
+            tracing::info!("combat: the weapon's damage {base} (skill {skill}, strength {strength}, fatigue {fatigue:.2}, condition {condition:.2}) times {mult:.2}: {out:.1}");
+        }
+        out
+    }
+
+    /// Every actor's blow: one by a creature that finds the player in its hit cone (or is aimed at
+    /// the player) has landed on the player.
+    unsafe extern "thiscall" fn hit(this: usize, power: u32, projectile: usize, target: usize) {
+        let real: Hit = unsafe { std::mem::transmute(REAL_HIT.load(Ordering::Acquire)) };
+        let player = crate::engine::player();
+        if this == player || this == 0 {
+            return unsafe { real(this, power, projectile, target) };
+        }
+        if target != 0 && target == player && projectile == 0 {
+            super::landed(this);
+        }
+        let outer = super::HITTING.swap(if target == 0 && projectile == 0 { this } else { 0 }, Ordering::Relaxed);
+        let before = (super::actor_value(player, super::AV_HEALTH), super::actor_value(player, super::AV_FATIGUE), super::current_action(player));
+        unsafe { real(this, power, projectile, target) };
+        super::HITTING.store(outer, Ordering::Relaxed);
+        let after = (super::actor_value(player, super::AV_HEALTH), super::actor_value(player, super::AV_FATIGUE));
+        if after != (before.0, before.1) {
+            tracing::info!("combat: a blow on the player{}: health {} -> {}, fatigue {} -> {} (the player's action {})", if power != 0 { " (a power attack)" } else { "" }, before.0, after.0, before.1, after.1, before.2);
+        }
+    }
+
+    /// The target in a blow's hit cone: the player, inside a creature's blow, is a blow landed.
+    unsafe extern "C" fn target(attacker: usize, reach: f32) -> usize {
+        let real: Target = unsafe { std::mem::transmute(REAL_TARGET.load(Ordering::Acquire)) };
+        let t = unsafe { real(attacker, reach) };
+        if t != 0 && t == crate::engine::player() && attacker == super::HITTING.load(Ordering::Relaxed) {
+            super::landed(attacker);
+        }
+        t
     }
 
     /// While the adapter casts: the projectile leaves the palm along the hand's aim.

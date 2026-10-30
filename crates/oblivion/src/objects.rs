@@ -1,6 +1,7 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
 //! ([`crate::weapons`]) and the game's things lying about near the player ([`crate::items`]), each
-//! owner's entries kept apart and written together.
+//! owner's entries kept apart and written together; and the same for their convex collision (the
+//! game's Havok shapes, [`publish_hulls`]).
 
 use rustvr_protocol::*;
 
@@ -45,6 +46,32 @@ struct Table {
     table: Box<ObjectTable>,
 }
 static TABLE: std::sync::Mutex<Option<Table>> = std::sync::Mutex::new(None);
+
+/// Each owner's convex parts, and the table they're written in together.
+struct Hulls {
+    weapons: Vec<GameHull>,
+    items: Vec<GameHull>,
+    table: Box<GameHulls>,
+}
+static HULLS: std::sync::Mutex<Option<Hulls>> = std::sync::Mutex::new(None);
+
+/// Replaces `owner`'s convex parts and writes all of them to the runtime (the weapons' first).
+pub fn publish_hulls(owner: Owner, hulls: &[GameHull], adapter: &rustvr_adapter::Adapter) -> bool {
+    let mut h = HULLS.lock().unwrap();
+    let h = h.get_or_insert_with(|| Hulls { weapons: Vec::new(), items: Vec::new(), table: bytemuck::zeroed_box() });
+    let mine = match owner {
+        Owner::Weapons => &mut h.weapons,
+        Owner::Items => &mut h.items,
+    };
+    mine.clear();
+    mine.extend(hulls.iter().filter(|x| x.id != 0 && x.count >= 4).copied());
+    h.table.count = 0;
+    for x in h.weapons.iter().chain(&h.items).take(MAX_GAME_HULLS) {
+        h.table.hulls[h.table.count as usize] = *x;
+        h.table.count += 1;
+    }
+    adapter.write_game_hulls(&h.table)
+}
 
 /// Replaces `owner`'s objects and writes the whole table to the runtime.
 pub fn publish(owner: Owner, descs: &[ObjectDesc], adapter: &rustvr_adapter::Adapter) -> bool {

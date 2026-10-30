@@ -9,6 +9,11 @@
 //! The equipped shield is the other: taken from over the left shoulder by its strap, it guards (it
 //! meets blows, it doesn't hit), and a block with it is the game's block with its shield.
 //!
+//! Both are the game's own bodies ([`crate::havok`]): their Havok shapes are what they meet the
+//! world and creatures with, their Havok masses what they weigh. A weapon's handle (a sword's grip,
+//! an axe's haft) takes either hand anywhere along it, and how hard a hit has to be is the game's
+//! own swing of that weapon ([`swing_speeds`]).
+//!
 //! Forms: `MiddleHighProcess::equippedWeaponData` (+0xE4 of the player's process) is the
 //! inventory entry of the equipped weapon (its form at +8), `equippedShieldData` (+0xF0) the
 //! shield's (an armour: its male model's path at +0x70). `TESObjectWEAP` (xOBSE's
@@ -38,6 +43,7 @@ const WEAP_MODEL: usize = 0x34;
 const WEAP_WEIGHT: usize = 0x7C;
 const WEAP_DAMAGE: usize = 0x8C;
 const WEAP_TYPE: usize = 0x90;
+const WEAP_SPEED: usize = 0x94;
 const WEAP_REACH: usize = 0x98;
 
 /// `TESObjectWEAP::type`.
@@ -55,6 +61,8 @@ pub struct Equipped {
     pub model: String,
     pub kind: u32,
     pub damage: u16,
+    /// Its attack animation's rate (a dagger's 1.4, a longsword's 1, a claymore's 0.8).
+    pub speed: f32,
     pub reach: f32,
     pub weight: f32,
 }
@@ -78,6 +86,7 @@ pub fn equipped() -> Option<Equipped> {
         model: crate::combat::read_str(mem::deref(form + WEAP_MODEL)),
         kind: mem::at(form + WEAP_TYPE)?,
         damage: mem::at(form + WEAP_DAMAGE)?,
+        speed: mem::at::<f32>(form + WEAP_SPEED).filter(|s| s.is_finite() && *s > 0.05)?,
         reach: mem::at(form + WEAP_REACH)?,
         weight: mem::at(form + WEAP_WEIGHT)?,
     })
@@ -94,11 +103,66 @@ pub fn equipped_shield() -> Option<(usize, String)> {
     (!model.is_empty()).then_some((form, model))
 }
 
+/// The game's own swing, at the `Hit` key of its attack animations (`meshes\characters\_male/// onehandattackright.kf` and `...left.kf`, `onehandattackpower.kf`, and the same for `twohand`):
+/// the `Weapon` node through the Biped chain at that moment, its velocity and spin. A point `d`
+/// metres up the blade from the grip moves at `sqrt(a + 2 b d + c d^2)` m/s, at the weapon's speed 1
+/// (`a`: the grip's own speed squared). Measured from the game's animations (normal attacks: their
+/// right and left swings; the standing power attack).
+#[derive(Clone, Copy, Debug)]
+struct GameSwing {
+    right: (f32, f32, f32),
+    left: (f32, f32, f32),
+    power: (f32, f32, f32),
+}
+
+const ONE_HAND: GameSwing = GameSwing { right: (59.63, 86.51, 275.30), left: (115.25, 65.58, 255.99), power: (175.26, 226.75, 452.14) };
+const TWO_HAND: GameSwing = GameSwing { right: (16.88, 48.68, 191.09), left: (54.33, 86.60, 189.55), power: (96.10, 112.71, 246.39) };
+/// The middle of the iron longsword's blade (m from the grip): where the runtime's own full cut is
+/// (a one-handed sword's, [`FULL_SLASH_SPEED`]).
+const SWORD_MID: f32 = 0.48;
+
+fn speed_at((a, b, c): (f32, f32, f32), d: f32) -> f32 {
+    (a + 2.0 * b * d + c * d * d).max(0.0).sqrt()
+}
+
+impl GameSwing {
+    /// A normal attack's speed `d` up the blade (the right and left swings together).
+    fn normal(&self, d: f32) -> f32 {
+        0.5 * (speed_at(self.right, d) + speed_at(self.left, d))
+    }
+    fn grip(&self) -> f32 {
+        0.5 * (self.right.0.sqrt() + self.left.0.sqrt())
+    }
+}
+
+/// The game's swing in the hand: the game's characters swing faster than an arm in VR does, so its
+/// own swings keep their proportions (a slower weapon, a heavier one, a point further up the blade,
+/// a power attack) at the scale where its one-handed sword's full cut at the middle of the blade is
+/// the runtime's own ([`FULL_SLASH_SPEED`]).
+pub fn to_hand() -> f32 {
+    FULL_SLASH_SPEED / ONE_HAND.normal(SWORD_MID)
+}
+
+/// How hard a weapon of the game's `kind` swung at `speed` must hit `d` metres up from its grip:
+/// (a full hit's speed there, a power hit's over it), m/s, as the game's own attack swings it.
+pub fn swing_speeds(kind: u32, speed: f32, d: f32) -> (f32, f32) {
+    let s = if matches!(kind, BLADE_TWO_HAND | BLUNT_TWO_HAND) { TWO_HAND } else { ONE_HAND };
+    let normal = s.normal(d);
+    (to_hand() * speed * normal, speed_at(s.power, d) / normal.max(1e-3))
+}
+
+/// How fast the hand moves in the game's own swing of a weapon of `kind` at `speed` (m/s, in the
+/// hand's scale): what a power hit wants the arm to do.
+pub fn grip_speed(kind: u32, speed: f32) -> f32 {
+    let s = if matches!(kind, BLADE_TWO_HAND | BLUNT_TWO_HAND) { TWO_HAND } else { ONE_HAND };
+    to_hand() * speed * s.grip()
+}
+
 /// A shield as an object, measured on its model (Oblivion's shields: the disc across X and Y, its
 /// face to -Z, the strap standing out on the +Z side): held by the strap (the furthest out at +Z),
 /// the fist round it with the thumb up the disc and the back of the hand to the shield; the disc
 /// guards (one capsule across it).
-pub fn shield(model: &rustvr_asset::Model, key: &str, id: u32) -> (ObjectDesc, MeleeDesc) {
+pub fn shield(model: &rustvr_asset::Model, key: &str, id: u32, havok: Option<&crate::havok::Body>) -> (ObjectDesc, MeleeDesc) {
     let lo = Vec3::from_array(model.bounds_min);
     let hi = Vec3::from_array(model.bounds_max);
     let (mut strap, mut n) = (Vec3::ZERO, 0.0);
@@ -116,10 +180,11 @@ pub fn shield(model: &rustvr_asset::Model, key: &str, id: u32) -> (ObjectDesc, M
     d.id = id;
     d.kind = OBJ_MELEE;
     d.flags = OBJF_GRABBABLE | OBJF_PULLABLE | OBJF_HOLSTERABLE | OBJF_RUNTIME_DRAWS;
-    d.shape = SHAPE_BOX;
+    d.shape = if havok.is_some_and(|h| !h.parts.is_empty()) { SHAPE_HULL } else { SHAPE_BOX };
     d.half_extents = ((hi - lo) * 0.5).max(Vec3::splat(0.01)).to_array();
     d.center = centre.to_array();
-    d.mass = 3.0;
+    // Its Havok mass (an iron shield's), else an iron shield's own.
+    d.mass = havok.map(|h| h.mass).filter(|m| *m > 0.05).unwrap_or(3.0).clamp(0.3, 20.0);
     d.grip = strap.to_array();
     d.grip_rot = fist(Vec3::Y, Vec3::NEG_Z).to_array();
     d.start_slot = 1 + SLOT_BACK_LEFT;
@@ -188,7 +253,10 @@ impl Slices {
 ///   bludgeons, and an axe's (a head that reaches out to one side) cuts with its outer edge;
 /// * a staff bludgeons with its top fifth;
 /// * all of it, end to end, guards (meets blows without hitting).
-pub fn melee_from_model(model: &rustvr_asset::Model, kind: u32, id: u32, damage: f32) -> MeleeDesc {
+///
+/// Each part hits as hard as the game's own swing of the weapon (`speed`, its animation's rate)
+/// moves it ([`swing_speeds`]).
+pub fn melee_from_model(model: &rustvr_asset::Model, kind: u32, id: u32, damage: f32, speed: f32) -> MeleeDesc {
     let s = Slices::of(model);
     let n = s.lo.len();
     let (z_lo, z_hi) = (model.bounds_min[2], model.bounds_max[2]);
@@ -246,13 +314,52 @@ pub fn melee_from_model(model: &rustvr_asset::Model, kind: u32, id: u32, damage:
     }
     // The whole of it meets a blow (the haft, the grip, the flat): it guards, it doesn't hit.
     add(Damager { kind: DMG_BLUNT, flags: DMGF_GUARD, radius: 0.03, a: [0.0, 0.0, z_lo], b: [0.0, 0.0, z_hi], ..Default::default() });
+    // How hard each part has to hit: as the game's own swing moves it there; a power hit as its
+    // power attack does (at the middle of the first part that hurts), the arm as its swing's grip.
+    if kind != STAFF {
+        let n = (w.count as usize).min(MAX_DAMAGERS);
+        for d in &mut w.damagers[..n] {
+            d.full_a = swing_speeds(kind, speed, Vec3::from_array(d.a).length()).0;
+            d.full_b = swing_speeds(kind, speed, Vec3::from_array(d.b).length()).0;
+        }
+        let main = w.damagers[0];
+        w.power = swing_speeds(kind, speed, (Vec3::from_array(main.a) + Vec3::from_array(main.b)).length() * 0.5).1;
+        w.grip_speed = grip_speed(kind, speed);
+    }
     w
 }
 
+/// A weapon's handle, measured on its model: from its pommel to its guard (a blade's) or to where
+/// its head grows (a haft's), and its radius there; None for a model without one.
+fn handle(model: &rustvr_asset::Model, kind: u32) -> Option<([[f32; 3]; 2], f32)> {
+    let s = Slices::of(model);
+    let n = s.lo.len();
+    let (z_lo, z_hi) = (model.bounds_min[2], model.bounds_max[2]);
+    let end = match kind {
+        BLADE_ONE_HAND | BLADE_TWO_HAND => (0..n).filter(|&i| s.z(i) <= z_lo + (z_hi - z_lo) * 0.4).max_by(|&a, &b| s.width(a).total_cmp(&s.width(b))).map(|i| s.z(i) - SLICE * 1.5)?,
+        BLUNT_ONE_HAND | BLUNT_TWO_HAND | STAFF => {
+            let mut widths: Vec<f32> = (0..n / 2).map(|i| s.width(i)).filter(|&x| x > 0.0).collect();
+            widths.sort_by(f32::total_cmp);
+            let handle = widths.get(widths.len() / 2).copied()?;
+            (n / 2..n).find(|&i| s.width(i) > handle * 2.0).map_or(z_lo + (z_hi - z_lo) * 0.7, |i| s.z(i)) - SLICE * 2.0
+        }
+        _ => return None,
+    };
+    let from = z_lo + SLICE * 0.5;
+    if end - from < 0.04 {
+        return None;
+    }
+    // Its thickness: the median width of the slices along it.
+    let mut widths: Vec<f32> = (0..n).filter(|&i| s.z(i) > from && s.z(i) < end).map(|i| s.width(i)).filter(|&x| x > 0.0).collect();
+    widths.sort_by(f32::total_cmp);
+    let radius = (widths.get(widths.len() / 2).copied().unwrap_or(0.03) * 0.5).clamp(0.008, 0.03);
+    Some(([[0.0, 0.0, from], [0.0, 0.0, end]], radius))
+}
+
 /// The weapon as an object: held at its grip (the model's origin, where the game's hand holds it),
-/// a fist round the handle with the blade out past the thumb and its edges fore and aft; a
-/// two-handed one's other hand lower on the handle.
-pub fn object_desc(model: &rustvr_asset::Model, e: &Equipped, key: &str, id: u32) -> ObjectDesc {
+/// a fist round the handle with the blade out past the thumb and its edges fore and aft, either hand
+/// anywhere along the handle; its body the game's own (`havok`: its convex parts, its mass).
+pub fn object_desc(model: &rustvr_asset::Model, e: &Equipped, key: &str, id: u32, havok: Option<&crate::havok::Body>) -> ObjectDesc {
     let lo = Vec3::from_array(model.bounds_min);
     let hi = Vec3::from_array(model.bounds_max);
     let two_handed = matches!(e.kind, BLADE_TWO_HAND | BLUNT_TWO_HAND | STAFF);
@@ -260,13 +367,18 @@ pub fn object_desc(model: &rustvr_asset::Model, e: &Equipped, key: &str, id: u32
     d.id = id;
     d.kind = OBJ_MELEE;
     d.flags = OBJF_GRABBABLE | OBJF_PULLABLE | OBJF_HOLSTERABLE | OBJF_RUNTIME_DRAWS | if two_handed { OBJF_TWO_HANDED } else { 0 };
-    d.shape = SHAPE_BOX;
+    d.shape = if havok.is_some_and(|h| !h.parts.is_empty()) { SHAPE_HULL } else { SHAPE_BOX };
     d.half_extents = ((hi - lo) * 0.5).max(Vec3::splat(0.01)).to_array();
     d.center = ((hi + lo) * 0.5).to_array();
-    // The game's weights are heavy (an iron longsword is 22): to kilograms, a sword's 1.3.
-    d.mass = (e.weight * 0.06).clamp(0.4, 4.0);
+    // Its Havok mass, to kilograms (a longsword's 1.24); without one, its weight in the game's
+    // inventory as the longsword's is to its Havok mass (20 to 1.24 kg).
+    d.mass = havok.map(|h| h.mass).filter(|m| *m > 0.05).unwrap_or(e.weight * 0.062).clamp(0.1, 20.0);
     d.grip = [0.0; 3];
     d.grip_rot = fist(Vec3::Z, Vec3::Y).to_array();
+    if let Some((line, radius)) = handle(model, e.kind) {
+        d.grip_line = line;
+        d.grip_radius = radius;
+    }
     d.muzzle = [0.0, 0.0, hi.z];
     if two_handed {
         d.foregrip = [0.0, 0.0, lo.z * 0.6];
@@ -279,9 +391,37 @@ pub fn object_desc(model: &rustvr_asset::Model, e: &Equipped, key: &str, id: u32
 }
 
 struct Registered {
-    /// The weapon's form and the shield's.
+    /// The weapon's form and the shield's, and how strong the arms are (hundredths).
     forms: (usize, usize),
+    arm: u32,
     seq: u32,
+}
+
+/// The game's strength term in a blow's damage (0x547070: `fDamageStrengthBase +
+/// fDamageStrengthMult x strength / 100`, strength at most 100; 1 at 50): how strong the player's
+/// arms are, for the runtime's arms.
+fn arm_strength() -> f32 {
+    const BASE: usize = 0x00B3_6E00;
+    const MULT: usize = 0x00B3_6E08;
+    const AV_STRENGTH: u32 = 0;
+    let strength = crate::combat::player_value(AV_STRENGTH).clamp(0, 100) as f32;
+    match (mem::at::<f32>(BASE), mem::at::<f32>(MULT)) {
+        (Some(b), Some(m)) if b.is_finite() && m.is_finite() && b + m > 0.1 => b + m * strength / 100.0,
+        _ => 1.0,
+    }
+}
+
+/// A model's convex parts as the runtime's hulls for object `id`.
+fn hulls(id: u32, body: Option<&crate::havok::Body>, out: &mut Vec<GameHull>) {
+    for part in body.map(|b| b.parts.as_slice()).unwrap_or(&[]) {
+        let mut h: GameHull = bytemuck::Zeroable::zeroed();
+        h.id = id;
+        h.count = part.len().min(MAX_HULL_POINTS) as u32;
+        for (k, p) in part.iter().take(MAX_HULL_POINTS).enumerate() {
+            h.points[k] = [p.x, p.y, p.z, 0.0];
+        }
+        out.push(h);
+    }
 }
 
 static REGISTERED: Mutex<Option<Registered>> = Mutex::new(None);
@@ -294,33 +434,48 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
     let shield_now = equipped_shield();
     let mut reg = REGISTERED.lock().unwrap();
     let forms = (now.as_ref().map_or(0, |e| e.form), shield_now.as_ref().map_or(0, |s| s.0));
-    if reg.as_ref().is_some_and(|r| r.forms == forms) {
+    let arm = arm_strength();
+    let arm_key = (arm * 100.0).round() as u32;
+    if reg.as_ref().is_some_and(|r| r.forms == forms && r.arm == arm_key) {
         return;
     }
+    let mut hull_parts = Vec::new();
     let seq = reg.as_ref().map_or(0, |r| r.seq).wrapping_add(1).max(1);
     let mut objects: Box<ObjectTable> = zeroed();
     let mut melee: Box<MeleeTable> = zeroed();
     objects.seq = seq;
     melee.seq = seq;
+    melee.arm = arm;
     if let Some(e) = &now {
         let key = oblivion_assets::export::model_key(&e.model);
         match rustvr_asset::load_model(&rustvr_asset::default_root().join("oblivion"), &key) {
             Ok(model) => {
-                let mut d = object_desc(&model, e, &key, WEAPON_ID);
+                let body = crate::havok::body(&e.model);
+                let mut d = object_desc(&model, e, &key, WEAPON_ID, body.as_ref());
                 d.spawn_seq = seq;
                 objects.descs[0] = d;
                 objects.count = 1;
-                melee.weapons[0] = melee_from_model(&model, e.kind, WEAPON_ID, e.damage as f32);
+                hulls(WEAPON_ID, body.as_ref(), &mut hull_parts);
+                let w = melee_from_model(&model, e.kind, WEAPON_ID, e.damage as f32, e.speed);
+                melee.weapons[0] = w;
                 melee.count = 1;
                 tracing::info!(
-                    "weapons: {} ({}, model {key}, type {}, damage {}, reach {}): {} damagers, {:.2} m long",
+                    "weapons: {} ({}, model {key}, type {}, damage {}, speed {}, reach {}): {} damagers, {:.2} m long, {:.2} kg, {} convex parts, the handle {:?}; a full hit {:.1} to {:.1} m/s along its edge, a power hit {:.2} times that, the arm {:.1} m/s; the arms {arm:.2}",
                     e.name,
                     e.model,
                     e.kind,
                     e.damage,
+                    e.speed,
                     e.reach,
-                    melee.weapons[0].count,
-                    model.bounds_max[2] - model.bounds_min[2]
+                    w.count,
+                    model.bounds_max[2] - model.bounds_min[2],
+                    d.mass,
+                    body.as_ref().map_or(0, |b| b.parts.len()),
+                    d.grip_line,
+                    w.damagers[0].full_a,
+                    w.damagers[0].full_b,
+                    w.power,
+                    w.grip_speed
                 );
             }
             Err(err) => {
@@ -338,7 +493,9 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
         let key = oblivion_assets::export::model_key(path);
         match rustvr_asset::load_model(&rustvr_asset::default_root().join("oblivion"), &key) {
             Ok(model) => {
-                let (mut d, w) = shield(&model, &key, SHIELD_ID);
+                let body = crate::havok::body(path);
+                let (mut d, w) = shield(&model, &key, SHIELD_ID, body.as_ref());
+                hulls(SHIELD_ID, body.as_ref(), &mut hull_parts);
                 d.spawn_seq = seq;
                 let (i, k) = (objects.count as usize, melee.count as usize);
                 objects.descs[i] = d;
@@ -350,9 +507,10 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             Err(err) => tracing::warn!("weapons: the shield {path} has no extracted model ({key}: {err:#})"),
         }
     }
-    // The melee table first: when the runtime sees the weapon, its damagers are there.
-    if a.write_melee(&melee) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
-        *reg = Some(Registered { forms, seq });
+    // The melee table and the bodies' shapes first: when the runtime sees the weapon, its damagers
+    // and its shape are there.
+    if a.write_melee(&melee) && crate::objects::publish_hulls(crate::objects::Owner::Weapons, &hull_parts, a) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
+        *reg = Some(Registered { forms, arm: arm_key, seq });
     }
 }
 
@@ -382,7 +540,7 @@ mod tests {
     fn a_sword_cuts_from_its_guard_to_its_point() {
         // Pommel at -0.17, a guard 16 cm wide at 0, a blade 5 cm wide to 0.95.
         let m = model(&[[0.0, 0.0, -0.17], [-0.015, 0.0, -0.1], [0.015, 0.0, -0.1], [-0.08, 0.0, 0.0], [0.08, 0.0, 0.0], [-0.025, 0.0, 0.3], [0.025, 0.0, 0.3], [0.0, 0.0, 0.95]]);
-        let w = melee_from_model(&m, BLADE_ONE_HAND, 9, 8.0);
+        let w = melee_from_model(&m, BLADE_ONE_HAND, 9, 8.0, 1.0);
         assert_eq!(w.count, 4);
         assert_eq!(w.damagers[3].flags, DMGF_GUARD);
         let cut = w.damagers[0];
@@ -398,7 +556,7 @@ mod tests {
     fn an_axe_cuts_with_the_side_its_head_reaches_to() {
         // A 3 cm handle to 0.5, a head from 0.4 reaching out to +0.14.
         let m = model(&[[-0.015, 0.0, -0.1], [0.015, 0.0, -0.1], [-0.015, 0.0, 0.2], [0.015, 0.0, 0.2], [-0.02, 0.0, 0.42], [0.14, 0.0, 0.42], [0.14, 0.0, 0.55], [-0.02, 0.0, 0.55]]);
-        let w = melee_from_model(&m, BLUNT_ONE_HAND, 9, 8.0);
+        let w = melee_from_model(&m, BLUNT_ONE_HAND, 9, 8.0, 1.0);
         let cut = w.damagers[0];
         assert_eq!(cut.kind, DMG_SLASH);
         assert_eq!(cut.edge, [1.0, 0.0, 0.0]);
@@ -409,7 +567,7 @@ mod tests {
     #[test]
     fn a_mace_bludgeons_with_its_head() {
         let m = model(&[[-0.015, 0.0, -0.1], [0.015, 0.0, -0.1], [-0.015, 0.0, 0.2], [0.015, 0.0, 0.2], [-0.05, 0.0, 0.4], [0.05, 0.0, 0.4], [0.05, 0.0, 0.5], [-0.05, 0.0, 0.5]]);
-        let w = melee_from_model(&m, BLUNT_ONE_HAND, 9, 8.0);
+        let w = melee_from_model(&m, BLUNT_ONE_HAND, 9, 8.0, 1.0);
         assert_eq!(w.damagers[0].kind, DMG_BLUNT);
         assert!(w.damagers[0].radius > 0.03);
     }
@@ -418,7 +576,7 @@ mod tests {
     fn a_shield_is_held_by_its_strap_and_only_guards() {
         // A disc 60 cm across in X and Y, its face at z -0.1, the strap standing out to +0.04.
         let m = model(&[[-0.05, -0.3, -0.1], [0.55, 0.3, -0.1], [0.25, 0.0, -0.15], [0.2, -0.05, 0.04], [0.2, 0.05, 0.04]]);
-        let (d, w) = shield(&m, "m1", SHIELD_ID);
+        let (d, w) = shield(&m, "m1", SHIELD_ID, None);
         assert!((Vec3::from_array(d.grip) - Vec3::new(0.2, 0.0, 0.04)).length() < 1e-5, "{:?}", d.grip);
         assert_eq!(d.start_slot, 1 + SLOT_BACK_LEFT);
         assert_eq!((w.count, w.damagers[0].flags), (1, DMGF_GUARD));
@@ -428,13 +586,13 @@ mod tests {
     #[test]
     fn a_one_handed_weapon_hangs_at_the_left_hip_a_two_handed_on_the_back() {
         let m = model(&[[0.0, 0.0, -0.2], [0.0, 0.0, 1.0]]);
-        let mut e = Equipped { form: 1, name: "x".into(), model: "weapons\\iron\\longsword.nif".into(), kind: BLADE_ONE_HAND, damage: 8, reach: 1.0, weight: 22.0 };
-        let d = object_desc(&m, &e, "m1", WEAPON_ID);
+        let mut e = Equipped { form: 1, name: "x".into(), model: "weapons\\iron\\longsword.nif".into(), kind: BLADE_ONE_HAND, damage: 8, speed: 1.0, reach: 1.0, weight: 22.0 };
+        let d = object_desc(&m, &e, "m1", WEAPON_ID, None);
         assert_eq!(d.start_slot, 1 + SLOT_HIP_LEFT);
         assert_eq!(name_str(&d.name), "oblivion/m1");
         assert!(d.flags & OBJF_RUNTIME_DRAWS != 0 && d.flags & OBJF_TWO_HANDED == 0);
         e.kind = BLADE_TWO_HAND;
-        let d = object_desc(&m, &e, "m1", WEAPON_ID);
+        let d = object_desc(&m, &e, "m1", WEAPON_ID, None);
         assert_eq!(d.start_slot, 1 + SLOT_BACK_RIGHT);
         assert!(d.flags & OBJF_TWO_HANDED != 0 && d.foregrip[2] < 0.0);
     }

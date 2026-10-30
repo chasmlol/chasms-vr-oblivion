@@ -637,7 +637,7 @@ mod game {
             s.infos.count += 1;
         }
         let descs: Vec<ObjectDesc> = items.iter().map(|i| i.desc).collect();
-        let ok = crate::link::with_adapter(|a| a.write_game_hulls(&s.hulls) && a.write_item_infos(&s.infos) && crate::objects::publish(crate::objects::Owner::Items, &descs, a)).unwrap_or(false);
+        let ok = crate::link::with_adapter(|a| crate::objects::publish_hulls(crate::objects::Owner::Items, &s.hulls.hulls[..s.hulls.count as usize], a) && a.write_item_infos(&s.infos) && crate::objects::publish(crate::objects::Owner::Items, &descs, a)).unwrap_or(false);
         if ok {
             s.logged = now;
             tracing::info!(
