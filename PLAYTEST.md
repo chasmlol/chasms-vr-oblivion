@@ -49,14 +49,19 @@ note. The inn's own patrons walk about further in. The research and the design a
    go of it in one of his pockets: it's his. Something with weight (the potion) gets the game's own
    "You cannot place items in a container while pickpocketing." and stays yours. This is the game's
    own rule: Oblivion has no chance for planting, only that rule.
-7. **Rummage and come away empty.** A hand in and out with nothing taken is the game's own "looked
-   and took nothing": a use of Sneak, and the game's chance (with nothing taken) that he noticed. It
-   happens once the hands have been away from his pockets for 3/4 s.
+7. **Rummage and come away empty.** A quick look (a hand in someone's pockets for less than a
+   second) is only feeling: nothing happens. Feeling about longer opens his pickpocketing, as the
+   game's menu opening; coming away with nothing then is the game's own "looked and took nothing": a
+   use of Sneak, and the game's chance (with nothing taken) that he noticed, and if he did, the
+   crime and the bounty. It happens once the hands have been away from his pockets for 3/4 s.
 8. **Drop or throw a taken thing** away from your body and anyone's pockets: it's the game's own
    thing in the world where you let go, flying on as it left your hand (Havok), to pick up again.
 9. **The patrons.** Walk in (sneaking) and try the people moving about. Their pockets hold what
-   they carry but don't wear (often nothing: an empty pocket feels empty at once). Follow a walking
-   one: the pockets move with them.
+   they carry but don't wear, as the game's pickpocketing lists it, and that's often nothing: an
+   empty pocket is one dull brush and no card. In the round 3 run: Velus Hosidius had only 10 gold,
+   in the purse at the front of his belt; Nilphas Omellian nothing at all; Audens Avidius two keys
+   in his left belt pouch, 31 gold in his purse, and a silver warhammer and clothes in a bag on his
+   back. Follow a walking one: the pockets move with them.
 10. **Watch the sneak eye** (at your gaze; the flat game's crosshair is hidden in VR, its activate
     icons stay). While a hand is in the pocket of someone who sees you, you feel a slow heartbeat
     in that hand (a strong beat as they first notice you). Being seen doesn't change the per-item
@@ -120,8 +125,11 @@ Not checked:
   out one at a time.
 - **The refusal is a corner message, not a box.** The game shows `sInvalidPickpocket` in a message
   box; a box in the middle of a reach would take over the view.
-- **The session is the menu.** Opened as a hand goes into someone's pockets (empty, or bringing
-  something to plant), closed 0.75 s after the hands are away from them all.
+- **The session is the menu.** Opened once a hand has been in someone's pockets for a second
+  (round 3: the game's rummaging check after every brush got the player arrested for looking), or
+  at once as a thing is taken out or planted; closed 0.75 s after the hands are away from them all.
+  A quicker look is only feeling and the game has no part in it. Someone who caught the player
+  before has no menu at all, only the game's refusal (`sNoPickPocketAgain`), so no second check.
 - **Pockets are where clothes would have them**, the same on everyone (Oblivion's clothes have no
   pockets of their own): hips, belt front, inside the coat, a bag on the back only when there's
   something big. Shared out by kind (`pocket_for`).

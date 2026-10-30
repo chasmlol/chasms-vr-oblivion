@@ -18,10 +18,12 @@
 //!   the value taken) against its own roll, then its own `RemoveItem` into the player's things
 //!   (marked stolen) or its own crime and reaction when caught (`PlayerCharacter` vtable +0x23C),
 //!   as its container menu does them. Gold comes out as the whole purse.
-//! * **The session** is the game's menu: opened as a hand goes in, closed once the hands are away.
-//!   Closed having tried nothing, the game's own rummaging check (a Sneak use, then its chance with
-//!   nothing taken: failing it is being caught); having taken things, its own check for witnesses of
-//!   the theft (vtable +0x238 with the value taken).
+//! * **The session** is the game's menu: opened once a hand has been in the pockets a moment (a
+//!   quicker look is only feeling), or as it takes or plants a thing; closed once the hands are
+//!   away. Closed having tried nothing, the game's own rummaging check (a Sneak use, then its
+//!   chance with nothing taken: failing it is being caught); having taken things, its own check for
+//!   witnesses of the theft (vtable +0x238 with the value taken). One that caught the player before
+//!   has no menu, only the game's refusal.
 //! * **Planting** is the game's rule: a weightless thing goes into the NPC's things, anything else
 //!   gets the game's `sInvalidPickpocket`.
 //! * **Detection:** each pocket says how aware its NPC is of the player, from the NPC's own
@@ -722,12 +724,17 @@ mod game {
             let player = engine::player();
             match ev.kind {
                 PE_OPEN => {
-                    self.sessions.insert(ev.actor, Session::default());
+                    let shut = self.people.get(&ev.actor).is_some_and(|p| p.shut);
                     if let Some(p) = self.people.get(&ev.actor) {
-                        tracing::info!("pockets: a hand into {} of {} ({:#x}): its pickpocketing opens{}", NAMES[(ev.pocket & 7).saturating_sub(1) as usize % PLACES], p.name, ev.actor, if p.shut { " (shut: it caught the player before)" } else { "" });
-                        if p.shut {
-                            message(&format!("{} {}", p.name, setting_text(S_NO_PICKPOCKET_AGAIN)));
-                        }
+                        tracing::info!("pockets: a hand in {} of {} ({:#x}): its pickpocketing opens{}", NAMES[(ev.pocket & 7).saturating_sub(1) as usize % PLACES], p.name, ev.actor, if shut { " (shut: it caught the player before)" } else { "" });
+                    }
+                    // One that caught the player before: the game won't open its menu, only says
+                    // why (and so has nothing to check as the hands come away).
+                    if shut {
+                        let name = self.people.get(&ev.actor).map(|p| p.name.clone()).unwrap_or_default();
+                        message(&format!("{name} {}", setting_text(S_NO_PICKPOCKET_AGAIN)));
+                    } else {
+                        self.sessions.insert(ev.actor, Session::default());
                     }
                 }
                 PE_TAKE => self.take(n, ev, player),
