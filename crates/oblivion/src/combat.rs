@@ -435,6 +435,14 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
     if player == 0 {
         return;
     }
+    // The game's rule: no fighting from the saddle (nor casting). The hands still swing, as a
+    // rider's would, but nothing lands.
+    if crate::riding::mounted() {
+        if !events.is_empty() {
+            tracing::info!("combat: {} blows or casts from the saddle: the game doesn't fight mounted", events.len());
+        }
+        return;
+    }
     for ev in events {
         match ev.kind {
             CE_HIT => {

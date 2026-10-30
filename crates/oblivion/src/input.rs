@@ -139,6 +139,8 @@ impl Bridge {
         let counts = self.presses.update(it);
         let started = |a: Action| it.held & a.bit() != 0 && self.last_held & a.bit() == 0;
         let long_menu = started(Action::FlashlightHold);
+        // (The runtime's player rig holds Jump while A is down, rather than counting a press.)
+        let jump = started(Action::Jump);
         self.last_held = it.held;
         let mut v = Virtual::default();
         let hold = |b: Binding, v: &mut Virtual| {
@@ -171,6 +173,9 @@ impl Bridge {
         }
         if long_menu {
             self.pulses.push((self.binding("Quick Menu"), now + PULSE));
+        }
+        if jump && !pressed(&counts, Action::Jump) {
+            self.pulses.push((self.binding("Jump"), now + PULSE));
         }
         // The laser's trigger on the game's menus: the left mouse button.
         if it.flags & rustvr_protocol::INT_CURSOR_DOWN != 0 {

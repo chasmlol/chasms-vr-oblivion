@@ -81,6 +81,8 @@ const SADDLE_REACH: f32 = 0.07;
 /// How the rider's eye is held steady on the horse: the game camera's place on it, eased over this
 /// (seconds), so the gait's bob goes and the seat's place stays.
 const STEADY: f32 = 0.35;
+/// The horse's speed is eased over this (seconds).
+const SPEED_EASE: f32 = 0.25;
 /// The game's gaits forward: walk, gallop.
 const GAITS: u32 = 2;
 /// The joystick's axis at a pace of 1 (the game's |axis| · 0.02), and at the game's full turn
@@ -323,7 +325,7 @@ pub fn carry(eye: Vec3, dt: f32) -> Option<Carry> {
 /// The horses offered last (by id), to get on when the runtime asks.
 static OFFERED: Mutex<Option<HashMap<u32, usize>>> = Mutex::new(None);
 /// How the horse moved since the last game frame, for the runtime's comfort.
-static LAST_PLACE: Mutex<Option<(usize, Vec3, f64)>> = Mutex::new(None);
+static LAST_PLACE: Mutex<Option<(usize, Vec3, f64, f32)>> = Mutex::new(None);
 
 /// Every game frame in VR (with this frame's mapping): the horse ridden and the horses near the
 /// player, for the runtime.
@@ -371,16 +373,22 @@ pub fn publish(view: &rustvr_adapter::View, now: f64) {
         } else {
             0
         };
-        // Its speed over the ground since the last frame.
+        // Its speed over the ground, eased (the game moves it a little unevenly from frame to
+        // frame: sometimes not at all, then twice as far).
         let at = position(horse);
         let mut last = LAST_PLACE.lock().unwrap();
-        if let (Some(at), Some((h, was, then))) = (at, *last)
+        let mut speed = 0.0;
+        if let (Some(at), Some((h, was, then, eased))) = (at, *last)
             && h == horse
-            && now > then
         {
-            r.speed = Vec3::new(at.x - was.x, 0.0, at.z - was.z).length() / (now - then) as f32;
+            speed = eased;
+            if now > then {
+                let step = Vec3::new(at.x - was.x, 0.0, at.z - was.z).length() / (now - then) as f32;
+                speed += (step - speed) * (1.0 - (-((now - then) as f32) / SPEED_EASE).exp());
+            }
         }
-        *last = at.map(|a| (horse, a, now));
+        r.speed = speed;
+        *last = at.map(|a| (horse, a, now, speed));
         drop(last);
         let h = heading(horse).unwrap_or(0.0);
         // The mount's frame in tracking space: its heading, with the view's turn taken off.
