@@ -122,6 +122,8 @@ mod win {
     const INTERFACE_MANAGER: usize = 0x00B3_A6E0;
     const ANSWER: usize = 0xB0;
     const YES: u8 = 1;
+    /// The main menu's creator (cdecl, no arguments), as the game's start and its reset call it.
+    const CREATE_MAIN_MENU: usize = 0x005B_6040;
     /// The main menu's New, answered (0x5B5DF0, cdecl, no arguments).
     const NEW_GAME: usize = 0x005B_5DF0;
     /// The top menu (cdecl), as the frame's draw asks it at 0x40D606 before `cmp eax, 414h`.
@@ -374,12 +376,21 @@ mod win {
         SAID.call_once(|| tracing::info!("worldmenu: the place lives under the main menu (the sky, water and wind with the time passing, x {k})"));
     }
 
-    /// The main menu's root tile shown, and its logo and buttons (`user0`, `user1`): a film the boot
-    /// started behind it (which the place's loading stops) keeps it hidden until it ends.
+    /// The main menu over the place: made again by the game's own creator (0x5B6040, which it also
+    /// calls with a world loaded) if the way there closed it; its root tile shown, and its logo and
+    /// buttons (`user0`, `user1`): a film the boot started behind it (which the place's loading
+    /// stops) keeps it hidden until it ends.
     fn show_main_menu() {
+        if menus::tile_menu(menus::MENU_MAIN) == 0 {
+            tracing::warn!("worldmenu: the main menu closed on the way to its place: the game makes it again");
+            let create: unsafe extern "C" fn() -> u32 = unsafe { std::mem::transmute(CREATE_MAIN_MENU) };
+            hooks::guard_void("main menu made", || {
+                unsafe { create() };
+            });
+        }
         let tile = menus::tile_menu(menus::MENU_MAIN);
         if tile == 0 {
-            tracing::warn!("worldmenu: the main menu closed on the way to its place");
+            tracing::warn!("worldmenu: no main menu over the place");
             return;
         }
         type Update = unsafe extern "thiscall" fn(usize, u32, f32);

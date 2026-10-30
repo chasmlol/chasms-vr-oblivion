@@ -14,6 +14,9 @@ const MARK_TEMPORARY: usize = 0x0046_B590;
 const SET_TEXT: usize = 0x004F_9E50;
 const COMPILE_AND_RUN: usize = 0x004F_BF00;
 const DESTRUCTOR: usize = 0x004F_C980;
+/// The console's manager (`ConsoleManager`, cdecl, made if it isn't there when asked with 1): its
+/// first word is the script context a console line runs in. Nothing makes it before a game is
+/// loaded unless asked (at the main menu, `crate::worldmenu`'s lines).
 const SCRIPT_STATE: usize = 0x0058_5C10;
 /// `sizeof(Script)` in the game.
 const SCRIPT_SIZE: usize = 0x50;
@@ -215,13 +218,14 @@ fn run_with(line: &str, calling: usize) -> bool {
     type ThisFn = unsafe extern "thiscall" fn(*mut c_void);
     type SetTextFn = unsafe extern "thiscall" fn(*mut c_void, *const u8);
     type RunFn = unsafe extern "thiscall" fn(*mut c_void, *mut c_void, u32, *mut c_void) -> u8;
-    type StateFn = unsafe extern "C" fn() -> *mut *mut c_void;
+    type StateFn = unsafe extern "C" fn(u8) -> *mut *mut c_void;
     let Ok(text) = std::ffi::CString::new(line) else { return false };
     let mut obj = [0u8; SCRIPT_SIZE + 16];
     let script = obj.as_mut_ptr() as *mut c_void;
     unsafe {
-        let state = std::mem::transmute::<usize, StateFn>(SCRIPT_STATE)();
+        let state = std::mem::transmute::<usize, StateFn>(SCRIPT_STATE)(1);
         if state.is_null() || (*state).is_null() {
+            tracing::warn!("console: no console for {line:?} to run in");
             return false;
         }
         std::mem::transmute::<usize, ThisFn>(CONSTRUCTOR)(script);
