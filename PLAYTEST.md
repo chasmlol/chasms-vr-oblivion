@@ -46,7 +46,9 @@ skeleton instead. `-Close` puts it away.
    * It flies off a little along your swing and drops with physics.
    * The body falls with a capped stump in its collar.
    * The stump pumps blood at a heartbeat for about 14 s, weakening, then flows for about half a
-     minute, then drips. With each strong pulse it also sprays the game's own blood effect.
+     minute, then drips. Each beat is a jet whose pressure rises and falls, so it lands in a line
+     out from the stump. With each strong pulse it also sprays the game's own blood effect.
+   * The hand that struck feels a heavy thump as the limb goes.
    * Pools form under it.
    * The severed head's cut bleeds too, more weakly.
 
