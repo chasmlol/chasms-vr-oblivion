@@ -620,36 +620,66 @@ mod win {
         }
     }
 
-    /// `kind`'s latest capture on the CPU, as its size and tightly packed BGRA8 pixels (testing:
-    /// the eyes' pictures, [`crate::render`]).
-    pub fn read_bgra(gpu: &Gpu, kind: usize) -> anyhow::Result<(u32, u32, Vec<u8>)> {
-        use windows::Win32::Graphics::Direct3D11::{D3D11_CPU_ACCESS_READ, D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING};
+    /// `kind`'s latest capture on the CPU, made `max_width` wide at most (each pixel the average of
+    /// the square it stands for), as its size and tightly packed BGRA8 pixels (testing: the eyes'
+    /// pictures, [`crate::render`]). It's read back a strip of rows at a time: an eye at the
+    /// headset's size is over 100 MB, more than the game's 32-bit address space has to spare in
+    /// one piece (reading it whole crashed the game).
+    pub fn read_bgra(gpu: &Gpu, kind: usize, max_width: u32) -> anyhow::Result<(u32, u32, Vec<u8>)> {
+        use windows::Win32::Graphics::Direct3D11::{D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING};
         let bridge = BRIDGE.lock().unwrap();
         let b = bridge.as_ref().context("no bridge")?;
         anyhow::ensure!(b.ready[kind] != 0, "nothing captured");
         let ctx4: ID3D11DeviceContext4 = gpu.ctx.cast()?;
+        let mut d = D3D11_TEXTURE2D_DESC::default();
+        unsafe { b.shared11[kind].GetDesc(&mut d) };
+        let f = d.Width.div_ceil(max_width.max(1)).max(1) as usize;
+        let (w, h) = (d.Width as usize / f, d.Height as usize / f);
+        // (A strip is whole squares of rows.)
+        let strip = f * 32;
+        d.Height = strip as u32;
+        d.MipLevels = 1;
+        d.Usage = D3D11_USAGE_STAGING;
+        d.BindFlags = 0;
+        d.CPUAccessFlags = D3D11_CPU_ACCESS_READ.0 as u32;
+        d.MiscFlags = 0;
+        let mut out = Vec::new();
+        out.try_reserve_exact(w * h * 4)?;
+        out.resize(w * h * 4, 0u8);
+        let mut sums = vec![0u32; w * 4];
         unsafe {
             ctx4.Wait(&b.fence11, b.ready[kind])?;
-            let mut d = D3D11_TEXTURE2D_DESC::default();
-            b.shared11[kind].GetDesc(&mut d);
-            d.Usage = D3D11_USAGE_STAGING;
-            d.BindFlags = 0;
-            d.CPUAccessFlags = D3D11_CPU_ACCESS_READ.0 as u32;
-            d.MiscFlags = 0;
             let mut staging = None;
             gpu.device.CreateTexture2D(&d, None, Some(&mut staging))?;
             let staging = staging.context("no staging texture")?;
-            gpu.ctx.CopyResource(&staging, &b.shared11[kind]);
-            let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
-            gpu.ctx.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))?;
-            let row = d.Width as usize * 4;
-            let mut out = vec![0u8; row * d.Height as usize];
-            for y in 0..d.Height as usize {
-                std::ptr::copy_nonoverlapping((mapped.pData as *const u8).add(y * mapped.RowPitch as usize), out.as_mut_ptr().add(y * row), row);
+            for top in (0..h * f).step_by(strip) {
+                let rows = strip.min(h * f - top);
+                let region = D3D11_BOX { left: 0, top: top as u32, front: 0, right: (w * f) as u32, bottom: (top + rows) as u32, back: 1 };
+                gpu.ctx.CopySubresourceRegion(&staging, 0, 0, 0, 0, &b.shared11[kind], 0, Some(&region));
+                let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+                gpu.ctx.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))?;
+                for r in 0..rows / f {
+                    sums.fill(0);
+                    for k in 0..f {
+                        let src = std::slice::from_raw_parts((mapped.pData as *const u8).add((r * f + k) * mapped.RowPitch as usize), w * f * 4);
+                        for (sum, px) in sums.chunks_exact_mut(4).zip(src.chunks_exact(4 * f)) {
+                            for p in px.chunks_exact(4) {
+                                sum[0] += p[0] as u32;
+                                sum[1] += p[1] as u32;
+                                sum[2] += p[2] as u32;
+                                sum[3] += p[3] as u32;
+                            }
+                        }
+                    }
+                    let y = top / f + r;
+                    for (o, s) in out[y * w * 4..(y + 1) * w * 4].iter_mut().zip(&sums) {
+                        *o = (*s / (f * f) as u32) as u8;
+                    }
+                }
+                gpu.ctx.Unmap(&staging, 0);
             }
-            gpu.ctx.Unmap(&staging, 0);
-            Ok((d.Width, d.Height, out))
         }
+        Ok((w as u32, h as u32, out))
     }
 
     /// Copies `kind`'s latest capture into `dst` on the adapter's device (after the copy into the

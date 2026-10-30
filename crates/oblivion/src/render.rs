@@ -430,9 +430,9 @@ mod win {
         result
     }
 
-    /// Testing, `RUSTVR_OBLIVION_EYE_PNG=<folder>`: both eyes' pictures (the world, before the HUD)
-    /// are saved there every 5 seconds from 5 seconds in, up to 60 pairs (`<n>-left.png`,
-    /// `<n>-right.png`), to hold the eyes up to each other.
+    /// Testing, `RUSTVR_OBLIVION_EYE_PNG=<folder>`: both eyes' pictures (the world, before the HUD,
+    /// at most 2048 pixels wide) are saved there every 10 seconds from 5 seconds in, up to 60 pairs
+    /// (`<n>-left.png`, `<n>-right.png`), to hold the eyes up to each other.
     fn eye_pictures(now: f64) {
         static DIR: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
         let Some(dir) = DIR.get_or_init(|| std::env::var_os("RUSTVR_OBLIVION_EYE_PNG").filter(|v| !v.is_empty()).map(std::path::PathBuf::from)) else { return };
@@ -445,13 +445,13 @@ mod win {
             if now < next.0 || next.1 >= 60 {
                 return;
             }
-            next.0 = now + 5.0;
+            next.0 = now + 10.0;
             next.1 += 1;
             next.1
         };
         let mut pictures = Vec::new();
         for (eye, name) in [(0, "left"), (1, "right")] {
-            match link::with_adapter(|a| d3d9::read_bgra(a.gpu(), eye)) {
+            match link::with_adapter(|a| d3d9::read_bgra(a.gpu(), eye, 2048)) {
                 Some(Ok(p)) => pictures.push((dir.join(format!("{n:02}-{name}.png")), p)),
                 Some(Err(e)) => tracing::warn!("render: the {name} eye's picture: {e:#}"),
                 None => {}
