@@ -55,6 +55,7 @@ pub mod player;
 pub mod proxy;
 pub mod render;
 pub mod resolution;
+pub mod reticle;
 pub mod settings;
 pub mod tiles;
 pub mod timing;
