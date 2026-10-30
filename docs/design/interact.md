@@ -419,3 +419,37 @@ Calls made:
   player who activates a chair standing (the trigger at it) is seated by the game, and their view
   stays where their head is.
 * Lying down isn't asked for: sitting on the bed is enough for the game's own sleep question.
+
+## 7. Surrendering and yielding
+
+### How VR games do it
+
+* **Hands up is universal.** Social VR and VR shooters (*Pavlov*, *Contractors*' hostage modes,
+  *Hitman 3 VR*'s guards, *The Walking Dead: Saints & Sinners*' standoffs) read both hands raised
+  over the head as surrender, held a moment so a stretch isn't mistaken for it.
+* **The answer is the other side's.** Surrender is asked for; the enemy decides.
+
+### Oblivion
+
+* **The player's yield** is the player's activation of someone fighting them while Block is held
+  (in the player's activation of an actor: the actor in combat, the game's input says Block,
+  control 6): the actor's own answer (`AcceptsYield`: its disposition,
+  `fAIYieldBase`, its class's "Accepts Yields"/"Rejects Yields"), and if it accepts it stops
+  fighting; its words "accepts your yield." or "rejects your yield!" as a notice;
+  "Creatures never accept a yield!". A guard who accepts goes back to arresting the player.
+* **A guard and a criminal**: a guard who wants the player (the player's bounty) comes
+  to them and forcegreets ("Stop right there, criminal scum!"), and the player's activation of a
+  guard opens the same crime dialogue: pay the fine, go to jail (`GoToJail`), or resist arrest.
+
+### Design
+
+* **Both hands up** (each over the head, apart, held 0.7 s, felt as a faint pulse in both hands)
+  before someone the head looks at, within 8 m, who is fighting the player (or anyone, while the
+  player has a bounty: a guard come for them) is the game's own yield: Block held in the game's
+  input for a moment, then the player's activation of them. In a fight their own answer; with a
+  guard, their crime dialogue at them, worked with the laser as any dialogue.
+
+Calls made:
+
+* The gesture asks; the game answers (its own accept or reject, its own dialogue). Raising the hands
+  before nobody does nothing.

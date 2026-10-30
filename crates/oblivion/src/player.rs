@@ -22,8 +22,13 @@ fn bridge() -> std::sync::MutexGuard<'static, Option<input::Bridge>> {
 /// Taps the game's control `name` (as the player's own file binds it) for a moment, for the
 /// adapter's own reasons: standing up from a chair as the game's Activate does ([`crate::rest`]).
 pub fn press(name: &str) {
+    press_for(name, 0.12);
+}
+
+/// Holds the game's control `name` for `seconds` (Block while the player yields, [`crate::surrender`]).
+pub fn press_for(name: &str, seconds: f64) {
     if let Some(b) = bridge().as_mut() {
-        b.hold(name, link::now() + 0.12);
+        b.hold(name, link::now() + seconds);
     }
 }
 

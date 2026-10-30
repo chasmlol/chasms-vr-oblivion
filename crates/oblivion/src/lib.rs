@@ -89,6 +89,7 @@ pub mod slot_menu;
 pub mod soul;
 pub mod sounds;
 pub mod tiles;
+pub mod surrender;
 pub mod swim;
 pub mod timing;
 pub mod torch;

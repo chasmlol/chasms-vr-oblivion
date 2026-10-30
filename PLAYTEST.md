@@ -194,3 +194,26 @@ standing up and the bed's checks are the game's own (its activation of the furni
 
 What I couldn't: anything in the game: the view's anchor while seated (the game's standing eye height
 kept over the feet) is untested.
+
+## 7. Surrendering and yielding — `playtest-yield.bat`, `playtest-surrender.bat`
+
+`playtest-yield.bat`: Odiil Farm with a bandit a few metres ahead, fighting you; saves as
+`rustvr-yield`.
+
+1. **Yield**: look at the bandit and raise both hands over your head, apart, for a moment (a faint
+   pulse in both hands while you hold them up). The game's own yield: the bandit "accepts your
+   yield." and stops, or "rejects your yield!" and keeps coming (its own choice).
+
+`playtest-surrender.bat`: Chorrol with a 100 gold bounty on you; saves as `rustvr-surrender`.
+
+2. **Surrender to a guard**: when a guard comes for you (or walk up to one), raise both hands at them:
+   their crime dialogue opens at them (pay the fine, go to jail, resist arrest), worked with the
+   laser.
+3. **Resist, then yield**: pick "resist arrest", let the guard fight you, then raise your hands: the
+   game's yield to a guard takes you back to the arrest.
+
+What I checked: builds; unit tests (hands up). The yield is the game's own (its activation with Block
+held), the dialogue the game's.
+
+What I couldn't: anything in the game: that the game reads the Block held for the yield the frame
+before the activation is untested.
