@@ -52,6 +52,16 @@ mod win {
     static REAL_PRESENT: AtomicUsize = AtomicUsize::new(0);
     static REAL_TCL: AtomicUsize = AtomicUsize::new(0);
     static LAST_TCL: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+    /// The device's answers when lost: not to be reset yet, and to be reset.
+    const DEVICE_LOST: i32 = 0x8876_0868_u32 as i32;
+    const DEVICE_NOT_RESET: i32 = 0x8876_0869_u32 as i32;
+    /// The game is in its render (`Main::Render`).
+    static RENDERING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    /// Says whether the game is in its render (where a lost device isn't to be reset).
+    pub fn rendering(now: bool) {
+        RENDERING.store(now, Ordering::Release);
+    }
 
     thread_local! {
         static MAKING: Cell<bool> = const { Cell::new(false) };
@@ -229,7 +239,15 @@ mod win {
 
     unsafe extern "system" fn test_cooperative_level(dev: *mut c_void) -> windows::core::HRESULT {
         let real: unsafe extern "system" fn(*mut c_void) -> windows::core::HRESULT = unsafe { std::mem::transmute(REAL_TCL.load(Ordering::Acquire)) };
-        let hr = unsafe { real(dev) };
+        let mut hr = unsafe { real(dev) };
+        // The game's renderer resets its device as soon as it hears it wants resetting, wherever it
+        // asks: in the middle of its render too, as it starts drawing the water's reflection, and
+        // the reset's callback lets go of the reflection's camera under the drawing (a crash). There
+        // the device is only lost (its renderer draws nothing more until it's back): the game's own
+        // loop resets it before its next frame, as it does whenever it finds it lost.
+        if hr.0 == DEVICE_NOT_RESET && RENDERING.load(Ordering::Acquire) {
+            hr = windows::core::HRESULT(DEVICE_LOST);
+        }
         if LAST_TCL.swap(hr.0, Ordering::AcqRel) != hr.0 {
             tracing::info!("d3d9: TestCooperativeLevel {:#x}", hr.0);
         }
@@ -545,6 +563,10 @@ mod win {
     /// Copies the game's back buffer as it is now into `kind`'s shared texture. False if the
     /// bridge isn't there (yet).
     pub fn capture(dev: &IDirect3DDevice9, gpu: &Gpu, kind: usize) -> bool {
+        // (Not on a lost device: a bridge made on it would keep it from being reset.)
+        if LAST_TCL.load(Ordering::Acquire) < 0 {
+            return false;
+        }
         let Some((w, h)) = backbuffer_size(dev) else { return false };
         let d12 = D3D12.lock().unwrap();
         let Some(d12) = d12.as_ref() else { return false };

@@ -152,12 +152,16 @@ mod win {
         // as an autosave goes through a door) is the game's, drawn as it draws it: two eyes drawn
         // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
         // menus goes into its world texture.)
-        if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
-            return unsafe { real(this, arg) };
-        }
-        crate::timing::render_start();
-        let result = unsafe { render_stereo(this, arg, real) };
-        crate::timing::render_end();
+        d3d9::rendering(true);
+        let result = if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
+            unsafe { real(this, arg) }
+        } else {
+            crate::timing::render_start();
+            let r = unsafe { render_stereo(this, arg, real) };
+            crate::timing::render_end();
+            r
+        };
+        d3d9::rendering(false);
         result
     }
 
