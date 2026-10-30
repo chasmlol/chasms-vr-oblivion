@@ -81,10 +81,11 @@ pub fn look(decal: &str, spray: &str) -> Option<(Look, Option<String>)> {
 }
 
 /// A limb of the game's skeleton: the bone it's cut at, the bone above it (the joint's other side),
-/// what it is, and its radius at the joint (m).
+/// the bones its axis runs between (out of the body), what it is, and its radius at the joint (m).
 pub struct Limb {
     pub bone: &'static str,
     pub parent: &'static str,
+    pub axis: (&'static str, &'static str),
     pub limb: u32,
     pub radius: f32,
     /// How far past its last bone the limb reaches (m): a head's crown, a hand's fingertips.
@@ -94,20 +95,26 @@ pub struct Limb {
 }
 
 pub const LIMBS: &[Limb] = &[
-    Limb { bone: "Bip01 Head", parent: "Bip01 Neck1", limb: LIMB_HEAD, radius: 0.055, reach: 0.2, mass: 4.5 },
-    Limb { bone: "Bip01 L UpperArm", parent: "Bip01 L Clavicle", limb: LIMB_UPPER_ARM | LIMB_LEFT, radius: 0.055, reach: 0.1, mass: 4.0 },
-    Limb { bone: "Bip01 L Forearm", parent: "Bip01 L UpperArm", limb: LIMB_FOREARM | LIMB_LEFT, radius: 0.045, reach: 0.1, mass: 2.0 },
-    Limb { bone: "Bip01 L Hand", parent: "Bip01 L Forearm", limb: LIMB_HAND | LIMB_LEFT, radius: 0.035, reach: 0.1, mass: 0.6 },
-    Limb { bone: "Bip01 R UpperArm", parent: "Bip01 R Clavicle", limb: LIMB_UPPER_ARM, radius: 0.055, reach: 0.1, mass: 4.0 },
-    Limb { bone: "Bip01 R Forearm", parent: "Bip01 R UpperArm", limb: LIMB_FOREARM, radius: 0.045, reach: 0.1, mass: 2.0 },
-    Limb { bone: "Bip01 R Hand", parent: "Bip01 R Forearm", limb: LIMB_HAND, radius: 0.035, reach: 0.1, mass: 0.6 },
-    Limb { bone: "Bip01 L Thigh", parent: "Bip01 Pelvis", limb: LIMB_THIGH | LIMB_LEFT, radius: 0.075, reach: 0.12, mass: 10.0 },
-    Limb { bone: "Bip01 L Calf", parent: "Bip01 L Thigh", limb: LIMB_CALF | LIMB_LEFT, radius: 0.055, reach: 0.12, mass: 4.5 },
-    Limb { bone: "Bip01 L Foot", parent: "Bip01 L Calf", limb: LIMB_FOOT | LIMB_LEFT, radius: 0.045, reach: 0.1, mass: 1.2 },
-    Limb { bone: "Bip01 R Thigh", parent: "Bip01 Pelvis", limb: LIMB_THIGH, radius: 0.075, reach: 0.12, mass: 10.0 },
-    Limb { bone: "Bip01 R Calf", parent: "Bip01 R Thigh", limb: LIMB_CALF, radius: 0.055, reach: 0.12, mass: 4.5 },
-    Limb { bone: "Bip01 R Foot", parent: "Bip01 R Calf", limb: LIMB_FOOT, radius: 0.045, reach: 0.1, mass: 1.2 },
+    // The head goes with its neck: cut at the neck's base (`Neck1`, at the collar), the head's mesh
+    // (skinned down to the clavicles) closes up there, under the collar, instead of leaving a cone of
+    // neck on the body.
+    Limb { bone: "Bip01 Neck1", parent: "Bip01 Neck", axis: ("Bip01 Neck", "Bip01 Head"), limb: LIMB_HEAD, radius: 0.065, reach: 0.2, mass: 4.5 },
+    Limb { bone: "Bip01 L UpperArm", parent: "Bip01 L Clavicle", axis: ("Bip01 L Clavicle", "Bip01 L UpperArm"), limb: LIMB_UPPER_ARM | LIMB_LEFT, radius: 0.055, reach: 0.1, mass: 4.0 },
+    Limb { bone: "Bip01 L Forearm", parent: "Bip01 L UpperArm", axis: ("Bip01 L UpperArm", "Bip01 L Forearm"), limb: LIMB_FOREARM | LIMB_LEFT, radius: 0.045, reach: 0.1, mass: 2.0 },
+    Limb { bone: "Bip01 L Hand", parent: "Bip01 L Forearm", axis: ("Bip01 L Forearm", "Bip01 L Hand"), limb: LIMB_HAND | LIMB_LEFT, radius: 0.035, reach: 0.1, mass: 0.6 },
+    Limb { bone: "Bip01 R UpperArm", parent: "Bip01 R Clavicle", axis: ("Bip01 R Clavicle", "Bip01 R UpperArm"), limb: LIMB_UPPER_ARM, radius: 0.055, reach: 0.1, mass: 4.0 },
+    Limb { bone: "Bip01 R Forearm", parent: "Bip01 R UpperArm", axis: ("Bip01 R UpperArm", "Bip01 R Forearm"), limb: LIMB_FOREARM, radius: 0.045, reach: 0.1, mass: 2.0 },
+    Limb { bone: "Bip01 R Hand", parent: "Bip01 R Forearm", axis: ("Bip01 R Forearm", "Bip01 R Hand"), limb: LIMB_HAND, radius: 0.035, reach: 0.1, mass: 0.6 },
+    Limb { bone: "Bip01 L Thigh", parent: "Bip01 Pelvis", axis: ("Bip01 Pelvis", "Bip01 L Thigh"), limb: LIMB_THIGH | LIMB_LEFT, radius: 0.075, reach: 0.12, mass: 10.0 },
+    Limb { bone: "Bip01 L Calf", parent: "Bip01 L Thigh", axis: ("Bip01 L Thigh", "Bip01 L Calf"), limb: LIMB_CALF | LIMB_LEFT, radius: 0.055, reach: 0.12, mass: 4.5 },
+    Limb { bone: "Bip01 L Foot", parent: "Bip01 L Calf", axis: ("Bip01 L Calf", "Bip01 L Foot"), limb: LIMB_FOOT | LIMB_LEFT, radius: 0.045, reach: 0.1, mass: 1.2 },
+    Limb { bone: "Bip01 R Thigh", parent: "Bip01 Pelvis", axis: ("Bip01 Pelvis", "Bip01 R Thigh"), limb: LIMB_THIGH, radius: 0.075, reach: 0.12, mass: 10.0 },
+    Limb { bone: "Bip01 R Calf", parent: "Bip01 R Thigh", axis: ("Bip01 R Thigh", "Bip01 R Calf"), limb: LIMB_CALF, radius: 0.055, reach: 0.12, mass: 4.5 },
+    Limb { bone: "Bip01 R Foot", parent: "Bip01 R Calf", axis: ("Bip01 R Calf", "Bip01 R Foot"), limb: LIMB_FOOT, radius: 0.045, reach: 0.1, mass: 1.2 },
 ];
+
+/// The head of a skeleton without a neck's base (`Bip01 Neck1`: a creature's): cut at the head.
+pub const HEAD_ALONE: Limb = Limb { bone: "Bip01 Head", parent: "Bip01 Neck", axis: ("Bip01 Neck", "Bip01 Head"), limb: LIMB_HEAD, radius: 0.06, reach: 0.2, mass: 4.5 };
 
 /// Which joint a hit on a body part (a capsule from bone `from` to bone `to`, `t` along it from the
 /// one to the other, past 1 beyond `to`; the bones `len` metres apart) cuts through: the nearer
@@ -118,7 +125,7 @@ pub fn joint_for(from: &str, to: &str, t: f32, len: f32) -> Option<&'static Limb
     match (from, to) {
         // The neck: the head comes off, struck anywhere up to the jaw (a blow on the skull above
         // it doesn't).
-        ("Bip01 Neck", "Bip01 Head") if (t - 1.0) * len < 0.08 => by("Bip01 Head"),
+        ("Bip01 Neck", "Bip01 Head") if (t - 1.0) * len < 0.08 => by("Bip01 Neck1"),
         // An upper arm or thigh: at the shoulder or hip in its upper half, the elbow or knee below.
         (f, t2) if f.ends_with("UpperArm") || f.ends_with("Thigh") => by(if t_in < 0.5 { f } else { t2 }),
         // A forearm or calf: the elbow or knee in its upper part, the wrist or ankle in the rest.
@@ -427,7 +434,7 @@ mod game {
         /// its bones either side of the cut (the skeleton's: they last as long as the 3D does).
         root: usize,
         cut_node: usize,
-        above_node: usize,
+        axis_nodes: (usize, usize),
         /// The piece: its object, the clone that shows it, and the clone's nodes with their world
         /// transforms at the cut (the collapsed ones already collapsed).
         object: u32,
@@ -541,7 +548,7 @@ mod game {
 
     /// The skeleton's limbs as a chain, for "is under": each limb bone's parent limb bone.
     const CHAINS: &[&[&str]] = &[
-        &["Bip01 Head"],
+        &["Bip01 Neck1", "Bip01 Head"],
         &["Bip01 L UpperArm", "Bip01 L Forearm", "Bip01 L Hand"],
         &["Bip01 R UpperArm", "Bip01 R Forearm", "Bip01 R Hand"],
         &["Bip01 L Thigh", "Bip01 L Calf", "Bip01 L Foot"],
@@ -617,9 +624,18 @@ mod game {
     /// Cuts `limb` off the actor: the clone that's the piece, the piece's object, the event.
     fn sever(actor: usize, id: u32, root: usize, limb: &'static Limb, ev: &CombatEvent) {
         let nodes = tree(root);
-        let Some(top) = nodes.iter().position(|n| n.name == limb.bone) else { return };
-        let Some(parent) = nodes.iter().find(|n| n.name == limb.parent).map(|n| n.ptr) else { return };
-        let (Some(cut), Some(above)) = (Xf::read(nodes[top].ptr), Xf::read(parent)) else { return };
+        // (A creature's skeleton may have no neck's base: its head is cut at the head.)
+        let limb = if limb.limb == LIMB_HEAD && !nodes.iter().any(|n| n.name == limb.bone) { &HEAD_ALONE } else { limb };
+        if cut_off(id, limb.bone) {
+            return;
+        }
+        let Some(top) = nodes.iter().position(|n| n.name == limb.bone) else {
+            tracing::info!("gore: {id:#x} has no {} to cut", limb.bone);
+            return;
+        };
+        let find = |name: &str| nodes.iter().find(|n| n.name == name).map(|n| n.ptr);
+        let (Some(axis_from), Some(axis_to)) = (find(limb.axis.0), find(limb.axis.1)) else { return };
+        let (Some(cut), Some(from), Some(to)) = (Xf::read(nodes[top].ptr), Xf::read(axis_from), Xf::read(axis_to)) else { return };
         let inside = under(&nodes, top);
         let skeleton = nodes.iter().position(|n| n.name == "Bip01").map(|i| under(&nodes, i)).unwrap_or_else(|| vec![false; nodes.len()]);
         let basis = camera::basis();
@@ -627,7 +643,7 @@ mod game {
         let pos = basis.point_from_game(cut.t);
         let rot = basis.rot_from_game(cut.r).normalize();
         let inv = rot.inverse();
-        let axis = (cut.t - above.t).normalize_or(cut.r.x_axis);
+        let axis = (to.t - from.t).normalize_or(cut.r.x_axis);
         let out = basis.dir_from_game(axis).normalize_or(Vec3::Y);
         // Its shape: a box round its bones (in its frame), and the limb's reach past the last.
         let mut pts: Vec<Vec3> = nodes.iter().enumerate().filter(|(i, n)| inside[*i] && n.name.starts_with("Bip01")).filter_map(|(_, n)| Xf::read(n.ptr)).map(|x| inv * (basis.point_from_game(x.t) - pos)).collect();
@@ -650,7 +666,7 @@ mod game {
         // The clone: the actor's 3D as it is, with no controllers or collision (nothing of it is
         // animated or simulated by the game: it's drawn where the runtime has the piece).
         let clone = clone_bare(&nodes);
-        let mut sv = Sever { limb, actor, root, cut_node: nodes[top].ptr, above_node: parent, object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), cut, desc, born: crate::link::now(), next_spray: 0.0 };
+        let mut sv = Sever { limb, actor, root, cut_node: nodes[top].ptr, axis_nodes: (axis_from, axis_to), object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), cut, desc, born: crate::link::now(), next_spray: 0.0 };
         if clone != 0 {
             let copy = tree(clone);
             if copy.len() == nodes.len() && copy.iter().zip(&nodes).all(|(c, n)| c.name == n.name) {
@@ -722,7 +738,8 @@ mod game {
     /// `kill`; not with `kill` false) and the limb at `bone` cut off it, as a full-strength blow of
     /// the blade would.
     pub fn test_cut(bone: &str, kill: bool) -> bool {
-        let Some(limb) = LIMBS.iter().find(|l| l.bone.eq_ignore_ascii_case(bone)) else { return false };
+        // (`Bip01 Head` names the head too: it's cut at its neck.)
+        let Some(limb) = LIMBS.iter().find(|l| l.bone.eq_ignore_ascii_case(bone) || (l.limb == LIMB_HEAD && bone.eq_ignore_ascii_case("Bip01 Head"))) else { return false };
         let player = engine::player();
         let Some(me) = mem::at::<[f32; 3]>(player + engine::refr::POS).map(Vec3::from) else { return false };
         let nearest = crate::combat::known_actors().into_iter().filter(|&(_, a)| a != player).filter_map(|(id, a)| Some((id, a, mem::at::<[f32; 3]>(a + engine::refr::POS).map(Vec3::from)?.distance(me)))).min_by(|a, b| a.2.total_cmp(&b.2));
@@ -801,15 +818,15 @@ mod game {
         }
     }
 
-    /// Lets go of a piece's clone: off where it was attached (if that's still there), and our
-    /// reference given back.
-    fn drop_clone(sv: &mut Sever, actor_ok: bool) {
+    /// Lets go of a piece's clone: off where it was attached (if that's still there: a node that
+    /// goes lets go of its children), and our reference given back.
+    fn drop_clone(sv: &mut Sever) {
         if sv.clone == 0 {
             return;
         }
         let clone = sv.clone;
         sv.clone = 0;
-        if actor_ok && mem::deref(clone + PARENT) == sv.attached_to {
+        if sv.attached_to != 0 && mem::deref(clone + PARENT) == sv.attached_to && is_node(sv.attached_to) {
             type Detach = unsafe extern "thiscall" fn(usize, *mut usize, usize) -> *mut usize;
             let mut out = 0usize;
             unsafe { std::mem::transmute::<usize, Detach>(mem::deref(mem::deref(sv.attached_to) + VT_DETACH))(sv.attached_to, &mut out, clone) };
@@ -910,7 +927,7 @@ mod game {
                 list.retain_mut(|v| {
                     let ok = still(v.actor, *id, v.root);
                     if !ok {
-                        drop_clone(v, false);
+                        drop_clone(v);
                     }
                     ok
                 });
@@ -935,8 +952,10 @@ mod game {
                     let mut nodes = Vec::new();
                     for v in list.iter_mut() {
                         let cut_node = v.cut_node;
-                        let (Some(cut), Some(above)) = (Xf::read(cut_node), Xf::read(v.above_node)) else { continue };
-                        let axis = (cut.t - above.t).normalize_or(cut.r.x_axis);
+                        let (Some(cut), Some(from), Some(to)) = (Xf::read(cut_node), Xf::read(v.axis_nodes.0), Xf::read(v.axis_nodes.1)) else { continue };
+                        // (The axis from bones on the body: a severed head's own is shrunk away.)
+                        let to_t = if v.axis_nodes.1 == cut_node || to.s < 0.01 { cut.t + (cut.t - from.t) } else { to.t };
+                        let axis = (to_t - from.t).normalize_or(cut.r.x_axis);
                         if (b.count as usize) < MAX_STUMPS {
                             b.stumps[b.count as usize] = Stump { at: basis.point_from_game(cut.t).to_array(), radius: v.limb.radius, out: basis.dir_from_game(axis).normalize_or(Vec3::Y).to_array(), limb: v.limb.limb };
                             b.count += 1;

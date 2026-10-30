@@ -269,8 +269,8 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
         let mut a: Actor = bytemuck::Zeroable::zeroed();
         a.id = id;
         for (part, &(from, to, r, kind, material)) in HUMANOID.iter().enumerate() {
-            // (Not a limb the gore has cut off.)
-            if crate::gore::cut_off(id, from) {
+            // (Not a limb the gore has cut off: a head goes with its neck.)
+            if crate::gore::cut_off(id, from) || (kind == PART_HEAD && crate::gore::cut_off(id, to)) {
                 continue;
             }
             let (Some(p), Some(q)) = (b.get(from).and_then(|&n| node_pos(n)), b.get(to).and_then(|&n| node_pos(n))) else { continue };
