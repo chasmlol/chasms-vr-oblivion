@@ -1,6 +1,6 @@
 //! Where the game's frames go: the time of each part of a frame (the runtime's frame and what the
-//! adapter does with it before the eyes, each eye's render, the picture and depth copies, and the
-//! rest of the game's frame between renders), averaged and the worst, logged every few seconds
+//! adapter does with it before the eyes, each eye's render, the picture and depth copies, the
+//! game's waits for its background thread, and the rest of the game's frame between renders), averaged and the worst, logged every few seconds
 //! with how much of its 32-bit address space the game has left.
 
 use std::sync::Mutex;
@@ -17,11 +17,13 @@ pub enum Part {
     Eye,
     Capture,
     Depth,
+    /// The game's waits for its background thread's lock (in a render's and out of it).
+    Loader,
     /// From one render's end to the next one's start: the game's update, its menus, Present.
     Between,
 }
 
-const N: usize = 9;
+const N: usize = 10;
 const PARTS: [(Part, &str); N] = [
     (Part::Prepare, "prepare"),
     (Part::Combat, "combat"),
@@ -31,6 +33,7 @@ const PARTS: [(Part, &str); N] = [
     (Part::Eye, "eye renders"),
     (Part::Capture, "picture copies"),
     (Part::Depth, "depth copies"),
+    (Part::Loader, "waits for the loader"),
     (Part::Between, "between renders"),
 ];
 

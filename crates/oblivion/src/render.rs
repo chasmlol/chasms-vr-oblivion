@@ -45,10 +45,16 @@ mod win {
     /// The game's background thread (0xB3F940: it loads and changes the scene graph, cells
     /// and actors' 3D) shares the scene with the render through a semaphore: the world render takes
     /// it at its start (`mov eax, [B3F940]` at 0x40C8F7, then its wait) and gives it back at its end
-    /// (`mov esi, [B3F940]` at 0x40D059, then its release). Rendered once per eye, the thread could
-    /// run between the eyes and change the scene under the second. Those two places read these
-    /// instead (patched at install): the first eye takes the lock and keeps it, the second gives it
-    /// back; a single render does both, as the game does.
+    /// (`mov esi, [B3F940]` at 0x40D059, then its release). Those two places read these instead
+    /// (patched at install), so the eyes can be rendered under one hold of it ([`hold_loader`]);
+    /// by default each render takes and gives it, as the game's one render does.
+    ///
+    /// The thread can change the scene only while no render holds the lock: on a desktop most of
+    /// the frame. Two eyes and their copies held it for most of each frame (6..12 ms of 9), so it
+    /// fell behind loading the cells ahead, and the game stood waiting for it at the next render's
+    /// start (0x404D60), most of all crossing into new cells. Given back after each eye, it can work
+    /// while that eye's picture is copied; a thing it adds then shows in the second eye a frame
+    /// before the first.
     static LOCK_TAKE: AtomicUsize = AtomicUsize::new(0);
     static LOCK_GIVE: AtomicUsize = AtomicUsize::new(0);
     const BACKGROUND: usize = 0x00B3_F940;
@@ -67,6 +73,46 @@ mod win {
         } else {
             tracing::error!("render: the background thread's lock isn't held across the eyes (patched: take {take}, give {give})");
         }
+    }
+
+    /// Testing, `RUSTVR_OBLIVION_HOLD_LOADER=1`: the background thread's lock is held across all the
+    /// renders of a frame, as before, to compare the stutter.
+    fn hold_loader() -> bool {
+        static HOLD: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *HOLD.get_or_init(|| {
+            let hold = std::env::var("RUSTVR_OBLIVION_HOLD_LOADER").is_ok_and(|v| v == "1");
+            if hold {
+                tracing::info!("render: testing: the background thread's lock is held across the eyes (RUSTVR_OBLIVION_HOLD_LOADER)");
+            }
+            hold
+        })
+    }
+
+    /// The game's wait for its background thread's lock (0x404D60, cdecl, a first timeout in
+    /// milliseconds): the world render's at its start, and the game's own elsewhere. Timed on the
+    /// game's thread, as how long its frame stood waiting for the thread (the stutter crossing into
+    /// new cells); one over 20 ms is logged.
+    const LOADER_WAIT: usize = 0x0040_4D60;
+    static REAL_LOADER_WAIT: AtomicUsize = AtomicUsize::new(0);
+    /// The thread the world render runs on (the game's), once it has.
+    static GAME_THREAD: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+    unsafe extern "C" fn loader_wait(ms: u32) -> i32 {
+        let real: unsafe extern "C" fn(u32) -> i32 = unsafe { std::mem::transmute(REAL_LOADER_WAIT.load(Ordering::Acquire)) };
+        let thread = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
+        if GAME_THREAD.load(Ordering::Acquire) != thread {
+            return unsafe { real(ms) };
+        }
+        let t0 = std::time::Instant::now();
+        let r = unsafe { real(ms) };
+        let waited = t0.elapsed();
+        hooks::guard_void("the background thread's lock's wait", || {
+            crate::timing::add(crate::timing::Part::Loader, waited);
+            if waited > std::time::Duration::from_millis(20) {
+                tracing::info!("render: the game waited {:.0} ms for its background thread (loading)", waited.as_secs_f64() * 1000.0);
+            }
+        });
+        r
     }
 
     /// The lock as the next render takes and gives it.
@@ -257,6 +303,7 @@ mod win {
         patch_lock();
         patch_centres();
         hooks::install_into(ACTOR_SHADOWS as *const (), actor_shadows as *const (), "actor shadows", &REAL_SHADOWS);
+        hooks::install_into(LOADER_WAIT as *const (), loader_wait as *const (), "the background thread's lock's wait", &REAL_LOADER_WAIT);
         hooks::install_into(engine::FRAME as *const (), frame_hook as *const (), "Main::Frame", &REAL_FRAME);
         hooks::install_into(engine::RENDER as *const (), render_hook as *const (), "Main::Render", &REAL_RENDER);
         hooks::install_into(GRID_REDRAW as *const (), grid_redraw as *const (), "the outdoor grid's redraw", &REAL_GRID_REDRAW);
@@ -278,6 +325,7 @@ mod win {
 
     unsafe extern "thiscall" fn render_hook(this: *mut c_void, arg: i32) -> i32 {
         let real: RenderFn = unsafe { std::mem::transmute(REAL_RENDER.load(Ordering::Acquire)) };
+        GAME_THREAD.store(unsafe { windows::Win32::System::Threading::GetCurrentThreadId() }, Ordering::Release);
         // A picture of the world into a texture of the game's own making (a save's picture, taken
         // as an autosave goes through a door) is the game's, drawn as it draws it: two eyes drawn
         // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
@@ -360,7 +408,7 @@ mod win {
                 if per_eye {
                     SKY_CENTRE.centre(&SKY_FROM, glam::Vec3::from(s.pos));
                 }
-                set_lock(false, true);
+                set_lock(!hold_loader(), true);
                 SECOND_EYE.store(true, Ordering::Release);
                 result = time(Part::Eye, || unsafe { real(this, arg) });
                 if log_shadows {
@@ -392,7 +440,11 @@ mod win {
             if per_eye {
                 SKY_CENTRE.centre(&SKY_FROM, glam::Vec3::from(s.pos));
             }
-            set_lock(eye == 0, eye + 1 == renders);
+            if hold_loader() {
+                set_lock(eye == 0, eye + 1 == renders);
+            } else {
+                set_lock(true, true);
+            }
             SECOND_EYE.store(eye == 1, Ordering::Release);
             result = time(Part::Eye, || unsafe { real(this, arg) });
             if log_shadows {
