@@ -512,9 +512,10 @@ mod win {
             _ if holding() => held(&dev, aspect),
             // (The main menu waiting for its place with nothing to hold, as the game starts, or a
             // loading screen's first pictures, drawn before its UI goes in with its alpha: nothing
-            // new, the runtime keeps what it shows, until the loading bar alone.)
+            // new, the runtime keeps what it shows, until the loading bar alone. Not a menu to the
+            // runtime, so its own settings don't come up in its room meanwhile.)
             _ if crate::worldmenu::waiting() && !crate::menus::menu_open(crate::menus::MENU_LOADING) || crate::menus::menu_open(crate::menus::MENU_LOADING) && !d3d9::ui_pass_on() => {
-                let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, loading: false, hands_only: true, recenter: None, now, dt: 0.0 });
+                let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: false, race_menu: None, loading: false, hands_only: true, recenter: None, now, dt: 0.0 });
             }
             // (Loading with no place to hold, the first time: its bar floats in the runtime's room.)
             _ => menu(&dev, aspect, d3d9::ui_pass_on() && crate::menus::menu_open(crate::menus::MENU_LOADING)),

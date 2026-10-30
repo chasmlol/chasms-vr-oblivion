@@ -32,8 +32,8 @@ can be the main menu's place with `menu_spot` or `RUSTVR_OBLIVION_MENU_SPOT`:
    runtime's room. When the game's main menu comes up it takes you to the place at once: the game's
    loading bar floats alone in the room (no loading picture), then the place fades in from black.
    - Expect the Imperial City at sunset, the logo and the menu's words (Continue, New, Load, Options,
-     Credits, Exit) in a column floating out over the lake, 2.5 m away, to the left of the White-Gold
-     Tower so they never cover it, a little under the horizon.
+     Credits, Exit) in a column floating out over the lake, 5 m away, to the left of the White-Gold
+     Tower so they never cover it, a little under the horizon, fixed there in the world.
    - You face the view whichever way you're standing in the room.
    - Your hands are there, but no body (the game has no character for you yet).
    - The main menu's music should play (tell me if the place's load stops it).
@@ -46,7 +46,7 @@ can be the main menu's place with `menu_spot` or `RUSTVR_OBLIVION_MENU_SPOT`:
    - **Credits**: the game's credits float ahead; B (or its own way out) brings you back.
    - **Options**: the game's options float ahead, as from the pause menu.
    - **Load**: the game's list of saves floats ahead.
-   - The runtime's own settings float to the right of the words, as beside the pause menu.
+   - The runtime's own settings aren't there (they're beside the pause menu in a game).
 4. **Continue** (or Load a save): the game's question pops up where you look; answer Yes. The view of
    the city stays round you, still moving with your head (lean and turn: it isn't stuck to your face),
    and only the loading bar floats ahead, filling. When the save's place is loaded it takes over: the

@@ -764,12 +764,10 @@ mod win {
                 big_four(&mut l, &mut trees);
             }
             MENU_BOOK => book(&mut l, screen, &mut trees),
-            // The main menu in its place: its words over the view, the runtime's settings beside
-            // them (as beside the pause menu: they're set up before a game).
+            // The main menu in its place: its words over the view, alone (the runtime's settings
+            // aren't beside them: they're beside the pause menu, in a game).
             crate::menus::MENU_MAIN => {
-                if main_menu(&mut l, screen, &mut trees, true).is_some() {
-                    l.flags |= HUDL_SETTINGS;
-                }
+                main_menu(&mut l, screen, &mut trees, true);
             }
             MENU_QUANTITY | MENU_MESSAGE | MENU_NEGOTIATE => {
                 // A count, a question or a haggle over another menu: where the eyes look, the menu
