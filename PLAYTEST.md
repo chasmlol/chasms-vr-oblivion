@@ -94,6 +94,14 @@ Only if a difference isn't clear: the sky on the game's camera, the people's bod
 drawn for the left eye, and no anisotropic filtering, as before this branch. (The runtime's change
 below is in both.)
 
+## Round 12: what the hitches are (`playtest.bat`)
+
+The streak is gone (round 11). Your last run's hitches: 40..56 ms every 20..30 seconds as you
+moved, the game's update and its first drawing of new things spiking together: new cells coming
+in. This run samples the game's thread about once a millisecond (a cost of a few percent) and sums
+up every frame over 30 ms in the log: what code it was in. Walk or run along the road for a few
+minutes, through several cells, then close it.
+
 ## Round 10: which kind of draw the streak is (`playtest-leaveout.bat`, one run)
 
 Neither shadow pass was it (round 8). So this run checks every kind at once. Every 5 seconds one
