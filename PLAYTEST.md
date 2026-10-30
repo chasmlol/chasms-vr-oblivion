@@ -32,6 +32,13 @@ hand instead of the flat screen.
   used to show ahead of you for a moment as it shut).
 - **The map is centred on your hand**, not held out to one side by its edge.
 
+## Since the third headset play (2026-10-30)
+
+- **A lighter flick**: 0.6 m/s turns a page (it was 1; your flicks that turned one were 1.0 to 1.3).
+- **Steady pages**: a book's pages (and the map, and a sheet from the pack) no longer shake with your
+  hand. While you hold it nearly still they're smoothed hard, so your hand's tremor all but goes;
+  as you move it they follow more and more closely, so they keep up with a deliberate move.
+
 The flat game's crosshair is gone (taken from the menus branch, which has it from riding): where you
 look shows only the icon of what you can activate, red when taking it is stealing.
 
@@ -46,7 +53,7 @@ look shows only the icon of what you can activate, red when taking it is stealin
      into your **off hand** and opens there.
    - It's about as big as a large open book (38 by 28 cm): bring it nearer to read it bigger. Your
      other hand in front of the pages covers them, as a real hand would.
-2. **Turn a page.** Flick your free hand sideways, right to left, a medium flick: the page turns
+2. **Turn a page.** Flick your free hand sideways, right to left, a light flick: the page turns
    onwards. Left to right turns back. Anywhere: the hand needn't be near the pages. Let the hand slow
    before the next flick; bringing it back after a flick doesn't turn the page back (the way back is
    shut for a little over a second after a turn). Or pull the trigger at a page's edge and pull it
@@ -129,7 +136,7 @@ look shows only the icon of what you can activate, red when taking it is stealin
   eyes from its middle (the first build laid it on the cover, where it turned with the wrist), just
   in front of the book and the fingers round it.
 - **Turning by a flick**: the free hand's controller velocity, sideways as the eyes see it (level),
-  1 m/s or more with most of its speed sideways, anywhere; the hand empty and not gripping; none in
+  0.6 m/s or more with most of its speed sideways, anywhere; the hand empty and not gripping; none in
   the 0.4 s after the pages appear. The first build's sweep had to start well out on a page and cross
   the spine within a few centimetres (in the first play the buttons turned the pages instead); the
   second's flick was the hand's speed against the pages, near them, and turned pages at random as
@@ -143,8 +150,12 @@ look shows only the icon of what you can activate, red when taking it is stealin
 - **Solid paper.** Oblivion draws its book and map pages as light added over the screen, with no
   coverage (its UI starts on the world's last blending); in the hand they're as solid as what the
   game drew, and the black it leaves is clear.
+- **Steadied, not exact.** Pages in one hand follow it through a one-euro filter (Casiez et al.,
+  CHI 2012): a third of a second behind while nearly still, a fifteenth at half a metre a second.
+  So text doesn't shake, but a page can trail the book a centimetre or two as it moves. Spread
+  between both hands the map follows them exactly (a pinch steadied would slide under them).
 - **A sheet faces you, centred on the hand.** The map, and a book read from the pack, are held at
-  their middle (the hand behind them, hidden), always turned to your eyes, upright, a little smoothed.
+  their middle (the hand behind them, hidden), always turned to your eyes, upright, steadied.
   Spread between the hands, the points of it each hand took stay in them (a pinch to zoom: nothing
   jumps as the second hand takes it), and handed over, the second hand keeps it where it took it.
 - **The map never leaves the hand but by letting go**: every page of the map menu, the journal's
