@@ -4,6 +4,8 @@ Save: rustvr-base
 
 `powershell -File tools\play.ps1 mirror` boots Oblivion into `rustvr-base`. That's Danwood, a Nord in
 iron armour, in his house in Danwood. `powershell -File tools\play.ps1 -Close` puts the game away.
+`play.ps1 mirror -Commands "showracemenu"` boots it with the race menu open (the real keyboard doesn't
+reach the game in VR, so its console can't be typed into).
 
 The heads, hair, helmets and their FaceGen morphs are already extracted into the shared
 `local_assets`. On another machine, run `cargo run --release -p oblivion-assets --bin
@@ -13,7 +15,20 @@ The research and the design are in `docs/research/mirror.md`.
 
 ## What to try, in order
 
-1. **Call up a mirror.**
+1. **Cast Mirror.**
+   - Every character has a lesser power called "Mirror" (a Conjuration spell, free, castable any
+     time). Open the game's magic menu, find it with your powers and select it.
+   - Cast it with the spell hand as any spell on yourself: hold the trigger with that hand empty,
+     then let go.
+   - The game's summoning effect, the swirl a summoned Daedra arrives in, rises 1.2 m in front of
+     you. The mirror appears in it at its flash, as a summoned creature would, with Conjuration's
+     hit sound at the glass.
+   - Cast it again while looking at the mirror: the same effect, and it's gone.
+   - Cast it while looking somewhere else, or when it's far behind you: it comes to stand in front
+     of you instead.
+   - Save, load the save again: you still have the spell (once, not twice). An older save of your
+     own gets it the first second it's loaded.
+2. **Call up a mirror without the spell.**
    - Hold both grips with empty hands, with your hands together in front of your chest (about
      30 cm in front, below your chin). Then pull them apart wide, quickly, like opening curtains.
    - A standing mirror appears 1.2 m in front of you, on the floor, facing you: 0.95 m wide and
@@ -27,7 +42,7 @@ The research and the design are in `docs/research/mirror.md`.
    - The same gesture puts it away.
    - Or use the RustVR menu: press the menu button so the game pauses and the RustVR menu shows,
      open the Body tab, and press "Stand a mirror in front of me" (the same button puts it away).
-2. **Look at yourself.**
+3. **Look at yourself.**
    - Step up to the glass and look at your face: the race's head, morphed to the save's own face,
      the age map's wrinkles, the eye colour, the hair colour.
    - Your reflection's eyes look back into yours (as far as eyes turn: about 30° from where the head
@@ -35,7 +50,7 @@ The research and the design are in `docs/research/mirror.md`.
    - Turn your head and see your profile.
    - Lean in close, then step back to see the whole body.
    - Walk round behind it: it's a single-sided mirror, and its back isn't drawn.
-3. **The world in it.**
+4. **The world in it.**
    - Behind you in the mirror is the game's own picture, drawn from where your eyes are reflected,
      each eye with its own parallax, so the reflection has depth.
    - Walk away and turn: the mirror stays where it stands in the world.
@@ -43,7 +58,7 @@ The research and the design are in `docs/research/mirror.md`.
    - A mirror called up in a doorway or against a wall is moved nearer (never nearer than 0.6 m).
    - The game's own walls hide the glass where they're nearer.
    - Walk more than 25 m away, or go through a door, and it's put away.
-4. **The race menu.** Open the console (or start a new game) and enter `showracemenu`.
+5. **The race menu.** Boot with `-Commands "showracemenu"` (or start a new game).
    - The world stays round you and a mirror stands in front of you. The game's own race menu
      stands at the mirror's left, turned to face you.
    - Point at the menu with the laser and pull the trigger to work it, as before.
@@ -55,7 +70,7 @@ The research and the design are in `docs/research/mirror.md`.
      - Face opens the face sliders.
    - Your helmet comes off while the menu is open (the game takes it off) and goes back on after.
    - Press Done and the mirror goes, unless you had called it up yourself.
-5. **Settings** (the RustVR menu, Body tab, under Mirror):
+6. **Settings** (the RustVR menu, Body tab, under Mirror):
    - Distance (0.6 to 3 m);
    - Width and Height;
    - the gesture on or off;
@@ -92,6 +107,13 @@ The research and the design are in `docs/research/mirror.md`.
 
 ## What wasn't checked
 
+- **The mirror spell, at all.** It was built after the emulated runs and has never been in the game:
+  - the spell made and given to the player (and once only, after saving and loading);
+  - how the magic menu shows it (its icon, and whether the game says it was added);
+  - the cast, the summoning effect at the mirror's foot, the glass appearing at its flash;
+  - the hit sound at the glass. The game may also play Conjuration's hit sound on you as the spell
+    lands, so it could sound twice.
+
 - **On a real headset.** Everything above is the emulated headset's captures. Watch for:
   - the reflection's depth and parallax;
   - whether the eyes' gaze looks right (at capture resolution the eyes are a few pixels);
@@ -106,6 +128,21 @@ The research and the design are in `docs/research/mirror.md`.
 - **The gesture** made by real hands.
 
 ## Decisions
+
+- **The mirror spell:**
+  - Oblivion has no mirror of its own to use: no model, no record, as decoration or an item. So it's
+    conjured, the way the game brings things in by magic.
+  - A lesser power, so anyone can cast it as often as they like, for nothing. It's a script effect
+    with no script, in Conjuration, looking like Bound Shield (a conjured thing): its light in the
+    hand, its sounds and icon.
+  - It's made as the spellmaking altar makes a player's spells (a created spell, which the save
+    keeps) and given with the game's own `AddSpell`, so every game has it: a new one, or a save from
+    before.
+  - It arrives as a summoned Daedra does: the game's own summoning effect (`summonDaedra.nif`), the
+    glass appearing at the effect's "Hit" moment.
+  - Cast while looking at the mirror (within about 35° and 6 m) it sends it away; anywhere else it
+    summons one in front. So a mirror left behind comes to you with one cast.
+  - The gesture and the menu button still call it up and put it away at once, with no effect.
 
 - **One game render for both eyes.** The mirror's world is rendered once a frame from the head
   reflected in the glass, and moved to each eye by its depth (the runtime's warp). Two renders
