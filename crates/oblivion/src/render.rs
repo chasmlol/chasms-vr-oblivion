@@ -214,6 +214,7 @@ mod win {
         let stereo = time(Part::Prepare, || hooks::guard("Render", None, prepare));
         let Some((snap, game, cam)) = stereo else { return unsafe { real(this, arg) } };
         let view = snap.view.expect("prepared with a view");
+        hooks::guard_void("reticle", crate::reticle::hide_crosshair);
         let Some(dev) = d3d9::device(engine::device() as *mut c_void) else { return unsafe { real(this, arg) } };
         let mut result = 0;
         let mut captured = [false; 2];
