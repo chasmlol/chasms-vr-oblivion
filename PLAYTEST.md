@@ -10,10 +10,12 @@ you were in round you, with only the game's loading bar floating in it.
 
 The research and the design are in `docs/research/worldmenu.md`.
 
-## First: pick the place
+## The place
 
-Six `.bat` files at the worktree's root each boot `rustvr-weye` and move you to a candidate spot at
-its hour and weather (the game's own `coc`/`cow`, `setpos`, `setangle`, `set gamehour`, `fw`):
+Picked: spot 1, the Imperial City across Lake Rumare at sunset (the default). The six `.bat` files at
+the worktree's root still each boot `rustvr-weye` and move you to a candidate spot at its hour and
+weather (the game's own `coc`/`cow`, `setpos`, `setangle`, `set gamehour`, `fw`), and any of them
+can be the main menu's place with `menu_spot` or `RUSTVR_OBLIVION_MENU_SPOT`:
 
 | `.bat` | The spot |
 |---|---|
@@ -23,10 +25,6 @@ its hour and weather (the game's own `coc`/`cow`, `setpos`, `setangle`, `set gam
 | `spot-4-anvil.bat` | Anvil's lighthouse on the Gold Coast at sunset, over the Abecean Sea |
 | `spot-5-rumare-night.bat` | Lake Rumare by moonlight, from Vilverin's ruin, the city across the water |
 | `spot-6-first-view.bat` | The first view: Lake Rumare from the prison sewer's exit, facing Vilverin, morning |
-
-Look round in each (walk a little if you like; time passes there as in the game, so a sunset moves
-on) and tell me which you like: one, or several to take turns each time the game starts. Tell me too
-if one needs moving (a tree in the way, the wrong hour or weather).
 
 ## What to try, in order
 

@@ -67,7 +67,7 @@ pub const SPOTS: &[Spot] = &[
     Spot { name: "first-view", cell: "ICPrisonSewerExit01", pos: [47110.0, 83000.0, 297.0], heading: 40.0, hour: 9.0, weather: CLEAR, subject: [50804.0, 87399.0, 900.0], side: SIDE_RIGHT },
 ];
 
-/// The spot until the player picks: the view players mention most.
+/// The main menu's place, picked by looking at the six: the view players mention most.
 pub const DEFAULT_SPOT: &str = "imperial-city";
 
 /// The spot named by `menu_spot` (a name, or several separated by commas: one of them, `turn` picks
