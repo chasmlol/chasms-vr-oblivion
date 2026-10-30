@@ -22,9 +22,9 @@ trigger to click. The right stick scrolls, and B closes.
    - Look at Jensine: the game's card of what you're looking at (her name) floats just under the
      point you're looking at, just in front of her. It eases after your head instead of being
      fixed to it. It's the same card that says "Open Door".
-   - Look at a thing you can take (in the chest's room, anything on a shelf): no card, only the
-     game's hand icon (red if taking it is stealing). Pick it up and its card (name, value, weight)
-     floats over it in your hand.
+   - Look at a thing you can take (in the chest's room, anything on a shelf): nothing comes up, no
+     card and no hand icon. Pick it up and its card (name, value, weight) floats over it in your
+     hand.
    - The flat game's crosshair is gone. Where the head looks, only the game's icon of what can be
      activated shows (a hand, a door; red when taking it would be stealing).
 2. **The chest (looting).** Look at the chest and pull the trigger with an empty right hand.
@@ -142,6 +142,13 @@ it), so turning those down wasn't all of it. What I checked:
   - **The log says:** half a second after a menu opens, the adapter's log gets "hud: piece N
     (group G) is covered X at its middle". Over parchment that should be 1.00. If it isn't, the
     runtime's solid drawing is what's holding it, and I'll find the game's blend that thins it.
+
+Then: **"The steal red hand icon still pops up over items."** A thing you can take now shows
+nothing while you only look at it, the hand icon included (the same test as the card). A person, a
+door or a container still has its icon and card. The red hand was the game's only warning before a
+theft. While a hand has a thing, the game's card is aimed at it (that's how the card shows over your
+hand), and the icon comes back under your gaze, as the game sets it for its target. Whether it turns
+red there for someone else's thing hasn't been seen: worth a look on a shelf in Jensine's shop.
 
 ## What was checked in the game (emulated headset, captures)
 

@@ -40,7 +40,7 @@
 //! | the health, magicka and fatigue bars, the weapon and the spell | `hud_main_menu.xml` | the back of the off-hand wrist (Alyx's glove) |
 //! | the compass | `hud_main_menu.xml` | up the forearm from the bars |
 //! | the spells and potions working on the player | `hud_main_menu.xml` | up the forearm from the compass |
-//! | what the reticle can activate (its crosshair is hidden, [`crate::reticle`]), the sneak eye | `hud_reticle.xml` | where the head looks |
+//! | what the reticle can activate (its crosshair is hidden, [`crate::reticle`]; nothing for a thing that can be taken until a hand has it), the sneak eye | `hud_reticle.xml` | where the head looks |
 //! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing, for a person, a door, a container (not a thing that can be taken); over the thing while a hand has one |
 //! | a foe's health | `hud_reticle.xml` | over the foe |
 //! | spoken lines | `hud_subtitle_menu.xml` | the caption strip |
@@ -576,11 +576,17 @@ mod win {
         // looked at; its crosshair is hidden, as the hands aim), and the card of what it's on under it.
         let (w, h) = screen;
         let offset = |b: [f32; 4]| [((b[0] + b[2]) * 0.5 - w * 0.5) / h, -((b[1] + b[3]) * 0.5 - h * 0.5) / h, 0.0];
-        let reticle = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_reticle"), From::Drawn("hudreticle_sneak")], false));
+        let crosshair = mem::deref(mem::deref(HUD_INFO_MENU) + CROSSHAIR_REF);
+        // A thing that can be taken says nothing while it's only looked at: neither its card nor its
+        // activate icon (a hand, red when taking it would be stealing). Once a hand has it, the
+        // game's card is the held thing's (`crate::hud_info`) and floats over it, and the icon is
+        // under the gaze again, as the game sets it for its target.
+        let quiet = !crate::hud_info::holding() && crosshair != 0 && crate::items::takeable_ref(crosshair).is_some();
+        let icons: &'static [From] = if quiet { &[From::Drawn("hudreticle_sneak")] } else { &[From::Drawn("hudreticle_reticle"), From::Drawn("hudreticle_sneak")] };
+        let reticle = piece_box(trees.get(RETICLE), &Piece::of(icons, false));
         if let Some((b, uv)) = reticle.and_then(|b| Some((b, tiles::uv_of(b, screen, MARGIN)?))) {
             l.push(HudElement { role: HUD_GAZE, uv, offset: offset(b), ..Default::default() });
         }
-        let crosshair = mem::deref(mem::deref(HUD_INFO_MENU) + CROSSHAIR_REF);
         // (What they're about: they float just in front of it, a person's head or a thing's bound.)
         if crosshair != 0
             && let Some((centre, radius)) = bound(crosshair)
@@ -593,10 +599,8 @@ mod win {
             if crate::hud_info::holding() {
                 // (Over the thing in a hand.)
                 l.push(HudElement::new(HUD_HELD, uv));
-            } else if crosshair != 0 && crate::items::takeable_ref(crosshair).is_some() {
-                // A thing that can be taken says what it is only once a hand has it (the card over
-                // it then): a card for every thing looked at is too much. Its activate icon stays
-                // (red when taking it would be stealing).
+            } else if quiet {
+                // (Its card comes once a hand has it: a card for every thing looked at is too much.)
             } else {
                 let below = reticle.map_or(0.0, |r| (r[3] - r[1]) * 0.5 / h) + (uv[3] - uv[1]) * 0.5 + 0.01;
                 let above_middle = reticle.map_or([0.0; 3], offset);
