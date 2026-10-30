@@ -150,7 +150,8 @@ runs from the shoulder to its controller, and the mirror shows the same pose eac
 
 ## The evaluation tool (outside the repository)
 
-Everything is under `<builds>\ik` (about 5 GB; delete the folder to drop it):
+Everything is under `<builds>\ik` (about 11 GB: 6 GB of motion capture, the rest this
+worktree's builds, which `playtest.bat` and `range.bat` install from; delete the folder to drop it):
 
 - `eval\`: `ikeval`, a Rust tool against both the old solver (`baseline\`, main at protocol v14)
   and the worktree's. Build with
