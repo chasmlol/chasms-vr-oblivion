@@ -3,8 +3,8 @@
 Save: rustvr-doors
 
 `tools\play.ps1 world` boots this branch's build into **rustvr-doors**: Bethesda's own test cell
-`TestTraps`, standing in front of a row of doors that swing in place (a big planked cave door straight
-ahead, a double cave door, a barred prison cell gate, an Imperial dungeon door), with the fort ruin
+`TestTraps`, beside a row of doors that swing in place, on your right (turn to face them: a big planked
+cave door right in front of you then, a double cave door, a barred prison cell gate, an Imperial dungeon door), with the fort ruin
 lever 16 m to your left, and 20 lockpicks in the pack. `-At WarehouseLock` (with
 `-Give "0000000A 20"`) is Bethesda's lock test cell: rows of locked fence gates. Real places with
 doors and levers that work by hand: the Imperial Dungeon (`-At ImperialDungeon01`, the cell gates),
@@ -58,13 +58,17 @@ Checked, each once, with the emulated headset (the logs and captures are the evi
   each of the five tumblers in turn; tumblers pushed up; one set by the trigger; picks broken by
   mistimed ones; after Auto Attempt opened the lock, the gate swung open by the game with the
   runtime following it.
+- The trigger at gaze on the cave door: the game's own Activate and animation, the runtime's leaf
+  following it open (and saying when the game stopped moving it).
+- Cell changes (Chorrol's guilds, back and forth, then `TestTraps`): the world's parts dropped
+  before the cell went and offered again in the new one, no crash; the double cave door's two leaves
+  each on their own hinge.
 - In the framework (a quick temporary check, not committed): a door's leaf taken and pushed, pressed
   with a palm, stopped by the player's body, latched and let go.
 
 Not checked in the game:
 
-- Following the game's own opening from the trigger at gaze and from an NPC walking through (the
-  same following was seen with the gate the lock opened).
+- Following an NPC walking through a door (the same following as the trigger's).
 - A door whose hinge is level (a trap door, a display case's lid): it should fall shut under its own
   weight.
 - The sliding doors (a ruin's stone door, a portcullis): a tug should be the game's Activate and the

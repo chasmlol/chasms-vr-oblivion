@@ -61,6 +61,8 @@ pub const REARM: f32 = 0.35;
 /// How hard a lever's two positions hold it (newtons at the end of its handle): more than a hand
 /// resting on it, less than a deliberate push.
 pub const DETENT_FORCE: f32 = 25.0;
+/// How much more than its own weight's turn a lid's stay holds at the end of its swing.
+pub const STAY: f32 = 1.3;
 /// How long (seconds) a door's swing takes to die away once let go (its damping's time).
 pub const SETTLE: f32 = 0.8;
 /// Its pins: the friction of iron on iron, greased or not, and their radius (metres).
@@ -457,18 +459,26 @@ mod game {
         (0..n).map(|i| deref(data + i * 4)).filter(|&c| is_node(c)).collect()
     }
 
-    /// The nodes under `root` (itself too), by name.
+    /// The nodes under `root` (itself too), by name, in the model's order: a name the model has
+    /// more than once is `name@#0` the second time, `name@#1` the third (as a model's animations
+    /// name them).
     fn nodes(root: usize) -> HashMap<String, usize> {
         let mut out = HashMap::new();
+        let mut seen: HashMap<String, usize> = HashMap::new();
         let mut stack = vec![(root, 0u32)];
-        let mut seen = 0;
+        let mut count = 0;
         while let Some((node, depth)) = stack.pop() {
-            seen += 1;
-            if seen > 2000 || depth > 32 {
+            count += 1;
+            if count > 2000 || depth > 32 {
                 continue;
             }
-            out.entry(name_of(node)).or_insert(node);
-            stack.extend(child_nodes(node).into_iter().map(|c| (c, depth + 1)));
+            let name = name_of(node);
+            let k = seen.entry(name.clone()).or_insert(0);
+            let key = if *k == 0 { name } else { format!("{name}@#{}", *k - 1) };
+            *k += 1;
+            out.entry(key).or_insert(node);
+            // (Its children in order: the first is looked at next.)
+            stack.extend(child_nodes(node).into_iter().rev().map(|c| (c, depth + 1)));
         }
         out
     }
@@ -768,6 +778,8 @@ mod game {
         tried: f64,
         armed: bool,
         locked: bool,
+        /// The game's own animation is playing on it.
+        game_moving: bool,
     }
 
     #[derive(Default)]
@@ -947,7 +959,7 @@ mod game {
             return None;
         }
         let open = if matches!(kind, Kind::Door | Kind::HeavyDoor) { matches!(open_state(refr), 1 | 2) } else { parts[0].at > parts[0].far * 0.5 };
-        let mut t = Thing { refr, form_id, kind, root, anims, parts, open, synced: false, owned: false, pending: false, tried: f64::MIN, armed: true, locked: locked(refr) };
+        let mut t = Thing { refr, form_id, kind, root, anims, parts, open, synced: false, owned: false, pending: false, tried: f64::MIN, armed: true, locked: locked(refr), game_moving: false };
         shape_descs(&mut t);
         tracing::info!(
             "world: {:?} {form_id:08X} ({}): {} part(s) [{}], open {}, locked {}",
@@ -966,6 +978,16 @@ mod game {
             t.locked
         );
         Some(t)
+    }
+
+    /// Whether a thing's reference is still the one it was made from, with the same 3D (a cell left
+    /// or reloaded, the reference deleted or disabled: its nodes are the game's to free).
+    fn alive(refr: usize, t: &Thing) -> bool {
+        mem::is_readable(refr as *const u8, 0x48)
+            && mem::at::<u32>(refr + FORM_ID) == Some(t.form_id)
+            && deref(refr + REFR_NODE) == t.root
+            && mem::at::<u32>(refr + FORM_FLAGS).is_some_and(|f| f & (DELETED | DISABLED) == 0)
+            && t.parts.iter().all(|p| mem::is_readable(p.node as *const u8, 0xB8))
     }
 
     /// Whether `node` is under `ancestor` in the live tree.
@@ -993,10 +1015,10 @@ mod game {
                 Kind::Door | Kind::HeavyDoor if !t.open => (0.0, LATCH_PLAY.min(p.far)),
                 _ => (0.0, p.far),
             };
-            // Springing back as fast as its animation comes back (critically damped, settled in
-            // the time it takes the game's).
             // (What it is to a hand: a leaf turned about its edge, or its mass along a slide.)
             let inertia = if p.slide { p.desc.mass } else { p.desc.mass * (p.desc.radius * p.desc.radius / 3.0).max(1e-4) };
+            // Springing back as fast as its animation comes back (critically damped, settled in
+            // the time it takes the game's).
             let spring = if t.kind == Kind::Activator && anim.returns {
                 let back = (back_time - anim.times[j.far_at]).max(0.2);
                 let w = 4.0 / back;
@@ -1012,8 +1034,16 @@ mod game {
             p.desc.turn_min = range.0;
             p.desc.turn_max = range.1;
             // A lever that stays where it's put holds at its ends (its two positions) against a
-            // hand merely resting on it.
-            p.desc.detent = if t.kind == Kind::Activator && !anim.returns { DETENT_FORCE * p.desc.radius.max(0.1) * if p.slide { 1.0 / p.desc.radius.max(0.1) } else { 1.0 } } else { 0.0 };
+            // hand merely resting on it; a lid or a trap door props open at the end of its swing
+            // (as a real one's stay holds it), against its own weight, and falls shut short of it.
+            p.desc.detent = if t.kind == Kind::Activator && !anim.returns {
+                DETENT_FORCE * if p.slide { 1.0 } else { p.desc.radius.max(0.1) }
+            } else if flags & JOINT_GRAVITY != 0 {
+                let (c, _) = crate::items::bounds(&p.hull).unwrap_or_default();
+                STAY * p.desc.mass * 9.81 * c.truncate().length()
+            } else {
+                0.0
+            };
             (p.desc.joint_spring, p.desc.joint_damping) = spring;
             p.desc.joint_flags = flags;
         }
@@ -1027,10 +1057,12 @@ mod game {
             return;
         }
         with_state(|s| {
-            for t in s.things.values_mut().filter(|t| t.pending) {
+            for (r, t) in s.things.iter_mut().filter(|(_, t)| t.pending) {
                 t.pending = false;
                 t.tried = now;
-                fire(t);
+                if alive(*r, t) {
+                    fire(t);
+                }
                 s.republish = true;
             }
             if now >= s.next_scan {
@@ -1132,8 +1164,7 @@ mod game {
         }
         let before = s.things.len();
         s.things.retain(|r, t| keep.contains(r) || t.parts.iter().any(|p| p.held) || t.owned && t.parts.iter().any(|p| p.vel.abs() > 0.01));
-        // (A thing whose 3D went: gone.)
-        s.things.retain(|r, t| deref(r + REFR_NODE) == t.root && mem::at::<u32>(r + FORM_ID) == Some(t.form_id));
+        s.things.retain(|r, t| alive(*r, t));
         if s.things.len() != before {
             s.republish = true;
         }
@@ -1168,6 +1199,16 @@ mod game {
     /// and the game's Activate asked for where a hand has worked one far enough.
     pub fn place(now: f64) {
         with_state(|s| {
+            // (A thing whose reference or 3D has gone since the last look round, or everything
+            // while the game loads: never touched again.)
+            let before = s.things.len();
+            if !crate::menus::in_world() {
+                s.things.clear();
+            }
+            s.things.retain(|r, t| alive(*r, t));
+            if s.things.len() != before {
+                s.republish = true;
+            }
             if s.things.is_empty() {
                 return;
             }
@@ -1196,8 +1237,9 @@ mod game {
                 let mgr = manager(t.root);
                 let seqs = [sequence(mgr, &t.anims.0.name), t.anims.1.as_ref().map_or(0, |a| sequence(mgr, &a.name))];
                 let game_moving = seqs.iter().any(|&q| animating(q));
-                if game_moving && t.owned {
-                    tracing::info!("world: {:08X}: the game is moving it ({held})", t.form_id);
+                if game_moving != t.game_moving {
+                    t.game_moving = game_moving;
+                    tracing::info!("world: {:08X}: the game {} it{}", t.form_id, if game_moving { "moves" } else { "has stopped moving" }, if held { " (a hand has it)" } else { "" });
                 }
                 if game_moving && held && t.kind != Kind::HeavyDoor {
                     seqs.iter().for_each(|&q| stop(q));
