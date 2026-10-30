@@ -18,8 +18,9 @@ why it works the way it does: `docs/research/riding.md`.
    Activate).
 2. **Look down and round.** Your body sits in the saddle, legs astride, round the horse's barrel.
    Look about freely: your head never steers it. The horse's head and neck stay in front of you.
-3. **Take the reins.** They're at the base of the neck, just in front of the saddle horn, either side
-   of the mane: close a hand there (either hand, or both). A tick in the hand says you have one.
+3. **Take the reins.** They lie on the neck from the bit up behind the ears and back to its base,
+   just in front of the saddle horn, either side of the mane: close a hand there (either hand, or
+   both). A tick in the hand says you have one; the rein runs from the bit to your fist.
 4. **Spur on.** A flick of the reins (snap a rein hand down a few centimetres, quickly, and stop) or
    the trigger of a hand on a rein: walk. Again: gallop. A pulse in the rein hands each time.
 5. **Steer.** Pull one rein back towards you (left rein: left), or move both hands to one side (a
@@ -61,6 +62,8 @@ why it works the way it does: `docs/research/riding.md`.
   left from the saddle doesn't steer.
 - Someone else's horse (made the stable's for the test): got on, and a Chorrol guard arrested the
   player for it.
+- The reins drawn: from the bit over the neck to each hand holding one, lying on the neck when let
+  go, both hands' bight between them.
 - The runtime's log: the vignette closes in at a gallop and in a turn, and opens again; the fade
   comes on as the game gets the rider on, and off.
 - The view turning with the horse in steps (a build with steps as the default, not committed): 30°
@@ -105,8 +108,12 @@ why it works the way it does: `docs/research/riding.md`.
   are only played on the third-person body, which it leaves standing). The legs go round the horse's
   barrel at a rider's proportions (knee 0.43 m below the seat, ankle 0.89 m).
 - **The reins are where a rider holds them**: half way from the saddle horn to the base of the neck,
-  9 cm either side of the mane. Oblivion's horses have a bridle but **no reins** (its bridle is the
-  size of the head), so the reins in the hands aren't drawn.
+  9 cm either side of the mane. Oblivion's horses have a bridle and bit but **no reins** (its bridle
+  is the size of the head), so the runtime draws them: leather straps from the bit's rings (measured
+  at the corners of the horse's mouth on its own head model), over the neck behind the ears, to the
+  hands, in the colour of the game's own tack texture, lit by the game's sun and ambient. They're
+  flat ribbons turned to the eye, unlit by the game's lamps and not hidden behind the world: a
+  stand-in for straps drawn with the body, lit and hidden as it is.
 - **No fighting from the saddle**: the game's rule. The hands still swing, nothing lands; casting
   is off too.
 - **The ridden horse isn't one of the hands' creatures**, so the hands don't push against it.
@@ -115,8 +122,8 @@ why it works the way it does: `docs/research/riding.md`.
 
 ## Not done
 
-- Reins drawn in the hands (the game has none: drawing a pair from the bit would be ours, with the
-  game's tack texture; your call).
+- The reins as real straps drawn with the body (lit by the game's lamps, hidden behind the world,
+  textured): they're flat ribbons for now.
 - The game's own riding pose for the body (the game doesn't animate it in first person); the legs
   don't swing with the gait (the seat does, with the horse's spine).
 - Mounted combat (the game's rule kept).
