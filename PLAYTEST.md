@@ -13,9 +13,44 @@ Run `playtest.bat` in this worktree (`<worktrees>\riding`): it installs this bui
 a key in its window when you're done and it saves the ride's logs (into `<builds>\riding\logs`),
 closes the game and puts your settings back.
 
+## Round 10: three crashes
+
+Built and unit-tested; not in the game yet. Your rides on round 9 ("it worked perfect") crashed
+three times, at 11:14, 11:23 and 11:37. Their crash dumps are in
+`%LOCALAPPDATA%\CrashDumps` (`Oblivion.exe.7792.dmp`, `.42080.dmp`, `.22780.dmp`).
+
+- **11:14, two seconds after getting on: a read of memory the game had just freed.**
+  - Every frame, the hands' collisions read the skeletons of the creatures nearby by walking the
+    game's memory, and each read checks the page first.
+  - Riding brings cells in and out quickly. The game's loading thread freed a skeleton between the
+    check and the read, and the read faulted.
+  - Now a read that faults is treated as unreadable and skipped, so the game carries on. The log
+    says so (`mem: a read at ... faulted`).
+- **11:23: the game reset its graphics device in the middle of drawing.**
+  - The graphics device is lost now and then, whenever the desktop's displays change (Virtual
+    Desktop's monitor coming and going). Your rides lost it about once a minute.
+  - The game's renderer resets the device as soon as it finds it needs resetting. Here it found
+    that just as it started drawing the water's reflection, and the reset freed the reflection's
+    camera while it was being drawn.
+  - Now, inside the game's drawing, the device is reported as just lost, so the game draws nothing
+    more that frame. The game's main loop then resets it before the next frame, as it already does
+    whenever it finds the device lost there.
+  - Nothing of the mod's is made on a lost device any more either, since that kept the reset from
+    succeeding the first time.
+- **11:37: inside NVIDIA's driver, five seconds after one of those resets.**
+  - The crash was on the driver's own thread, not in the mod's code or the game's.
+  - Resets no longer happen in the middle of a frame, which may be enough to stop it. If it still
+    happens, the log's last `d3d9:` lines before the crash will show whether a reset came first.
+
+### Try this round
+
+- Ride for a good while: gallop across cell borders, along water and through the paddock past the
+  other horses.
+- If the picture freezes for half a second (a lost device), carry on: it should come straight back.
+
 ## Round 9: the loop between the hands just hangs
 
-Built and unit-tested; not in the game yet.
+Played: "it worked perfect".
 
 - **"The rein in the middle between the hands is trying to float up and being all weird, just make
   it hang naturally."** The loop between your hands was simulated and kept off the neck like the
