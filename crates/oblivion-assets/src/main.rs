@@ -144,12 +144,14 @@ fn export(archives: &Archives, args: &[String]) -> Result<()> {
         } else {
             ItemKind::Prop
         };
-        // A weapon with its scabbard: the weapon alone, and the scabbard alone. Arrows: the arrow
-        // alone (what the hand nocks), and the quiver with its arrows (what the body wears).
+        // A weapon with its scabbard: the weapon alone, and the scabbard alone. Arrows: the whole
+        // model, and the arrow alone (what the hand nocks, `#arrow`), with the quiver and its arrows
+        // (what the body wears) below. The arrow alone has a key of its own because every other
+        // extractor writes the plain key whole, and `local_assets` is shared.
         let parts: Vec<(String, String, Part)> = if nif.find("Scb").is_some() {
             vec![(export::model_key(&path), rel.clone(), Part::Without("Scb")), (export::variant_key(&path, "scb"), format!("{rel}#scb"), Part::Only("Scb"))]
         } else if nif.find("ArrowQuiver").is_some() {
-            vec![(export::model_key(&path), rel.clone(), Part::Without("ArrowQuiver"))]
+            vec![(export::model_key(&path), rel.clone(), Part::All), (export::variant_key(&path, "arrow"), format!("{rel}#arrow"), Part::Without("ArrowQuiver"))]
         } else {
             vec![(export::model_key(&path), rel.clone(), Part::All)]
         };

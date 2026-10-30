@@ -7,8 +7,8 @@
 //!   the game bends it at full draw, `#bent`, from the model's morph). It hangs on the back over the
 //!   left shoulder, where Oblivion wears it (`BackWeapon`). Its limbs spring back after a shot as the
 //!   player's bow animation has them (`bows.toml`, from `bowattack.kf`).
-//! * **The arrows** are the equipped arrows' own model (`arrow.nif` without its quiver), as many as
-//!   the game says the player has.
+//! * **The arrows** are the equipped arrows' own model (`arrow.nif` without its quiver, which
+//!   `oblivion-extract` writes as `#arrow`), as many as the game says the player has.
 //! * **A shot** is the game's own, made at once the way the game makes it when its bow animation
 //!   lets go (case 5 of the actor's attack actions, 0x5FCAB0): its `ArrowProjectile` (the arrow's
 //!   speed, gravity, damage, the bow's and the arrow's enchantments and poison, its sounds in
@@ -618,10 +618,12 @@ mod game {
         );
         descs.push(d);
         if let Some(ar) = arrows {
-            let akey = model_key(&ar.model);
+            // The arrow alone, never the plain key: that's the whole model, the quiver and its five
+            // arrows with it.
+            let akey = variant_key(&ar.model, "arrow");
             match rustvr_asset::load_model(&dir, &akey) {
                 Ok(m) => descs.push(arrow_object(&m, &akey, ARROWS_ID, ar.count)),
-                Err(err) => tracing::warn!("archery: {} have no extracted model ({}, {akey}: {err:#})", ar.name, ar.model),
+                Err(err) => tracing::warn!("archery: {} have no extracted model ({}#arrow, {akey}: {err:#}); run oblivion-extract export meshes/weapons", ar.name, ar.model),
             }
         }
     }
