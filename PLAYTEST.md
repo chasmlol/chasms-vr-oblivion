@@ -209,6 +209,13 @@ otherwise).
    chest). The finger: not seen in the preview (`--fingers point`, the `hand` view); what shows
    is the leather glove under steel's plates at the thumb's root, through the seam with the wrist
    bent in.
+5. **The wrist showing in the openings: perfect. But the hands showed slightly round the edges of
+   the glass gloves, whatever the hand did.** The body under the armour at the glove's outline: a
+   glove's fingers are often the bare hand's own (iron, ebony, mithril, chain mail, the thief's),
+   the two bending a little differently, and others are slimmer than it (glass's fingers by up to
+   3.5 mm, its hand by up to 6, measured on every vanilla glove). The body under the armour is now
+   drawn 5 mm inside its own skin: it stays within the armour's outline, and the hand still fills
+   the openings (and shows wherever a glove leaves it bare), a little slimmer.
 
 ## Not done
 
