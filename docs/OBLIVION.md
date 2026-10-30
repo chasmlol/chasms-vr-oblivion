@@ -23,7 +23,9 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | The body | The runtime draws the player's body from the game's own models: the race's skin where nothing is worn, the armour and clothes worn over it, on the game's skeleton. | `body.rs` |
 | Lighting | The body and what the hands hold are lit as Oblivion's own shaders light them: the scene's sun or moon, the point lights near the player (torches, candles, spells), the ambient (Night-Eye's too), normal maps, specular, the skin's rim, glow maps and the fog. | `lighting.rs`, `docs/research/oblivion-lighting.md` |
 | Weapons | The equipped weapon (the game's model) hangs at the left hip, or on the back if two-handed, and the hand draws it. The equipped shield is taken from over the left shoulder. Edges, points, heads and guards are measured on each model. | `weapons.rs` |
-| Combat | Hits are the game's own hit with the equipped weapon (damage, skill, enchantments). A blow met by the weapon or shield is the game's block. Spells charge in the palm and go off as the game's own cast: target spells from the palm along the aim, touch spells into what the hand touches, self spells on the player. | `combat.rs` |
+| Combat | Hits are the game's own hit with the equipped weapon (damage, skill, enchantments). A blow met by the weapon or shield is the game's block. Spells charge in the palm and go off as the game's own cast: target spells from the palm along the aim, touch spells into what the hand touches, self spells on the player. An enchanted staff casts from its tip along its length as the game's own staff cast (its charge used up, or the game's "not enough charge"). | `combat.rs` |
+| Magic | The game's own casting art where the hand casts: the spell's main effect's model playing its `SpecialIdle_Cast` art (fire's flames, frost's mist, healing's sparkles), its first part held burning in the palm while the spell is readied (small) and charging (growing), with the effect's casting light fading in and its casting sound as the charge starts; a staff's enchantment the same at its tip. An enchanted weapon or staff shimmers with its enchantment's own effect shader (its membrane, drawn over the held model), and a spell's shader on the player (healing's glow, a shield's flames, being burned) is drawn over the body and hands, through the game's own fade. | `magic.rs`, `scene.rs`, `docs/research/torches.md` |
+| Torch | The equipped torch hangs at the right hip, flame up and burning, and either hand draws it, waves it, holsters it and drops it (it lies burning where it lands; left behind, it's back at the hip). The game draws it: a copy of its model with the game's flame, its light made from the torch's form (radius, colour, attenuation) and flickered as the game flickers a torch, lighting the world, the body and the hands; it crackles with the game's held-torch loop. | `torch.rs`, `scene.rs` |
 | Things in the world | Everything the player can take near them (weapons, armour, clothes, books, potions, ingredients, keys, soul gems, sigil stones, apparatus, carriable lights, clutter) is the hands' to take or pull with the gloves: its collision its own Havok shape, its weight its Havok mass, drawn by the game where the hand has it (a candle still burns), and let go, the game's again, flying on with the throw. A card beside it says what it is: its name, damage or armour, weight, value, condition, and whether it's stolen. Let go in any body slot (a hip, a shoulder, the chest, the belt), the player takes it: the game's own pick-up, with its stealing and its message. | `items.rs`, `objects.rs` |
 | Menus | While a menu is open it's a panel; the game's cursor follows the laser and the trigger clicks. | `menus.rs` |
 | Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <id>`, `PlaceInFront <ref> <metres>`, or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
@@ -33,7 +35,7 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 The game's models are converted once into `local_assets/oblivion` (never committed):
 
 ```
-cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/staffs meshes/lights meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters
 ```
 
 Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
@@ -46,7 +48,9 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Left stick click (sprint) | Run, when Always Run is off |
 | Right stick click, or its down flick, or ducking | Crouch/Sneak (kept in step with the game's sneaking) |
 | A (either hand) | Jump |
-| Trigger, empty hand | Activate (what the head looks at); held: Rest/Wait. The off hand, with a spell ready: charge it, let go (or touch, for a touch spell) to cast |
+| Trigger, empty hand | Activate (what the head looks at); held: Rest/Wait. The off hand, with a spell ready: a finger on it readies the spell (its art in the palm), pulling it charges it, letting go (or touching, for a touch spell) casts |
+| Trigger, holding an enchanted staff | Charge its enchantment at the tip; let go to cast it along the staff |
+| Grip at the right hip | Draw the torch (when one is equipped); let go there to hang it back up, anywhere else to drop it |
 | Off hand's B | Menu Mode (inventory, magic, map, journal); held: the Quick Menu (hotkeys) |
 | B on a menu, or the menu button | Escape (closes the menu; in the world, the pause menu) |
 | Laser + trigger on a menu | The game's cursor and click |

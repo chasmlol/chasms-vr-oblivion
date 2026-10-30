@@ -328,11 +328,15 @@ fn publish_overlays() {
 
 /// `ActorProcessManager`'s two lists of the game's temporary effects in the world (`tList`s,
 /// inline first nodes, 0x678D30 puts each in one): its spells' shaders on actors
-/// (`MagicShaderHitEffect`: the target +0x1C, the shader +0x34) among them.
+/// (`MagicShaderHitEffect`: the target +0x1C, its age +0x20, on what the actor holds +0x28, the
+/// shader +0x34) among them.
 const PROCESS_MANAGER: usize = 0x00B3_BD00;
 const TEMP_EFFECTS: [usize; 2] = [0x40, 0x48];
 const HIT_TARGET: usize = 0x1C;
 const HIT_AGE: usize = 0x20;
+/// Set on one that's on what the actor holds (its enchanted weapon), not on its body (seen: 1 for a
+/// weapon's enchantment, 0 for a healing spell on the player).
+const HIT_ON_ITEM: usize = 0x28;
 const HIT_SHADER: usize = 0x34;
 
 /// The game's spells' shaders on the player now (each `MagicShaderHitEffect` whose target is the
@@ -348,7 +352,9 @@ pub fn player_hit_shaders() -> Vec<(usize, usize, f32)> {
             guard += 1;
             let e = mem::deref(node);
             node = mem::deref(node + 4);
-            if e == 0 || crate::nodes::class(e) != "MagicShaderHitEffect" || mem::deref(e + HIT_TARGET) != player {
+            // (One on what the actor holds, its enchanted weapon's shimmer, isn't on its body: the
+            // weapon's own overlay draws that.)
+            if e == 0 || crate::nodes::class(e) != "MagicShaderHitEffect" || mem::deref(e + HIT_TARGET) != player || mem::at::<u8>(e + HIT_ON_ITEM) != Some(0) {
                 continue;
             }
             let shader = mem::deref(e + HIT_SHADER);
