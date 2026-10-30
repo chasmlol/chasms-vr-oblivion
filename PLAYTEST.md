@@ -153,6 +153,17 @@ otherwise).
    the cuff rigid on the forearm and the hand plate on the hand, sliding past the cuff's rim. In
    the preview the steel cuffs fold the same way (and likely the other plated gauntlets: glass,
    ebony, daedric, dwarven, orcish, mithril, elven); not changed yet.
+2. **The cuffs held, but the leather under the bracer didn't bend, and the rings at the elbows went
+   through the arm at the least bend.** The iron bracer is metal over the back of the forearm and
+   leather (the glove's) underneath with a strap band, one island; the couter is a plate round the
+   back of the elbow and the leather strap holding it on across the inside of the elbow, one island
+   too. Rigid, the strap was in the way of the forearm the moment the elbow bent. The game's own
+   textures say which is which (its specular mask too faintly to go by, the layout of the texture
+   exactly): the framework's marks choose a plate's corners by where its texture draws them
+   (`uv_within`), the leather's corners where it meets the plate going with the plate, and the
+   preview draws each model's textures with its triangles coloured by plate (`uv-<model>.png`) to
+   mark them from. Iron's bracers and couters are only their metal now, and the other sets are
+   being marked the same way.
 
 ## Not done
 
