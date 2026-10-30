@@ -73,6 +73,11 @@ mod win {
     const TRUE: f32 = 2.0;
     /// Room left of the card for a longer name than it was measured with (the HUD's pixels).
     const NAME_ROOM: f32 = 96.0;
+    /// How wide the card's part of the HUD is at least (of the HUD's width), from its right edge,
+    /// where its lines end (they're right-aligned): the same for every thing, so its lines stay
+    /// where they are as the thing changes or the red line comes and goes. Clear of the main HUD's
+    /// pieces (its left half: the bars and the compass).
+    const CARD_WIDTH: f32 = 0.34;
 
     /// The HUD reticle's `hudreticle_reticle` rect: its stealing red, and its activate icons.
     const RETICLE_RECT: usize = 0x00B3_B350;
@@ -111,6 +116,8 @@ mod win {
     static POCKET_HELD: AtomicUsize = AtomicUsize::new(0);
     static POCKET_FROM: AtomicUsize = AtomicUsize::new(0);
     static SHOWN: AtomicUsize = AtomicUsize::new(0);
+    /// The card's action line as it's to be: the icon and the word, or none ([`card_now`]).
+    static ACTION: Mutex<Option<(u32, usize)>> = Mutex::new(None);
 
     /// The card's thing: the world's thing in a hand, else a pocket's.
     fn held() -> usize {
@@ -209,13 +216,16 @@ mod win {
         // after the box is measured: "Gold (50)" was cut to "ld (50)". Room to the left for it;
         // what's there is the HUD's black, nothing.)
         let b = b?;
-        super::uv_of([b[0] - NAME_ROOM, b[1], b[2], b[3]], screen, 6.0)
+        let uv = super::uv_of([b[0] - NAME_ROOM, b[1], b[2], b[3]], screen, 6.0)?;
+        Some([uv[0].min(uv[2] - CARD_WIDTH).max(0.0), uv[1], uv[2], uv[3]])
     }
 
     unsafe extern "C" fn set_target(target: usize, a: u8, force: u8) -> u8 {
         let real: unsafe extern "C" fn(usize, u8, u8) -> u8 = unsafe { std::mem::transmute(REAL.load(Ordering::Acquire)) };
         let held = held();
-        unsafe { real(if held != 0 { held } else { target }, a, force) }
+        let shown = unsafe { real(if held != 0 { held } else { target }, a, force) };
+        crate::hooks::guard_void("hud info action", || card_now(target));
+        shown
     }
 
     /// The thing of the world's a hand has now (0: none): the card is its.
@@ -248,14 +258,28 @@ mod win {
         crime.then_some((icon, word))
     }
 
-    /// Before each picture: the card's action line shown as [`action`] says, or hidden, whenever the
-    /// game's tiles aren't so already.
+    /// The card now shows `target` (0: nothing, as it fades out): its action line decided with it, and
+    /// set in the same frame, so the card is never drawn without it first. A thing a hand has, as
+    /// [`action`] says; a thing the crosshair's on, none (the reticle's red is the game's own sign
+    /// there); nothing, the line as it was, fading out with the card it's on.
+    fn card_now(target: usize) {
+        if held() != 0 {
+            *ACTION.lock().unwrap() = action();
+        } else if target != 0 {
+            *ACTION.lock().unwrap() = None;
+        }
+        keep_action();
+    }
+
+    /// Before each picture (and as the card's thing changes): the card's action line shown as
+    /// [`card_now`] decided, or hidden, whenever the game's tiles aren't so already.
     pub fn keep_action() {
         let menu = mem::deref(mem::deref(HUD_INFO_MENU) + MENU_TILE);
         if menu == 0 {
             return;
         }
-        let Some((kind, word)) = action() else {
+        let action = *ACTION.lock().unwrap();
+        let Some((kind, word)) = action else {
             set_value(menu, USER2, FALSE);
             return;
         };
@@ -288,11 +312,17 @@ mod win {
             crate::hooks::guard_void("hud info", || unsafe {
                 real(refr, 0, 0);
             });
+            crate::hooks::guard_void("hud info action", || card_now(refr));
         }
     }
 
-    /// The card's place on the HUD, when it has moved since it was last told (for the layout).
+    /// The card's place on the HUD, when it has moved since it was last told (for the layout). Only
+    /// while it's a hand's thing's: what else it shows (the crosshair's thing, or nothing as it fades)
+    /// isn't over a hand, and the card over the hand, fading, keeps the place it had.
     pub fn moved() -> Option<[f32; 4]> {
+        if held() == 0 {
+            return None;
+        }
         let now = card_uv()?;
         let mut last = LAST.lock().unwrap();
         let far = last.is_none_or(|l| l.iter().zip(now).any(|(a, b)| (a - b).abs() > 0.01));

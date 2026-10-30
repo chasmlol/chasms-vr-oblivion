@@ -14,24 +14,24 @@ note. The inn's own patrons walk about further in. The research and the design a
 
 1. **Sneak** (right stick click, or duck). Pockets only exist while you sneak, and only on people
    within 3 m who are alive and not fighting: whom the game would let you pickpocket.
-2. **Find a pocket by touch.** Everyone has pockets where clothes have them: a trouser pocket at
-   the front of each hip, a back pocket on each side of the seat, a shirt pocket at the left of the
-   chest, and a bag on the back when they carry something big. From in front, lay your fingers on
-   the front of Bruce's hip or the left of his chest; from behind (his back's to you), on his seat.
-   Your hand stops on his body; touching it there is being in the pocket. You feel a soft brush going
-   in, then a tick for the thing your fingers are on. Move the hand slowly over it: every 4 cm you're
-   on the next thing, with another tick. Each kind of thing feels different: coins jingle (bright), a key clicks (sharp), glass rings (very short, high), paper
-   rasps, cloth or food is a dull push, something hard knocks. An empty pocket is one dull brush.
+2. **Find a pocket by touch.** Everything anyone carries is in their trouser pockets: one at the
+   front and one at the back of each hip. From in front, lay your fingers on the front of Bruce's
+   hip; from behind (his back's to you), on the back of it; from the side, on its side (the front
+   and the back pockets meet there). Your hand stops on his body; touching it there is being in the
+   pocket. You feel a soft brush going in, then a tick for the thing your fingers are on. Move the
+   hand slowly over it: every 4 cm you're on the next thing, with another tick. Each kind of thing
+   feels different: coins jingle (bright), a key clicks (sharp), glass rings (very short, high),
+   paper rasps, cloth or food is a dull push, something hard knocks. An empty pocket is one dull
+   brush.
    **You see what you're on:** the game's card of the thing under your fingers floats over your
    hand (its name, value and weight), changing as you move on to the next thing. Over the name, in
    the game's stealing red, is the reticle's red hand and the word **Pickpocket**.
-   His pockets:
-   - the right trouser pocket: the potion and the apples (potions, food, small things);
-   - the left trouser pocket: the key and the lockpicks (keys, lockpicks, gems);
+   His pockets (things go where they'd be kept, then are spread out: no pocket has more than a
+   quarter of them while another has fewer):
+   - the right front pocket: the apples and the potion;
+   - the left front pocket: the lockpicks and the key;
    - the right back pocket: all his gold (a purse);
-   - the left back pocket: nothing (rings, amulets, soul gems, sigil stones);
-   - the shirt pocket, at the left of his chest: the note (books, notes, scrolls);
-   - a bag on the back, only when someone carries something big (weapons, armour, clothes).
+   - the left back pocket: the note.
 3. **Take one.** Squeeze the grip: the thing (the game's own model) is in your hand, with the game's
    own card over it (its name, value and weight), still with the red hand and **Pickpocket**. It's
    still his while your hand is in the pocket: let go there and it's back, nothing tried.
@@ -61,9 +61,9 @@ note. The inn's own patrons walk about further in. The research and the design a
 9. **The patrons.** Walk in (sneaking) and try the people moving about. Their pockets hold what
    they carry but don't wear, as the game's pickpocketing lists it, and that's often nothing: an
    empty pocket is one dull brush and no card. In the round 3 run: Velus Hosidius had only 10 gold
-   (his right back pocket); Nilphas Omellian nothing at all; Audens Avidius two keys (left trouser
-   pocket), 31 gold (right back pocket) and a silver warhammer and clothes (a bag on his back).
-   Follow a walking one: the pockets move with them.
+   (his right back pocket); Nilphas Omellian nothing at all; Audens Avidius two keys, 31 gold, a
+   silver warhammer and clothes, spread over all four. Follow a walking one: the pockets move with
+   them.
 10. **Watch the sneak eye** (at your gaze; the flat game's crosshair is hidden in VR, its activate
     icons stay). While a hand is in the pocket of someone who sees you, you feel a slow heartbeat
     in that hand (a strong beat as they first notice you). Being seen doesn't change the per-item
@@ -107,7 +107,8 @@ With the emulated headset, from the logs and captures:
 Not checked:
 
 - Anything in the real headset: how the ticks, the brush and the heartbeat feel; whether 4 cm per
-  thing is right for a real hand; the trouser, back and shirt pockets (round 5) by hand.
+  thing is right for a real hand; the four trouser pockets (round 6) by hand; the card's steady
+  size and its red line coming and going with it (round 6).
 - The heartbeat itself (only the awareness values: 0, 0.5 noticed, 1 seen, read from the NPC's own
   detection list).
 - The game's success message and sound (the call is the menu's own, with its message flag).
@@ -131,17 +132,17 @@ Not checked:
   at once as a thing is taken out or planted; closed 0.75 s after the hands are away from them all.
   A quicker look is only feeling and the game has no part in it. Someone who caught the player
   before has no menu at all, only the game's refusal (`sNoPickPocketAgain`), so no second check.
-- **Pockets where clothes have them**, the same on everyone (Oblivion's clothes have no pockets of
-  their own), so some are reached from in front and some from behind (round 5: after round 4's two
-  hip pockets, the player asked for pockets in different spots again, like trouser pockets and a
-  shirt pocket). On the body's 17 cm capsule: the trouser pockets at the front of the hips (45
-  degrees round from the sides, at the pelvis), the back pockets on the seat (60 degrees round the
-  other way, 4 cm lower), each 11 cm round; the shirt pocket at the left of the chest, 9 cm round;
-  the bag at the small of the back, 11 cm round, only when there's something big. Shared out by kind
-  (`pocket_for`): keys, lockpicks and gems in the left trouser pocket; potions, food and small
-  things in the right; gold in the right back pocket; rings, amulets, soul gems and sigil stones in
-  the left; books, notes and scrolls in the shirt pocket; anything big in the bag. Twelve to a
-  pocket; more go in the next.
+- **Everything in the trouser pockets, front and back** (round 6; the rounds before tried belt
+  pouches with a purse, a chest pocket and a bag; then two pockets wrapping each hip; then trouser,
+  back and shirt pockets and a bag), the same on everyone (Oblivion's clothes have no pockets of
+  their own). On the body's 17 cm capsule at the pelvis: a front pocket 40 degrees round from each
+  hip's side towards the front, a back pocket 40 degrees round towards the back, each 12 cm round:
+  together the hip's surface from near the middle of the front round its side to near the middle of
+  the back, so from in front, behind or the side there's a pocket under the fingers. Things go where
+  they'd be kept (`pocket_for`: keys, lockpicks and gems at the left front; potions, food and small
+  things at the right front; gold at the right back; anything else at the left back), then are
+  spread out (`spread`): no pocket has more than a quarter of them, rounded up, while another has
+  fewer.
 - **Planting a thing lying about** (a thing to take, not yet yours) first takes it with the game's
   own pick-up, then plants it, if it's weightless; otherwise it falls out of the pocket.
 - **Templates and a card reference.** Each kind of thing is a template object drawn from the game's
@@ -174,6 +175,16 @@ Not checked:
   height over the ball round the thing (a plate held flat counted as 15 cm tall). Now its bottom
   edge is 1.5 cm over the top of the thing's box as it's turned now, the game's card as the
   runtime's.
+- **The card keeps its size, and its red line comes and goes with it** (round 6: first "Gold"
+  alone, then the red line; going, "Gold" big and cut off). The log had the card's part of the HUD
+  31% of its width with the red line, 21% without it and 11% as it faded, each stretched to the
+  same 20 cm: the text tripled as the line went, and the part lagged what the game drew. Now:
+  - the red line is decided as the card's thing changes, in the same frame, not before the next
+    picture;
+  - it stays as the card fades out with nothing in a hand (it's on the card that's going);
+  - the card's part is at least 34% of the HUD's width from its right edge (its lines are
+    right-aligned), and only changes while a hand's thing is on it;
+  - the runtime draws it at one scale (the whole HUD would be 60 cm), not stretched to a width.
 
 ## Not done, known issues
 
