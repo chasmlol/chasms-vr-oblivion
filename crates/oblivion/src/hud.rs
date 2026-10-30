@@ -368,11 +368,17 @@ mod win {
     fn book(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees) {
         let Some((menu, refr)) = crate::books::open() else { return };
         let scroll = crate::books::is_scroll(menu);
-        let (object, flags) = match crate::books::held_book() {
-            Some(id) => (id, HELD_FACE | HELD_PAGES),
-            None => (0, HELD_SHEET | HELD_PAGES),
+        // (On the book in the hand; a book read where it lies comes to the off hand and opens there;
+        // one from the pack is held in the off hand as a sheet.)
+        let (object, flags) = match (crate::books::held_book(), crate::books::lying_book()) {
+            (Some(id), _) => (id, HELD_FACE | HELD_PAGES),
+            (None, Some(id)) => (id, HELD_FACE | HELD_PAGES | HELD_BRING),
+            _ => (0, HELD_SHEET | HELD_PAGES),
         };
-        let held = HudHeld { object, hand: HELD_OFF_HAND, flags, fold: if scroll { 0.0 } else { BOOK_FOLD } };
+        // (Its pages centred on its model, not on its collision box, which can be off it.)
+        let model = (object != 0).then(|| crate::items::visual_centre(refr)).flatten();
+        let flags = flags | if model.is_some() { HELD_CENTRE } else { 0 };
+        let held = HudHeld { object, hand: HELD_OFF_HAND, flags, fold: if scroll { 0.0 } else { BOOK_FOLD }, centre: model.unwrap_or_default().to_array(), _pad: 0 };
         let id = MENU_BOOK ^ refr as u32 ^ object.rotate_left(8) ^ if scroll { 0x5C } else { 0 };
         let group = HudGroup { id, ..Default::default() };
         let tree = trees.get(MENU_BOOK);
@@ -408,7 +414,7 @@ mod win {
         let mut said = SAID.lock().unwrap();
         if *said != id {
             *said = id;
-            tracing::info!("hud: {} being read, {}", if scroll { "a note" } else { "a book" }, if object != 0 { "on the book in the hand" } else { "in the off hand" });
+            tracing::info!("hud: {} being read, {} (its model's middle {model:.3?})", if scroll { "a note" } else { "a book" }, if object != 0 { "on the book in the hand" } else { "in the off hand" });
         }
     }
 

@@ -246,6 +246,11 @@ mod game {
     const SET_POS: usize = 0x004D_8A30;
     const RESET_COLLISION: usize = 0x0089_7A20;
     const UPDATE_NODE: usize = 0x0070_7370;
+    /// `TESObjectREFR::Activate` (thiscall: refr, by whom, 0, 0, 1): what the player's Activate does,
+    /// the reference's own script's `OnActivate` first (the script command `Activate` calls it; a
+    /// line of script can't name a reference that isn't persistent, as most things lying about
+    /// aren't, so it's called directly).
+    const ACTIVATE_REF: usize = 0x004D_D260;
     /// `Actor` virtual 0xB3: takes a reference into the inventory (thiscall: refr, count, 0); the
     /// game's items call it when the player activates them.
     const VT_PICK_UP: usize = 0xB3 * 4;
@@ -385,13 +390,24 @@ mod game {
         Some(Vec3::new(v[0], v[1], v[2]).length() * crate::collision::HAVOK_SCALE / camera::UNITS_PER_METER)
     }
 
+    /// The player activates a reference, as the player's own Activate does (its script first).
+    pub fn activate(refr: usize) -> bool {
+        type Activate = unsafe extern "thiscall" fn(usize, usize, u32, u32, u32) -> u8;
+        let player = engine::player();
+        if player == 0 || refr == 0 {
+            return false;
+        }
+        crate::hooks::guard("activate", false, || unsafe { std::mem::transmute::<usize, Activate>(ACTIVATE_REF)(refr, player, 0, 0, 1) != 0 })
+    }
+
     /// The player takes it, as activating it does (the game's own pick-up: stealing, the message,
     /// the sound); one with a script is activated by the player, its script deciding.
     fn take(refr: usize, id: u32) -> bool {
+        let _ = id;
         let base = mem::deref(refr + REFR_BASE);
         let scriptable = cast(base, RTTI_SCRIPTABLE);
         if scriptable != 0 && mem::deref(scriptable + 4) != 0 {
-            return crate::console::run_script(&format!("{id:08X}.Activate player 1"));
+            return activate(refr);
         }
         type PickUp = unsafe extern "thiscall" fn(usize, usize, i32, i32) -> i32;
         let player = engine::player();
@@ -525,6 +541,22 @@ mod game {
     /// What the hands hold now.
     pub fn held() -> Vec<Held> {
         with_state(|s| s.held.clone())
+    }
+
+    /// The middle of what's seen of a thing (its model's bound) in its own space (its object's: the
+    /// runtime's axes, metres), by its reference.
+    pub fn visual_centre(refr: usize) -> Option<Vec3> {
+        let node = mem::deref(refr + REFR_NODE);
+        // (As its collision is put in its own space: world size, its turn undone.)
+        let (m, t, _) = world_of(node)?;
+        let b: [f32; 4] = mem::at(node + 0x20)?;
+        let c = camera::basis().point_from_game(m.transpose() * (Vec3::new(b[0], b[1], b[2]) - t));
+        (c.is_finite() && c.length() < 1.0).then_some(c)
+    }
+
+    /// The object of a thing lying about that's offered to the hands, by its reference.
+    pub fn offered(refr: usize) -> Option<u32> {
+        with_state(|s| s.items.values().find(|i| i.refr == refr && i.taken_at.is_none()).map(|i| i.desc.id))
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);

@@ -64,8 +64,9 @@ pub fn select_spell(_id: u32) -> bool {
 
 /// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <hex id>` selects a spell,
 /// `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in front of the
-/// player (and that far over their feet), facing them (tests), anything else is compiled and run as
-/// a line of script. True if it ran.
+/// player (and that far over their feet), facing them (tests), `ActivateRef <ref hex id>` has the
+/// player activate a reference (tests: a book on a shelf read), anything else is compiled and run
+/// as a line of script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
@@ -79,7 +80,24 @@ pub fn run(line: &str) -> bool {
         let up = it.next().and_then(|u| u.parse::<f32>().ok()).unwrap_or(0.0);
         return place_in_front(r, m, up);
     }
+    if let Some(id) = line.strip_prefix("ActivateRef ") {
+        return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(activate_ref);
+    }
     run_script(line)
+}
+
+/// The player activates the reference with form id `id`, as their own Activate does (a line of
+/// script can't name a reference that isn't persistent: most things lying about).
+#[cfg(target_arch = "x86")]
+fn activate_ref(id: u32) -> bool {
+    type Lookup = unsafe extern "C" fn(u32) -> usize;
+    let refr = unsafe { std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(id) };
+    refr != 0 && crate::items::activate(refr)
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn activate_ref(_id: u32) -> bool {
+    false
 }
 
 /// Puts the reference `r` (its hex form id) `metres` in front of the player, `up` over their feet

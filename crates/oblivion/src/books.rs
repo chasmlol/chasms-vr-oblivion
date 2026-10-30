@@ -1,8 +1,8 @@
 //! Books and notes read in the hands (`docs/research/books.md`): a book lying about, taken in one
 //! hand ([`crate::items`]), is opened by the other hand's grip on it ([`OBJF_OPENS`]), and Oblivion
-//! reads it exactly as activating it would (`<ref>.Activate player 1`): its book menu with the
-//! book's text laid out in pages by the game, its "Take" (with its stealing), a skill book's skill
-//! rise and message, a note's script, "you can't read in combat". The book menu then lies on the
+//! reads it exactly as activating it would (the reference's own `Activate` by the player): its
+//! book menu with the book's text laid out in pages by the game, its "Take" (with its stealing), a
+//! skill book's skill rise and message, a note's script, "you can't read in combat". The book menu then lies on the
 //! book in the hand ([`crate::hud`]: `ANCHOR_HELD`), its pages turned by the other hand (the game's
 //! own page turn, [`crate::input`]: `PageNext`, `PagePrev`).
 //!
@@ -57,6 +57,13 @@ pub fn is_scroll(menu: usize) -> bool {
 pub fn held_book() -> Option<u32> {
     let (_, refr) = open()?;
     (refr != 0).then(|| crate::items::held().into_iter().find(|h| h.refr == refr).map(|h| h.id)).flatten()
+}
+
+/// The thing (the runtime's object) the book menu is reading where it lies (on a shelf, activated
+/// by looking at it), if it's one the hands can take.
+pub fn lying_book() -> Option<u32> {
+    let (_, refr) = open()?;
+    (refr != 0).then(|| crate::items::offered(refr)).flatten()
 }
 
 /// Shuts the book with the game's own Exit.
@@ -121,7 +128,7 @@ pub fn frame() {
                     let id = mem::at::<u32>(h.refr + FORM_ID).unwrap_or(h.id);
                     let base = mem::deref(h.refr + REFR_BASE);
                     s.read = Some((base, mem::at::<u8>(base + BOOK_SKILL).unwrap_or(0xFF)));
-                    let ok = crate::console::run_script(&format!("{id:08X}.Activate player 1"));
+                    let ok = crate::items::activate(h.refr);
                     tracing::info!("books: opened by the other hand ({id:08X}): {}", if ok { "read" } else { "not read" });
                 }
                 _ => {}
