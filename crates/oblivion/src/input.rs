@@ -186,8 +186,9 @@ impl Bridge {
         if long_menu {
             self.pulses.push((self.binding("Quick Menu"), now + PULSE));
         }
-        // The laser's trigger on the game's menus: the left mouse button.
-        if it.flags & rustvr_protocol::INT_CURSOR_DOWN != 0 {
+        // The laser's trigger on the game's menus: the left mouse button. (Out of them a fingertip on
+        // a book's pages is the book's, `crate::books`: the button would swing.)
+        if it.flags & rustvr_protocol::INT_CURSOR_DOWN != 0 && it.flags & rustvr_protocol::INT_MENU_MODE != 0 {
             v.buttons |= 1;
         }
         // Scrolling a menu: the mouse wheel, a notch at a time as the stick's rate adds up.
@@ -200,16 +201,6 @@ impl Bridge {
             v.wheel = notches as i32 * WHEEL_NOTCH;
         } else {
             self.wheel = 0.0;
-        }
-        // A page turned by hand: a notch of the wheel over the book, the game's own page turn (its
-        // wheel turns a book's pages, onwards as it turns down) and its sound.
-        if it.flags & rustvr_protocol::INT_MENU_MODE != 0 {
-            if pressed(&counts, Action::PageNext) {
-                v.wheel -= WHEEL_NOTCH;
-            }
-            if pressed(&counts, Action::PagePrev) {
-                v.wheel += WHEEL_NOTCH;
-            }
         }
         // B on a menu in the world: Menu Mode, which closes it (a book shuts itself).
         if game.tab_closes && !game.reading && pressed(&counts, Action::MenuBack) {

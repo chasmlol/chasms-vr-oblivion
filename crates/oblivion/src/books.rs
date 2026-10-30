@@ -4,25 +4,31 @@
 //! book's text laid out in pages by the game, its "Take" (with its stealing), a skill book's skill
 //! rise and message, a note's script, "you can't read in combat". The book menu then floats over the
 //! book in the hand, turned to the eyes ([`crate::hud`]: `ANCHOR_HELD`, `HELD_FACING`), its pages
-//! turned by a flick of the other hand (the game's own page turn, [`crate::input`]: `PageNext`,
-//! `PagePrev`).
+//! turned by the other hand's fingertip swiped across them (`PageNext`, `PagePrev`), its buttons
+//! (Take, Exit, the page turns) pressed by that fingertip.
 //!
-//! It's read once while it's in the hands: shut by the game's own Exit (`HandleClick(31)`), with B,
-//! or refused by the game, it stays shut until it's been let go of and taken again. Let go of (or
-//! taken from the hand) while it's open, it's shut too. A magic scroll isn't read: the game takes
-//! one that's activated rather than reading it, so it would go straight to the pack.
+//! A book is held as anything else is: the game plays on (its world, the player's walking and
+//! fighting, the HUD), and the book's pages just float on it. Oblivion goes into its menus (its world
+//! stopped, the player's controls the menu's, the HUD gone) when a menu goes on the interface's menu
+//! stack (`InterfaceManager` +0xE0; 0x57D640 pushes one, and the first sets the interface's mode,
+//! +8, from play, 1, to 3). A book opened with no menu up isn't pushed ([`install`]), so the game
+//! never leaves play; and the game's cursor and mouse are then its play (the left button swings), so
+//! its pages are turned and its buttons pressed on the menu itself: the step its own wheel takes
+//! (0x595DA0), its own `HandleClick`.
 //!
-//! The game goes on while a book is read in the hands ([`install`]): Oblivion stops its world while
-//! any menu is open, and a book held open is a menu. The player walks meanwhile
-//! ([`world_goes_on`]).
+//! It's read once while it's in the hands: shut by the game's own Exit (`HandleClick(31)`), or
+//! refused by the game, it stays shut until it's been let go of and taken again. Let go of (or taken
+//! from the hand) while it's open, it's shut too. A magic scroll isn't read: the game takes one
+//! that's activated rather than reading it, so it would go straight to the pack. One read from the
+//! pack is over the inventory, a menu, and is the game's menu as ever (B shuts it).
 //!
 //! The book menu (xOBSE's `GameMenus.h`, `BookMenu`, menu type 0x402): the reference read at +0x30
 //! (0 from the inventory), the book at +0x34 (`TESObjectBOOK`: its flags +0x88, 1 a scroll).
 //! `Menu::HandleClick(id, tile)` is the menu's vtable slot 3.
 
 use crate::{mem, tiles};
-use rustvr_protocol::Action;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use rustvr_protocol::{Action, INT_CURSOR, INT_CURSOR_DOWN};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub const MENU_BOOK: u32 = 0x402;
 const BOOK_REF: usize = 0x30;
@@ -36,7 +42,27 @@ const BOOK_ENCHANTMENT: usize = 0x64;
 /// A reference's base form.
 const REFR_BASE: usize = 0x1C;
 const VT_HANDLE_CLICK: usize = 3 * 4;
+/// The book's buttons' ids (`book_menu.xml`, a book's and a scroll's alike).
 const EXIT: u32 = 31;
+const TAKE: u32 = 32;
+/// A menu's top tile (`Menu` +4), and the type it put on the interface's menu stack, kept for its
+/// close to take off it (+0x14, set as it opens).
+const MENU_TILE: usize = 0x4;
+const MENU_STACKED: usize = 0x14;
+/// The book menu's values (xOBSE's `BookMenu`: user6, user8, user9): its page step (two a turn, a
+/// page each side), its page-turn sound, and its page (a scroll: where it's scrolled to by).
+const PAGE_STEP: u16 = 4020;
+const TURN_SOUND: u16 = 4022;
+const PAGE: u16 = 4023;
+/// `Tile::UpdateFloat` (thiscall: tile, value, number), and a menu sound by its number (cdecl; 6,
+/// "ITMBookPageTurn").
+const UPDATE_FLOAT: usize = 0x0058_CEB0;
+const MENU_SOUND: usize = 0x0057_DE50;
+/// `InterfaceManager::GetSingleton` (cdecl `(0, 1)`), its menu stack (the open menus' types, up to
+/// ten, a 0 after the last) and its push (thiscall: the interface, the type).
+const INTERFACE: usize = 0x0058_2160;
+const MENU_STACK: usize = 0xE0;
+const PUSH_MENU: usize = 0x0057_D640;
 /// `TESForm` form id.
 const FORM_ID: usize = 0xC;
 
@@ -82,13 +108,83 @@ static HELD_OPEN: AtomicUsize = AtomicUsize::new(0);
 
 /// Shuts the book with the game's own Exit.
 fn shut(menu: usize) {
+    click(menu, EXIT);
+}
+
+/// The book menu's own handling of one of its buttons (`Menu::HandleClick`): Exit, Take.
+fn click(menu: usize, id: u32) {
     let f = mem::deref(mem::deref(menu) + VT_HANDLE_CLICK);
     if !(0x0040_1000..0x00A0_0000).contains(&f) {
         return;
     }
     type Click = unsafe extern "thiscall" fn(usize, u32, usize);
-    crate::hooks::guard_void("book exit", || unsafe { std::mem::transmute::<usize, Click>(f)(menu, EXIT, 0) });
+    crate::hooks::guard_void("book button", || unsafe { std::mem::transmute::<usize, Click>(f)(menu, id, 0) });
 }
+
+fn update_float(tile: usize, id: u16, v: f32) {
+    type Update = unsafe extern "thiscall" fn(usize, u32, f32);
+    crate::hooks::guard_void("book value", || unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(tile, id as u32, v) });
+}
+
+/// Turns the book's page, onwards or back, as its own wheel does (0x595DA0): a book's page step by
+/// two, both its pages, with its page-turn sound if the page moved; a scroll scrolled a notch.
+fn turn(menu: usize, onwards: bool) {
+    let tile = mem::deref(menu + MENU_TILE);
+    if tile == 0 {
+        return;
+    }
+    if is_scroll(menu) {
+        update_float(tile, PAGE, if onwards { 1.0 } else { -1.0 });
+        update_float(tile, PAGE, 0.0);
+        return;
+    }
+    let before = tiles::value(tile, PAGE);
+    update_float(tile, PAGE_STEP, if onwards { 2.0 } else { -2.0 });
+    update_float(tile, PAGE_STEP, 0.0);
+    if tiles::value(tile, PAGE) != before
+        && let Some(sound) = tiles::value(tile, TURN_SOUND).filter(|s| *s >= 1.0)
+    {
+        crate::hooks::guard_void("book page sound", || unsafe { std::mem::transmute::<usize, unsafe extern "C" fn(i32) -> i32>(MENU_SOUND)(sound as i32); });
+    }
+}
+
+/// A button of the book's, by what it does.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Button {
+    Take,
+    Exit,
+    Prev,
+    Next,
+}
+
+/// The book's button under a point of the HUD texture (0..1 across and down), as the game laid it
+/// out (a scroll's arrows turn it as a book's Prev and Next do).
+fn button_at(uv: [f32; 2]) -> Option<Button> {
+    let (w, h) = tiles::screen()?;
+    let (x, y) = (uv[0] * w, uv[1] * h);
+    let tree = tiles::Tree::read(tiles::menu_tile(MENU_BOOK));
+    [
+        ("book_take", Button::Take),
+        ("book_scroll_take", Button::Take),
+        ("book_exit", Button::Exit),
+        ("book_scroll_exit", Button::Exit),
+        ("book_prev", Button::Prev),
+        ("book_scroll_up", Button::Prev),
+        ("book_next", Button::Next),
+        ("book_scroll_down", Button::Next),
+    ]
+    .into_iter()
+    .find(|(name, _)| tree.find(name).is_some_and(|t| t.shown && x >= t.rect[0] && x <= t.rect[2] && y >= t.rect[1] && y <= t.rect[3]))
+    .map(|(_, b)| b)
+}
+
+/// The interface's menu stack has a menu of this type.
+fn stacked(kind: u32) -> bool {
+    type Interface = unsafe extern "C" fn(u8, u8) -> usize;
+    let ui = unsafe { std::mem::transmute::<usize, Interface>(INTERFACE)(0, 1) };
+    ui != 0 && (0..10).map(|k| mem::deref(ui + MENU_STACK + 4 * k) as u32).take_while(|t| *t != 0).any(|t| t == kind)
+}
+
 
 #[derive(Default)]
 struct State {
@@ -102,18 +198,17 @@ struct State {
     /// A book just read: its form and the skill it taught before (for the log: the game's own skill
     /// rise is that it teaches nothing now).
     read: Option<(usize, u8)>,
+    /// The page turns' presses as last seen (onwards, back).
+    pages: Option<(u16, u16)>,
+    /// A fingertip pressing the book in play: the button it went down on.
+    pressing: Option<Option<Button>>,
 }
 
 static STATE: std::sync::Mutex<Option<State>> = std::sync::Mutex::new(None);
 
 /// Once a game frame, where the game's scripts run: a book just taken in a hand read, one let go of
-/// while it's open shut, or one shut with B; then whether the world goes on under it this frame.
+/// while it's open shut, one shut with B; its pages turned and its buttons pressed.
 pub fn frame() {
-    step();
-    READING_IN_HAND.store(reading() && held_book().is_some(), Ordering::Relaxed);
-}
-
-fn step() {
     let mut s = STATE.lock().unwrap();
     let s = s.get_or_insert_with(State::default);
     let held = crate::items::held();
@@ -132,6 +227,54 @@ fn step() {
         tracing::info!("books: shut with B");
         shut(m);
         return;
+    }
+    if let Some((m, _)) = book {
+        let play = !stacked(MENU_BOOK);
+        if play {
+            // (Off the stack: its close mustn't take another menu off it.)
+            if mem::is_readable((m + MENU_STACKED) as *const u8, 4) {
+                unsafe { ((m + MENU_STACKED) as *mut u32).write(0) };
+            }
+        }
+        let it = crate::link::last().map(|l| l.frame.intents);
+        // Its pages turned by the hand (the runtime's page presses): the game's own step.
+        let pages = it.map(|i| (i.presses[Action::PageNext as usize], i.presses[Action::PagePrev as usize]));
+        if let (Some((n0, p0)), Some((n, p))) = (s.pages, pages) {
+            if n != n0 {
+                turn(m, true);
+            }
+            if p != p0 {
+                turn(m, false);
+            }
+        }
+        s.pages = pages;
+        // A fingertip on its buttons, in play (in the menus the game's own cursor and click are
+        // them): what it went down on, pressed when it comes off still on it.
+        if let (true, Some(i)) = (play, it) {
+            let on = i.flags & INT_CURSOR != 0;
+            let down = on && i.flags & INT_CURSOR_DOWN != 0;
+            match (s.pressing, down) {
+                (None, true) => s.pressing = Some(button_at(i.cursor_uv)),
+                (Some(was), false) => {
+                    s.pressing = None;
+                    let now = if on { button_at(i.cursor_uv) } else { None };
+                    if let Some(b) = was.filter(|b| Some(*b) == now) {
+                        tracing::info!("books: {b:?} pressed by a finger");
+                        match b {
+                            Button::Prev => turn(m, false),
+                            Button::Next => turn(m, true),
+                            // (Shut by it: what's left of this frame is for an open book.)
+                            Button::Take => return click(m, TAKE),
+                            Button::Exit => return click(m, EXIT),
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    } else {
+        s.pages = None;
+        s.pressing = None;
     }
     // Read once while it's in the hands (one brought to the hand by looking at it was read where it
     // lay).
@@ -181,63 +324,28 @@ fn step() {
     }
 }
 
-/// The book being read is in a hand and its menu is on top (as [`frame`] last found, before the
-/// game's frame runs: the checks below are asked in the middle of it).
-static READING_IN_HAND: AtomicBool = AtomicBool::new(false);
+static REAL_PUSH: AtomicUsize = AtomicUsize::new(0);
 
-/// The game goes on under the book being read (it's in a hand): the player walks as with no menu
-/// open (`GS_MENU_WALKS`), the stick's step taken by the player's own update ([`crate::movement`]),
-/// which goes on with the world.
-pub fn world_goes_on() -> bool {
-    READING_IN_HAND.load(Ordering::Relaxed)
-}
-
-/// `IsMenuMode` (cdecl: the interface's cursor is out, `InterfaceManager` +0x1C, and its mode, +8,
-/// isn't 1).
-const IS_MENU_MODE: usize = 0x0057_8F60;
-/// Where the world's update asks it, each a 5-byte call: the game's frame (0x40D800) before each
-/// part of the world's update (the sound's pause, the actors' AI and processing, the player's own
-/// update and the cell grid round them, the sky and the time of day, Havok's step), and the world's
-/// seconds for the frame (0x405290, 0 while a menu is open), which all of it goes by.
-const WORLD_MENU_CHECKS: [usize; 15] = [
-    0x0040_D809,
-    0x0040_D817,
-    0x0040_D9C6,
-    0x0040_D9D4,
-    0x0040_DA78,
-    0x0040_DB5B,
-    0x0040_DBAB,
-    0x0040_DBFB,
-    0x0040_DC61,
-    0x0040_DD5F,
-    0x0040_DD6E,
-    0x0040_DE3F,
-    0x0040_DE76,
-    0x0040_DEA6,
-    0x0040_5297,
-];
-
-/// The world's own question, "is a menu open?": not while a book is read in the hands, so the game
-/// goes on as it does with no menu (time, the actors, the weather, the physics, the sounds). Every
-/// other asker still sees the menu: its cursor and clicks are the book's, the player's Activate stays
-/// off (the hand on the pages isn't activating), scripts run their menu-mode blocks.
+/// The interface's push of a menu onto its stack: a book opened with no menu up (taken in the hand,
+/// or activated where it lies) isn't pushed, so the game stays in play under it. In VR only: on
+/// the flat screen a book is the game's menu as ever.
 #[cfg(target_arch = "x86")]
-extern "C" fn world_menu_mode() -> u8 {
-    let menu = unsafe { std::mem::transmute::<usize, unsafe extern "C" fn() -> u8>(IS_MENU_MODE)() };
-    if menu != 0 && READING_IN_HAND.load(Ordering::Relaxed) { 0 } else { menu }
+unsafe extern "thiscall" fn push_menu(ui: usize, kind: u32) -> i32 {
+    let real: unsafe extern "thiscall" fn(usize, u32) -> i32 = unsafe { std::mem::transmute(REAL_PUSH.load(Ordering::Acquire)) };
+    if kind == MENU_BOOK && mem::deref(ui + MENU_STACK) == 0 && crate::link::last().is_some_and(|s| s.view.is_some()) {
+        static SAID: std::sync::Once = std::sync::Once::new();
+        SAID.call_once(|| tracing::info!("books: a book opened in play stays off the menu stack: the game plays on under it"));
+        return 0;
+    }
+    unsafe { real(ui, kind) }
 }
 
-/// Once: the world's checks ask [`world_menu_mode`] (each only if it's the call the build had).
+/// Once: books opened in play stay off the menu stack ([`push_menu`]).
 #[cfg(target_arch = "x86")]
 pub fn install() {
-    let ours = world_menu_mode as *const () as usize;
-    let mut done = 0;
-    for at in WORLD_MENU_CHECKS {
-        let real = (IS_MENU_MODE as i32).wrapping_sub(at as i32 + 5).to_le_bytes();
-        let rel = (ours as i32).wrapping_sub(at as i32 + 5).to_le_bytes();
-        done += mem::patch_code(at, &[0xE8, real[0], real[1], real[2], real[3]], &[0xE8, rel[0], rel[1], rel[2], rel[3]]) as u32;
+    if crate::hooks::install_into(PUSH_MENU as *const (), push_menu as *const (), "InterfaceManager's menu push", &REAL_PUSH) {
+        tracing::info!("books: a book is read as the game plays on");
     }
-    tracing::info!("books: the world goes on while a book is read in the hands ({done} of {} of its menu checks)", WORLD_MENU_CHECKS.len());
 }
 
 #[cfg(not(target_arch = "x86"))]

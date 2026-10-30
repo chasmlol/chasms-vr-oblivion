@@ -82,8 +82,9 @@ pub fn before_update() {
         }
         log_movement_toggles();
         trace_movement(mv);
-        // The laser on the game's menus moves the game's cursor.
-        if s.frame.intents.flags & rustvr_protocol::INT_CURSOR != 0 {
+        // The laser on the game's menus moves the game's cursor (out of them a fingertip on a book's
+        // pages is the book's, `crate::books`).
+        if s.frame.intents.flags & rustvr_protocol::INT_CURSOR != 0 && s.frame.intents.flags & rustvr_protocol::INT_MENU_MODE != 0 {
             crate::menus::point(s.frame.intents.cursor_uv);
         }
         if let Some(view) = s.view {

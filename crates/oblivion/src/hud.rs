@@ -556,7 +556,15 @@ mod win {
         static LOOKED_AT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         if !crate::menus::menu_mode() {
             LOOKED_AT.store(mem::deref(mem::deref(HUD_INFO_MENU) + CROSSHAIR_REF), std::sync::atomic::Ordering::Relaxed);
-            hud(&mut l, screen, &mut trees);
+            // A book read as the game plays on (`crate::books`): its pages held over it as ever, and
+            // the HUD's pieces it covers in the game's picture of the HUD (it's drawn over them)
+            // left out until it's shut.
+            let covered = crate::books::open().and_then(|_| piece_box(trees.get(MENU_BOOK), &Piece::of(&[From::All], false)));
+            hud(&mut l, screen, &mut trees, covered);
+            if covered.is_some() {
+                book(&mut l, screen, &mut trees);
+                solid(trees.get(MENU_BOOK));
+            }
             return l;
         }
         // Testing (`RUSTVR_OBLIVION_DUMP_TILES=1`): each menu's tiles into the log, once, for cutting
@@ -657,10 +665,12 @@ mod win {
         l
     }
 
-    /// The HUD's pieces (out of menus): see the module's table.
-    fn hud(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees) {
+    /// The HUD's pieces (out of menus): see the module's table. None of the ones under `covered` (a
+    /// book's area, which is drawn over them).
+    fn hud(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees, covered: Option<[f32; 4]>) {
+        let under = |b: [f32; 4]| covered.is_some_and(|c| b[0] < c[2] && b[2] > c[0] && b[1] < c[3] && b[3] > c[1]);
         let piece = |l: &mut HudLayout, trees: &mut Trees, role: u32, menu: u32, from: &'static [From]| -> Option<[f32; 4]> {
-            let b = piece_box(trees.get(menu), &Piece::of(from, false))?;
+            let b = piece_box(trees.get(menu), &Piece::of(from, false)).filter(|b| !under(*b))?;
             l.push(HudElement::new(role, tiles::uv_of(b, screen, MARGIN)?));
             Some(b)
         };
@@ -682,12 +692,12 @@ mod win {
         // looked at; its crosshair is hidden, as the hands aim), and the card of what it's on under it.
         let (w, h) = screen;
         let offset = |b: [f32; 4]| [((b[0] + b[2]) * 0.5 - w * 0.5) / h, -((b[1] + b[3]) * 0.5 - h * 0.5) / h, 0.0];
-        let reticle = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_reticle"), From::Drawn("hudreticle_sneak")], false));
+        let reticle = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_reticle"), From::Drawn("hudreticle_sneak")], false)).filter(|b| !under(*b));
         if let Some((b, uv)) = reticle.and_then(|b| Some((b, tiles::uv_of(b, screen, MARGIN)?))) {
             l.push(HudElement { role: HUD_GAZE, uv, offset: offset(b), ..Default::default() });
         }
         let crosshair = mem::deref(mem::deref(HUD_INFO_MENU) + CROSSHAIR_REF);
-        if let Some(uv) = crate::hud_info::card_uv() {
+        if let Some(uv) = crate::hud_info::card_uv().filter(|uv| !under([uv[0] * w, uv[1] * h, uv[2] * w, uv[3] * h])) {
             if crate::hud_info::holding() {
                 // (Over the thing in a hand.)
                 l.push(HudElement::new(HUD_HELD, uv));
@@ -698,7 +708,7 @@ mod win {
             }
         }
         // A foe's health over the foe (what the crosshair is on), or at gaze with nobody there.
-        if let Some(b) = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_enemy_health")], false))
+        if let Some(b) = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_enemy_health")], false)).filter(|b| !under(*b))
             && let Some(uv) = tiles::uv_of(b, screen, MARGIN)
         {
             match (crosshair != 0 && is_actor(crosshair)).then(|| head(crosshair)).flatten() {

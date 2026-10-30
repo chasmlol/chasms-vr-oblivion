@@ -82,10 +82,6 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     });
     let mut gs: GameState = bytemuck::Zeroable::zeroed();
     gs.flags = GS_PLAYER_RIG | if view.is_some() { GS_IN_GAME } else { 0 } | if g.menu { GS_MENU } else { 0 };
-    // (A book read in the hands is a menu the game goes on under: the player walks.)
-    if g.menu && crate::books::world_goes_on() {
-        gs.flags |= GS_MENU_WALKS;
-    }
     // (The runtime keeps its crouch in step with the game's sneaking.)
     if view.is_some() && crate::player::sneaking() {
         gs.flags |= GS_CROUCHED;
