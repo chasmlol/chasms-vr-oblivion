@@ -1,12 +1,13 @@
 # Playtest: talking to people out loud
 
-Save: rustvr-city
+Save: rustvr-voice
 
 `playtest.bat` in this worktree (not committed: double-click it in Explorer) puts away any game left
 running, starts the voice servers if they aren't up (speech to text and Breeze, waiting for both:
 Breeze's first start takes about 4 minutes), turns RustVR's Voice setting on, then boots this build
-into **rustvr-city** (which is at Odiil Farm, outside the city) and moves you with the game's own
-`coc` into the Imperial City's **Market District** at noon, full of people. A key in the .bat's
+into **rustvr-voice**: The Merchants Inn in the Imperial City's Market District, with people about
+(a copy of the pickpocket feature's `rustvr-pocket`; `rustvr-city` is at Odiil Farm, outside the
+city). The market is out of the inn's door. A key in the .bat's
 window closes the game and keeps the runtime's and the voice plugin's logs in
 `<builds>\voice\playtest-<n>`.
 
