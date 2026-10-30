@@ -122,6 +122,8 @@ weapon's damagers over the picture.
 - **A clean cut follows through** (the body stops a blunt hit, a glancing one, a slow one).
 - **Melee weapons turn by their inertia about the hand** (a long or top-heavy one slowly); the
   arm's torque (`ARM_TORQUE`) is set so a one-handed sword turns as everything held always has.
+- **The flat game's crosshair is hidden** (riding's `reticle.rs`, cherry-picked): the hands aim in
+  VR, and a dot fixed in the middle of the view is only in the way. The activate icons stay.
 - **A free grab of a weapon's handle moves nothing** (the hand closes where it is); drawing from a
   holster still puts it in the hand the rigged way. A rig test that expected the old snap was made to
   let the sword settle first.
