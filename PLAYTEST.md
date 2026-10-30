@@ -40,7 +40,11 @@ The research and the design are in `docs/research/archery.md`.
    - You feel a tick in both hands every centimetre, stronger as the draw grows.
    - Full draw is the bow's own, or a little less if your arms are shorter: about 92% of your arm,
      drawn to the chin.
-   - At full draw the string stops, and a low strain pulses now and then.
+   - At full draw a low strain pulses now and then. Keep pulling and the string still comes back,
+     but stiffly: half as far as your hand at first, then less and less, up to 15% past full draw
+     (6 cm more on the Iron Bow; your hand 10 cm past brings it about 3.5 cm). The bow bends
+     further with it, and the strain gets stronger and more frequent until it's nearly a steady
+     rumble. The shot is no stronger past full draw: that's the game's full charge.
    - You hear the game's own `WPNBowDraw` as the draw starts.
 5. **Loose.**
    - Let go of the grip. The arrow is the game's own: it leaves exactly along the drawn arrow, at
@@ -146,6 +150,10 @@ at Weye.
   to the 9 cm where it goes on. It only turns, about its nock: the nock stays in your fingers.
   The Longbow also slides it out of the hand onto the rest over that stretch; here the last
   centimetres slide on as it seats instead.
+- **Past full draw the string stiffens instead of stopping** (playtest 1). Up to 15% more draw, at
+  first half the hand's further pull, falling off from there. The game's bend model is drawn past
+  its full bend the same way (the limbs bend on). The shot stays the game's full charge: the
+  game's power stops at 1, so drawing past full draw is for the feel.
 - **The fatigue is the game's.** Holding drawn burns fatigue as the game's own hold does (15 a
   second), and a shot costs 5. The Marksman perk waives both, as in the game.
 - **No shield with a bow.** With a bow equipped the shield isn't offered: the game holds no shield
@@ -186,6 +194,9 @@ at Weye.
   dagger.** Asked for: held so it lies level as the forearm comes down, and nocking that looks
   nice, as other VR bows do. Done: held by its nock, along the controller's aim, and turned to
   lie along the bow as it nears the string (see Decisions).
+- **Full draw felt stiff, like a wall.** Asked for: the string to keep coming back past it, ever
+  tighter. Done: past full draw it gives up to 15% more, ever more stiffly, with the strain
+  growing to a near-steady rumble (see Decisions).
 
 ## Branches
 
