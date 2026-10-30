@@ -71,6 +71,7 @@ const NODE_NAME: usize = 0x08;
 const NECK: &str = "Bip02 Neck1";
 const REINS_ALONG: f32 = 0.5;
 const REINS_APART: f32 = 0.09;
+const REINS_OVER_APART: f32 = 0.06;
 const FOOT: f32 = 0.15;
 /// Without the saddle's measure, the seat is this far over the horse's feet (metres).
 const SEAT_FALLBACK: f32 = 1.6;
@@ -414,11 +415,26 @@ pub fn publish(view: &rustvr_adapter::View, now: f64) {
                 }
                 // The reins run from the bit along the neck to the rider's hands: held over the
                 // withers, between the pommel and the neck's base, either side of the mane.
+                let side = Quat::from_rotation_y(h) * Vec3::X;
                 if let Some(neck) = (neck != 0).then(|| node_pos(neck)).flatten() {
                     let hold = pommel.lerp(neck, REINS_ALONG);
-                    let side = Quat::from_rotation_y(h) * Vec3::X * REINS_APART;
-                    r.reins = [four(t(hold - side)), four(t(hold + side))];
+                    r.reins = [four(t(hold - side * REINS_APART)), four(t(hold + side * REINS_APART))];
                     r.flags |= RIDE_REINS;
+                }
+                // The bit's rings, on the head as it moves (Oblivion's horses have no reins of their
+                // own: the runtime draws them from here, in the tack's own colour).
+                let [head] = nodes(horse_root, [s.head_bone.as_str()]);
+                if let (Some(a), Some(b), Some(poll)) = (
+                    (head != 0).then(|| node_point(head, s.bit)).flatten(),
+                    (head != 0).then(|| node_point(head, mirror(s.bit))).flatten(),
+                    (head != 0).then(|| node_pos(head)).flatten(),
+                ) {
+                    let (left, right) = if a.dot(side) < b.dot(side) { (a, b) } else { (b, a) };
+                    r.bits = [four(t(left)), four(t(right))];
+                    // (Back from the bit they pass over the neck behind the ears: the head's bone.)
+                    r.reins_over = [four(t(poll - side * REINS_OVER_APART)), four(t(poll + side * REINS_OVER_APART))];
+                    r.reins_color = [s.tack[0], s.tack[1], s.tack[2], 1.0];
+                    r.flags |= RIDE_BITS;
                 }
             }
         }
@@ -452,7 +468,7 @@ fn log_ride(r: &Riding) {
     let now = crate::link::now();
     if (r.flags, r.gait) != (last.0, last.1) || now - last.2 > 5.0 {
         tracing::info!(
-            "riding: horse {:#x} flags {:#x} gait {} at {:.2} m/s; seat {:.2?}, knees {:.2?}, ankles {:.2?}, reins {:.2?}, pommel {:.2?}",
+            "riding: horse {:#x} flags {:#x} gait {} at {:.2} m/s; seat {:.2?}, knees {:.2?}, ankles {:.2?}, reins {:.2?}, pommel {:.2?}, bits {:.2?}",
             r.id,
             r.flags,
             r.gait,
@@ -461,7 +477,8 @@ fn log_ride(r: &Riding) {
             r.knees.map(|k| [k[0], k[1], k[2]]),
             r.ankles.map(|k| [k[0], k[1], k[2]]),
             r.reins.map(|k| [k[0], k[1], k[2]]),
-            [r.pommel[0], r.pommel[1], r.pommel[2]]
+            [r.pommel[0], r.pommel[1], r.pommel[2]],
+            r.bits.map(|k| [k[0], k[1], k[2]])
         );
         *last = (r.flags, r.gait, now);
     }

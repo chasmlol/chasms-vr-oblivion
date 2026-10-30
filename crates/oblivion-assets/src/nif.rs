@@ -615,6 +615,23 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(4)?; // interpolator
             Block::Other(kind.into())
         }
+        "NiGeomMorpherController" => {
+            time_controller(r)?;
+            r.skip(2 + 4 + 1)?; // morpher flags, data, always update
+            let _interpolators = r.refs()?;
+            let _unknown = r.refs()?;
+            Block::Other(kind.into())
+        }
+        "NiMorphData" => {
+            let morphs = r.u32()?;
+            let vertices = r.u32()? as usize;
+            r.skip(1)?; // relative targets
+            for _ in 0..morphs {
+                r.string()?;
+                r.skip(vertices * 12)?;
+            }
+            Block::Other(kind.into())
+        }
         "NiTransformInterpolator" => {
             r.skip(32 + 4)?;
             Block::Other(kind.into())
