@@ -34,6 +34,9 @@ own settings for distance and sharpness: `<builds>\visuals\research\oblivion-tec
      now at your resolution, short of 120).
 3. **The sky, the people's shadows, the people** (rounds 1 and 2, fixed): still right?
 
+The streaks across the trees in one forest spot (playtest 4) are parked: they were there before the
+anisotropic filtering, and may be the game's own.
+
 ## `playtest-rain.bat`
 
 The rain comes in over a few seconds.
