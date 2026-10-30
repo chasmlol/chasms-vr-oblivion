@@ -53,9 +53,11 @@ The research and the design are in `docs/research/archery.md`.
 7. **Power.** A half draw flies at about two thirds speed and drops much faster than a full one.
    That's the game's own curve: your draw stands in for the time the game's bow is held drawn.
 8. **Crosshair (off by default).** Open the runtime's menu, go to the Hands tab and turn on "Bow
-   crosshair". While you draw, the game's own crosshair image sits where the arrow would land. It
-   uses the game's speed and gravity for that draw, traced against the world and creatures. The
-   same tab has "Quiver" (shoulder, hip or both) and "Fit a bow's full draw to my arm".
+   crosshair". While you draw, the game's own crosshair image sits straight out along the arrow,
+   20 m away, like the flat game's crosshair but where the bow points. It leaves out the drop and
+   never lands on buildings or things nearby. It's half the game's crosshair size and half
+   see-through. The same tab has "Quiver" (shoulder, hip or both) and "Fit a bow's full draw to my
+   arm".
 9. **Enchanted arrows.** Equip the Arrows of Flames from the inventory. The quiver and the arrow in
    the hand become the game's Elven arrow model. The game's projectile carries the fire
    enchantment and uses it on a hit.
@@ -74,7 +76,6 @@ at Weye.
 - The game fired its own `ArrowProjectile` each time. Its flight was logged every tenth of a second:
   - At full draw it flew 21.7 m/s and fell at 2.1 m/s² (the game's 21.4 and 0.3 × 7).
   - At 57% draw, 14.8 m/s and about 5.4 m/s².
-  - The crosshair uses those same numbers.
 - The arrow count went down with each shot (168, 167, 166). With one arrow left, the game took the
   arrows off after the shot and the quiver left the body.
 - Arrows stuck in wood and in the ground and stayed there. Arrows bounced off stone and the stone
@@ -83,7 +84,8 @@ at Weye.
   - the bow bent with the draw and the string came back with the hand;
   - the arrow lay on the bow, on the bow hand's side;
   - the Elven arrow model showed for Arrows of Flames;
-  - the crosshair sat exactly where a half-draw arrow then landed.
+  - the crosshair (then traced to where the arrow lands) sat exactly where a half-draw arrow then
+    landed.
 - The runtime wore the quiver part on the body, with the right count of arrows showing.
 - Haptic pulses were counted: about 160 in one run (ticks, strain, nock, release, the limbs'
   swings).
@@ -130,6 +132,10 @@ at Weye.
 - **The release is the grip, not the trigger.**
 - **The crosshair is the game's own image** (`menus\misc\hud_reticle.dds`). It's off by default,
   because the best VR bows have none.
+- **The crosshair is a guide, not a sight** (playtest 1). It sits straight out along the arrow, at
+  a set 20 m, so it never jumps onto what's near. Its size in view is the same at any distance, so
+  the 20 m only sets where your eyes meet on it. The aim error that leaves (the eyes sit a little
+  above the arrow) is a few centimetres at 10 m.
 - **The fatigue is the game's.** Holding drawn burns fatigue as the game's own hold does (15 a
   second), and a shot costs 5. The Marksman perk waives both, as in the game.
 - **No shield with a bow.** With a bow equipped the shield isn't offered: the game holds no shield
@@ -151,6 +157,21 @@ at Weye.
   only "valid".
 - **Games that draw the player themselves (Metro's in-frame drawing) don't bend a bow yet.** The
   protocol's drawn objects carry no bend. Oblivion is drawn by the runtime, so it isn't affected.
+
+## Playtests on the headset
+
+### 1 (2026-10-30)
+
+- **Fine:** the bow, nocking, drawing and loosing.
+- **An arrow taken came out as the whole quiver, with its five arrows.** The arrow in the hand is
+  the game's `arrow.nif` without its quiver. Every other branch's `oblivion-extract` writes that
+  file's plain key whole, and `local_assets` is shared. Pickpocketing's extract this morning
+  (06:03) overwrote the arrow alone with the whole model. Fixed: the arrow alone is now its own
+  key, `#arrow`, which no other extractor writes, and the plain key is the whole model as everyone
+  writes it. The arrows were re-extracted.
+- **The crosshair stuck to what the arrow would hit, and vanished when aimed far off.** Asked for:
+  a guide like the flat game's crosshair, where the bow points, never on buildings or things
+  nearby, half the size and half see-through. Done (see Decisions).
 
 ## Branches
 

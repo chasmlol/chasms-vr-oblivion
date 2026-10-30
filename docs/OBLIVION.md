@@ -37,7 +37,8 @@ The game's models are converted once into `local_assets/oblivion` (never committ
 cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters textures/menus/misc/hud_reticle.dds
 ```
 
-Bows are written bent too (`#bent`, from their morph), arrows alone and their quivers worn on the
+Bows are written bent too (`#bent`, from their morph), arrows alone (`#arrow`: every other
+branch's extractor writes the plain key whole, quiver and all) and their quivers worn on the
 skeleton (`#quiver0` .. `#quiver5`), with `bows.toml` (the limbs' spring, from the player's bow
 animation); the reticle is the bow's optional crosshair.
 
