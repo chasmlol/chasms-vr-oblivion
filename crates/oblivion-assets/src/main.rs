@@ -61,7 +61,8 @@ fn main() -> Result<()> {
         }
         Some("anims") => {
             // Each model's animations: what each moves, from where it starts to where it ends (a
-            // door's leaf turned about its hinge, an activator's lever, a gate slid up).
+            // door's leaf turned about its hinge, an activator's lever, a gate slid up), or to the
+            // farthest it goes when it comes back (a button pushed in and out again).
             let prefixes: Vec<String> = args[1..].iter().map(|p| oblivion_assets::bsa::normalise(p)).collect();
             let names: Vec<String> = archives.names().filter(|n| n.ends_with(".nif") && prefixes.iter().any(|p| n.starts_with(p.as_str()))).map(str::to_owned).collect();
             for name in names {
@@ -72,14 +73,25 @@ fn main() -> Result<()> {
                 }
                 println!("{name}{}", nif.stopped_at.as_ref().map(|k| format!(" (stopped at {k})")).unwrap_or_default());
                 for s in seqs {
-                    let moved: Vec<String> = nif
-                        .sequence_ends(s)
-                        .into_iter()
-                        .filter_map(|(node, a, b)| {
-                            let turn = glam::Quat::from_mat3(&(b.rotation * a.rotation.transpose()));
-                            let (axis, angle) = turn.to_axis_angle();
-                            let slid = b.translation - a.translation;
-                            (angle.to_degrees() > 1.0 || slid.length() > 0.5).then(|| format!("'{node}' {:.0} deg about {axis:.2?} slid {slid:.1?}", angle.to_degrees()))
+                    let (t0, t1) = nif.sequence_span(s);
+                    let poses: Vec<_> = (0..=32).map(|k| (t0 + (t1 - t0) * k as f32 / 32.0, nif.sequence_pose(s, t0 + (t1 - t0) * k as f32 / 32.0))).collect();
+                    let moved: Vec<String> = (0..poses[0].1.len())
+                        .filter_map(|n| {
+                            let a = &poses[0].1[n].1;
+                            let moved = |b: &oblivion_assets::nif::Transform| {
+                                let turn = glam::Quat::from_mat3(&(b.rotation * a.rotation.transpose()));
+                                let (axis, angle) = turn.to_axis_angle();
+                                (angle.to_degrees(), axis, b.translation - a.translation)
+                            };
+                            let far = poses.iter().max_by(|x, y| {
+                                let (ax, _, sx) = moved(&x.1[n].1);
+                                let (ay, _, sy) = moved(&y.1[n].1);
+                                (ax + sx.length()).total_cmp(&(ay + sy.length()))
+                            })?;
+                            let (angle, axis, slid) = moved(&poses.last()?.1[n].1);
+                            let (far_angle, _, far_slid) = moved(&far.1[n].1);
+                            let back = (far_angle > angle + 1.0 || far_slid.length() > slid.length() + 0.5).then(|| format!(" (farthest at {:.2}: {far_angle:.0} deg, slid {far_slid:.1?})", far.0)).unwrap_or_default();
+                            (far_angle > 1.0 || far_slid.length() > 0.5).then(|| format!("'{}' {angle:.0} deg about {axis:.2?} slid {slid:.1?}{back}", poses[0].1[n].0))
                         })
                         .collect();
                     println!("  {} {:.2}..{:.2}: {}", s.name, s.start, s.stop, moved.join("; "));
