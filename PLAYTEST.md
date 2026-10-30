@@ -3,9 +3,10 @@
 Save: rustvr-doors
 
 `tools\play.ps1 world` boots this branch's build into **rustvr-doors**: Bethesda's own test cell
-`TestTraps`, beside a row of doors that swing in place, on your right (turn to face them: a big planked
-cave door right in front of you then, a double cave door, a barred prison cell gate, an Imperial dungeon door), with the fort ruin
-lever 16 m to your left, and 20 lockpicks in the pack. `-At WarehouseLock` (with
+`TestTraps`. A row of doors that swing in place is on your right: turn to face them and a big
+planked cave door is right in front of you, with a double cave door, a barred prison cell gate and
+an Imperial dungeon door along the row. The fort ruin's lever is about 16 m straight ahead (where you
+face when the game loads), and there are 20 lockpicks in the pack. `-At WarehouseLock` (with
 `-Give "0000000A 20"`) is Bethesda's lock test cell: rows of locked fence gates. Real places with
 doors and levers that work by hand: the Imperial Dungeon (`-At ImperialDungeon01`, the cell gates),
 Fort Ash (`-At FortAsh02`, its turning switches), Chorrol's Mages Guild (`-At ChorrolMagesGuild`, its
@@ -30,8 +31,8 @@ locked display cases: a lid on a hinge).
 5. **Open a door the old way.** Look at a door and pull the empty hand's trigger (the game's
    Activate at gaze): the game plays its own opening and your hand meets the door where it's drawn as
    it swings.
-6. **The lever.** Walk about 16 m to your left (north), past the trap doors: the fort ruin's floor
-   lever stands by a rock. Grip its handle and push it over. It holds at each end (its two positions); at the end of its travel the game's
+6. **The lever.** Walk about 16 m ahead from where you started, past the trap doors: the fort ruin's
+   floor lever stands by a rock. Grip its handle and push it over. It holds at each end (its two positions); at the end of its travel the game's
    Activate fires (its script; in this cell it works the secret stone door nearby).
 7. **The lock.** `play.ps1 world -At WarehouseLock -Give "0000000A 20"`. Push or pull one of the
    locked gates: the game's own lock opens (the same menu as on a flat screen, as a panel). Your right
