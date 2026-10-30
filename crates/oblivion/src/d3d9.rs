@@ -60,6 +60,9 @@ mod win {
     static REAL_CREATE_VS: AtomicUsize = AtomicUsize::new(0);
     static REAL_SET_VS: AtomicUsize = AtomicUsize::new(0);
     static REAL_SET_VS_F: AtomicUsize = AtomicUsize::new(0);
+    static REAL_CREATE_VB: AtomicUsize = AtomicUsize::new(0);
+    static REAL_DRAW_INDEXED: AtomicUsize = AtomicUsize::new(0);
+    static REAL_SET_STREAM: AtomicUsize = AtomicUsize::new(0);
 
     thread_local! {
         static MAKING: Cell<bool> = const { Cell::new(false) };
@@ -239,6 +242,18 @@ mod win {
             } else {
                 tracing::info!("d3d9: testing: the leaves' constants as the game sets them (RUSTVR_OBLIVION_LEAVES_AS_GAME)");
             }
+            // IDirect3DDevice9::CreateVertexBuffer (slot 26), DrawIndexedPrimitive (82) and
+            // SetStreamSource (100): system memory vertex buffers drawn whole ([`crate::sysmem`]).
+            if crate::sysmem::enabled() {
+                let create_vb = unsafe { *(*(dev as *const *const usize)).add(26) };
+                hooks::install_into(create_vb as *const (), create_vertex_buffer as *const (), "IDirect3DDevice9::CreateVertexBuffer", &REAL_CREATE_VB);
+                let draw = unsafe { *(*(dev as *const *const usize)).add(82) };
+                hooks::install_into(draw as *const (), draw_indexed_primitive as *const (), "IDirect3DDevice9::DrawIndexedPrimitive", &REAL_DRAW_INDEXED);
+                let stream = unsafe { *(*(dev as *const *const usize)).add(100) };
+                hooks::install_into(stream as *const (), set_stream_source as *const (), "IDirect3DDevice9::SetStreamSource", &REAL_SET_STREAM);
+            } else {
+                tracing::info!("d3d9: testing: the draws' vertex hints as the game gives them (RUSTVR_OBLIVION_DRAWS_AS_GAME)");
+            }
             match Gpu::new() {
                 Ok(gpu) => {
                     let (w, h) = if params.is_null() { (0, 0) } else { unsafe { ((*params).BackBufferWidth, (*params).BackBufferHeight) } };
@@ -254,6 +269,9 @@ mod win {
     unsafe extern "system" fn present_hook(dev: *mut c_void, src: *const c_void, dst: *const c_void, wnd: HWND, dirty: *const c_void) -> windows::core::HRESULT {
         let real: PresentFn = unsafe { std::mem::transmute(REAL_PRESENT.load(Ordering::Acquire)) };
         hooks::guard_void("Present", || crate::render::on_present(dev));
+        if crate::sysmem::enabled() {
+            hooks::guard_void("Present", crate::sysmem::tick);
+        }
         unsafe { real(dev, src, dst, wnd, dirty) }
     }
 
@@ -324,6 +342,31 @@ mod win {
             });
         }
         hr
+    }
+
+    type CreateVertexBufferFn = unsafe extern "system" fn(*mut c_void, u32, u32, u32, u32, *mut *mut c_void, *mut c_void) -> windows::core::HRESULT;
+    type DrawIndexedFn = unsafe extern "system" fn(*mut c_void, u32, i32, u32, u32, u32, u32) -> windows::core::HRESULT;
+    type SetStreamSourceFn = unsafe extern "system" fn(*mut c_void, u32, *mut c_void, u32, u32) -> windows::core::HRESULT;
+
+    unsafe extern "system" fn create_vertex_buffer(dev: *mut c_void, length: u32, usage: u32, fvf: u32, pool: u32, out: *mut *mut c_void, shared: *mut c_void) -> windows::core::HRESULT {
+        let real: CreateVertexBufferFn = unsafe { std::mem::transmute(REAL_CREATE_VB.load(Ordering::Acquire)) };
+        let hr = unsafe { real(dev, length, usage, fvf, pool, out, shared) };
+        if hr.is_ok() && !out.is_null() {
+            hooks::guard_void("CreateVertexBuffer", || crate::sysmem::created(unsafe { *out } as usize, length, pool));
+        }
+        hr
+    }
+
+    unsafe extern "system" fn set_stream_source(dev: *mut c_void, stream: u32, buffer: *mut c_void, offset: u32, stride: u32) -> windows::core::HRESULT {
+        let real: SetStreamSourceFn = unsafe { std::mem::transmute(REAL_SET_STREAM.load(Ordering::Acquire)) };
+        hooks::guard_void("SetStreamSource", || crate::sysmem::bind(stream, buffer as usize, offset, stride));
+        unsafe { real(dev, stream, buffer, offset, stride) }
+    }
+
+    unsafe extern "system" fn draw_indexed_primitive(dev: *mut c_void, kind: u32, base: i32, min: u32, count: u32, start: u32, prims: u32) -> windows::core::HRESULT {
+        let real: DrawIndexedFn = unsafe { std::mem::transmute(REAL_DRAW_INDEXED.load(Ordering::Acquire)) };
+        let (min, count) = if crate::sysmem::bound() { hooks::guard("DrawIndexedPrimitive", None, || crate::sysmem::draw(base, min, count)).unwrap_or((min, count)) } else { (min, count) };
+        unsafe { real(dev, kind, base, min, count, start, prims) }
     }
 
     type SetVertexShaderFn = unsafe extern "system" fn(*mut c_void, *mut c_void) -> windows::core::HRESULT;
