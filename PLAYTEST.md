@@ -3,8 +3,8 @@
 Save: rustvr-doors
 
 `tools\play.ps1 world` boots this branch's build into **rustvr-doors**: Bethesda's own test cell
-`TestTraps`. A row of doors that swing in place is on your right: turn to face them and a big
-planked cave door is right in front of you, with a double cave door, a barred prison cell gate and
+`TestTraps`. A row of doors that swing in place is on your right: turn to face them and, a step ahead, a big
+planked cave door, with a double cave door, a barred prison cell gate and
 an Imperial dungeon door along the row. The fort ruin's lever is about 16 m straight ahead (where you
 face when the game loads), and there are 20 lockpicks in the pack. `-At WarehouseLock` (with
 `-Give "0000000A 20"`) is Bethesda's lock test cell: rows of locked fence gates. Real places with
