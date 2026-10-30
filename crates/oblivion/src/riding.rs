@@ -15,7 +15,11 @@
 //!   turns it (the horse's heading, ramped up at `iHorseTurnDegreesRampUpPerSecond`, 80, to
 //!   `iHorseTurnDegreesPerSecond`, 45, times |X| · 0.02 up to 1.5: as the keys do), Run gallops
 //!   (0x200) and Jump jumps. The rider's gait is the Y axis (and Run for the gallop), the steering
-//!   the X.
+//!   the X. The game reads the stick as a direction (0x67212C): only while |Y| is at least |X| is
+//!   it forward or back; past that it's a slide alone, which on a horse is a turn on the spot. So
+//!   while the horse goes, Y is kept at least |X| (its pace is capped at 1, so a full pace stays as
+//!   it is; a slow one turning hard goes a little faster), and it turns as hard as the game turns
+//!   a horse without stopping. Either axis past 98 is Run too.
 //! * **The rider** ([`publish`]): the horse's own animations carry the rider's `Bip01` tracks, so
 //!   the game animates the player's own skeleton in the saddle with every gait: the pelvis between
 //!   the hip joints, the knees and feet astride, the hands on the reins. The runtime's body sits
@@ -25,8 +29,11 @@
 //!   player, its saddle (measured on the game's own model, `oblivion_assets::horse`) on its live
 //!   spine, for a hand to take hold of.
 //! * **The view** ([`carry`]): the horse's turn carries the view round with it, and while riding
-//!   the view's anchor is the rider's eye held steady on the horse: the gait's bob is the game
-//!   camera's, which the runtime's head bob setting brings back.
+//!   the view's anchor is the rider's eye held steady on the horse: over the saddle's seat, at the
+//!   height the game's own first-person camera seats a rider (not the game's camera itself: after
+//!   getting off and on again it stays at a standing player's height on the horse's back, and
+//!   behind the horse as it moves). The gait's bob is the seat's, which the runtime's head bob
+//!   setting brings back.
 //!
 //! State: the player's process says sitting (`GetSitSleepState`, vtable +0x36C: 3 getting on, 4
 //! seated, 5 getting off), and the player's `horseOrRider` (+0xD4) is the horse.
@@ -78,15 +85,22 @@ const SEAT_FALLBACK: f32 = 1.6;
 const NEAR: f32 = 6.0;
 /// A hand takes hold of the saddle this far round its line past the seat (metres): a hand's reach.
 const SADDLE_REACH: f32 = 0.07;
-/// How the rider's eye is held steady on the horse: the game camera's place on it, eased over this
-/// (seconds), so the gait's bob goes and the seat's place stays.
+/// How the rider's eye is held steady on the horse: its place on it eased over this (seconds), so
+/// the gait's bob goes and the seat's place stays.
 const STEADY: f32 = 0.35;
+/// The rider's eye over the saddle's seat (metres): where the game's own first-person camera is on
+/// a horse when it seats the rider right (the first time in a session it does; measured on both
+/// rides on the headset: 0.85 m over the seat, upright above it). In first person nothing in the
+/// game poses its rider (`docs/research/riding.md`), and once off and on again its camera stays at
+/// a standing player's eye on the horse's back (1.9 m over the seat).
+const EYE_OVER_SEAT: f32 = 0.85;
 /// The horse's speed is eased over this (seconds).
 const SPEED_EASE: f32 = 0.25;
 /// The game's gaits forward: walk, gallop.
 const GAITS: u32 = 2;
 /// The joystick's axis at a pace of 1 (the game's |axis| · 0.02), and at the game's full turn
-/// (|axis| · 0.02 = 1.5, as fast as the turn keys turn a horse).
+/// (|axis| · 0.02 = 1.5, as fast as the turn keys turn a horse). Both under 98, where the game
+/// takes the stick as Run.
 const PACE_AXIS: f32 = 50.0;
 const TURN_AXIS: f32 = 75.0;
 
@@ -282,7 +296,9 @@ fn saddle_points(horse: usize) -> Option<[Vec3; 3]> {
 
 /// The view, carried with the horse.
 pub struct Carry {
-    /// The rider's eye held steady on the horse (the anchor without the gait's bob).
+    /// The rider's eye: seated, over the saddle's seat as the horse's gait moves it (getting on or
+    /// off, the game's camera); and held steady on the horse (the anchor without the gait's bob).
+    pub eye: Vec3,
     pub base_eye: Vec3,
     /// The horse's heading: what the view faces when it's recentred.
     pub look_yaw: f32,
@@ -295,15 +311,15 @@ pub struct Carry {
 struct Steady {
     horse: usize,
     heading: f32,
-    /// The game's eye in the horse's frame, eased.
+    /// The rider's eye in the horse's frame, eased.
     eye: Vec3,
     state: State,
 }
 
 static STEADY_STATE: Mutex<Option<Steady>> = Mutex::new(None);
 
-/// While on a horse: its turn since the last game frame, and the rider's eye held steady on it
-/// (`eye` is the game's camera, in the protocol's world). None on foot.
+/// While on a horse: its turn since the last game frame, and the rider's eye on it and held steady
+/// on it (`eye` is the game's camera, in the protocol's world). None on foot.
 pub fn carry(eye: Vec3, dt: f32) -> Option<Carry> {
     let (horse, state) = horse();
     let mut s = STEADY_STATE.lock().unwrap();
@@ -311,6 +327,11 @@ pub fn carry(eye: Vec3, dt: f32) -> Option<Carry> {
         *s = None;
         return None;
     };
+    // Seated, the eye is over the saddle's seat; getting on or off, the game's camera (the view is
+    // faded out meanwhile).
+    let seated = (state == State::Riding).then(|| seat(horse)).flatten();
+    let camera = eye;
+    let eye = seated.map_or(camera, |seat| seat + Vec3::Y * EYE_OVER_SEAT);
     let rel = Quat::from_rotation_y(-h) * (eye - at);
     let was = s.take().filter(|w| w.horse == horse);
     let turn = was.as_ref().map_or(0.0, |w| wrap(h - w.heading));
@@ -322,10 +343,26 @@ pub fn carry(eye: Vec3, dt: f32) -> Option<Carry> {
     };
     let recenter = state == State::Riding && was.as_ref().is_some_and(|w| w.state == State::GettingOn);
     if was.as_ref().is_none_or(|w| w.state != state) {
-        tracing::info!("riding: {:?} (horse {:#x} at heading {:.1} deg)", state, mem::at::<u32>(horse + FORM_ID).unwrap_or(0), h.to_degrees());
+        tracing::info!(
+            "riding: {:?} (horse {:#x} at heading {:.1} deg){}",
+            state,
+            mem::at::<u32>(horse + FORM_ID).unwrap_or(0),
+            h.to_degrees(),
+            match seated {
+                Some(seat) => format!("; the eye over the seat, the game's camera {:.2} m off it", (seat + Vec3::Y * EYE_OVER_SEAT).distance(camera)),
+                None => String::new(),
+            }
+        );
     }
     *s = Some(Steady { horse, heading: h, eye: steady, state });
-    Some(Carry { base_eye: at + Quat::from_rotation_y(h) * steady, look_yaw: h, turn, recenter })
+    Some(Carry { eye, base_eye: at + Quat::from_rotation_y(h) * steady, look_yaw: h, turn, recenter })
+}
+
+/// The saddle's seat on a horse's live spine (the protocol's world), when it's measured.
+fn seat(horse: usize) -> Option<Vec3> {
+    let s = saddle()?;
+    let [spine] = nodes(mem::deref(horse + NI_NODE), [s.bone.as_str()]);
+    (spine != 0).then(|| node_point(spine, s.seat)).flatten()
 }
 
 /// The horses offered last (by id), to get on when the runtime asks.
@@ -555,12 +592,15 @@ pub fn before_update() -> Option<Controls> {
 /// The rider's gait, pace and steering as the game's joystick and Run.
 pub fn controls(rt: &RtRide) -> Controls {
     let pace = rt.pace.clamp(0.0, 1.0);
+    let x = (rt.steer.clamp(-1.0, 1.0) * TURN_AXIS).round() as i32;
+    // (Going, the forward axis is at least the turn's: the game stops a horse whose stick points
+    // more to the side than ahead, and turns it on the spot.)
+    let ahead = ((pace * PACE_AXIS).round() as i32).max(x.abs());
     let y = match rt.gait {
-        g if g > 0 => -(pace * PACE_AXIS).round() as i32,
-        g if g < 0 => (pace * PACE_AXIS).round() as i32,
+        g if g > 0 => -ahead,
+        g if g < 0 => ahead,
         _ => 0,
     };
-    let x = (rt.steer.clamp(-1.0, 1.0) * TURN_AXIS).round() as i32;
     let c = Controls { stick: [x, y], run: rt.gait >= GAITS as i32 };
     // What the game is given, when it changes (the turn by a fifth of the game's at least): with
     // the runtime's log of the hands, what the rider did and what the horse was told.
