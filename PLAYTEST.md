@@ -2,8 +2,10 @@
 
 Save: rustvr-pocket
 
-`tools\play.ps1 pickpocket` boots it: the Merchants Inn in the Imperial City's Market District, at
-noon, at the door. Bruce (a test NPC with no AI packages, so he stands still) is about a metre to
+`playtest.bat` in this worktree (double-clicked in Explorer: not the app's terminal, where Steam
+looks signed out) boots it with `tools\play.ps1 pickpocket`; `playtest-sneak100.bat` does the same
+with the console's `player.setav sneak 100` (an 85% chance). It's the Merchants Inn in the Imperial
+City's Market District, at noon, at the door. Bruce (a test NPC with no AI packages, so he stands still) is about a metre to
 your **left**, his back to you. He carries 120 gold, a key, 3 lockpicks, a potion, two apples and a
 note. The inn's own patrons walk about further in. The research and the design are in
 `docs/research/pickpocket.md`.
@@ -49,11 +51,11 @@ note. The inn's own patrons walk about further in. The research and the design a
 9. **The patrons.** Walk in (sneaking) and try the people moving about. Their pockets hold what
    they carry but don't wear (often nothing: an empty pocket feels empty at once). Follow a walking
    one: the pockets move with them.
-10. **Watch the sneak eye** (above the crosshair, at your gaze). While a hand is in the pocket of
-    someone who sees you, you feel a slow heartbeat in that hand (a strong beat as they first
-    notice you). Being seen doesn't change the per-item chance (the game's doesn't), but when you're
-    done with someone, everyone who sees you then witnesses the theft (the game's own check): the
-    crime and the guards.
+10. **Watch the sneak eye** (at your gaze; the flat game's crosshair is hidden in VR, its activate
+    icons stay). While a hand is in the pocket of someone who sees you, you feel a slow heartbeat
+    in that hand (a strong beat as they first notice you). Being seen doesn't change the per-item
+    chance (the game's doesn't), but when you're done with someone, everyone who sees you then
+    witnesses the theft (the game's own check): the crime and the guards.
 
 The game's flat pickpocket menu is still there: the trigger on someone while sneaking opens it. A
 hand in a pocket doesn't activate anything with its trigger.
