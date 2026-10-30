@@ -42,6 +42,7 @@ pub mod console;
 pub mod d3d9;
 pub mod depth;
 pub mod engine;
+pub mod facesculpt;
 #[cfg(all(windows, target_arch = "x86"))]
 pub mod entry;
 pub mod game_settings;

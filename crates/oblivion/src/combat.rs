@@ -680,6 +680,8 @@ pub fn publish() {
         crate::weapons::publish(a);
         crate::torch::publish(a);
         crate::map::publish(a);
+        // The face shaped by hand in the race menu, into the character (before it's published).
+        crate::facesculpt::update(a);
         // (Every frame while the race menu changes the body and the face as the player watches.)
         if k.frame % 30 == 3 || crate::menus::menu_open(crate::menus::MENU_RACE_SEX) {
             crate::body::publish(a);
