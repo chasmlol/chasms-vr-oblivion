@@ -12,6 +12,24 @@ why it works the way it does: `docs/research/riding.md`.
 Run `playtest.bat` in this worktree (`<worktrees>\riding`): it installs this build and boots the save; press
 a key in its window when you're done and it closes the game and puts your settings back.
 
+## Round 6: a rider's grip on the reins
+
+Built and unit-tested; not in the game yet.
+
+- **"When I hold the grip on the reins... the pointy finger is lifted unless I hold the trigger as
+  well."** A hand on a rein now closes into a rider's fist round it from the grip alone: all four
+  fingers wrapped, the thumb pressed down on top. The trigger no longer matters to how it looks (a
+  squeeze of it is still a spur).
+- **"Rig the hands on the reins a bit nicer and realistic."** A rein now runs through the fist as a
+  rider holds one: it comes up from the bit into the bottom of the fist at the little finger, and
+  the loop between your hands comes out of the top, over the index finger under the thumb.
+
+### Try this round
+
+- Take the reins with just the grip: a closed fist, thumb on top. Look at where the rein goes in
+  (under the little finger) and where the loop between your hands comes out (over the thumb).
+- Turn your hands about: the rein should stay in the fist.
+
 ## Round 5: fine steering, a real walk, and spurs as hard as you do them
 
 Built and unit-tested; not in the game yet. Your fourth ride's logs are in
@@ -311,6 +329,10 @@ built, and its unit tests pass.
 
 ## Decisions
 
+- **A hand on a rein is a rider's fist** (round 6): `HoldShape::Rein` (all four fingers closed, the
+  thumb pressed on top; chosen by eye), taken by a hand on a rein whatever its trigger does; the
+  rein goes into the fist 3.5 cm down the grip's axis from the palm's middle (the little finger's
+  side) and the bight comes out 3.5 cm up it (over the index, under the thumb).
 - **Getting on is the game's activation**, not an animation of our own: the game checks whose horse
   it is, makes stealing a crime and plays its mount. The view fades meanwhile (on by default), since
   the game's animation moves the view as the player doesn't, and research says a camera taken over
