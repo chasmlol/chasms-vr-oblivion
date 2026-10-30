@@ -32,15 +32,28 @@ pub fn ini_path() -> Option<PathBuf> {
 /// * the water's waves are a 12-frames-a-second loop, which steps at 90..120 Hz (the same 2.7 s
 ///   loop at 36);
 /// * the files of the cells ahead are preloaded only up to 25 MB, so crossing into new cells
-///   loads more of them as you go (the game's own 100 MB setting for a 2 GB machine).
-const VR_FLOORS: [(&str, &str, &str); 7] = [
+///   loads more of them as you go (250 MB: the game is large-address-aware on the playtester's
+///   install, and loads a 7x7 grid there);
+/// * things fade in close: the view distance sliders' objects, items and actors at their most (15),
+///   trees at the game's own limit (`fTreeLODMax`, 2), the grass out to 86 m (its `[Grass]` keys,
+///   the ones it reads), and the distant buildings and tree cards half as far again (40 and 30
+///   cells). A head turns to all of it, so what a flat screen hides past its edges pops in.
+const VR_FLOORS: [(&str, &str, &str); 15] = [
     ("Display", "iShadowMapResolution", "1024"),
     ("SpeedTree", "fLODTreeMipMapLODBias", "0.0000"),
     ("SpeedTree", "fLocalTreeMipMapLODBias", "0.0000"),
     ("SpeedTree", "bForceFullLOD", "1"),
     ("Water", "uSurfaceFPS", "36"),
     ("Water", "uSurfaceFrameCount", "96"),
-    ("General", "iPreloadSizeLimit", "104857600"),
+    ("General", "iPreloadSizeLimit", "262144000"),
+    ("LOD", "fLODFadeOutMultObjects", "15.0000"),
+    ("LOD", "fLODFadeOutMultItems", "15.0000"),
+    ("LOD", "fLODFadeOutMultActors", "15.0000"),
+    ("LOD", "fLODMultTrees", "2.0000"),
+    ("Grass", "fGrassEndDistance", "6000.0000"),
+    ("Grass", "fGrassStartFadeDistance", "5000.0000"),
+    ("General", "uGridDistantCount", "40"),
+    ("General", "uGridDistantTreeRange", "30"),
 ];
 
 /// `section`'s `key` in INI text.
