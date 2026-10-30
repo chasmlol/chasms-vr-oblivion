@@ -117,7 +117,7 @@ pub fn before_update() {
         }
         // The game's lock, open: the hand is its pick.
         #[cfg(all(windows, target_arch = "x86"))]
-        crate::lock::frame(&s.frame, 1, &mut v, link::now());
+        crate::lock::frame(&s.frame, &mut v, link::now());
         // (Not while the race menu is open: it shows the player in third person, turned to its
         // camera, and rebuilds their third-person body as the race or sex changes; taken back to
         // first person under it, that body was gone and the game crashed.)

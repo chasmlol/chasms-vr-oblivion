@@ -453,7 +453,7 @@ mod game {
         unsafe { std::mem::transmute::<usize, Get>(GET_EXTRA)(refr + REFR_EXTRA, kind) }
     }
 
-    fn locked(refr: usize) -> bool {
+    pub(crate) fn locked(refr: usize) -> bool {
         let x = extra(refr, EXTRA_LOCK);
         let data = if x != 0 { deref(x + 0xC) } else { 0 };
         data != 0 && mem::at::<u8>(data + 8).is_some_and(|f| f & 1 != 0)

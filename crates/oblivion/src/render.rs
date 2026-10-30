@@ -383,6 +383,7 @@ mod win {
             hooks::guard_void("riding", || crate::riding::publish(view, now));
             hooks::guard_void("map", || crate::map::place(now));
             time(Part::Items, || hooks::guard_void("alchemy", || crate::alchemy::place(view, now)));
+            time(Part::Items, || hooks::guard_void("lock", || crate::lock::place(view, &snap.frame, now)));
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))

@@ -287,6 +287,18 @@ mod win {
     /// A menu nobody has cut yet: the whole of what it draws, as one piece.
     const WHOLE: &[Piece] = &[Piece::of(&[From::All], true)];
 
+    /// A lock picked at the keyhole (`lockpick_menu.xml`, [`crate::lock`]): its tumblers stand in the
+    /// world, so only what it says floats beside them, on its own art: the lock's level, the picks
+    /// left and the player's Security. (Its buttons are the controller's: A, B.)
+    const LOCK: &[Piece] = &[
+        Piece::of(&[From::Drawn("lockpick_level"), From::Drawn("lockpick_level_levelText")], false),
+        Piece::of(&[From::Drawn("lockpick_picks_left_text"), From::Drawn("lockpick_picks_left")], false),
+        Piece::of(&[From::Drawn("lockpick_playerlevel_text"), From::Drawn("lockpick_playerlevel")], false),
+    ];
+    /// How far round the keyhole the lock's tumblers reach (metres): what floats beside it stays
+    /// clear of them.
+    const LOCK_REACH: f32 = 0.08;
+
     /// The map drawn from the belt, in the hand: its page (the local or the world map in its frame,
     /// or a page of the journal, on its parchment) and its tabs; the big four's switcher stays
     /// behind.
@@ -666,6 +678,14 @@ mod win {
             // The holsters' editor ahead of the player, as their own menus are.
             crate::slot_menu::MENU_HOLSTERS => {
                 add_group(&mut l, player(top), top, HOLSTERS, screen, &mut trees);
+            }
+            // A lock picked at its keyhole: what it says beside its tumblers, and the hands go on
+            // under it (they hold the pick).
+            MENU_LOCKPICK if crate::lock::keyhole().is_some() => {
+                let k = crate::lock::keyhole().unwrap();
+                let group = HudGroup { anchor: ANCHOR_WORLD, side: SIDE_RIGHT, at: k.at.to_array(), radius: LOCK_REACH, id: MENU_LOCKPICK, height: 0.0 };
+                add_group(&mut l, group, MENU_LOCKPICK, LOCK, screen, &mut trees);
+                l.flags |= HUDL_HANDS;
             }
             kind => {
                 // (The runtime's own settings float beside the game's pause menu.)

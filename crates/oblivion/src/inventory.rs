@@ -29,7 +29,7 @@ use rustvr_protocol::*;
 
 /// The categories the slots draw from, as the runtime knows them (their names are what the
 /// player's slots remember).
-pub const CATEGORIES: [&str; 14] = ["Food", "Potions", "Poisons", "Ingredients", "Scrolls", "Arrows", "Weapons", "Soul Gems", "Keys", "Books", "Sigil Stones", "Apparatus", "Misc", "Torches"];
+pub const CATEGORIES: [&str; 16] = ["Food", "Potions", "Poisons", "Ingredients", "Scrolls", "Arrows", "Weapons", "Soul Gems", "Keys", "Books", "Sigil Stones", "Apparatus", "Misc", "Torches", "Lockpicks", "Hammers"];
 pub const FOOD: u32 = 0;
 pub const POTIONS: u32 = 1;
 pub const POISONS: u32 = 2;
@@ -44,14 +44,23 @@ pub const SIGIL_STONES: u32 = 10;
 pub const APPARATUS: u32 = 11;
 pub const MISC: u32 = 12;
 pub const TORCHES: u32 = 13;
+/// The misc things the hands work things with: lockpicks and the Skeleton Key (at a lock,
+/// [`crate::lock`]), repair hammers.
+pub const LOCKPICKS: u32 = 14;
+pub const HAMMERS: u32 = 15;
+/// Their forms: the lockpick, the Skeleton Key, the repair hammer.
+pub const LOCKPICK_FORMS: [u32; 2] = [0x0000_000A, 0x0000_000B];
+pub const HAMMER_FORM: u32 = 0x0000_000C;
 
 use crate::items::{AMMO, APPARATUS as APPA, BOOK, INGREDIENT, KEY, LIGHT, MISC as MISC_FORM, POTION, SIGIL_STONE, SOUL_GEM, WEAPON};
 
 /// The category of a thing of form type `kind` (food, a poison and a scroll as the game tells
-/// them); None: not one the slots hand out (apparel). A light in the inventory is one that's
-/// carried: a torch.
-pub fn category(kind: u8, food: bool, poison: bool, scroll: bool) -> Option<u32> {
+/// them; `id` its form id); None: not one the slots hand out (apparel). A light in the inventory is
+/// one that's carried: a torch.
+pub fn category(kind: u8, id: u32, food: bool, poison: bool, scroll: bool) -> Option<u32> {
     Some(match kind {
+        MISC_FORM if LOCKPICK_FORMS.contains(&id) => LOCKPICKS,
+        MISC_FORM if id == HAMMER_FORM => HAMMERS,
         POTION if poison => POISONS,
         POTION if food => FOOD,
         POTION => POTIONS,
@@ -131,6 +140,11 @@ pub fn defaults() -> Vec<SlotDesc> {
         slot("Scrolls", [0.13, -0.28, 0.12], 0.07, 0.03, &[SCROLLS, POISONS], RULE_VALUE, 0),
         // Food at the right hip, what restores the most fatigue first (Oblivion's food mostly does).
         slot("Food", [0.19, -0.55, 0.02], 0.09, 0.04, &[FOOD], RULE_FATIGUE, 0),
+        // Lockpicks in the left chest pocket, where the pick hand reaches across for one as for a
+        // pen; the Skeleton Key first, as the game's lock takes it first.
+        slot("Lockpicks", [-0.13, -0.28, 0.12], 0.06, 0.03, &[LOCKPICKS], RULE_VALUE, 0),
+        // The repair hammer at the front of the belt on the right, for the hammer hand.
+        slot("Hammers", [0.08, -0.5, 0.16], 0.065, 0.03, &[HAMMERS], RULE_MOST, 0),
     ]
 }
 
@@ -407,7 +421,7 @@ mod game {
         let food = matches!(kind, POTION | INGREDIENT) && mem::at::<u8>(form + ALCH_FLAGS).is_some_and(|f| f & FOOD_FLAG != 0);
         let poison = kind == POTION && unsafe { std::mem::transmute::<usize, Poison>(IS_POISON)(form + EFFECTS) } != 0;
         let scroll = kind == BOOK && mem::at::<u8>(form + BOOK_FLAGS).is_some_and(|f| f & 1 != 0) && mem::deref(form + BOOK_ENCHANTMENT) != 0;
-        let category = category(kind, food && !poison, poison, scroll)?;
+        let category = category(kind, mem::at::<u32>(form + FORM_ID)?, food && !poison, poison, scroll)?;
         let (model, center, half) = model_of(form, &mut s.models)?;
         let key = mem::at::<u32>(form + FORM_ID)?;
         let next_id = &mut s.next_id;
@@ -602,6 +616,37 @@ mod game {
         let after = count_of(player, form);
         tracing::info!("inventory: {} dropped at {at:.2?}: {before} -> {after}", name_of(form));
         after < before
+    }
+
+    /// A copy drawn from a slot that a hand has now: its object, its thing's form, the hand, its
+    /// pose as the runtime last said (in tracking space with `OS_TRACKING`), and its model's box
+    /// (its middle and half extents in its model's space, metres).
+    #[derive(Clone, Copy, Debug)]
+    pub struct HeldCopy {
+        pub id: u32,
+        pub form: usize,
+        pub hand: usize,
+        pub flags: u32,
+        pub pose: Pose,
+        pub center: Vec3,
+        pub half: Vec3,
+    }
+
+    /// The copies the hands have now (a lockpick at a lock, [`crate::lock`]).
+    pub fn held_copies() -> Vec<HeldCopy> {
+        with_state(|s| {
+            let n = (s.states.count as usize).min(MAX_OBJECTS);
+            s.states.states[..n]
+                .iter()
+                .filter(|st| st.flags & OS_INVENTORY != 0 && st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0)
+                .filter_map(|st| {
+                    let d = s.drawn.get(&st.id).filter(|d| !d.taken)?;
+                    let item = s.inv.item(st.parent)?;
+                    let hand = if st.flags & OS_HELD_LEFT != 0 { 0 } else { 1 };
+                    Some(HeldCopy { id: st.id, form: d.form, hand, flags: st.flags, pose: st.pose, center: Vec3::from_array(item.center), half: Vec3::from_array(item.half_extents) })
+                })
+                .collect()
+        })
     }
 
     /// A stack's name and count as the inventory last had it.

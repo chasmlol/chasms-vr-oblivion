@@ -40,6 +40,29 @@ pub fn load_game(_name: &str) -> bool {
     false
 }
 
+/// `TESSaveLoadGame::SaveGame(this, 0, name, 0)` (thiscall), as the console's `SaveGame` calls it.
+const SAVE_GAME: usize = 0x0046_5130;
+
+/// Saves the game by name (its file name without `.ess`): a playtest's set-out kept for the next
+/// time. `SaveGame` is a console-only command too.
+#[cfg(target_arch = "x86")]
+pub fn save_game(name: &str) -> bool {
+    type SaveFn = unsafe extern "thiscall" fn(*mut std::ffi::c_void, u32, *const u8, u32) -> u8;
+    let Ok(name) = std::ffi::CString::new(name) else { return false };
+    let this = crate::mem::deref(SAVE_LOAD_GAME);
+    if this == 0 {
+        return false;
+    }
+    let ok = unsafe { std::mem::transmute::<usize, SaveFn>(SAVE_GAME)(this as *mut _, 0, name.as_ptr() as *const u8, 0) != 0 };
+    tracing::info!("console: saved as {name:?}: {ok}");
+    ok
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn save_game(_name: &str) -> bool {
+    false
+}
+
 /// `LookupFormByID` (cdecl) and `PlayerCharacter::SetActiveSpell` (thiscall, a `MagicItem*`).
 const LOOKUP_FORM: usize = 0x0046_B250;
 const SET_ACTIVE_SPELL: usize = 0x0066_4700;
@@ -121,6 +144,9 @@ pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
     }
+    if let Some(name) = line.strip_prefix("SaveGame ") {
+        return save_game(name.trim().trim_matches('"'));
+    }
     if let Some(spell) = line.strip_prefix("SelectSpell ") {
         let spell = spell.trim().trim_matches('"');
         let id = spell_named(spell).or_else(|| u32::from_str_radix(spell.trim_start_matches("0x"), 16).ok());
@@ -168,6 +194,10 @@ pub fn run(line: &str) -> bool {
         let up = it.next().and_then(|u| u.parse::<f32>().ok()).unwrap_or(0.0);
         return place_in_front(r, m, up);
     }
+    if let Some(rest) = line.strip_prefix("OnNewest ") {
+        let Some((base, script)) = rest.trim().split_once(' ') else { return false };
+        return on_newest(base, script.trim());
+    }
     if let Some(id) = line.strip_prefix("ActivateRef ") {
         return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(activate_ref);
     }
@@ -190,6 +220,24 @@ fn activate_ref(id: u32) -> bool {
 
 #[cfg(not(target_arch = "x86"))]
 fn activate_ref(_id: u32) -> bool {
+    false
+}
+
+/// A line of script on the newest reference of the base form `base` (its hex id) near the player:
+/// one just set out (`PlaceAt`), locked or given an owner (`OnNewest 0008DCBC lock 40`).
+#[cfg(target_arch = "x86")]
+fn on_newest(base: &str, script: &str) -> bool {
+    type Lookup = unsafe extern "C" fn(u32) -> usize;
+    let Ok(id) = u32::from_str_radix(base.trim_start_matches("0x"), 16) else { return false };
+    let form = unsafe { std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(id) };
+    let Some(r) = (form != 0).then(|| crate::items::newest_of(form)).flatten() else { return false };
+    let rid = crate::mem::at::<u32>(r + 0xC).unwrap_or(0);
+    tracing::info!("console: {rid:08X}.{script}");
+    run_script(&format!("{rid:08X}.{script}"))
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn on_newest(_base: &str, _script: &str) -> bool {
     false
 }
 
