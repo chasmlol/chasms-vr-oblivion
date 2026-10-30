@@ -453,3 +453,32 @@ Calls made:
 
 * The gesture asks; the game answers (its own accept or reject, its own dialogue). Raising the hands
   before nobody does nothing.
+
+## More to do by hand
+
+A survey of what else in Oblivion the player could do with their hands and body, each through the
+game's own system. Ranked by how good it would feel in VR and how often a player meets it (best and
+most often first). Not built: for the user to pick from. (Already passed on: taking things out of
+containers and bodies by hand, eating and drinking at the mouth, shopping at the counter with gold.)
+
+| # | By hand | Feel | How often | The game's own system |
+|---|---|---|---|---|
+| 1 | **Harvesting plants**: pinch a flower's head, pull a mushroom's cap, pluck a Nirnroot (it hums) | High: the most tactile thing in the wild | Constantly, outdoors and in caves (155 flora forms) | `TESFlora` (form type 0x1F): the player's activation harvests by the game's chance ("You successfully harvest %s.", its season, its harvested look); the ingredient into the pack, or into the hand as its model |
+| 2 | **Putting armour and clothes on and off**: a helmet held to the head, a cuirass to the chest, gauntlets pulled on, a ring onto a finger; a worn piece gripped and pulled off | High: dressing is the classic VR moment | Every haul of loot | `Actor::EquipItem` / `UnequipItem` with the piece's biped slots (its `TESBipedModelForm`); needs apparel in the hands (the holsters handing out armour and clothes as their ground models, also in its `TESBipedModelForm`), which also lets carried armour be repaired and enchanted in the hand |
+| 3 | **Keys at the lock**: a key from the Keys slot put to its door or chest | Medium-high: small, satisfying, the lock already reads the tip | Often (houses, dungeons, quests) | The player's activation of a locked thing whose key they carry (`ExtraLock` +4, the key): it opens; the lockpicking's keyhole touch reused |
+| 4 | **Sigil Stones on gear**: a Sigil Stone held to the weapon in the other hand, or to a worn piece | High: the reward of every gate, made physical | Once per gate | The `SigilStoneMenu` (type 0x418) with its item chosen through the `RepairMenu` in mode 6 (made for a moment, as recharging is) |
+| 5 | **Doomstones and runestones**: a palm on the standing stone | Medium: a ritual, like the wayshrines | Common outdoors (13 Doomstones, 26 runestones) | Each stone's own script on activation (the birthsign power once a day, the runestones' lesser powers); the wayshrines' touch and kneel reused |
+| 6 | **Traps by hand**: a tripwire cut with a blade or snagged, a pressure plate pressed with a palm, stepped over to avoid | High: tension, and a reason to look down | Often in caves, forts and ruins (153 trap activators) | The trigger activators' own scripts (`CTrigTripwire01`, `ARTrigPressurePlate01`...): their activation by the player sets the trap off; a blade's cut is a hit on the wire |
+| 7 | **Persuasion by gesture**: admire (a hand on the heart), boast (a fist to the chest), joke (a laugh), coerce (a pointed finger) to the speaker | Medium: social VR, but gestures can misfire | Often with quests and merchants | The `PersuasionMenu`'s four quarters clicked as its wheel turns (its own disposition and timing), the wheel floating at the speaker |
+| 8 | **Ladders climbed**: rung over rung, the pull taking the player up | Medium-high (VR players love climbing) | Rarely (16 ladder doors: the palace, sewers) | Ladders are load doors: their activation at the top of the climb |
+| 9 | **The Altar of Spellmaking**: a palm on it opens spellmaking beside it | Low-medium (the work is the menu) | Rarely (the Arcane University) | `ICSpellmakingingStation`'s script (`ShowSpellmaking`); the enchanting altar's machinery reused |
+| 10 | **Handing a requested thing to someone**: the letter, the ring, the head of the bandit chief, held out to the one who asked | High when it fits | Often in quests, but each quest is its own | The quest's dialogue topic that takes the thing (`RemoveItem` in its result script): needs each quest's topic found; risky |
+| 11 | **Bells, chimes and gongs struck**: the Chime of the Wellspring, chimes in the Shivering Isles | Medium | Rarely | Their activators' scripts (20 chimes) |
+| 12 | **Training at the Arena's dummies and the archery butts** | Low-medium | Rarely | Hits on their activators (the game's skill training is its trainers') |
+
+Notes for building them:
+
+* 1, 3, 5 and 9 are small: activation by a gesture at the thing, as the shrines and wells are.
+* 2 is the biggest and unlocks the most (it changes the holsters: apparel in the hands).
+* 4 reuses recharging's machinery (the game's own item list, made for a moment).
+* 6 needs a hit from a blade on a trigger that isn't an actor (the combat code's hits are on actors).
