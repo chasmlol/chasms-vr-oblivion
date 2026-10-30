@@ -94,6 +94,81 @@ mod win {
         unsafe { real(this) }
     }
 
+    /// The world render centres the sky and the weather on the scene graph's camera node
+    /// ([`engine::camera_node`], where the game's camera is): at its start it copies the node's
+    /// position (`NiAVObject` +0x54) into the "Sky" node (`*0xB333D8`: the dome, the clouds, the
+    /// sun, the moons, the stars) and the "Weather" node (`*0xB333DC`: rain, snow, the sun's glare)
+    /// and updates them. An eye is elsewhere (where the head is: the room's offset, the real head's
+    /// height, the steps smoothed), so the dome and its clouds were centred off the eyes, near
+    /// enough to show parallax, and swam and bobbed as the player walked. The two copies take the
+    /// node from these words instead (patched at install: `mov eax, [0xB333CC]` and the walk to its
+    /// first child at 0x40C95F and 0x40C9AA become `mov eax, [word]` and a jump past the walk).
+    /// For a single render they hold the camera node, as the game has it. In the eyes, the sky is
+    /// centred on each render's camera (it's at infinity for both eyes, turning only as the head
+    /// turns) and the weather on the head, one place for both eyes, so rain and snow keep their
+    /// depth.
+    static SKY_FROM: AtomicUsize = AtomicUsize::new(0);
+    static WEATHER_FROM: AtomicUsize = AtomicUsize::new(0);
+    const SKY_COPY_AT: usize = 0x0040_C95F;
+    const WEATHER_COPY_AT: usize = 0x0040_C9AA;
+
+    /// A stand-in for the camera node as those copies read it: its position (+0x54) only.
+    #[repr(C)]
+    struct Centre([std::sync::atomic::AtomicU32; 24]);
+    static SKY_CENTRE: Centre = Centre([const { std::sync::atomic::AtomicU32::new(0) }; 24]);
+    static WEATHER_CENTRE: Centre = Centre([const { std::sync::atomic::AtomicU32::new(0) }; 24]);
+
+    impl Centre {
+        /// Puts the stand-in at `p` (game units) and it in `from`'s word.
+        fn centre(&self, from: &AtomicUsize, p: glam::Vec3) {
+            let at = engine::av::LOCAL_TRANSLATE / 4;
+            for (i, v) in p.to_array().into_iter().enumerate() {
+                self.0[at + i].store(v.to_bits(), Ordering::Release);
+            }
+            from.store(self as *const Centre as usize, Ordering::Release);
+        }
+    }
+
+    fn patch_centres() {
+        let [b0, b1, b2, b3] = (crate::engine::SCENE_GRAPH as u32).to_le_bytes();
+        let walk = [0xA1, b0, b1, b2, b3, 0x66, 0x83];
+        let patch = |at: usize, word: &AtomicUsize| {
+            let [w0, w1, w2, w3] = (word as *const AtomicUsize as u32).to_le_bytes();
+            // (The jump goes past the 27 bytes of the walk, from the end of these 7.)
+            crate::mem::patch_code(at, &walk, &[0xA1, w0, w1, w2, w3, 0xEB, 27 - 7])
+        };
+        let (sky, weather) = (patch(SKY_COPY_AT, &SKY_FROM), patch(WEATHER_COPY_AT, &WEATHER_FROM));
+        if sky && weather {
+            tracing::info!("render: the sky is centred on each eye and the weather on the head");
+        } else {
+            tracing::error!("render: the sky and the weather are centred on the game's camera (patched: sky {sky}, weather {weather})");
+        }
+    }
+
+    /// The sky and the weather centred on the camera node, as the game has them.
+    fn centre_on_camera_node() {
+        let node = engine::camera_node();
+        SKY_FROM.store(node, Ordering::Release);
+        WEATHER_FROM.store(node, Ordering::Release);
+    }
+
+    /// The "Sky" node (`*0xB333D8`), whose world position is where the render put the sky.
+    const SKY_NODE: usize = 0x00B3_33D8;
+
+    /// The fixes for what the game makes once a frame from one camera (the sky's centre, a
+    /// skinned model's bones) are on. Testing, `RUSTVR_OBLIVION_MONO_VISUALS=1`: they're off, to
+    /// see what they fix.
+    fn per_eye_visuals() -> bool {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *ON.get_or_init(|| {
+            let on = !std::env::var("RUSTVR_OBLIVION_MONO_VISUALS").is_ok_and(|v| v == "1");
+            if !on {
+                tracing::info!("render: testing: the sky is centred on the game's camera and the eyes share the renderer's frame (RUSTVR_OBLIVION_MONO_VISUALS)");
+            }
+            on
+        })
+    }
+
     /// The game's redraw from the outdoor cell grid (thiscall), which it also runs as soon as its
     /// lost device is reset: it reads the grid's middle cell without asking if there is one, and
     /// indoors there isn't (a crash on any device reset inside a building; the device is lost when
@@ -129,6 +204,7 @@ mod win {
     pub fn install() {
         set_lock(true, true);
         patch_lock();
+        patch_centres();
         hooks::install_into(ACTOR_SHADOWS as *const (), actor_shadows as *const (), "actor shadows", &REAL_SHADOWS);
         hooks::install_into(engine::FRAME as *const (), frame_hook as *const (), "Main::Frame", &REAL_FRAME);
         hooks::install_into(engine::RENDER as *const (), render_hook as *const (), "Main::Render", &REAL_RENDER);
@@ -155,6 +231,7 @@ mod win {
         // as an autosave goes through a door) is the game's, drawn as it draws it: two eyes drawn
         // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
         // menus goes into its world texture.)
+        centre_on_camera_node();
         if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
             return unsafe { real(this, arg) };
         }
@@ -207,10 +284,27 @@ mod win {
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let log = LOGGED.fetch_add(1, Ordering::Relaxed) % 600 == 30;
         let mut mirror_done = None;
+        let per_eye = per_eye_visuals();
+        let eyes = [0, 1].map(|eye| camera::eye_camera(&view, &snap.frame.eyes[eye], &snap.frame.fov[eye], &game));
+        if per_eye {
+            WEATHER_CENTRE.centre(&WEATHER_FROM, (glam::Vec3::from(eyes[0].pos) + glam::Vec3::from(eyes[1].pos)) * 0.5);
+        }
         for eye in 0..renders {
+            // Each render after the first is a frame of the renderer's own. The bones of a skinned
+            // model (the actors' bodies, clothes and armour) are made relative to the camera that
+            // draws it first in a frame, so with one frame for all the renders the second eye and
+            // the mirror drew the actors' bodies where the first eye's camera saw them: in the
+            // second eye, the eyes' width aside from their heads, weapons and shadows, which are
+            // drawn where they are.
+            if eye > 0 && per_eye {
+                engine::next_render_frame();
+            }
             if eye == 2 {
                 let s = mirror_cam.expect("a third render is the mirror's");
                 camera::write(cam, &s);
+                if per_eye {
+                    SKY_CENTRE.centre(&SKY_FROM, glam::Vec3::from(s.pos));
+                }
                 set_lock(false, true);
                 SECOND_EYE.store(true, Ordering::Release);
                 result = time(Part::Eye, || unsafe { real(this, arg) });
@@ -219,7 +313,7 @@ mod win {
                 mirror_done = (colour && depth).then_some((s.frustum[4], s.frustum[5]));
                 continue;
             }
-            let s = camera::eye_camera(&view, &snap.frame.eyes[eye], &snap.frame.fov[eye], &game);
+            let s = eyes[eye];
             if log {
                 tracing::info!(
                     "render: eye {eye}: tracking pos {:?} rot {:?} -> game pos {:?} dir {:?} up {:?} frustum {:?}; game camera pos {:?} dir {:?}; view anchor {:?} yaw {} wpm {}",
@@ -237,20 +331,35 @@ mod win {
                 );
             }
             camera::write(cam, &s);
+            if per_eye {
+                SKY_CENTRE.centre(&SKY_FROM, glam::Vec3::from(s.pos));
+            }
             set_lock(eye == 0, eye + 1 == renders);
             SECOND_EYE.store(eye == 1, Ordering::Release);
             result = time(Part::Eye, || unsafe { real(this, arg) });
+            if log {
+                let sky = mem::at::<[f32; 3]>(mem::deref(SKY_NODE) + engine::av::WORLD_TRANSLATE).map(glam::Vec3::from);
+                tracing::info!(
+                    "render: eye {eye}: the sky's centre is {:.2?} units from the eye (the game's camera {:.2} units)",
+                    sky.map(|c| c.distance(glam::Vec3::from(s.pos))),
+                    glam::Vec3::from(s.pos).distance(glam::Vec3::from(game.pos))
+                );
+            }
             captured[eye] = time(Part::Capture, || hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false)));
             depth[eye] = time(Part::Depth, || hooks::guard("capture depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), eye)).unwrap_or(false)));
         }
         set_lock(true, true);
         SECOND_EYE.store(false, Ordering::Release);
         camera::write(cam, &game);
+        centre_on_camera_node();
         if let Some(f) = arms_flags {
             unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f) };
         }
         if let Some(f) = outside_flags {
             unsafe { ((outside + engine::av::FLAGS) as *mut u16).write(f) };
+        }
+        if captured == [true, true] {
+            hooks::guard_void("eye pictures", || eye_pictures(link::now()));
         }
         hooks::guard_void("Render end", || {
             // The menus are drawn next: alone on black, they're the HUD layer.
@@ -258,6 +367,49 @@ mod win {
             *EYES.lock().unwrap() = Some(Eyes { snap, captured, depth, near_far: (game.frustum[4], game.frustum[5]), mirror: mirror_done });
         });
         result
+    }
+
+    /// Testing, `RUSTVR_OBLIVION_EYE_PNG=<folder>`: both eyes' pictures (the world, before the HUD)
+    /// are saved there every 10 seconds from 15 seconds in, up to 30 pairs (`<n>-left.png`,
+    /// `<n>-right.png`), to hold the eyes up to each other.
+    fn eye_pictures(now: f64) {
+        static DIR: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+        let Some(dir) = DIR.get_or_init(|| std::env::var_os("RUSTVR_OBLIVION_EYE_PNG").filter(|v| !v.is_empty()).map(std::path::PathBuf::from)) else { return };
+        static NEXT: Mutex<(f64, u32)> = Mutex::new((0.0, 0));
+        let n = {
+            let mut next = NEXT.lock().unwrap();
+            if next.0 == 0.0 {
+                next.0 = now + 15.0;
+            }
+            if now < next.0 || next.1 >= 30 {
+                return;
+            }
+            next.0 = now + 10.0;
+            next.1 += 1;
+            next.1
+        };
+        let mut pictures = Vec::new();
+        for (eye, name) in [(0, "left"), (1, "right")] {
+            match link::with_adapter(|a| d3d9::read_bgra(a.gpu(), eye)) {
+                Some(Ok(p)) => pictures.push((dir.join(format!("{n:02}-{name}.png")), p)),
+                Some(Err(e)) => tracing::warn!("render: the {name} eye's picture: {e:#}"),
+                None => {}
+            }
+        }
+        // (Written off the render thread: a picture takes longer than a frame.)
+        std::thread::spawn(move || {
+            for (path, (w, h, mut px)) in pictures {
+                // (The copies are B8G8R8A8; the picture is opaque.)
+                for p in px.as_chunks_mut::<4>().0 {
+                    p.swap(0, 2);
+                    p[3] = 255;
+                }
+                match rustvr_gpu::save_png_fast(&path, w, h, &px) {
+                    Ok(()) => tracing::info!("render: the eye's picture is {}", path.display()),
+                    Err(e) => tracing::warn!("render: saving {}: {e:#}", path.display()),
+                }
+            }
+        });
     }
 
     /// The runtime's frame and the game's camera, when the eyes are to be rendered.

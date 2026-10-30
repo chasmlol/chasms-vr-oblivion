@@ -620,6 +620,38 @@ mod win {
         }
     }
 
+    /// `kind`'s latest capture on the CPU, as its size and tightly packed BGRA8 pixels (testing:
+    /// the eyes' pictures, [`crate::render`]).
+    pub fn read_bgra(gpu: &Gpu, kind: usize) -> anyhow::Result<(u32, u32, Vec<u8>)> {
+        use windows::Win32::Graphics::Direct3D11::{D3D11_CPU_ACCESS_READ, D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING};
+        let bridge = BRIDGE.lock().unwrap();
+        let b = bridge.as_ref().context("no bridge")?;
+        anyhow::ensure!(b.ready[kind] != 0, "nothing captured");
+        let ctx4: ID3D11DeviceContext4 = gpu.ctx.cast()?;
+        unsafe {
+            ctx4.Wait(&b.fence11, b.ready[kind])?;
+            let mut d = D3D11_TEXTURE2D_DESC::default();
+            b.shared11[kind].GetDesc(&mut d);
+            d.Usage = D3D11_USAGE_STAGING;
+            d.BindFlags = 0;
+            d.CPUAccessFlags = D3D11_CPU_ACCESS_READ.0 as u32;
+            d.MiscFlags = 0;
+            let mut staging = None;
+            gpu.device.CreateTexture2D(&d, None, Some(&mut staging))?;
+            let staging = staging.context("no staging texture")?;
+            gpu.ctx.CopyResource(&staging, &b.shared11[kind]);
+            let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+            gpu.ctx.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))?;
+            let row = d.Width as usize * 4;
+            let mut out = vec![0u8; row * d.Height as usize];
+            for y in 0..d.Height as usize {
+                std::ptr::copy_nonoverlapping((mapped.pData as *const u8).add(y * mapped.RowPitch as usize), out.as_mut_ptr().add(y * row), row);
+            }
+            gpu.ctx.Unmap(&staging, 0);
+            Ok((d.Width, d.Height, out))
+        }
+    }
+
     /// Copies `kind`'s latest capture into `dst` on the adapter's device (after the copy into the
     /// shared texture is done). False if there's none or the sizes differ.
     pub fn deliver(gpu: &Gpu, kind: usize, dst: &ID3D11Texture2D) -> bool {
