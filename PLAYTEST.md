@@ -67,6 +67,24 @@ Look out for:
   something else?
 - **The spheres.** Too bright, too faint, or in the way of the editor?
 
+## Round 6: the shoulders easier to reach
+
+You said the shoulders were still too hard to reach. Both over-the-shoulder places are bigger now
+and reach down behind the shoulder, not just beside the head:
+
+- **The weapon holsters on the back** (the shield's, a two-handed weapon's) are 28 cm round (were
+  24), their middle 4 cm lower.
+- **The arrows slot** reaches 26 cm (was 20), its middle 6 cm lower: from above your right shoulder
+  down behind it.
+- **Behind the eyes:** both count with your hand anywhere beside or behind your head, where before
+  it had to be 3 cm behind your eyes. A hand in front of your face (food at your mouth) still
+  doesn't count.
+- **Logged:** each draw now logs where your hand was, relative to your body. If they're still
+  awkward, the next run shows where you actually reach, and the slots can be moved there.
+
+Try: reach for the arrows over your right shoulder and the shield over your left, a few times each,
+quickly, without looking.
+
 ## Round 5: things drawn from slots are rigged
 
 You said things drawn from a slot sat awkwardly in the hand, like something grabbed off a table
@@ -155,7 +173,7 @@ Look out for:
 | Slot | Where | Gives out |
 |---|---|---|
 | Healing | the belt, in front of your left hip (your off hand reaches it while the sword hand fights) | potions and food, what heals most first; then what restores magicka or fatigue; never a potion that restores nothing |
-| Arrows | over your right shoulder, behind your head (where Oblivion wears its quiver) | arrows, the ones you have equipped first, then the strongest |
+| Arrows | over your right shoulder, from above it down behind it (where Oblivion wears its quiver) | arrows, the ones you have equipped first, then the strongest |
 | Scrolls | high on your chest, on the right | scrolls, then poisons, the most valuable first |
 | Food | at your right hip | food, what restores the most fatigue first (most of Oblivion's food restores fatigue, not health) |
 

@@ -114,9 +114,9 @@ pub fn defaults() -> Vec<SlotDesc> {
         // hand fights.
         slot("Healing", [-0.13, -0.47, 0.14], 0.075, 0.035, &[POTIONS, FOOD], RULE_HEALING, 0),
         // The arrows, the equipped ones first, over the right shoulder where Oblivion wears its
-        // quiver (its arrows at the right shoulder). The biggest: a hand reaching behind the head
-        // can't see where it is.
-        slot("Arrows", [0.13, -0.06, -0.1], 0.12, 0.08, &[ARROWS], RULE_STRONGEST, SLOTF_EQUIPPED_FIRST | SLOTF_BEHIND),
+        // quiver (its arrows at the right shoulder). The biggest, from above the shoulder down
+        // behind it: a hand reaching behind the head can't see where it is.
+        slot("Arrows", [0.14, -0.12, -0.12], 0.13, 0.13, &[ARROWS], RULE_STRONGEST, SLOTF_EQUIPPED_FIRST | SLOTF_BEHIND),
         // Scrolls and poisons high on the chest, on the right.
         slot("Scrolls", [0.13, -0.28, 0.12], 0.07, 0.03, &[SCROLLS, POISONS], RULE_VALUE, 0),
         // Food at the right hip, what restores the most fatigue first (Oblivion's food mostly does).
