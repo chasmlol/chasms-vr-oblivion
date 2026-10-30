@@ -27,6 +27,15 @@ made from the game's clips.
    Silero's models, Breeze in WSL with your patch). The voices made from the game's clips go in
    `%LOCALAPPDATA%\RustVR\voice\oblivion\voices`, each character's memory in `...\oblivion\saves.json`.
 
+## Settings
+
+RustVR's menu (the menu button) has a **Voice** tab: Voice on or off, the microphone (the headset's
+own, Virtual Desktop's, unless you pick another), their voices' volume (1.5 times the game's own
+by default), acting lines out (on: their voice follows the line's "[sneering]"; it's twice the
+voice server's work, so answers are slower), talking over them to cut them off (for headphones),
+and how long a pause ends what you're saying. Changing the mic or how it listens restarts the
+voice plugin (what people were told since your last save goes with it).
+
 ## What to try, in order
 
 1. **Someone at a stall.** Walk up to a merchant (two or three steps away), look at their face and
