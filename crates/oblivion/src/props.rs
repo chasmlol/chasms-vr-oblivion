@@ -1,11 +1,14 @@
 //! The world's loose Havok bodies, for the hands: the parts of what's near the player that the
 //! game's own physics swings and the player can't take (hanging chains and the chain dolls on them,
 //! roots, ropes, a bucket or skulls on a rope, a trap's chain once it's sprung), each offered to the
-//! runtime as one of the game's own props ([`OBJF_GAME_SIMULATED`]): the hands, the fingers and
-//! what they hold go into it and push it, and the game's Havok moves it, so it swings off the hand
-//! and back on its own constraints, as the game would swing it. Each push is given to its body as
-//! the impulse its point lacks of the push (Havok's `applyPointImpulse`), as the game's own grab
-//! pushes a body.
+//! runtime as one of the game's own props on the game's constraints ([`OBJF_CONSTRAINED`]): solid
+//! to the hands, which rest on it and push it, and the game's Havok moves it, so it swings off the
+//! hand and back on its own constraints, as the game would swing it. Each push is given to its body
+//! as the impulse its point lacks of the push (Havok's `applyPointImpulse`). Taken in a hand, it's
+//! held with the game's own grab (holding Activate on a thing, `PlayerCharacter::StartGrab`): a
+//! `bhkMouseSpringAction` on its body, its middle pulled every frame to where the hand would have
+//! it, as hard as the game's grab pulls; the runtime draws the hand on it where the game has it, so
+//! a chain taut on its anchor holds the hand back, and the hand comes off it pulled 30 cm further.
 //!
 //! Bodies the game moves itself aren't offered: fixed ones are the world's collision
 //! ([`crate::collision`]), keyframed ones are moved by their animations (the doors and levers,
@@ -17,22 +20,32 @@
 //! mass +0xC0, linear and angular velocity +0xD0, +0xE0; virtual `getInertiaInvWorld` +0x3C and
 //! `applyPointImpulse` +0x60 (thiscall: impulse, point); `hkEntity::activate` 0x8A6410 wakes it. A
 //! node's collision object +0xA8, its `bhkRigidBody` +0x10, that one's `hkRigidBody` +8. Havok's
-//! unit is 7 game units.
+//! unit is 7 game units. The game's grab (the npcs branch's research, `docs/research/npcs.md`): its
+//! allocator 0x401F00 (cdecl: size); a mouse spring's construction info (64 bytes, set to the game's
+//! own grab's by 0x47F9F0: +4 the body, +0x10 the point in the body, +0x20 the target in the world);
+//! the `bhkMouseSpringAction` made from it (0x47DE90: 16 bytes, refcounted at +4, its
+//! `hkMouseSpringAction` at +8), added to the cell's `bhkWorld` (vtable +0x5C) and taken out
+//! (+0x60); `setMousePosition` (0x8B8A10) moves its target. `TESObjectREFR::GetParentCell`
+//! 0x6ECC80, a cell's `bhkWorld` 0x4440C0.
 
 use glam::{Mat3, Quat, Vec3};
 use rustvr_protocol::*;
 
 /// Metres from the player's chest the loose bodies are offered within (a step and an arm), and at
-/// most this many, nearest first.
+/// most this many, nearest first; one offered stays so until it's [`KEEP`] off (a chain swinging
+/// across the edge isn't dropped and offered again under the hand).
 pub const REACH: f32 = 3.0;
+pub const KEEP: f32 = 4.0;
 pub const MAX_BODIES: usize = 48;
 /// Seconds between looks round.
 pub const SCAN_EVERY: f64 = 0.5;
 
-/// A body's object: the runtime's prop that is the game's body, pushed but not taken.
+/// A body's object: the runtime's prop that is the game's body on the game's constraints, pushed
+/// and taken where the game has it (not pulled to the hand by the gloves, not put away: it isn't
+/// the player's).
 pub fn object_desc(id: u32, seq: u32, at: (Vec3, Quat), centre: Vec3, half: Vec3, mass: f32, hull: bool) -> ObjectDesc {
     let mut d = crate::items::object_desc(id, seq, at, centre, half, mass, hull);
-    d.flags = OBJF_GAME_SIMULATED;
+    d.flags = OBJF_GRABBABLE | OBJF_GAME_SIMULATED | OBJF_CONSTRAINED;
     d
 }
 
@@ -75,6 +88,16 @@ mod game {
     const VT_INERTIA_INV_WORLD: usize = 0x3C;
     const VT_POINT_IMPULSE: usize = 0x60;
     const ACTIVATE: usize = 0x008A_6410;
+    const MOTION_ROT: usize = 0x10;
+    const MOTION_POS: usize = 0x40;
+    const ALLOC: usize = 0x0040_1F00;
+    const SPRING_INFO: usize = 0x0047_F9F0;
+    const SPRING_NEW: usize = 0x0047_DE90;
+    const VT_ADD_TO_WORLD: usize = 0x5C;
+    const VT_REMOVE: usize = 0x60;
+    const SET_MOUSE: usize = 0x008B_8A10;
+    const PARENT_CELL: usize = 0x006E_CC80;
+    const CELL_WORLD: usize = 0x0044_40C0;
     const CODE: std::ops::Range<usize> = 0x0040_1000..0x00A0_0000;
     /// Metres per Havok unit.
     const HK_METRES: f32 = crate::collision::HAVOK_SCALE / camera::UNITS_PER_METER;
@@ -87,7 +110,16 @@ mod game {
         hk: usize,
         desc: ObjectDesc,
         hull: Vec<Vec3>,
+        /// A hand has it: the game's grab on it (its `bhkMouseSpringAction`), 0 while none does.
+        spring: usize,
     }
+
+    #[repr(C, align(16))]
+    #[derive(Clone, Copy, Default)]
+    struct V4([f32; 4]);
+
+    #[repr(C, align(16))]
+    struct SpringInfo([u8; 64]);
 
     #[derive(Default)]
     struct State {
@@ -99,6 +131,7 @@ mod game {
         next_scan: f64,
         poses: Option<Box<GamePoses>>,
         pushes: Option<Box<GamePushes>>,
+        states: Option<Box<ObjectStates>>,
         logged: HashMap<u32, f64>,
     }
 
@@ -164,7 +197,7 @@ mod game {
                 }
                 // (A reference is where it hangs from: its bodies may hang a few metres below.)
                 let Some(p) = mem::at::<[f32; 3]>(r + refr::POS) else { continue };
-                if camera::basis().point_from_game(Vec3::from(p)).distance(at) > REACH + 6.0 {
+                if camera::basis().point_from_game(Vec3::from(p)).distance(at) > KEEP + 6.0 {
                     continue;
                 }
                 let mut stack = vec![(mem::deref(r + REFR_NODE), 0u32)];
@@ -176,7 +209,7 @@ mod game {
                     }
                     if let Some(hk) = loose_body(n)
                         && let Some((p, _)) = pose_of(n)
-                        && p.distance(at) <= REACH
+                        && p.distance(at) <= KEEP
                     {
                         out.push((r, n, hk, p.distance(at)));
                     }
@@ -201,7 +234,7 @@ mod game {
         }
         let (centre, half) = crate::items::bounds(&hull)?;
         let mass = mem::at::<f32>(mem::deref(hk + ENTITY_MOTION) + MOTION_MASS_INV).filter(|m| *m > 1e-4 && m.is_finite()).map_or(5.0, |m| 1.0 / m).clamp(0.1, 200.0);
-        Some(Body { refr, node, hk, desc: object_desc(id, 1, at, centre, half, mass, true), hull })
+        Some(Body { refr, node, hk, desc: object_desc(id, 1, at, centre, half, mass, true), hull, spring: 0 })
     }
 
     /// Once a game frame: a look round, now and then, for the loose bodies near the player.
@@ -219,7 +252,10 @@ mod game {
             let chest = feet + Vec3::Y * 1.2;
             let near = if crate::menus::in_world() { nearby(chest) } else { Vec::new() };
             let mut keep = Vec::new();
-            for &(refr, node, hk, _) in near.iter().take(MAX_BODIES) {
+            for &(refr, node, hk, d) in near.iter().take(MAX_BODIES) {
+                if d > REACH && !s.ids.contains_key(&hk) {
+                    continue;
+                }
                 let id = match s.ids.get(&hk) {
                     Some(&id) => id,
                     None => {
@@ -238,8 +274,10 @@ mod game {
                     s.bodies.insert(id, body);
                 }
             }
-            s.bodies.retain(|id, _| keep.contains(id));
-            s.ids.retain(|_, id| keep.contains(id));
+            // (Out of reach: gone, unless a hand has it.)
+            s.bodies.retain(|id, b| keep.contains(id) || b.spring != 0);
+            let held: Vec<usize> = s.bodies.values().map(|b| b.hk).collect();
+            s.ids.retain(|hk, id| keep.contains(id) || held.contains(hk));
             let mut ids: Vec<u32> = s.bodies.keys().copied().collect();
             ids.sort();
             if ids != s.sent {
@@ -269,18 +307,24 @@ mod game {
         }
     }
 
-    /// Before the eyes are drawn: the hands' pushes given to the bodies, and where each body is now,
-    /// for the runtime.
-    pub fn place(now: f64) {
+    /// Before the eyes are drawn: the hands' holds on the bodies (the game's grab on each one held,
+    /// pulled to where the hand would have it) and their pushes, and where each body is now, for the
+    /// runtime.
+    pub fn place(view: &rustvr_adapter::View, now: f64) {
         with_state(|s| {
             // (A body whose reference or 3D has gone since the last look round, or everything while
-            // the game loads: never touched again.)
+            // the game loads: never touched again. Its grab goes with it: while the game loads its
+            // Havok world may be gone, and the spring with it.)
             if !crate::menus::in_world() {
                 s.bodies.clear();
             }
             let gone = s.bodies.len();
             s.bodies.retain(|id, b| {
-                mem::is_readable(b.refr as *const u8, 0x48) && candidate(b.refr) && mem::is_readable(b.node as *const u8, 0xB8) && loose_body(b.node) == Some(b.hk) && s.ids.get(&b.hk) == Some(id)
+                let there = mem::is_readable(b.refr as *const u8, 0x48) && candidate(b.refr) && mem::is_readable(b.node as *const u8, 0xB8) && loose_body(b.node) == Some(b.hk) && s.ids.get(&b.hk) == Some(id);
+                if !there && b.spring != 0 {
+                    unspring(b.spring, 0);
+                }
+                there
             });
             if s.bodies.len() != gone {
                 publish(s);
@@ -292,6 +336,39 @@ mod game {
             }
             if s.bodies.is_empty() {
                 return;
+            }
+            // Held: the game's grab on it, its middle pulled to where the hand would have it.
+            let states = s.states.get_or_insert_with(bytemuck::zeroed_box);
+            if crate::link::with_adapter(|a| a.read_object_states(states)).unwrap_or(false) {
+                let n = (states.count as usize).min(MAX_OBJECTS);
+                let by_id: HashMap<u32, &ObjectState> = states.states[..n].iter().map(|st| (st.id, st)).collect();
+                for b in s.bodies.values_mut() {
+                    let held = by_id.get(&b.desc.id).filter(|st| st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0);
+                    let middle = Vec3::from(b.desc.center);
+                    match held {
+                        Some(st) => {
+                            let (pos, rot) = if st.flags & OS_TRACKING != 0 { view.pose(&st.pose) } else { (Vec3::from_array(st.pose.pos), Quat::from_array(st.pose.rot)) };
+                            if !pos.is_finite() || !rot.is_finite() || rot.length_squared() < 1e-6 {
+                                continue;
+                            }
+                            if b.spring == 0 {
+                                let world = havok_world(b.refr);
+                                let Some((at, _)) = pose_of(b.node).map(|(p, q)| (p + q * middle, q)) else { continue };
+                                b.spring = if world != 0 { spring(b.hk, to_hk(at), world) } else { 0 };
+                                tracing::info!("props: {:#x} taken in hand: the game's grab on it ({:#x})", b.desc.id, b.spring);
+                            }
+                            if b.spring != 0 {
+                                pull(b.spring, to_hk(pos + rot.normalize() * middle));
+                            }
+                        }
+                        None if b.spring != 0 => {
+                            unspring(b.spring, b.hk);
+                            b.spring = 0;
+                            tracing::info!("props: {:#x} let go", b.desc.id);
+                        }
+                        None => {}
+                    }
+                }
             }
             let pushes = s.pushes.get_or_insert_with(bytemuck::zeroed_box);
             if crate::link::with_adapter(|a| a.read_game_pushes(pushes)).unwrap_or(false) {
@@ -322,6 +399,98 @@ mod game {
         });
     }
 
+    /// A point of the runtime's world in Havok's units.
+    fn to_hk(p: Vec3) -> Vec3 {
+        camera::basis().point_to_game(p) / crate::collision::HAVOK_SCALE
+    }
+
+    /// A body's transform in Havok's world: its rotation and position.
+    fn transform(hk: usize) -> Option<(Mat3, Vec3)> {
+        let m = mem::deref(hk + ENTITY_MOTION);
+        let c: [[f32; 4]; 3] = mem::at(m + MOTION_ROT)?;
+        let t: [f32; 4] = mem::at(m + MOTION_POS)?;
+        let r = Mat3::from_cols(Vec3::new(c[0][0], c[0][1], c[0][2]), Vec3::new(c[1][0], c[1][1], c[1][2]), Vec3::new(c[2][0], c[2][1], c[2][2]));
+        let t = Vec3::new(t[0], t[1], t[2]);
+        (r.is_finite() && t.is_finite()).then_some((r, t))
+    }
+
+    /// The `bhkWorld` a reference is in (its cell's).
+    fn havok_world(refr: usize) -> usize {
+        type Cell = unsafe extern "thiscall" fn(usize) -> usize;
+        let cell = unsafe { std::mem::transmute::<usize, Cell>(PARENT_CELL)(refr) };
+        if cell == 0 {
+            return 0;
+        }
+        unsafe { std::mem::transmute::<usize, Cell>(CELL_WORLD)(cell) }
+    }
+
+    /// The game's grab on `hk` at `point` (Havok units, the world), pulling it to the same point (no
+    /// pull yet), in `world`: as the game's own grab makes it, its strength and damping the game's.
+    fn spring(hk: usize, point: Vec3, world: usize) -> usize {
+        let Some((r, t)) = transform(hk) else { return 0 };
+        let local = r.transpose() * (point - t);
+        let mut info = SpringInfo([0; 64]);
+        type Info = unsafe extern "thiscall" fn(*mut SpringInfo);
+        type New = unsafe extern "thiscall" fn(usize, *const SpringInfo) -> usize;
+        type Alloc = unsafe extern "C" fn(usize) -> usize;
+        type Add = unsafe extern "thiscall" fn(usize, usize) -> u8;
+        unsafe {
+            std::mem::transmute::<usize, Info>(SPRING_INFO)(&mut info);
+            let base = info.0.as_mut_ptr();
+            (base.add(4) as *mut usize).write(hk);
+            (base.add(0x10) as *mut [f32; 4]).write([local.x, local.y, local.z, 0.0]);
+            (base.add(0x20) as *mut [f32; 4]).write([point.x, point.y, point.z, 0.0]);
+            let m = std::mem::transmute::<usize, Alloc>(ALLOC)(16);
+            if m == 0 {
+                return 0;
+            }
+            let action = std::mem::transmute::<usize, New>(SPRING_NEW)(m, &info);
+            if action == 0 {
+                return 0;
+            }
+            // Ours: one reference held until it's let go.
+            let rc = (action + 4) as *const std::sync::atomic::AtomicU32;
+            (*rc).fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            if let Some(f) = virt(action, VT_ADD_TO_WORLD) {
+                std::mem::transmute::<usize, Add>(f)(action, world);
+            }
+            action
+        }
+    }
+
+    /// Moves the grab's target (Havok units, the world).
+    fn pull(action: usize, to: Vec3) {
+        let hk = mem::deref(action + HK_OBJ);
+        if hk == 0 || !to.is_finite() {
+            return;
+        }
+        let v = V4([to.x, to.y, to.z, 0.0]);
+        type Set = unsafe extern "thiscall" fn(usize, *const V4) -> u32;
+        unsafe { std::mem::transmute::<usize, Set>(SET_MOUSE)(hk, &v) };
+    }
+
+    /// Takes the grab out of the world and lets it go (the body woken, as the game's own let-go;
+    /// `hk` 0: its body may be gone).
+    fn unspring(action: usize, hk: usize) {
+        type Remove = unsafe extern "thiscall" fn(usize) -> u32;
+        type Delete = unsafe extern "thiscall" fn(usize, u32);
+        type Activate = unsafe extern "thiscall" fn(usize) -> u32;
+        unsafe {
+            if let Some(f) = virt(action, VT_REMOVE) {
+                std::mem::transmute::<usize, Remove>(f)(action);
+            }
+            if hk != 0 {
+                std::mem::transmute::<usize, Activate>(ACTIVATE)(hk);
+            }
+            let rc = (action + 4) as *const std::sync::atomic::AtomicU32;
+            if (*rc).fetch_sub(1, std::sync::atomic::Ordering::AcqRel) == 1
+                && let Some(f) = virt(action, 0)
+            {
+                std::mem::transmute::<usize, Delete>(f)(action, 1);
+            }
+        }
+    }
+
     /// The push a hand gives a body: what its point `point` (the runtime's world) lacks of going
     /// `speed` m/s along `dir`, as an impulse there. False if it needed none.
     fn give(hk: usize, point: Vec3, dir: Vec3, speed: f32) -> bool {
@@ -334,9 +503,6 @@ mod game {
         }
         let (Some(com), Some(inv_mass)) = (mem::at::<[f32; 4]>(m + MOTION_COM), mem::at::<f32>(m + MOTION_MASS_INV)) else { return false };
         let (Some(inertia), Some(impulse_at)) = (virt(m, VT_INERTIA_INV_WORLD), virt(m, VT_POINT_IMPULSE)) else { return false };
-        #[repr(C, align(16))]
-        #[derive(Clone, Copy, Default)]
-        struct V4([f32; 4]);
         let mut i = [V4::default(); 3];
         type Inertia = unsafe extern "thiscall" fn(usize, *mut V4);
         unsafe { std::mem::transmute::<usize, Inertia>(inertia)(m, i.as_mut_ptr()) };

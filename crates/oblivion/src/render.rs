@@ -251,7 +251,7 @@ mod win {
             time(Part::Lighting, || hooks::guard_void("lighting", || crate::lighting::publish(view, head)));
             time(Part::Items, || hooks::guard_void("items", || crate::items::place(view, now)));
             time(Part::Items, || hooks::guard_void("world", || crate::world::place(now)));
-            time(Part::Items, || hooks::guard_void("props", || crate::props::place(now)));
+            time(Part::Items, || hooks::guard_void("props", || crate::props::place(view, now)));
         }
         Some((snap, game, cam))
     }
