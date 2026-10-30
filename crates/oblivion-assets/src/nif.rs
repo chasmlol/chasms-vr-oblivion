@@ -1,8 +1,9 @@
 //! Oblivion's models: NetImmerse/Gamebryo `.nif` files, version 20.0.0.4 or 20.0.0.5 (user version
-//! 11). Those versions store no block sizes, so every block a file holds has to be read field by
-//! field: this reader knows the blocks Oblivion's weapons, armour, clothes, bodies and hands use
-//! (layouts from the NifTools project's format description, `nif.xml`) and stops at the first one
-//! it doesn't, keeping the blocks before it.
+//! 11), and the older 10.0.1.0 and 10.2.0.0 that many of the head's parts are (hair, ears, eyes,
+//! mouth, teeth, tongue). Those versions store no block sizes, so every block a file holds has to
+//! be read field by field: this reader knows the blocks Oblivion's weapons, armour, clothes, bodies,
+//! hands and heads use (layouts from the NifTools project's format description, `nif.xml`, with the
+//! fields each version has) and stops at the first one it doesn't, keeping the blocks before it.
 //!
 //! What's kept: the node tree (names, local transforms, children), triangle shapes (vertices,
 //! normals, UVs, vertex colours, triangles from lists or strips), their skinning (bones, bind
@@ -146,9 +147,25 @@ pub struct Nif {
 struct Reader<'a> {
     b: &'a [u8],
     at: usize,
+    /// The file's version (`0x14000004` is 20.0.0.4).
+    v: u32,
 }
 
+/// Versions as `nif.xml` writes them.
+const V10_0_1_2: u32 = 0x0A00_0102;
+const V10_0_1_3: u32 = 0x0A00_0103;
+const V10_1_0_0: u32 = 0x0A01_0000;
+const V10_1_0_101: u32 = 0x0A01_0065;
+const V10_1_0_103: u32 = 0x0A01_0067;
+const V10_1_0_114: u32 = 0x0A01_0072;
+const V20_0_0_4: u32 = 0x1400_0004;
+
 impl Reader<'_> {
+    /// The file has the fields added in `version`.
+    fn since(&self, version: u32) -> bool {
+        self.v >= version
+    }
+
     fn take(&mut self, n: usize) -> Result<&[u8]> {
         if self.at + n > self.b.len() {
             bail!("read past the end at {:#x} (+{n})", self.at);
@@ -235,16 +252,23 @@ fn av_object(r: &mut Reader) -> Result<AvObject> {
 fn tex_desc(r: &mut Reader) -> Result<i32> {
     let source = r.i32()?;
     r.skip(4 + 4 + 4)?; // clamp, filter, UV set
-    if r.bool()? {
+    if r.v < V20_0_0_4 {
+        r.skip(4)?; // PS2 L, K
+    }
+    if r.since(V10_1_0_0) && r.bool()? {
         r.skip(8 + 8 + 4 + 4 + 8)?; // translation, scale, rotation, method, centre
     }
     Ok(source)
 }
 
 fn geometry_data(r: &mut Reader) -> Result<ShapeData> {
-    let _group = r.i32()?;
+    if r.since(V10_1_0_114) {
+        let _group = r.i32()?;
+    }
     let n = r.u16()? as usize;
-    r.skip(2)?; // keep, compress
+    if r.since(V10_1_0_0) {
+        r.skip(2)?; // keep, compress
+    }
     let mut d = ShapeData::default();
     if r.bool()? {
         d.vertices = (0..n).map(|_| r.vec3()).collect::<Result<_>>()?;
@@ -252,7 +276,7 @@ fn geometry_data(r: &mut Reader) -> Result<ShapeData> {
     let flags = r.u16()?;
     if r.bool()? {
         d.normals = (0..n).map(|_| r.vec3()).collect::<Result<_>>()?;
-        if flags & 4096 != 0 {
+        if flags & 4096 != 0 && r.since(V10_1_0_0) {
             r.skip(n * 24)?; // tangents, bitangents
         }
     }
@@ -268,7 +292,9 @@ fn geometry_data(r: &mut Reader) -> Result<ShapeData> {
         }
     }
     r.skip(2)?; // consistency
-    let _additional = r.i32()?;
+    if r.since(V20_0_0_4) {
+        let _additional = r.i32()?;
+    }
     Ok(d)
 }
 
@@ -276,7 +302,7 @@ fn tri_shape_data(r: &mut Reader) -> Result<ShapeData> {
     let mut d = geometry_data(r)?;
     let tris = r.u16()? as usize;
     let _points = r.u32()?;
-    if r.bool()? {
+    if !r.since(V10_1_0_0) || r.bool()? {
         d.triangles = (0..tris).map(|_| Ok([r.u16()?, r.u16()?, r.u16()?])).collect::<Result<_>>()?;
     }
     let groups = r.u16()? as usize;
@@ -292,7 +318,7 @@ fn tri_strips_data(r: &mut Reader) -> Result<ShapeData> {
     let _tris = r.u16()?;
     let strips = r.u16()? as usize;
     let lengths: Vec<usize> = (0..strips).map(|_| Ok(r.u16()? as usize)).collect::<Result<_>>()?;
-    if r.bool()? {
+    if !r.since(V10_0_1_3) || r.bool()? {
         for len in lengths {
             let s: Vec<u16> = (0..len).map(|_| r.u16()).collect::<Result<_>>()?;
             for i in 2..len {
@@ -315,14 +341,16 @@ fn skin_partition(r: &mut Reader) -> Result<()> {
         let strips = r.u16()? as usize;
         let per_vertex = r.u16()? as usize;
         r.skip(bones * 2)?;
-        if r.bool()? {
+        // (Before 10.1 the vertex map, weights and faces are always there.)
+        let always = !r.since(V10_1_0_0);
+        if always || r.bool()? {
             r.skip(verts * 2)?;
         }
-        if r.bool()? {
+        if always || r.bool()? {
             r.skip(verts * per_vertex * 4)?;
         }
         let lengths: Vec<usize> = (0..strips).map(|_| Ok(r.u16()? as usize)).collect::<Result<_>>()?;
-        if r.bool()? {
+        if always || r.bool()? {
             if strips != 0 {
                 r.skip(lengths.iter().sum::<usize>() * 2)?;
             } else {
@@ -384,7 +412,7 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
         "NiTriStripsData" => Block::ShapeData(tri_strips_data(r)?),
         "NiSkinInstance" => {
             let data = r.i32()?;
-            let partition = r.i32()?;
+            let partition = if r.since(V10_1_0_101) { r.i32()? } else { -1 };
             let root = r.i32()?;
             let bones = r.refs()?;
             Block::SkinInstance { data, partition, root, bones }
@@ -392,6 +420,9 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
         "NiSkinData" => {
             let transform = r.transform()?;
             let n = r.u32()? as usize;
+            if !r.since(V10_1_0_0) {
+                let _partition = r.i32()?;
+            }
             let has_weights = r.bool()?;
             let mut bones = Vec::with_capacity(n);
             for _ in 0..n {
@@ -409,6 +440,9 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
         }
         "NiTexturingProperty" => {
             object_net(r)?;
+            if !r.since(V10_0_1_3) {
+                r.skip(2)?; // flags
+            }
             r.skip(4)?; // apply mode
             let count = r.u32()?;
             let mut t = Texturing { base: -1, glow: -1, bump: -1, detail: -1 };
@@ -451,18 +485,32 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             let external = r.u8()?;
             let file = if external == 1 {
                 let f = r.string()?;
-                r.skip(4)?; // unknown ref
+                if r.since(V10_1_0_0) {
+                    r.skip(4)?; // unknown ref
+                }
                 f
             } else {
-                r.string()?;
+                if r.since(V10_1_0_0) {
+                    r.string()?;
+                } else if r.u8()? == 0 {
+                    // (Not internal either: no pixel data follows.)
+                    r.skip(12 + 1)?;
+                    return Ok(Some(Block::SourceTexture { file: String::new() }));
+                }
                 r.skip(4)?; // pixel data
                 String::new()
             };
-            r.skip(12 + 1 + 1)?; // format prefs, static, direct render
+            r.skip(12 + 1)?; // format prefs, static
+            if r.since(V10_1_0_103) {
+                r.skip(1)?; // direct render
+            }
             Block::SourceTexture { file }
         }
         "NiMaterialProperty" => {
             let (name, _) = object_net(r)?;
+            if !r.since(V10_0_1_3) {
+                r.skip(2)?; // flags
+            }
             let c = |r: &mut Reader| -> Result<[f32; 3]> { Ok([r.f32()?, r.f32()?, r.f32()?]) };
             Block::Material(MaterialProps { name, ambient: c(r)?, diffuse: c(r)?, specular: c(r)?, emissive: c(r)?, glossiness: r.f32()?, alpha: r.f32()? })
         }
@@ -494,6 +542,26 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
         "NiWireframeProperty" | "NiDitherProperty" | "NiShadeProperty" => {
             object_net(r)?;
             r.skip(2)?;
+            Block::Other(kind.into())
+        }
+        "NiDirectionalLight" | "NiAmbientLight" | "NiPointLight" => {
+            // A light exported with the model (the head's parts have one): read past.
+            av_object(r)?;
+            if r.since(0x0A01_006A) {
+                r.skip(1)?; // switch state
+            }
+            if r.since(V10_1_0_0) {
+                r.refs()?; // affected nodes
+            }
+            r.skip(4 + 36)?; // dimmer, ambient, diffuse, specular
+            if kind == "NiPointLight" {
+                r.skip(12)?; // attenuation
+            }
+            Block::Other(kind.into())
+        }
+        "NiBooleanExtraData" => {
+            r.string()?;
+            r.skip(1)?;
             Block::Other(kind.into())
         }
         "NiStringExtraData" => {
@@ -702,18 +770,24 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
 impl Nif {
     pub fn parse(data: &[u8]) -> Result<Nif> {
         let Some(nl) = data.iter().position(|&c| c == b'\n') else { bail!("no header line") };
-        let mut r = Reader { b: data, at: nl + 1 };
+        let mut r = Reader { b: data, at: nl + 1, v: 0 };
         let version = r.u32()?;
-        if version != 0x1400_0004 && version != 0x1400_0005 {
-            bail!("NIF version {version:#x} (only 20.0.0.4/5 are read)");
+        if ![0x0A00_0100, V10_0_1_2, V10_1_0_0, 0x0A01_006A, 0x0A02_0000, 0x1400_0004, 0x1400_0005].contains(&version) {
+            bail!("NIF version {version:#x} (only 10.0.1.0 to 10.2.0.0 and 20.0.0.4/5 are read)");
         }
-        let _endian = r.u8()?;
-        let _user = r.u32()?;
+        r.v = version;
+        if r.since(0x1400_0003) {
+            let _endian = r.u8()?;
+        }
+        let user = if r.since(0x0A00_0108) { r.u32()? } else { 0 };
         let count = r.u32()? as usize;
-        let _user2 = r.u32()?;
-        for _ in 0..3 {
-            let n = r.u8()? as usize;
-            r.skip(n)?;
+        // Bethesda's stream header (`nif.xml`'s `BSSTREAMHEADER`): its version, author and scripts.
+        if user >= 3 && (version == V10_0_1_2 || version == 0x1400_0005 || (r.since(V10_1_0_0) && version <= V20_0_0_4 && user <= 11)) {
+            let _user2 = r.u32()?;
+            for _ in 0..3 {
+                let n = r.u8()? as usize;
+                r.skip(n)?;
+            }
         }
         let ntypes = r.u16()? as usize;
         let types: Vec<String> = (0..ntypes).map(|_| r.string()).collect::<Result<_>>()?;
@@ -722,6 +796,10 @@ impl Nif {
         let mut blocks = Vec::with_capacity(count);
         let mut stopped_at = None;
         for kind in &kinds {
+            // (Up to 10.1.0.106 every block starts with a zero.)
+            if version <= 0x0A01_006A && r.u32()? != 0 {
+                bail!("block {} ({kind}) doesn't start with a zero", blocks.len());
+            }
             match block(&mut r, kind) {
                 Ok(Some(b)) => blocks.push(b),
                 Ok(None) => {

@@ -203,7 +203,7 @@ fn dump(nif: &Nif) {
         match b {
             Block::Node { av, children } => {
                 let w = nif.world(i as i32, &parents);
-                println!("{i:3} {pad}node '{}' at {:?} children {children:?} flags {:#x} collision {}", av.name, w.translation, av.flags, av.collision);
+                println!("{i:3} {pad}node '{}' at {:?} rot {:?} children {children:?} flags {:#x} collision {}", av.name, w.translation, w.rotation.to_cols_array().map(|x| (x * 1000.0).round() / 1000.0), av.flags, av.collision);
             }
             Block::Shape { av, data, skin } => {
                 let w = nif.world(i as i32, &parents);
