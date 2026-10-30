@@ -2,7 +2,8 @@
 //!
 //! * **Its creatures** ([`actors`]): every actor the game is fully processing near the player
 //!   (its high-process list), as capsules on its own skeleton's bones (`Bip01 ...`): the head, the
-//!   spine, the arms and the legs.
+//!   spine, the arms, the hands, the legs and the feet, each as thick as what it wears
+//!   ([`crate::shapes`]).
 //! * **The player's spells** ([`spells`]): the spells, powers and lesser powers on the player's
 //!   own list, with how each is delivered (its effects' range), what it costs the player now
 //!   (the game's own cost), the colour of its first effect's light, which one is selected, and
@@ -223,8 +224,10 @@ pub(crate) fn base_actor_value(_actor: usize, _av: u32) -> i32 {
     0
 }
 
-/// The capsules of a humanoid skeleton: (from bone, to bone, radius, part, material).
-const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
+/// The capsules of a humanoid skeleton: (from bone, to bone, radius, part, material). Each is
+/// fitted to what the actor wears ([`crate::shapes`]); the radius here holds until it is, and where
+/// nothing's drawn on it. (A part's index here is its `game_part`.)
+pub(crate) const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
     ("Bip01 Pelvis", "Bip01 Neck", 0.17, PART_TORSO, MAT_LEATHER),
     ("Bip01 Neck", "Bip01 Head", 0.1, PART_HEAD, MAT_FLESH),
     ("Bip01 L UpperArm", "Bip01 L Forearm", 0.06, PART_ARM, MAT_FLESH),
@@ -235,7 +238,16 @@ const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
     ("Bip01 L Calf", "Bip01 L Foot", 0.06, PART_LEG, MAT_FLESH),
     ("Bip01 R Thigh", "Bip01 R Calf", 0.08, PART_LEG, MAT_FLESH),
     ("Bip01 R Calf", "Bip01 R Foot", 0.06, PART_LEG, MAT_FLESH),
+    ("Bip01 L Hand", "Bip01 L Finger2", 0.045, PART_ARM, MAT_FLESH),
+    ("Bip01 R Hand", "Bip01 R Finger2", 0.045, PART_ARM, MAT_FLESH),
+    ("Bip01 L Foot", "Bip01 L Toe0", 0.05, PART_LEG, MAT_FLESH),
+    ("Bip01 R Foot", "Bip01 R Toe0", 0.05, PART_LEG, MAT_FLESH),
 ];
+
+/// The bone a part of a humanoid starts at (its `game_part`: its index in [`HUMANOID`]).
+pub(crate) fn part_bone(game_part: u32) -> Option<&'static str> {
+    HUMANOID.get(game_part as usize).map(|e| e.0)
+}
 
 /// The actors near the player and, by id, where each is in the game's memory.
 pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
@@ -266,19 +278,27 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
         let b = bones(root);
         let mut a: Actor = bytemuck::Zeroable::zeroed();
         a.id = id;
-        for &(from, to, r, kind, material) in HUMANOID {
+        let fitted = crate::shapes::fitted(id, root, &b);
+        for (part, &(from, to, r, kind, material)) in HUMANOID.iter().enumerate() {
             let (Some(p), Some(q)) = (b.get(from).and_then(|&n| node_pos(n)), b.get(to).and_then(|&n| node_pos(n))) else { continue };
-            // The head: from the neck up through the crown.
-            let q = if kind == PART_HEAD { q + (q - p).normalize_or(Vec3::Y) * 0.12 } else { q };
+            let along = (q - p).normalize_or(Vec3::Y);
+            let (p, q, r) = match fitted.get(part).copied().flatten() {
+                // As thick as what it wears, and on past its free ends to what's drawn there.
+                Some(f) => (p - along * f.start, q + along * f.end, f.radius),
+                // The head: from the neck up through the crown.
+                None if kind == PART_HEAD => (p, q + along * 0.12, r),
+                None => (p, q, r),
+            };
             let i = a.count as usize;
-            a.parts[i] = ActorPart { a: p.to_array(), radius: r, b: q.to_array(), kind, material, game_part: i as u32, _pad: [0; 2] };
+            a.parts[i] = ActorPart { a: p.to_array(), radius: r, b: q.to_array(), kind, material, game_part: part as u32, _pad: [0; 2] };
             a.count += 1;
         }
         if a.count == 0 {
-            // Not a humanoid (a creature): one capsule from its feet to its height.
+            // Not a humanoid (a creature): one capsule from its feet to its height (no bone of
+            // [`HUMANOID`]'s: its frame is along it).
             let Some(feet) = mem::at::<[f32; 3]>(actor + refr::POS) else { continue };
             let f = camera::basis().point_from_game(Vec3::from(feet));
-            a.parts[0] = ActorPart { a: (f + Vec3::Y * 0.3).to_array(), radius: 0.35, b: (f + Vec3::Y * 1.3).to_array(), kind: PART_TORSO, material: MAT_FLESH, game_part: 0, _pad: [0; 2] };
+            a.parts[0] = ActorPart { a: (f + Vec3::Y * 0.3).to_array(), radius: 0.35, b: (f + Vec3::Y * 1.3).to_array(), kind: PART_TORSO, material: MAT_FLESH, game_part: u32::MAX, _pad: [0; 2] };
             a.count = 1;
         }
         match current_action(actor) {
@@ -302,6 +322,7 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
         table.count += 1;
         by_id.insert(id, actor);
     }
+    crate::shapes::forget_others(&by_id);
     (table, by_id)
 }
 

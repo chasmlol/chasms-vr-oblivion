@@ -56,6 +56,7 @@ pub mod render;
 pub mod resolution;
 pub mod reticle;
 pub mod settings;
+pub mod shapes;
 pub mod timing;
 pub mod weapons;
 pub mod window;

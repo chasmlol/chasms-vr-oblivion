@@ -576,9 +576,10 @@ mod game {
         /// The last grab each hand let go of (so its last word isn't taken as a new grab).
         done: [u32; 2],
         limp: HashMap<u32, Limp>,
-        /// The actors published, by id, and each part's bone (the node its capsule starts at).
+        /// The actors published, by id, and each part's bone (the one it starts at) and where its
+        /// capsule starts (the frame a hold on it is in: its start, turned as its bone is).
         actors: HashMap<u32, usize>,
-        part_nodes: HashMap<(u32, usize), usize>,
+        part_nodes: HashMap<(u32, usize), (usize, Vec3)>,
         bodies: Box<ActorBodies>,
         grabs: Box<CreatureGrabs>,
         pushes: Box<GamePushes>,
@@ -593,8 +594,8 @@ mod game {
         skeletons: HashMap<u32, Skeleton>,
     }
 
-    /// An actor's bones with bodies, and each of its parts' bone (the node its capsule starts at),
-    /// for its 3D `root` and that many parts.
+    /// An actor's bones with bodies, and each of its parts' bone (the one it starts at), for its 3D
+    /// `root` and that many parts.
     struct Skeleton {
         root: usize,
         parts: u32,
@@ -663,15 +664,11 @@ mod game {
                     let root = mem::deref(ptr + NI_NODE);
                     let fresh = s.skeletons.get(&actor.id).is_some_and(|k| k.root == root && k.parts == actor.count);
                     if !fresh {
-                        // Each part's bone: the one at its capsule's start (where the creatures'
-                        // capsules begin).
+                        // Each part's bone: the one it starts at.
                         let named = if root != 0 { combat::bones(root) } else { HashMap::new() };
                         let part_nodes = actor.parts[..(actor.count as usize).min(MAX_ACTOR_PARTS)]
                             .iter()
-                            .map(|part| {
-                                let a = Vec3::from_array(part.a);
-                                named.values().copied().find(|&n| combat::node_pos(n).is_some_and(|p| p.distance(a) < 0.002))
-                            })
+                            .map(|part| combat::part_bone(part.game_part).and_then(|name| named.get(name).copied()))
                             .collect();
                         let bones = if root != 0 { skeleton(root) } else { Vec::new() };
                         s.skeletons.insert(actor.id, Skeleton { root, parts: actor.count, bones, part_nodes });
@@ -690,7 +687,7 @@ mod game {
                     // Each part turned as its bone is; its body's mass and speed.
                     for i in 0..(actor.count as usize).min(MAX_ACTOR_PARTS) {
                         let Some(node) = sk.part_nodes.get(i).copied().flatten() else { continue };
-                        s.part_nodes.insert((actor.id, i), node);
+                        s.part_nodes.insert((actor.id, i), (node, Vec3::from_array(actor.parts[i].a)));
                         let Some(rot) = mem::at::<[f32; 9]>(node + av::WORLD_ROTATE) else { continue };
                         let q = b.rot_from_game(crate::items::ni_matrix(rot)).normalize();
                         let own = bones.iter().find(|x| x.node == node);
@@ -792,12 +789,12 @@ mod game {
             }
             self.done[hand] = g.serial;
             let bones = skeleton(root);
-            // Where the hand has it: the point in its part's frame (its bone's), where the bone is
-            // now; else where the hand touched it.
+            // Where the hand has it: the point in its part's frame (its capsule's start, turned as
+            // its bone is), where the part is now; else where the hand touched it.
             let b = camera::basis();
-            let frame = self.part_nodes.get(&(g.actor, g.part as usize)).and_then(|&n| {
+            let frame = self.part_nodes.get(&(g.actor, g.part as usize)).and_then(|&(n, start)| {
                 let rot: [f32; 9] = mem::at(n + av::WORLD_ROTATE)?;
-                Some((combat::node_pos(n)?, b.rot_from_game(crate::items::ni_matrix(rot)).normalize()))
+                Some((start, b.rot_from_game(crate::items::ni_matrix(rot)).normalize()))
             });
             let at = frame.map_or(Vec3::from_array(g.target), |(p, q)| p + q * Vec3::from_array(g.point));
             // The bone held: on the throat, the head's; else the one whose body's middle is nearest.
