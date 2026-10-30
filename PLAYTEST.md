@@ -12,6 +12,66 @@ why it works the way it does: `docs/research/riding.md`.
 Run `playtest.bat` in this worktree (`<worktrees>\riding`): it installs this build and boots the save; press
 a key in its window when you're done and it closes the game and puts your settings back.
 
+## Round 4: a fluid speed, and reins that don't freak out near the horse
+
+Built and unit-tested; not in the game yet. Your third ride's logs are in
+`<builds>\riding\playtest-3`.
+
+1. **"Doing the spur makes them go faster and then slowly fades down... to maintain full speed I
+   have to keep spurring... lifting the reins should lower the speed... depending how much I pull...
+   all fluid."** The reins no longer step between two gaits: they ask for a **speed**, any share of
+   the horse's full gallop.
+   - **A spur** (a flick, or a rein hand's trigger) **surges it to its full gallop** (it picks up
+     over a second or two), and the surge **fades slowly to a cruise, a little over half its
+     gallop** (most of the way in about 8 s, all of it in about 20). To hold it flat out, keep
+     spurring every couple of seconds.
+   - **Pull both reins back and it slows, as hard as you pull**: just past the dead zone, gently;
+     15 cm back, hard (from a full gallop to a stand in about a second and a half). **Ease off and
+     it keeps the speed you slowed it to**: a canter, a walk, a stand. A spur from there surges again
+     and settles back at the cruise.
+   - Backing up is unchanged: at a stand, ease the reins, pull them right back again and hold.
+   - Let go of the reins: it keeps its speed 2.5 s, then eases to a stand over a few seconds.
+   - How it's made of Oblivion's horse: Oblivion has a walk and a gallop, and a pace for each (the
+     analog stick's). The speed you ask for is made of those with the game's own numbers for that
+     horse (its walk and run speeds, from its Speed, as the game computes them), so Shadowmere is
+     still faster than a paint horse. Up to about a quarter of its gallop it walks (at a slower
+     walk if you ask for less); above, it gallops at a pace (a slowed gallop is the canter: never
+     under 40% of the full gallop).
+   - In the menu (Comfort, Riding): where a spur settles ("Spurred, it settles at", 0.55 of a
+     gallop), how slowly the surge fades (8 s), and the pull for the hardest slowing (15 cm).
+   - The stick rides as before (its push is the pace; click for a gallop).
+2. **"The reins visual are still bugging out a lot... the moment they go near the horse they start
+   freaking out and glitching around."** I tried this offline, sweeping a hand along, into and across
+   the neck a millimetre at a time and measuring how far the reins moved: they jumped up to 90 cm in
+   a single frame. They were rebuilt from scratch every frame, sagging through the neck and being
+   pushed out of it, and near the neck's middle a rein would flip from one side to the other. Now each
+   rein is **a rope**: a chain of points carried on from frame to frame, hanging under gravity
+   (damped like leather, so it doesn't swing about), held at the bit and your hand, and kept out of
+   the neck:
+   - on the top of the neck, a point goes straight out from the neck's middle, so a rein reaching
+     your other hand goes over the crest; lower down, straight out to the side it's on, which it only
+     learns while it's clear of the neck, so it never flips across;
+   - the neck's ends round off smoothly; near your hand the reins are kept out of the neck less and
+     less, so a hand inside the horse keeps its rein in there (hidden), not fought over;
+   - a hand further away than the rein reaches slides along it (as yours would), and the loop
+     between your hands keeps its slack, instead of the rein snapping taut;
+   - a rein point moves at most 1.5 m/s on its own, so a rein tipping over the crest slips over it.
+   In the same sweeps no rein point now moves more than 13 mm in a frame, and still hands leave the
+   reins still. They also hang with less slack than before (6%: a rider keeps light contact), and
+   may sit 3 cm behind the horse's skin before the game's depth hides them, so they don't flicker
+   against it.
+
+### Try this round
+
+- **Spur** from a stand: it should pick up to a full gallop, then ease back over ten or twenty
+  seconds to a steady canter. **Spur every couple of seconds**: it should stay flat out.
+- **Pull a little, then more**: it should slow gently, then harder; let go at a canter, a walk,
+  or a stand, and it should keep it.
+- **Hold the reins near the horse**: rest your hands on the withers, bring them together over the
+  mane, move them along the neck, push a hand into it. The reins should follow calmly, lie along
+  the neck, and never jump or flicker.
+- Tell me the cruise speed (it can go up or down), how fast the surge fades, and how the pull feels.
+
 ## Round 3: from your second ride
 
 Built and unit-tested; not in the game yet. Your second ride's logs are in
@@ -141,15 +201,16 @@ built, and its unit tests pass.
    saddle horn, either side of the mane: close a hand there (either hand, or both). A tick in the
    hand says you have one; the rein runs from the bit along the neck to your fist.
 4. **Spur on.** A flick of the reins (snap a rein hand down a few centimetres, quickly, and stop) or
-   the trigger of a hand on a rein: walk. Again: gallop. A pulse in the rein hands each time.
+   the trigger of a hand on a rein: a surge to its full gallop, fading slowly to a canter. Spur again
+   to keep it flat out. A pulse in the rein hands each time.
 5. **Steer.** Pull one rein back towards you (left rein: left), or move both hands to one side (a
    neck rein), or open one rein out to its side. Nothing within 5 cm; full turn at 17 cm. The view
    turns with the horse, smoothly; a vignette closes in while it turns hard or gallops.
-6. **Slow and stop.** Pull both reins back (10 cm): down a gait. Keep holding: it walks, then
-   stands, and stays standing. To back up: at a stand, ease the reins, pull them back again and hold
-   1.2 s. Let the pull go and it stands.
-7. **Let go of the reins** at a gallop: it keeps going about 2.5 s, then slows a gait every 1.5 s to
-   a stand.
+6. **Slow and stop.** Pull both reins back: it slows as hard as you pull (hardest at 15 cm), and
+   where you let go it keeps that speed. To back up: at a stand, ease the reins, pull them right back
+   again and hold 1.2 s. Let the pull go and it stands.
+7. **Let go of the reins** at a gallop: it keeps going about 2.5 s, then eases to a stand over a
+   few seconds.
 8. **The sticks ride too.** Left stick ahead or to a side goes at its push and steers (click it:
    gallop), pulled back it backs up; let go and it stops. The right stick steers alone (without
    stopping it; at a stand, it turns on the spot).
@@ -222,9 +283,15 @@ built, and its unit tests pass.
   A held pull slows only to a stand; backing is asked for on its own (a pull begun at a stand, held
   1.2 s), so it can't follow from slowing down. A spur always counts, and gives reins held back.
   The values are guesses for the headset (5, 17 and 10 cm): the menu has them all.
-- **Gaits are the game's**: walk and gallop (Oblivion has no trot). A spur steps up one, a pull
-  steps down; the speeds and the turn rate are the game's own (`iHorseTurnDegreesPerSecond` 45,
-  ramping at 80 per second, times 1.5 at full rein like the turn keys).
+- **Speed is fluid, made of the game's gaits** (round 4): the reins ask for a share of the horse's
+  full gallop; a spur surges it to full (rising at 0.5 a second), fading to a cruise (0.55, over
+  8 s); a pull takes off up to 0.7 a second, as hard as it's pulled, and the cruise follows it down.
+  The adapter makes that speed of Oblivion's walk and gallop at a pace with the game's own walk and
+  run speeds for that horse (`GetWalkSpeed`, `GetRunSpeed`); the gallop is never
+  asked for under 40% of its speed (slower, its stride is drawn at a crawl), and below the speed
+  half way from the walk to that, it walks. The turn rate is the game's own
+  (`iHorseTurnDegreesPerSecond` 45, ramping at 80 per second, times 1.5 at full rein like the turn
+  keys). Max speed is the game's full gallop for that horse (not raised).
 - **Turning never stops the horse** (round 3): the game takes a stick that points more to the side
   than ahead as a slide, which on a horse halts it and turns it on the spot (the player's update,
   the game's). While the horse goes, the forward axis given to the game is kept at least the turn
@@ -260,6 +327,12 @@ built, and its unit tests pass.
   stretch of strap in it), mirrored along the rein so it has no seams. Rope (the game has
   `clutter\rope.dds`) was the other choice; the bridle's own leather matches what the reins hang
   from.
+- **The reins are ropes** (round 4): a rein laid afresh every frame jumped as it went near the neck;
+  as a rope carried from frame to frame (28 points a rein, 14 the bight; damped over 0.05 s, a
+  point on the neck stops there; 12 passes a frame of lengths and the neck; sliding on its own at
+  most 1.5 m/s) its shape only moves on from the last frame's. Measured offline by sweeping a hand
+  along, into and across a neck shaped like the measured one, a millimetre a frame: at most 13 mm a
+  frame for any rein point, where the laid curves jumped up to 90 cm.
 - **The reins lie on the neck**: the exporter measures the horse's neck (its five neck bones, with
   the three manes) and head (four places along it) as cross-sections, an ellipse fitted to the top
   of each from outside the game's own models (round 3: a point left outside costs 200 times one
@@ -277,6 +350,9 @@ built, and its unit tests pass.
 
 ## Not done
 
+- Round 4 isn't checked in the game yet (built and unit-tested only). The slowed gallop as a canter
+  depends on how Oblivion draws a gallop at a pace: if it looks wrong, the least gallop (40%) can go
+  up.
 - Round 3 isn't checked in the game yet (built and unit-tested only).
 - The body's legs and seat are still where the game last put the horse, not where a moved picture
   shows it (as the reins were); at a gallop they can sit a few centimetres off the picture's horse.
