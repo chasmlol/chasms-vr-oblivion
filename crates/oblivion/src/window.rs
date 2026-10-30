@@ -99,10 +99,9 @@ mod win {
         }
         let background = ours && settings::get().background;
         // The game makes its window where it was when the game last quit (`Oblivion.ini`
-        // `iLocation X`/`Y`): quit while minimised, that's -32000, off every monitor, where Windows
-        // never makes it the active window, and the game reads no input while it isn't (the player
-        // stood still in the headset, the window out of reach on the desktop). It goes to the
-        // screen's corner instead.
+        // `iLocation X`/`Y`): quit while minimised, that's -32000, off every monitor, where it can't
+        // be brought to the front on the desktop (it plays on in the headset all the same: it's
+        // always the active window to the game). It goes to the screen's corner instead.
         let (x, y) = if ours && !background && off_screen(x, y) { (0, 0) } else { (x, y) };
         let (ex, x, y) = if background { (ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW, OFF, OFF) } else { (ex, x, y) };
         let hwnd = unsafe { real(ex, cls, name, style, x, y, w, h, parent, menu, inst, param) };
