@@ -57,6 +57,7 @@ mod win {
     static REAL_TCL: AtomicUsize = AtomicUsize::new(0);
     static LAST_TCL: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
     static REAL_SET_SAMPLER: AtomicUsize = AtomicUsize::new(0);
+    static REAL_CREATE_VS: AtomicUsize = AtomicUsize::new(0);
 
     thread_local! {
         static MAKING: Cell<bool> = const { Cell::new(false) };
@@ -220,6 +221,11 @@ mod win {
                 hooks::install_into(set_sampler as *const (), set_sampler_state as *const (), "IDirect3DDevice9::SetSamplerState", &REAL_SET_SAMPLER);
                 tracing::info!("d3d9: the game's textures are filtered anisotropically ({}x)", anisotropy());
             }
+            // IDirect3DDevice9::CreateVertexShader (slot 91): the distant trees' shader.
+            if crate::distant_trees::enabled() {
+                let create_vs = unsafe { *(*(dev as *const *const usize)).add(91) };
+                hooks::install_into(create_vs as *const (), create_vertex_shader as *const (), "IDirect3DDevice9::CreateVertexShader", &REAL_CREATE_VS);
+            }
             match Gpu::new() {
                 Ok(gpu) => {
                     let (w, h) = if params.is_null() { (0, 0) } else { unsafe { ((*params).BackBufferWidth, (*params).BackBufferHeight) } };
@@ -268,6 +274,33 @@ mod win {
             }
         }
         unsafe { real(dev, sampler, kind, value) }
+    }
+
+    type CreateVertexShaderFn = unsafe extern "system" fn(*mut c_void, *const u32, *mut *mut c_void) -> windows::core::HRESULT;
+
+    /// The game's vertex shaders as it makes them: its distant trees' is made from
+    /// [`crate::distant_trees`] instead, the rest as they are.
+    unsafe extern "system" fn create_vertex_shader(dev: *mut c_void, function: *const u32, out: *mut *mut c_void) -> windows::core::HRESULT {
+        let real: CreateVertexShaderFn = unsafe { std::mem::transmute(REAL_CREATE_VS.load(Ordering::Acquire)) };
+        let ours = hooks::guard("CreateVertexShader", None, || {
+            if function.is_null() {
+                return None;
+            }
+            // (The version and the constant table's comment token, then the table.)
+            let comment = unsafe { function.add(1).read() };
+            let len = (comment >> 16) as usize;
+            if comment & 0xFFFF != 0xFFFE || len > 0x4000 {
+                return None;
+            }
+            let tokens = unsafe { std::slice::from_raw_parts(function, 2 + len) };
+            if !crate::distant_trees::is_distant_trees(tokens) {
+                return None;
+            }
+            let code = crate::distant_trees::replacement()?;
+            tracing::info!("d3d9: the distant trees' cards face the eye, not the way it looks");
+            Some(code.as_ptr())
+        });
+        unsafe { real(dev, ours.unwrap_or(function), out) }
     }
 
     unsafe extern "system" fn test_cooperative_level(dev: *mut c_void) -> windows::core::HRESULT {

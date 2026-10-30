@@ -31,6 +31,7 @@ pub mod combat;
 pub mod console;
 pub mod d3d9;
 pub mod depth;
+pub mod distant_trees;
 pub mod engine;
 #[cfg(all(windows, target_arch = "x86"))]
 pub mod entry;
