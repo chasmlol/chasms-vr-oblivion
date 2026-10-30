@@ -64,7 +64,7 @@ pub const DETENT_FORCE: f32 = 25.0;
 /// How much more than its own weight's turn a lid's stay holds at the end of its swing.
 pub const STAY: f32 = 1.3;
 /// How long (seconds) a door's swing takes to die away once let go (its damping's time).
-pub const SETTLE: f32 = 0.8;
+pub const SETTLE: f32 = 2.0;
 /// Its pins: the friction of iron on iron, greased or not, and their radius (metres).
 pub const PIN_FRICTION: f32 = 0.3;
 pub const PIN_RADIUS: f32 = 0.01;
@@ -158,7 +158,9 @@ impl Animation {
                 joints.push(j);
             }
         }
-        let sounds = nif.text_keys(s).iter().filter_map(|(t, k)| Some((*t, k.strip_prefix("Sound:")?.trim().to_owned()))).filter(|(_, k)| !k.is_empty()).collect();
+        // ("Sound: X", or "sound: X" in some.)
+        let sound = |k: &str| k.get(..6).filter(|p| p.eq_ignore_ascii_case("sound:")).map(|_| k[6..].trim().to_owned());
+        let sounds = nif.text_keys(s).iter().filter_map(|(t, k)| Some((*t, sound(k)?))).filter(|(_, k)| !k.is_empty()).collect();
         let returns = joints.first().is_some_and(|j| j.travel.last().is_some_and(|l| l.abs() < j.far.abs() * 0.3));
         Some(Animation { name: s.name.clone(), times, tracks, joints, sounds, returns })
     }
@@ -610,6 +612,7 @@ mod game {
         }
         unsafe {
             let h = std::mem::transmute::<usize, Make>(SOUND_MAKE)(mgr, id, SOUND_FLAGS_3D, 0);
+            tracing::info!("world: the game's sound {id:08X} at {:08X}{}", mem::at::<u32>(refr + FORM_ID).unwrap_or(0), if h == 0 { ": none made" } else { "" });
             if h == 0 {
                 return;
             }
@@ -753,10 +756,12 @@ mod game {
         tracks: Vec<(usize, usize)>,
         desc: ObjectDesc,
         hull: Vec<Vec3>,
-        /// Where the runtime has it, and whether a hand has it; where it was last logged.
+        /// Where the runtime has it, and whether a hand has it (which: bit 0 left, bit 1 right);
+        /// where it was last logged.
         at: f32,
         vel: f32,
         held: bool,
+        hands: u32,
         logged: f32,
     }
 
@@ -947,7 +952,7 @@ mod game {
                 .filter_map(|(ti, t)| Some((ti, *live.get(&t.node)?)))
                 .filter(|&(ti, n)| ti == j.track || (n != root && (under(n, node) || (k == 0 && !joint_nodes.iter().any(|&o| under(n, o))))))
                 .collect();
-            parts.push(Part { id, joint: k, node, body_node, centre, base, slide, units, far, tracks, desc: bytemuck::Zeroable::zeroed(), hull: points, at: now, vel: 0.0, held: false, logged: now });
+            parts.push(Part { id, joint: k, node, body_node, centre, base, slide, units, far, tracks, desc: bytemuck::Zeroable::zeroed(), hull: points, at: now, vel: 0.0, held: false, hands: 0, logged: now });
             let p = parts.last_mut().unwrap();
             p.desc = part_desc(id, 1, centre, base, &p.hull, mass, 0.0, (0.0, far), (0.0, 0.0), 0);
             p.desc.friction = PIN_FRICTION * mass * 9.81 * PIN_RADIUS;
@@ -1104,6 +1109,8 @@ mod game {
                     }
                     t.open = opened;
                     t.owned = true;
+                    // The latch let go, or caught: felt in the hands on it.
+                    latch_felt(t);
                 }
                 t.locked = locked(t.refr);
             }
@@ -1134,6 +1141,16 @@ mod game {
             }
         }
         shape_descs(t);
+    }
+
+    /// A door's latch letting go or catching, in the hands that have it: a click.
+    fn latch_felt(t: &Thing) {
+        let hands = t.parts.iter().fold(0, |h, p| h | p.hands);
+        for hand in 0..2u32 {
+            if hands & (1 << hand) != 0 {
+                crate::link::with_adapter(|a| a.haptic(hand, 0.03, 140.0, 0.8));
+            }
+        }
     }
 
     fn scan(s: &mut State) {
@@ -1225,6 +1242,7 @@ mod game {
                         p.at = st.slide;
                         p.vel = if p.slide { Vec3::from(st.lin_vel).length() * Vec3::from(st.lin_vel).dot(p.base * Vec3::Z).signum() } else { Vec3::from(st.ang_vel).dot(p.base * Vec3::Z) };
                         p.held = st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0;
+                        p.hands = u32::from(st.flags & OS_HELD_LEFT != 0) | u32::from(st.flags & OS_HELD_RIGHT != 0) << 1;
                     }
                 }
                 for p in t.parts.iter_mut().filter(|p| (p.at - p.logged).abs() > 0.1 * p.far.max(0.05)) {

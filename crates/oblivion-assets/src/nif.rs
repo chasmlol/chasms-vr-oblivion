@@ -1,6 +1,6 @@
 //! Oblivion's models: NetImmerse/Gamebryo `.nif` files, version 20.0.0.4 or 20.0.0.5 (user version
-//! 11). Those versions store no block sizes, so every block a file holds has to be read field by
-//! field: this reader knows the blocks Oblivion's weapons, armour, clothes, bodies and hands use
+//! 11), or the older 10.2.0.0 some of its models are. Those versions store no block sizes, so
+//! every block a file holds has to be read field by field: this reader knows the blocks Oblivion's weapons, armour, clothes, bodies and hands use
 //! (layouts from the NifTools project's format description, `nif.xml`) and stops at the first one
 //! it doesn't, keeping the blocks before it.
 //!
@@ -223,7 +223,17 @@ pub struct Nif {
 struct Reader<'a> {
     b: &'a [u8],
     at: usize,
+    /// The file's version (fields come and go with it).
+    version: u32,
 }
+
+/// NIF versions: 10.2.0.0 (some of Oblivion's older models: Chorrol's doors, the Ayleid switches),
+/// the last with a texture's PS2 fields and a sequence's phase (until 10.4.0.1), and 20.0.0.4,
+/// the first with geometry's additional data.
+const V10_2: u32 = 0x0A02_0000;
+const V10_4_0_1: u32 = 0x0A04_0001;
+const V20_0_0_3: u32 = 0x1400_0003;
+const V20_0_0_4: u32 = 0x1400_0004;
 
 impl Reader<'_> {
     fn take(&mut self, n: usize) -> Result<&[u8]> {
@@ -312,6 +322,9 @@ fn av_object(r: &mut Reader) -> Result<AvObject> {
 fn tex_desc(r: &mut Reader) -> Result<i32> {
     let source = r.i32()?;
     r.skip(4 + 4 + 4)?; // clamp, filter, UV set
+    if r.version < V10_4_0_1 {
+        r.skip(2 + 2)?; // PS2 L, K
+    }
     if r.bool()? {
         r.skip(8 + 8 + 4 + 4 + 8)?; // translation, scale, rotation, method, centre
     }
@@ -345,7 +358,9 @@ fn geometry_data(r: &mut Reader) -> Result<ShapeData> {
         }
     }
     r.skip(2)?; // consistency
-    let _additional = r.i32()?;
+    if r.version >= V20_0_0_4 {
+        let _additional = r.i32()?;
+    }
     Ok(d)
 }
 
@@ -766,6 +781,22 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(4)?; // data
             Block::Other(kind.into())
         }
+        // A blend of interpolators (an older model's sequences go through one), and its value.
+        "NiBlendTransformInterpolator" | "NiBlendFloatInterpolator" | "NiBlendBoolInterpolator" => {
+            let flags = r.u8()?;
+            let items = r.u8()? as usize;
+            r.skip(4)?; // weight threshold
+            if flags & 1 == 0 {
+                r.skip(4 + 4 * 4)?; // count, single index, priorities; single time, weight sums, spinner
+                r.skip(items * 17)?; // interpolator, weights, priority, spinner
+            }
+            match kind {
+                "NiBlendFloatInterpolator" => r.skip(4)?,
+                "NiBlendBoolInterpolator" => r.skip(1)?,
+                _ => {}
+            }
+            Block::Other(kind.into())
+        }
         "NiPoint3Interpolator" => {
             r.skip(12 + 4)?;
             Block::Other(kind.into())
@@ -859,6 +890,9 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(4)?; // weight
             let text_keys = r.i32()?;
             r.skip(4 + 4)?; // cycle type, frequency
+            if r.version < V10_4_0_1 {
+                r.skip(4)?; // phase
+            }
             let start = r.f32()?;
             let stop = r.f32()?;
             r.skip(4)?; // manager
@@ -932,12 +966,15 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
 impl Nif {
     pub fn parse(data: &[u8]) -> Result<Nif> {
         let Some(nl) = data.iter().position(|&c| c == b'\n') else { bail!("no header line") };
-        let mut r = Reader { b: data, at: nl + 1 };
+        let mut r = Reader { b: data, at: nl + 1, version: 0 };
         let version = r.u32()?;
-        if version != 0x1400_0004 && version != 0x1400_0005 {
-            bail!("NIF version {version:#x} (only 20.0.0.4/5 are read)");
+        if version != 0x1400_0004 && version != 0x1400_0005 && version != V10_2 {
+            bail!("NIF version {version:#x} (only 10.2.0.0 and 20.0.0.4/5 are read)");
         }
-        let _endian = r.u8()?;
+        r.version = version;
+        if version >= V20_0_0_3 {
+            let _endian = r.u8()?;
+        }
         let _user = r.u32()?;
         let count = r.u32()? as usize;
         let _user2 = r.u32()?;
