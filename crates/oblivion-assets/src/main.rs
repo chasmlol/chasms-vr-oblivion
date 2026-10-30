@@ -219,13 +219,14 @@ fn export(archives: &Archives, args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// A rigid part of the head the game hangs on the head bone: FaceGen's (with an `.egm`: the ears,
-/// eyes, mouth, teeth, tongue, hair) or one naming the head as its parent (`Prn`).
+/// A rigid model the game hangs on the head bone: a part of FaceGen's head (with an `.egm`: the
+/// ears, eyes, mouth, teeth, tongue, hair), or one naming the head as its parent (`Prn`: the hair,
+/// helmets, hoods, circlets).
 fn head_part(archives: &Archives, nif: &Nif, path: &str) -> bool {
     let skinned = nif.blocks.iter().any(|b| matches!(b, oblivion_assets::nif::Block::Shape { skin, .. } if *skin >= 0));
     let on_head = nif.blocks.iter().any(|b| matches!(b, oblivion_assets::nif::Block::StringExtra { name, value } if name == "Prn" && value.eq_ignore_ascii_case("Bip01 Head")));
     let egm = format!("{}.egm", path.strip_suffix(".nif").unwrap_or(path));
-    export::normalise(path, "meshes\\").starts_with("characters\\") && !skinned && (on_head || archives.contains(&egm))
+    !skinned && (on_head || (export::normalise(path, "meshes\\").starts_with("characters\\") && archives.contains(&egm)))
 }
 
 /// FaceGen's controls the adapter needs (`facegen.toml`): the age, from the symmetric geometry

@@ -32,10 +32,11 @@ pub fn init(gpu: Gpu, w: u32, h: u32) {
     }
 }
 
-/// The eyes and a HUD panel, the size of Oblivion's back buffer, in its format (BGRA).
+/// The eyes and a HUD panel, the size of Oblivion's back buffer, in its format (BGRA), and the
+/// mirror's world with its depth (the aux view, the eyes' size: [`crate::render`]).
 fn request(w: u32, h: u32) -> TargetRequest {
     const DXGI_FORMAT_B8G8R8A8_UNORM: u32 = 87;
-    TargetRequest { color_format: DXGI_FORMAT_B8G8R8A8_UNORM, flags: TGT_HUD | TGT_DEPTH, eye_w: w, eye_h: h, hud_w: w, hud_h: h, ..Default::default() }
+    TargetRequest { color_format: DXGI_FORMAT_B8G8R8A8_UNORM, flags: TGT_HUD | TGT_DEPTH | TGT_AUX | TGT_AUX_DEPTH, eye_w: w, eye_h: h, hud_w: w, hud_h: h, ..Default::default() }
 }
 
 pub fn set_size(w: u32, h: u32) {
@@ -60,6 +61,9 @@ pub struct GameFrame {
     pub eye: Option<Vec3>,
     pub look_yaw: f32,
     pub menu: bool,
+    /// The race menu is open: the player stays in the world for it, before the mirror, its menu
+    /// the part of the picture `menu_uv` says.
+    pub race_menu: Option<[f32; 4]>,
     pub now: f64,
     pub dt: f32,
 }
@@ -85,6 +89,10 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     // (The runtime keeps its crouch in step with the game's sneaking.)
     if view.is_some() && crate::player::sneaking() {
         gs.flags |= GS_CROUCHED;
+    }
+    if let (Some(uv), true) = (g.race_menu, view.is_some()) {
+        gs.flags |= GS_MENU_IN_WORLD | GS_MIRROR;
+        gs.menu_uv = uv;
     }
     gs.game_zoom = 1.0;
     if view.is_some() {

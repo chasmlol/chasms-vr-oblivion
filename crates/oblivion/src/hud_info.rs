@@ -58,6 +58,8 @@ mod win {
     const HEIGHT: u16 = 0xFCA;
     const WIDTH: u16 = 0xFCB;
     const TRUE: f32 = 2.0;
+    /// `TileRect`'s kind.
+    const TILE_RECT: u32 = 0x385;
 
     static REAL: AtomicUsize = AtomicUsize::new(0);
     /// The thing a hand has (a reference), or 0.
@@ -82,20 +84,31 @@ mod win {
         list(tile + TILE_VALUES).into_iter().find(|&v| mem::at::<u16>(v + VALUE_ID) == Some(id)).and_then(|v| mem::at::<f32>(v + VALUE_NUM)).filter(|v| v.is_finite())
     }
 
-    /// The box of what's shown under `tile` (its place from `origin`, its locus's).
-    fn shown(tile: usize, origin: (f32, f32), depth: u32, out: &mut Option<[f32; 4]>) {
+    /// The box of what's shown under `tile` (its place from `origin`, its locus's). `drawn`: only
+    /// the tiles that draw something (images and text, not the rects that lay them out, which may
+    /// reach past them: the race menu's for dragging the player round).
+    fn shown(tile: usize, origin: (f32, f32), depth: u32, drawn: bool, out: &mut Option<[f32; 4]>) {
         if depth > 8 || value(tile, VISIBLE).is_some_and(|v| v != TRUE) {
             return;
         }
         let (x, y) = (origin.0 + value(tile, X).unwrap_or(0.0), origin.1 + value(tile, Y).unwrap_or(0.0));
         let (w, h) = (value(tile, WIDTH).unwrap_or(0.0), value(tile, HEIGHT).unwrap_or(0.0));
-        if w > 0.0 && h > 0.0 {
+        if w > 0.0 && h > 0.0 && !(drawn && type_of(tile) == TILE_RECT) {
             *out = super::grow(*out, [x, y, x + w, y + h]);
         }
         let inner = if value(tile, LOCUS) == Some(TRUE) { (x, y) } else { origin };
         for c in list(tile + TILE_CHILDREN) {
-            shown(c, inner, depth + 1, out);
+            shown(c, inner, depth + 1, drawn, out);
         }
+    }
+
+    /// A tile's kind (`Tile::GetTypeID`, its vtable's fourth).
+    fn type_of(tile: usize) -> u32 {
+        let f = mem::deref(mem::deref(tile) + 0x0C);
+        if f == 0 {
+            return 0;
+        }
+        unsafe { std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> u32>(f)(tile) }
     }
 
     /// Where the game's card is on its HUD now (the part of it, 0..1), if it shows one.
@@ -110,8 +123,24 @@ mod win {
         }
         let screen = (value(root, WIDTH)?, value(root, HEIGHT)?);
         let mut b = None;
-        shown(tile, (0.0, 0.0), 0, &mut b);
+        shown(tile, (0.0, 0.0), 0, false, &mut b);
         super::uv_of(b?, screen, 6.0)
+    }
+
+    /// Where an open menu (`kMenuType_*`) is on the game's picture (the part of it, 0..1): the box of
+    /// its tiles that show.
+    pub fn menu_uv(kind: u32) -> Option<[f32; 4]> {
+        type Interface = unsafe extern "C" fn(u8, u8) -> usize;
+        let tile = crate::menus::tile_menu(kind);
+        let ui = unsafe { std::mem::transmute::<usize, Interface>(INTERFACE)(0, 1) };
+        let root = mem::deref(ui + MENU_ROOT);
+        if tile == 0 || root == 0 {
+            return None;
+        }
+        let screen = (value(root, WIDTH)?, value(root, HEIGHT)?);
+        let mut b = None;
+        shown(tile, (0.0, 0.0), 0, true, &mut b);
+        super::uv_of(b?, screen, 8.0)
     }
 
     unsafe extern "C" fn set_target(target: usize, a: u8, force: u8) -> u8 {

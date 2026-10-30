@@ -529,7 +529,8 @@ pub fn publish() {
     let spells_now = (k.frame % 10 == 1).then(spells);
     crate::link::with_adapter(|a| {
         crate::weapons::publish(a);
-        if k.frame % 30 == 3 {
+        // (Every frame while the race menu changes the body and the face as the player watches.)
+        if k.frame % 30 == 3 || crate::menus::menu_open(crate::menus::MENU_RACE_SEX) {
             crate::body::publish(a);
         }
         a.write_actors(&table);
