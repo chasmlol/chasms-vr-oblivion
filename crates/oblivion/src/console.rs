@@ -64,14 +64,18 @@ pub fn select_spell(_id: u32) -> bool {
 
 /// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <hex id>` selects a spell,
 /// `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in front of the
-/// player (and that far over their feet), facing them (tests), anything else is compiled and run as
-/// a line of script. True if it ran.
+/// player (and that far over their feet), facing them (tests), `GoreCut <bone>` cuts a limb off
+/// the nearest creature as a killing blow would (`crate::gore`, tests), anything else is compiled
+/// and run as a line of script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
     }
     if let Some(id) = line.strip_prefix("SelectSpell ") {
         return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(select_spell);
+    }
+    if let Some(bone) = line.strip_prefix("GoreCut ") {
+        return crate::gore::test_cut(bone.trim().trim_matches('"'));
     }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();

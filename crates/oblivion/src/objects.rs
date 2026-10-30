@@ -1,6 +1,7 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
-//! ([`crate::weapons`]) and the game's things lying about near the player ([`crate::items`]), each
-//! owner's entries kept apart and written together.
+//! ([`crate::weapons`]), the game's things lying about near the player ([`crate::items`]) and the
+//! limbs cut off its creatures ([`crate::gore`]), each owner's entries kept apart and written
+//! together.
 
 use rustvr_protocol::*;
 
@@ -9,6 +10,7 @@ use rustvr_protocol::*;
 pub enum Owner {
     Weapons,
     Items,
+    Gore,
 }
 
 /// The owners' entries (pure: no link), merged into a table.
@@ -16,6 +18,7 @@ pub enum Owner {
 pub struct Parts {
     weapons: Vec<ObjectDesc>,
     items: Vec<ObjectDesc>,
+    gore: Vec<ObjectDesc>,
     seq: u32,
 }
 
@@ -26,11 +29,12 @@ impl Parts {
         let mine = match owner {
             Owner::Weapons => &mut self.weapons,
             Owner::Items => &mut self.items,
+            Owner::Gore => &mut self.gore,
         };
         mine.clear();
         mine.extend(descs.iter().filter(|d| d.id != 0));
         table.descs.fill(bytemuck::Zeroable::zeroed());
-        let all: Vec<&ObjectDesc> = self.weapons.iter().chain(&self.items).take(MAX_OBJECTS).collect();
+        let all: Vec<&ObjectDesc> = self.weapons.iter().chain(&self.gore).chain(&self.items).take(MAX_OBJECTS).collect();
         for (i, d) in all.iter().enumerate() {
             table.descs[i] = **d;
         }

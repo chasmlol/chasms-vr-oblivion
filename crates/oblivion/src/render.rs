@@ -249,6 +249,7 @@ mod win {
             time(Part::Lighting, || hooks::guard_void("lighting", || crate::lighting::publish(view, head)));
             time(Part::Items, || hooks::guard_void("items", || crate::items::place(view, now)));
         }
+        time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))
     }
 
