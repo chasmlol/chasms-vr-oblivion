@@ -218,6 +218,26 @@ mod game {
     const TEMP_PARTICLE: usize = 0x0057_13F0;
     const ADD_TEMP_EFFECT: usize = 0x0067_8D30;
     const PROCESS_MANAGER: usize = 0x00B3_BD00;
+    /// The game's free (cdecl).
+    const FREE: usize = 0x0040_1F20;
+    /// The game's blood on a creature's skin (`BSTempEffectGeometryDecal`): a geometry over its
+    /// mesh, drawn by its shader property (`NiAVObject::GetProperty(4)`, thiscall), a
+    /// `GeometryDecalShaderProperty`, from the decals listed on it (an `NiTPointerList` at +0x80:
+    /// its first node at +4 from there, its count at +0xC; a node is next, previous, the decal).
+    /// A decal (0x4C bytes) holds its texture at +0 and the property at +0x48; the game adds it to
+    /// the property's list (thiscall: the decal), takes it off (the same), and lets go of what it
+    /// holds (thiscall) before freeing it.
+    const GET_PROPERTY: usize = 0x0070_7530;
+    const PROPERTY_SHADER: u32 = 4;
+    const DECALS: usize = 0x80;
+    const LIST_FIRST: usize = 0x4;
+    const LIST_COUNT: usize = 0xC;
+    const DECAL_SIZE: usize = 0x4C;
+    const DECAL_TEXTURE: usize = 0x00;
+    const DECAL_PROPERTY: usize = 0x48;
+    const ADD_DECAL: usize = 0x007E_E3E0;
+    const REMOVE_DECAL: usize = 0x007E_E740;
+    const DECAL_RELEASE: usize = 0x0056_C0F0;
     /// The quarter of an exterior cell a reference is in (cdecl), and a cell's node.
     const CELL_QUARTER: usize = 0x004C_9BE0;
     const CELL_NODE: usize = 0x54;
@@ -441,6 +461,9 @@ mod game {
         clone: usize,
         attached_to: usize,
         clone_nodes: Vec<(usize, Xf, [f32; 4])>,
+        /// The game's blood decals copied onto the clone ([`copy_decals`]): the clone's property
+        /// and the copy, let go of with the clone.
+        decals: Vec<(usize, usize)>,
         /// The cut bone's world transform at the cut.
         cut: Xf,
         desc: ObjectDesc,
@@ -668,7 +691,7 @@ mod game {
         // The clone: the actor's 3D as it is, with no controllers or collision (nothing of it is
         // animated or simulated by the game: it's drawn where the runtime has the piece).
         let clone = clone_bare(&nodes);
-        let mut sv = Sever { limb, actor, root, cut_node: nodes[top].ptr, axis_nodes: (axis_from, axis_to), object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), cut, desc, born: crate::link::now(), next_spray: 0.0, held: 0 };
+        let mut sv = Sever { limb, actor, root, cut_node: nodes[top].ptr, axis_nodes: (axis_from, axis_to), object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), decals: Vec::new(), cut, desc, born: crate::link::now(), next_spray: 0.0, held: 0 };
         if clone != 0 {
             let copy = tree(clone);
             if copy.len() == nodes.len() && copy.iter().zip(&nodes).all(|(c, n)| c.name == n.name) {
@@ -699,6 +722,8 @@ mod game {
                 tracing::info!("gore: the piece's clone hides {hidden} meshes that don't show it");
                 let attach_to = mem::deref(root + PARENT);
                 if attach_to != 0 && is_node(attach_to) {
+                    // (Before it's ever drawn: the game draws a decal geometry's first decal.)
+                    sv.decals = copy_decals(&copy, &nodes);
                     // (A reference of ours keeps it whatever happens to where it's attached.)
                     unsafe { (*((clone + 4) as *const std::sync::atomic::AtomicU32)).fetch_add(1, std::sync::atomic::Ordering::AcqRel) };
                     type Attach = unsafe extern "thiscall" fn(usize, usize, u8);
@@ -828,6 +853,7 @@ mod game {
         }
         let clone = sv.clone;
         sv.clone = 0;
+        drop_decals(std::mem::take(&mut sv.decals));
         if sv.attached_to != 0 && mem::deref(clone + PARENT) == sv.attached_to && is_node(sv.attached_to) {
             type Detach = unsafe extern "thiscall" fn(usize, *mut usize, usize) -> *mut usize;
             let mut out = 0usize;
@@ -839,6 +865,82 @@ mod game {
             unsafe { ((clone + PARENT) as *mut usize).write(0) };
         }
         release(clone);
+    }
+
+    /// The game's blood decals on the creature's skin, copied onto the clone. A decal geometry's
+    /// property comes through `Clone` without its list of decals, and the game's decal shader
+    /// draws the first one it lists without asking whether there is one (the crash when a head
+    /// that had been hit came off). So each decal the original's property lists is copied to the
+    /// clone's as the game makes one: its texture and the property held, added with the game's
+    /// own call. The piece keeps the blood the body had on it, and the copies are the piece's,
+    /// let go of with its clone ([`drop_decals`]); the originals stay the game's.
+    fn copy_decals(copy: &[Node], nodes: &[Node]) -> Vec<(usize, usize)> {
+        type GetProperty = unsafe extern "thiscall" fn(usize, u32) -> usize;
+        type Alloc = unsafe extern "C" fn(usize) -> usize;
+        type Add = unsafe extern "thiscall" fn(usize, usize) -> usize;
+        let shader = |g: usize| unsafe { std::mem::transmute::<usize, GetProperty>(GET_PROPERTY)(g, PROPERTY_SHADER) };
+        let hold = |obj: usize| {
+            if obj != 0 {
+                unsafe { (*((obj + 4) as *const std::sync::atomic::AtomicU32)).fetch_add(1, std::sync::atomic::Ordering::AcqRel) };
+            }
+        };
+        let mut out = Vec::new();
+        for (c, n) in copy.iter().zip(nodes) {
+            if !is_a(n.ptr, "NiGeometry") {
+                continue;
+            }
+            let (from, to) = (shader(n.ptr), shader(c.ptr));
+            if from == 0 || to == 0 || from == to || !is_a(from, "GeometryDecalShaderProperty") || !is_a(to, "GeometryDecalShaderProperty") {
+                continue;
+            }
+            // (Only into an empty list: one that came with its decals needs none.)
+            if mem::at::<u32>(to + DECALS + LIST_COUNT) != Some(0) {
+                continue;
+            }
+            let mut node = mem::deref(from + DECALS + LIST_FIRST);
+            let mut seen = 0;
+            while node != 0 && seen < 16 {
+                seen += 1;
+                // (A node is next, previous, the decal: read at once.)
+                let Some([next, _, decal]) = mem::at::<[u32; 3]>(node) else { break };
+                node = next as usize;
+                let decal = decal as usize;
+                if decal == 0 || !mem::is_readable(decal as *const u8, DECAL_SIZE) {
+                    continue;
+                }
+                let mine = unsafe { std::mem::transmute::<usize, Alloc>(ALLOC)(DECAL_SIZE) };
+                if mine == 0 {
+                    break;
+                }
+                unsafe {
+                    std::ptr::copy_nonoverlapping(decal as *const u8, mine as *mut u8, DECAL_SIZE);
+                    hold(mem::deref(mine + DECAL_TEXTURE));
+                    ((mine + DECAL_PROPERTY) as *mut usize).write(to);
+                    hold(to);
+                    std::mem::transmute::<usize, Add>(ADD_DECAL)(to, mine);
+                }
+                out.push((to, mine));
+            }
+        }
+        if !out.is_empty() {
+            tracing::info!("gore: the piece's clone wears the game's {} blood decals the body had", out.len());
+        }
+        out
+    }
+
+    /// Lets go of the decals copied onto a clone, as the game lets go of its own: off the
+    /// property's list, what each holds let go of, and freed.
+    fn drop_decals(decals: Vec<(usize, usize)>) {
+        type Remove = unsafe extern "thiscall" fn(usize, usize);
+        type Release = unsafe extern "thiscall" fn(usize);
+        type Free = unsafe extern "C" fn(usize);
+        for (property, decal) in decals {
+            unsafe {
+                std::mem::transmute::<usize, Remove>(REMOVE_DECAL)(property, decal);
+                std::mem::transmute::<usize, Release>(DECAL_RELEASE)(decal);
+                std::mem::transmute::<usize, Free>(FREE)(decal);
+            }
+        }
     }
 
     fn release(obj: usize) {

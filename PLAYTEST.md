@@ -157,6 +157,29 @@ A corpse needs 0.8 of the toughness. So:
 * **Creatures without the people's skeleton.** Wolves, bears and rats can't lose limbs: their
   combat body is one capsule. Zombies, skeletons and other `Bip01`-limbed creatures can.
 
+## Real headset
+
+### Playtest 1: the game crashed as a head came off
+
+(`playtest-still.bat`; logs in `<builds>\gore\playtest-1`.)
+
+* **The restraint held.** The three bandits stood where they were.
+* **The first bandit** (on 5 health) died to a blow that struck its head capsule 3.0 of the way from
+  the neck to the head bone, that is on top of the skull. By the rule, a blow above the jaw doesn't
+  take the head, so nothing came off.
+* **The second bandit** (`ff000c49`) was hit once lightly on the chest (5 → 1), then across the
+  neck (power 1.25 against 0.55): the head came off, and the game crashed in its own renderer
+  (in the decal shader's pass).
+* **Why:** the first hit had left the game's blood decal on the bandit's skin. That decal is a
+  geometry over the mesh (`BSTempEffectGeometryDecal`), drawn by a `GeometryDecalShaderProperty`
+  from the decals listed on it. `NiObject::Clone` copies the property without its list, and the
+  decal shader draws the first decal on the list without checking that there is one. The
+  emulated-headset checks never cut a creature that already had a decal on it.
+* **The fix:** each decal on the body's decal geometries is copied onto the clone's, as the game's
+  decal makes its own, through the game's calls: its texture and property held, added to the list
+  as the game adds one, and, when the piece goes, taken off, let go of and freed. So a
+  severed head keeps the blood that was on it.
+
 ## Frame rate (same scene, your eye size 4147×4406, emulated headset at 120 Hz)
 
 The scene: the bandit room, one bandit killed. **Before** with no gore. **After** with five limbs
