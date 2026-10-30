@@ -27,9 +27,13 @@
 //! NPC's where the game's 0x521A10 says (+0x108 or +0x168); each four vectors of 0x18 (symmetric
 //! and asymmetric geometry, symmetric and asymmetric texture), each its count at +0 and its floats
 //! from the pointer at +0xC.
+//!
+//! Arrows worn hang their quiver on the body as the game hangs it (the arrows' model's `Prn`, the
+//! skeleton's `Quiver`: on the back, its arrows at the right shoulder), showing as many of its five
+//! arrows as there are left (`oblivion-extract` writes `#quiver0` .. `#quiver5`).
 
 use crate::{combat::read_str, engine, mem};
-use oblivion_assets::export::{model_key, texture_key};
+use oblivion_assets::export::{model_key, texture_key, variant_key};
 use rustvr_protocol::*;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -60,6 +64,10 @@ const EXTRA_WORN_LEFT: u8 = 0x1C;
 const FORM_TYPE: usize = 0x04;
 const ARMOR: u8 = 0x14;
 const CLOTHING: u8 = 0x16;
+const AMMO: u8 = 0x22;
+/// `TESAmmo`'s model path; the arrows a quiver shows at most.
+const AMMO_MODEL: usize = 0x34;
+const QUIVER_ARROWS: u32 = 5;
 
 /// Biped slots (bits of a `TESBipedModelForm`'s mask).
 const HEAD: u16 = 1 << 0;
@@ -105,6 +113,8 @@ pub struct Body {
     pub hair: Option<(String, String)>,
     /// The eyes' texture.
     pub eyes: String,
+    /// Arrows worn: their model and how many of the quiver's arrows show.
+    pub quiver: Option<(String, u32)>,
 }
 
 /// Walks a `tList` from its inline first node: its items.
@@ -136,6 +146,18 @@ fn extra(list: usize, kind: u8) -> usize {
     0
 }
 
+/// How many an inventory entry's extra data list stands for (`ExtraDataList::GetCount`).
+#[cfg(target_arch = "x86")]
+fn stack_count(list: usize) -> u32 {
+    type Count = unsafe extern "thiscall" fn(usize) -> i16;
+    (unsafe { std::mem::transmute::<usize, Count>(0x0041_E860)(list) }).max(0) as u32
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn stack_count(_list: usize) -> u32 {
+    1
+}
+
 /// The player's base form and race, if there's a player.
 fn npc() -> Option<(usize, usize)> {
     let player = engine::player();
@@ -155,6 +177,16 @@ pub fn body() -> Option<Body> {
     let data = mem::deref(changes + 0x0C);
     for entry in list(mem::deref(data), 512) {
         let form = mem::deref(entry + 8);
+        // Arrows worn: their quiver, with as many showing as are left (up to its five).
+        if mem::at::<u8>(form + FORM_TYPE) == Some(AMMO)
+            && let Some(l) = list(mem::deref(entry), 64).into_iter().find(|&l| extra(l, EXTRA_WORN) != 0)
+        {
+            let path = read_str(mem::deref(form + AMMO_MODEL));
+            if !path.is_empty() {
+                b.quiver = Some((path, stack_count(l).min(QUIVER_ARROWS)));
+            }
+            continue;
+        }
         let biped = match mem::at::<u8>(form + FORM_TYPE) {
             Some(ARMOR) => form + 0x64,
             Some(CLOTHING) => form + 0x5C,
@@ -249,6 +281,9 @@ pub fn avatar(b: &Body) -> AvatarDesc {
     }
     if b.beast && covered & TAIL == 0 && !b.tail.is_empty() {
         d.push_part(&name(&b.tail));
+    }
+    if let Some((path, shown)) = &b.quiver {
+        d.push_part(&format!("oblivion/{}", variant_key(path, &format!("quiver{shown}"))));
     }
     // The race's own skin: its folder for the Imperial one.
     let folder = b.race.to_ascii_lowercase().replace(' ', "");
@@ -389,11 +424,12 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
         if sent.as_ref() != Some(&b) {
             let d = avatar(&b);
             tracing::info!(
-                "body: {} {} ({}), wearing {:?}, head {:?}, hair {:?}, eyes {:?}: {} parts, {} texture swaps",
+                "body: {} {} ({}), wearing {:?}, a quiver {:?}, head {:?}, hair {:?}, eyes {:?}: {} parts, {} texture swaps",
                 if b.female { "female" } else { "male" },
                 b.race,
                 if b.beast { "beast" } else { "human" },
                 b.worn,
+                b.quiver,
                 b.face.first().map(|f| &f.1),
                 b.hair.as_ref().map(|h| &h.0),
                 b.eyes,

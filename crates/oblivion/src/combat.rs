@@ -240,7 +240,7 @@ fn node_pos(node: usize) -> Option<Vec3> {
 
 /// Calls `Actor::GetActorValue`.
 #[cfg(target_arch = "x86")]
-fn actor_value(actor: usize, av: u32) -> i32 {
+pub(crate) fn actor_value(actor: usize, av: u32) -> i32 {
     type F = unsafe extern "thiscall" fn(usize, u32) -> i32;
     let vt = mem::deref(actor);
     let f = mem::deref(vt + VT_GET_AV);
@@ -254,7 +254,7 @@ fn base_actor_value(actor: usize, av: u32) -> i32 {
 }
 
 #[cfg(not(target_arch = "x86"))]
-fn actor_value(_actor: usize, _av: u32) -> i32 {
+pub(crate) fn actor_value(_actor: usize, _av: u32) -> i32 {
     0
 }
 
@@ -492,6 +492,7 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
                 tracing::info!("combat: the player blocks {:#x}{}", ev.actor, if ev.flags & CEF_PARRY != 0 { " (a parry)" } else { "" });
                 crate::player::hold_control("Block", BLOCK_HOLD);
             }
+            CE_LOOSE => crate::archery::loose(ev),
             _ => {}
         }
     }

@@ -294,8 +294,9 @@ pub fn object_desc(model: &rustvr_asset::Model, e: &Equipped, key: &str, id: u32
 }
 
 struct Registered {
-    /// The weapon's form and the shield's.
+    /// The weapon's form and the shield's, and with a bow its arrows' and how many.
     forms: (usize, usize),
+    arrows: (usize, u32),
     seq: u32,
 }
 
@@ -306,18 +307,33 @@ static MISSING: Mutex<Option<String>> = Mutex::new(None);
 /// changes, or taken away when there's none.
 pub fn publish(a: &rustvr_adapter::Adapter) {
     let now = equipped();
-    let shield_now = equipped_shield();
+    // (With a bow the game holds no shield: both hands are on the bow.)
+    let shield_now = equipped_shield().filter(|_| now.as_ref().is_none_or(|e| e.kind != crate::archery::BOW));
     let mut reg = REGISTERED.lock().unwrap();
     let forms = (now.as_ref().map_or(0, |e| e.form), shield_now.as_ref().map_or(0, |s| s.0));
-    if reg.as_ref().is_some_and(|r| r.forms == forms) {
+    let arrows = crate::archery::arrows_key();
+    if reg.as_ref().is_some_and(|r| r.forms == forms && r.arrows == arrows) {
         return;
     }
-    let seq = reg.as_ref().map_or(0, |r| r.seq).wrapping_add(1).max(1);
+    // A new weapon is put where it starts (its holster); only the arrows changing (one shot) leaves
+    // the bow where it is.
+    let seq = match reg.as_ref() {
+        Some(r) if r.forms == forms => r.seq,
+        r => r.map_or(0, |r| r.seq).wrapping_add(1).max(1),
+    };
     let mut objects: Box<ObjectTable> = zeroed();
     let mut melee: Box<MeleeTable> = zeroed();
     objects.seq = seq;
     melee.seq = seq;
-    if let Some(e) = &now {
+    if let Some(e) = now.as_ref().filter(|e| e.kind == crate::archery::BOW) {
+        // A bow and its arrows (crate::archery).
+        let mut descs = Vec::new();
+        crate::archery::register(e, seq, &mut descs, a);
+        for d in descs {
+            objects.descs[objects.count as usize] = d;
+            objects.count += 1;
+        }
+    } else if let Some(e) = &now {
         let key = oblivion_assets::export::model_key(&e.model);
         match rustvr_asset::load_model(&rustvr_asset::default_root().join("oblivion"), &key) {
             Ok(model) => {
@@ -371,7 +387,7 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
     crate::magic::set_weapon_overlay(now.as_ref().filter(|e| e.enchantment != 0).and_then(|e| crate::magic::enchant_overlay(e.enchantment, WEAPON_ID)));
     // The melee table first: when the runtime sees the weapon, its damagers are there.
     if a.write_melee(&melee) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
-        *reg = Some(Registered { forms, seq });
+        *reg = Some(Registered { forms, arrows, seq });
     }
 }
 

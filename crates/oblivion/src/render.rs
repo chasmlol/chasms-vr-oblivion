@@ -145,6 +145,7 @@ mod win {
             crate::console::tick();
             crate::player::before_update();
             crate::items::frame(link::now());
+            crate::archery::frame(link::now());
         });
         unsafe { real(this) }
     }
