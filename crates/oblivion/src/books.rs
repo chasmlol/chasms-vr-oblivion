@@ -13,7 +13,8 @@
 //! one that's activated rather than reading it, so it would go straight to the pack.
 //!
 //! The game goes on while a book is read in the hands ([`install`]): Oblivion stops its world while
-//! any menu is open, and a book held open is a menu.
+//! any menu is open, and a book held open is a menu. The player walks meanwhile
+//! ([`world_goes_on`]).
 //!
 //! The book menu (xOBSE's `GameMenus.h`, `BookMenu`, menu type 0x402): the reference read at +0x30
 //! (0 from the inventory), the book at +0x34 (`TESObjectBOOK`: its flags +0x88, 1 a scroll).
@@ -183,6 +184,13 @@ fn step() {
 /// The book being read is in a hand and its menu is on top (as [`frame`] last found, before the
 /// game's frame runs: the checks below are asked in the middle of it).
 static READING_IN_HAND: AtomicBool = AtomicBool::new(false);
+
+/// The game goes on under the book being read (it's in a hand): the player walks as with no menu
+/// open (`GS_MENU_WALKS`), the stick's step taken by the player's own update ([`crate::movement`]),
+/// which goes on with the world.
+pub fn world_goes_on() -> bool {
+    READING_IN_HAND.load(Ordering::Relaxed)
+}
 
 /// `IsMenuMode` (cdecl: the interface's cursor is out, `InterfaceManager` +0x1C, and its mode, +8,
 /// isn't 1).

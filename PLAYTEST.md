@@ -76,6 +76,14 @@ hand instead of the flat screen.
 - When you're done, press a key in the playtest window (don't just close it): that's what saves the
   runtime's log for me. The last run's was lost when another feature's game started.
 
+## Since the seventh headset play (2026-10-30)
+
+- **Walk while reading**: with a book open in your hand, the off-hand stick walks you as it does
+  without a book (the same deadzone, towards where your head looks, and the game body follows you
+  when you step about the room); the comfort vignette is as when walking. The right stick still
+  turns the pages, and B still shuts the book. Turning with the stick isn't there while reading:
+  turn your body.
+
 The flat game's crosshair is gone (taken from the menus branch, which has it from riding): where you
 look shows only the icon of what you can activate, red when taking it is stealing.
 
@@ -159,6 +167,9 @@ look shows only the icon of what you can activate, red when taking it is stealin
 - **The world going on under a book** was only worked out, never run: the game's
   world never updates with a menu open in the flat game, so something may not expect it (an NPC
   talking to you, combat starting, a script). If anything odd happens while reading, say what.
+- **Walking while reading**: that the game takes the player's step while its book menu is up (its
+  own walking controls may be off in menus; the step is the adapter's, in `Actor::Move`, which the
+  player's update should still call).
 - **A book taken off a shelf by hand** (the gloves' pull and the grip are the existing ones; the tests
   put books in the hand from the console or brought them by activating them).
 - **The local map's picture**: indoors the local map's window showed the parchment and your arrow
@@ -233,9 +244,13 @@ look shows only the icon of what you can activate, red when taking it is stealin
   each part of the world's update, and the world's seconds for a frame are 0 while one
   is. Those 15 calls ask the adapter instead, which says no while the book being read is in a hand
   and its menu is on top; everything else still sees the menu (the cursor and clicks are the
-  book's, the player's Activate is off, scripts run their menu-mode blocks, the runtime's controls
-  are the menu's, so the player doesn't walk while reading). The map, and a book read from the pack,
-  pause as the flat game does. Your hands are never paused: you can move the book, hand it over,
+  book's, the player's Activate is off, scripts run their menu-mode blocks). The map, and a book
+  read from the pack, pause as the flat game does.
+- **Walking while reading** (the player asked): the adapter says the book's menu is one the game goes
+  on under (`GS_MENU_WALKS`), and the runtime then walks with the off-hand stick as without a menu
+  (its move setting, deadzone, roomscale following, the comfort vignette); the menu's buttons and
+  the right stick stay the book's (no stick turning while reading). The step is the adapter's own
+  (`Actor::Move`, `crate::movement`), taken in the player's update, which goes on with the world. Your hands are never paused: you can move the book, hand it over,
   let it go, spread the map.
 
 ## Not done
