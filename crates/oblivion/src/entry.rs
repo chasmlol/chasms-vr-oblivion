@@ -2,7 +2,7 @@
 //! hooks `Direct3DCreate9` straight away (the game makes its device seconds later) and the engine
 //! once Steam's DRM has decrypted the game's code.
 
-use crate::{console, d3d9, engine, game_settings, launcher, log, render, settings, window};
+use crate::{console, d3d9, engine, game_settings, launcher, log, mem, render, settings, window};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -55,6 +55,7 @@ pub extern "system" fn DllMain(inst: HMODULE, reason: u32, _reserved: *mut core:
         let _ = MOD_DIR.set(dir.clone());
         log::init(&dir.join("rustvr-oblivion.log"));
         log::watch_access_violations();
+        mem::guard_reads();
         settings::load_from(&dir);
         game_settings::restore(&dir);
         let s = settings::get();

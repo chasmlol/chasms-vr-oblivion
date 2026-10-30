@@ -300,6 +300,21 @@ fn export(archives: &Archives, args: &[String]) -> Result<()> {
             }
         }
     }
+    // A horse's saddle, measured for the hands to find (`oblivion_assets::horse`).
+    if prefixes.iter().any(|p| oblivion_assets::horse::SADDLE.starts_with(p.as_str())) {
+        let read = |p: &str| archives.read(p).and_then(|d| Nif::parse(&d));
+        let tack = archives.read(oblivion_assets::horse::TACK).and_then(|d| oblivion_assets::dds::parse(&d, oblivion_assets::horse::TACK)).ok();
+        match (read(oblivion_assets::horse::SADDLE), read(oblivion_assets::horse::SKELETON), read(oblivion_assets::horse::BODY), read(oblivion_assets::horse::HEAD)) {
+            (Ok(saddle), Ok(skeleton), Ok(body), Ok(head)) => match oblivion_assets::horse::measure(&saddle, &skeleton, &body, &head, &oblivion_assets::horse::MANES.iter().filter_map(|m| read(m).ok()).collect::<Vec<_>>(), tack.as_ref()) {
+                Some(s) => {
+                    oblivion_assets::horse::save(&out, &s)?;
+                    println!("the horse's saddle on {}: pommel {:?}, seat {:?}, cantle {:?}, a rider's knee {:?} and ankle {:?}, the bit {:?} on {}, the tack's colour {:?}", s.bone, s.pommel, s.seat, s.cantle, s.knee, s.ankle, s.bit, s.head_bone, s.tack);
+                }
+                None => eprintln!("the horse's saddle: not measured"),
+            },
+            (Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => eprintln!("the horse's saddle: {e:#}"),
+        }
+    }
     index.items = items.into_values().collect();
     std::fs::write(&index_path, toml::to_string(&index)?)?;
     println!("{models} models ({failed} unreadable, {faces} with face morphs), {wrote} new textures ({missing} missing) in {}", out.display());

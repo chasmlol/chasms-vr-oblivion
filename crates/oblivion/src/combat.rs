@@ -293,6 +293,23 @@ pub(crate) fn part_bone(game_part: u32) -> Option<&'static str> {
     HUMANOID.get(game_part as usize).map(|e| e.0)
 }
 
+/// Every actor the game is fully processing near the player (not the player).
+pub(crate) fn high_actors() -> Vec<usize> {
+    let player = engine::player();
+    let mut out = Vec::new();
+    let mut node = PROCESS_MANAGER + ACTORS_LIST;
+    let mut guard = 0;
+    while node != 0 && guard < 256 {
+        guard += 1;
+        let actor = mem::deref(node);
+        node = mem::deref(node + 4);
+        if actor != player && is_actor(actor) {
+            out.push(actor);
+        }
+    }
+    out
+}
+
 /// The actors near the player and, by id, where each is in the game's memory.
 pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
     let mut table: Box<Actors> = bytemuck::zeroed_box();
@@ -305,7 +322,8 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
         guard += 1;
         let actor = mem::deref(node);
         node = mem::deref(node + 4);
-        if actor == player || !is_actor(actor) {
+        // (The horse the player rides is under them, not in the hands' way.)
+        if actor == player || !is_actor(actor) || actor == crate::riding::horse().0 {
             continue;
         }
         let Some(id) = mem::at::<u32>(actor + FORM_ID) else { continue };
@@ -493,6 +511,14 @@ pub fn angles(dir: Vec3) -> (f32, f32) {
 pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &HashMap<u32, usize>) {
     let player = engine::player();
     if player == 0 {
+        return;
+    }
+    // The game's rule: no fighting from the saddle (nor casting). The hands still swing, as a
+    // rider's would, but nothing lands.
+    if crate::riding::mounted() {
+        if !events.is_empty() {
+            tracing::info!("combat: {} blows or casts from the saddle: the game doesn't fight mounted", events.len());
+        }
         return;
     }
     for ev in events {

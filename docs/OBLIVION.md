@@ -34,14 +34,15 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | Doors and levers | Every door near the player that swings or slides in place (not a load door) and every scripted activator with a moving part (levers, switches, buttons, wheels) is a hinge or a slide in the runtime's physics (`OBJ_VALVE`, `JOINT_PANEL`): the joint from the model's own "Open" or "Forward" animation (read from the game's archives), its shape the game's Havok shape (or its drawn shape where it has no body of its own, or its body lies off its drawing), its mass the model's or its drawn volume of its Havok material (a lid no heavier than a hand lifts by its edge; a button against a firm spring). Taken anywhere and swung, pushed with a palm, stopped by the player's body. A shut door is latched: a tug to the latch's end is the game's own Activate (its script, lock and key, open state); opened, the game's animation is stopped and the door's nodes and keyframed body follow the hand; swung shut, the game's Activate again. A lever's end of travel is the game's Activate (an animation its script plays in answer is stopped: the hand moved it). A sliding door (a portcullis, a ruin's stone) taken in a hand is tugged: the game's animation moves it. Traps and their triggers stay the game's. The game moving one itself (an NPC, the trigger at gaze) plays its animation and the runtime follows. | `world.rs`, `docs/research/world.md` |
 | The lock | While the game's lock is open, the right hand is its pick: sideways under a tumbler, up to push it, the trigger to set it (the game's cursor and mouse, so every rule is the game's); A is Auto Attempt, B closes it; the tumbler, a set and a broken pick are felt. | `lock.rs` |
 | Menus | While a menu is open it's a panel; the game's cursor follows the laser and the trigger clicks. | `menus.rs` |
-| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <name or id>`, `EquipAll <id>`, `PlaceInFront <ref> <metres>`, or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
+| Riding | The game's horses near the player offer their saddles (measured on the game's `saddle.nif`, on each horse's live spine): a hand closing on one is the player's own activation of the horse, so the game's mount happens (whose horse, the crime of stealing it, its animation and sounds). Riding, the runtime's reins, stick and spurs give the game its own controls (the joystick's Y the pace, X the turn, Run the gallop, Jump the jump); the horse's turn carries the view round, the view's anchor is the rider's eye held steady on it, and the body sits in the saddle with its legs round the horse's own body. Getting off is the same activation. No fighting from the saddle (the game's rule). | `riding.rs`, `docs/design/riding.md` |
+| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <name or id>`, `EquipAll <id>`, `PlaceInFront <ref> <metres>`, `PlayerHorse <base> [<metres>]` (a horse of the player's own beside them), or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
 
 ## Setting up
 
 The game's models are converted once into `local_assets/oblivion` (never committed):
 
 ```
-cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/staffs meshes/lights meshes/characters meshes/armor meshes/clothes textures/characters textures/menus/misc/hud_reticle.dds
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/staffs meshes/lights meshes/characters meshes/armor meshes/clothes meshes/creatures/horse textures/characters textures/menus/misc/hud_reticle.dds
 ```
 
 (`meshes/characters` brings the races' heads and the parts made to them, the hair and their FaceGen
@@ -77,6 +78,12 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Grip over the other shoulder or at its hip, the bow in the other hand | An arrow from the quiver (let go there, it goes back in) |
 | The arrow's back end to the string; pull back; let go | Nock, draw, loose: the further drawn, the faster and flatter it flies (a fifth or less: it stays on the string) |
 | Weapon or shield across a blow | Block |
+| Grip a horse's saddle | Get on (the game's own mount; someone else's horse is stealing it) |
+| Grip the reins (base of the neck) | Hold them, either hand or both |
+| One rein back, or both to one side / both back | Turn that way / slower, stop, back up |
+| Flick the reins, or the trigger of a rein hand | Spur on: walk, gallop |
+| Left stick (click: gallop), right stick, mounted | Ride and steer with the sticks |
+| Hold a free hand's trigger, or hold the pommel and lean out | Get off the horse |
 
 ## Settings (`rustvr-oblivion.toml` beside the DLL)
 

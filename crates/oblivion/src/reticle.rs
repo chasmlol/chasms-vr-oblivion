@@ -55,10 +55,7 @@ mod win {
     fn name(tile: usize) -> String {
         let (p, n) = (mem::deref(tile + NAME), mem::at::<u16>(tile + NAME + 4).unwrap_or(0) as usize);
         let n = n.min(64);
-        if p == 0 || n == 0 || !mem::is_readable(p as *const u8, n) {
-            return String::new();
-        }
-        let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n) };
+        let Some(bytes) = (p != 0 && n != 0).then(|| mem::bytes(p as *const u8, n)).flatten() else { return String::new() };
         String::from_utf8_lossy(bytes.split(|&b| b == 0).next().unwrap_or(&[])).into_owned()
     }
 

@@ -81,7 +81,21 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     let adapter = guard.as_mut()?;
     let frame = adapter.poll()?;
     let view = g.eye.and_then(|eye| {
-        let anchor = Anchor { eye, base_eye: eye, look_yaw: g.look_yaw, scripted: false };
+        // On a horse the view turns with it, and is anchored on the rider's eye over the saddle held
+        // steady on it (crate::riding): just seated, it faces the horse's way.
+        let ride = crate::riding::carry(eye, g.dt);
+        if let Some(c) = &ride {
+            adapter.tracking.carry_turn(c.turn);
+            if c.recenter {
+                adapter.tracking.recenter();
+            }
+        }
+        let anchor = Anchor {
+            eye: ride.as_ref().map_or(eye, |c| c.eye),
+            base_eye: ride.as_ref().map_or(eye, |c| c.base_eye),
+            look_yaw: ride.as_ref().map_or(g.look_yaw, |c| c.look_yaw),
+            scripted: false,
+        };
         adapter.tracking.update(&frame, &anchor, g.now, g.dt)
     });
     let mut gs: GameState = bytemuck::Zeroable::zeroed();

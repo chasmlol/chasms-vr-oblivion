@@ -98,8 +98,10 @@ pub fn equip_all(_id: u32) -> bool {
 /// spell, has no id to know beforehand), `EquipAll <hex id>` equips all the player has of a thing (a
 /// stack of arrows), `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in
 /// front of the player (and that far over their feet), facing them (tests), `GoreCut <bone>` cuts a
-/// limb off the nearest creature as a killing blow would (`crate::gore`, tests), anything else is
-/// compiled and run as a line of script. True if it ran.
+/// limb off the nearest creature as a killing blow would (`crate::gore`, tests), `PlayerHorse <base
+/// hex id> [<metres>]` puts a horse that far beside them and makes it theirs
+/// (`crate::riding::give_horse`), anything else is compiled and run as a line of script. True if it
+/// ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
@@ -123,6 +125,11 @@ pub fn run(line: &str) -> bool {
             None => (bone, true),
         };
         return crate::gore::test_cut(bone, kill);
+    }
+    if let Some(rest) = line.strip_prefix("PlayerHorse ") {
+        let mut it = rest.split_whitespace();
+        let Some(base) = it.next() else { return false };
+        return crate::riding::give_horse(base, it.next().and_then(|m| m.parse::<f32>().ok()).unwrap_or(3.0));
     }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();

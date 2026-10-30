@@ -18,6 +18,8 @@
 //! * **The world** ([`items`], [`world`], [`lock`]): the things lying about, to take in the hands;
 //!   the doors and levers, worked by hand with the game's own activation; the game's lock, its pick
 //!   in the hand.
+//! * **Riding** ([`riding`]): the game's horses, got on by the saddle, ridden by the reins, the
+//!   player's body in the game's own seat on them.
 //!
 //! The rest is plumbing: the DLL proxy ([`proxy`]), the game's addresses ([`engine`]), hooking
 //! ([`hooks`], [`iat`]), the game window ([`window`]), the game's settings ([`game_settings`]) and
@@ -65,6 +67,7 @@ pub mod proxy;
 pub mod render;
 pub mod resolution;
 pub mod reticle;
+pub mod riding;
 #[cfg(target_arch = "x86")]
 pub mod scene;
 pub mod settings;

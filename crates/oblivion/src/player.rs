@@ -69,9 +69,15 @@ pub fn before_update() {
     #[cfg(target_arch = "x86")]
     crate::movement::set_stick(snap.filter(|_| vr).map(|s| s.frame.intents.move_xy));
     let mut v = input::Virtual::default();
+    // On a horse its controls are the rider's (crate::riding): getting on and off, and the joystick
+    // and Run for its gait and steering.
+    let riding = if vr { crate::riding::before_update() } else { None };
     if let Some(s) = snap {
         if let Some(b) = bridge().as_mut() {
             v = b.update(&s.frame.intents, game_controls(), link::now());
+            if let Some(c) = &riding {
+                ride(b, &mut v, c);
+            }
         }
         static LAST_MOVE: Mutex<[f32; 2]> = Mutex::new([0.0; 2]);
         let mv = s.frame.intents.move_xy;
@@ -95,7 +101,10 @@ pub fn before_update() {
         if let Some(view) = s.view.filter(|_| !crate::menus::menu_open(crate::menus::MENU_RACE_SEX)) {
             log_once(view.look_yaw);
             first_person();
-            set_look(view.look_yaw, view.look_pitch);
+            // (A rider looks round freely: the horse goes where the reins say.)
+            if riding.is_none() {
+                set_look(view.look_yaw, view.look_pitch);
+            }
         }
     }
     #[cfg(windows)]
@@ -160,6 +169,30 @@ pub fn trace_frame(now: f64, snap: &link::Snapshot, game: &crate::camera::Camera
         game.pos,
         anchor.map(|a| a.to_array())
     );
+}
+
+/// The horse's controls in the game's input: the joystick its pace and turn, Run its gallop (with
+/// Always Run on, not holding Run runs), and Auto Move off (the horse's gait is the rider's).
+fn ride(b: &input::Bridge, v: &mut input::Virtual, c: &crate::riding::Controls) {
+    v.stick = c.stick;
+    let run = b.binding("Run");
+    v.keys.retain(|k| Some(*k) != run.key);
+    if let Some(m) = run.mouse {
+        v.buttons &= !(1 << m.min(7));
+    }
+    if c.run != game_controls().always_run {
+        if let Some(k) = run.key {
+            v.keys.push(k);
+        }
+        if let Some(m) = run.mouse {
+            v.buttons |= 1 << m.min(7);
+        }
+    }
+    let p = engine::player();
+    if p != 0 && mem::at::<u8>(p + engine::pc::AUTO_MOVE) == Some(1) {
+        unsafe { ((p + engine::pc::AUTO_MOVE) as *mut u8).write(0) };
+        tracing::info!("riding: Auto Move off (the horse goes as the rider says)");
+    }
 }
 
 /// Holds one of the game's controls (by its name in `Oblivion.ini`) for `seconds`.

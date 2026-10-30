@@ -149,6 +149,7 @@ mod win {
             crate::grabs::apply(link::now());
             crate::world::frame(link::now());
             crate::props::frame(link::now());
+            crate::riding::frame(link::now());
         });
         unsafe { real(this) }
     }
@@ -159,12 +160,16 @@ mod win {
         // as an autosave goes through a door) is the game's, drawn as it draws it: two eyes drawn
         // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
         // menus goes into its world texture.)
-        if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
-            return unsafe { real(this, arg) };
-        }
-        crate::timing::render_start();
-        let result = unsafe { render_stereo(this, arg, real) };
-        crate::timing::render_end();
+        d3d9::rendering(true);
+        let result = if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
+            unsafe { real(this, arg) }
+        } else {
+            crate::timing::render_start();
+            let r = unsafe { render_stereo(this, arg, real) };
+            crate::timing::render_end();
+            r
+        };
+        d3d9::rendering(false);
         result
     }
 
@@ -320,6 +325,7 @@ mod win {
             time(Part::Items, || hooks::guard_void("magic", || crate::magic::place(view)));
             time(Part::Items, || hooks::guard_void("world", || crate::world::place(now)));
             time(Part::Items, || hooks::guard_void("props", || crate::props::place(view, now)));
+            hooks::guard_void("riding", || crate::riding::publish(view, now));
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))
