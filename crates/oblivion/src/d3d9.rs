@@ -56,6 +56,7 @@ mod win {
     static REAL_PRESENT: AtomicUsize = AtomicUsize::new(0);
     static REAL_TCL: AtomicUsize = AtomicUsize::new(0);
     static LAST_TCL: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+    static REAL_SET_SAMPLER: AtomicUsize = AtomicUsize::new(0);
 
     thread_local! {
         static MAKING: Cell<bool> = const { Cell::new(false) };
@@ -213,6 +214,12 @@ mod win {
             // IDirect3DDevice9::TestCooperativeLevel (slot 3): the game skips its frames while it fails.
             let tcl = unsafe { *(*(dev as *const *const usize)).add(3) };
             hooks::install_into(tcl as *const (), test_cooperative_level as *const (), "IDirect3DDevice9::TestCooperativeLevel", &REAL_TCL);
+            // IDirect3DDevice9::SetSamplerState (slot 69): the textures' anisotropic filtering.
+            if anisotropy() > 1 {
+                let set_sampler = unsafe { *(*(dev as *const *const usize)).add(69) };
+                hooks::install_into(set_sampler as *const (), set_sampler_state as *const (), "IDirect3DDevice9::SetSamplerState", &REAL_SET_SAMPLER);
+                tracing::info!("d3d9: the game's textures are filtered anisotropically ({}x)", anisotropy());
+            }
             match Gpu::new() {
                 Ok(gpu) => {
                     let (w, h) = if params.is_null() { (0, 0) } else { unsafe { ((*params).BackBufferWidth, (*params).BackBufferHeight) } };
@@ -229,6 +236,38 @@ mod win {
         let real: PresentFn = unsafe { std::mem::transmute(REAL_PRESENT.load(Ordering::Acquire)) };
         hooks::guard_void("Present", || crate::render::on_present(dev));
         unsafe { real(dev, src, dst, wnd, dirty) }
+    }
+
+    /// The anisotropic filtering of the game's textures: `anisotropy` in the settings (testing,
+    /// `RUSTVR_OBLIVION_ANISOTROPY` over it), within what Direct3D 9 takes (16).
+    fn anisotropy() -> u32 {
+        static A: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+        *A.get_or_init(|| {
+            let env = std::env::var("RUSTVR_OBLIVION_ANISOTROPY").ok().and_then(|v| v.parse().ok());
+            env.unwrap_or(crate::settings::get().anisotropy).clamp(1, 16)
+        })
+    }
+
+    type SetSamplerFn = unsafe extern "system" fn(*mut c_void, u32, D3DSAMPLERSTATETYPE, u32) -> windows::core::HRESULT;
+
+    /// The game's texture filtering, made anisotropic ([`crate::settings::Settings::anisotropy`]):
+    /// a sampler the game sets to filter linearly as it shrinks a texture filters anisotropically
+    /// instead, as far as the settings say. The game's other filters (point sampling, its
+    /// magnification, its mip filter) are as it sets them, and a picture of its own sampled one
+    /// texel to a pixel (its image space passes) comes out as it did.
+    unsafe extern "system" fn set_sampler_state(dev: *mut c_void, sampler: u32, kind: D3DSAMPLERSTATETYPE, value: u32) -> windows::core::HRESULT {
+        let real: SetSamplerFn = unsafe { std::mem::transmute(REAL_SET_SAMPLER.load(Ordering::Acquire)) };
+        // (The pixel shaders' samplers only, not the vertex shaders', 257 on.)
+        if sampler < 16 {
+            if kind == D3DSAMP_MINFILTER && value == D3DTEXF_LINEAR.0 as u32 {
+                let _ = unsafe { real(dev, sampler, D3DSAMP_MAXANISOTROPY, anisotropy()) };
+                return unsafe { real(dev, sampler, kind, D3DTEXF_ANISOTROPIC.0 as u32) };
+            }
+            if kind == D3DSAMP_MAXANISOTROPY {
+                return unsafe { real(dev, sampler, kind, anisotropy()) };
+            }
+        }
+        unsafe { real(dev, sampler, kind, value) }
     }
 
     unsafe extern "system" fn test_cooperative_level(dev: *mut c_void) -> windows::core::HRESULT {
