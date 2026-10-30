@@ -2,8 +2,10 @@
 
 Save: rustvr-city
 
-`playtest.bat` boots Oblivion into `rustvr-city` (the Imperial City market at noon, with people about)
-under a cloudy sky, with the Mirror power selected. `playtest-rain.bat` is the same in the rain.
+`playtest.bat` boots Oblivion into `rustvr-city` at noon and moves you to the Imperial City's Market
+District (`-At ICMarketDistrict`: people about, in the sun), under a cloudy sky, with the Mirror
+power selected. (`rustvr-city` itself is at Odiil Farm, in the forest.) `playtest-rain.bat` is the
+same in the rain.
 `playtest-before.bat` is `playtest.bat` with this branch's fixes switched off, to compare.
 Run them from Explorer (double-click). Each one closes a game another .bat left running, and
 closes the game and puts your settings back when you press a key.
@@ -23,13 +25,14 @@ What was wrong, why, and the audit of the rest: `docs/research/visuals.md`.
    - Close one eye, then the other: the clouds shouldn't jump.
    - Walk about with the stick, and up and down any steps. The clouds shouldn't bob.
    - The sun, and at night the moons and the stars, should behave the same way.
-2. **The people.** Walk up to people in the market, to about 2 m.
-   - Their bodies (skin, clothes, armour) should be in one place with their heads, what they carry
-     and their shadows on the ground: one solid person, nothing doubled.
-   - Watch their feet against their shadows as they walk.
-   - Close one eye, then the other: the body shouldn't jump against the head.
-   - This was the "cross-eyed" feeling: in the right eye every body was drawn where the left eye saw
-     it.
+2. **The people's shadows.** Walk up to people in the market, to about 2 m, and look at the
+   shadows at their feet.
+   - Each shadow should be in both eyes, in the same place on the ground: solid, not see-through or
+     flickering.
+   - Close one eye, then the other: the shadow should stay.
+   - This was the "cross-eyed" feeling: playtest 1's pictures show a rider's horse with its shadow in
+     the left eye and none in the right.
+   - Their bodies should be in one place with their heads and what they carry: one solid person.
 3. **The mirror** (optional). Cast Mirror (your selected power: hold the trigger with the spell hand
    empty, let go) with people behind you. The people in the mirror should be whole: bodies with their
    heads.
@@ -55,6 +58,9 @@ are drawn for the left eye in both, as before this branch.
   head's real height, the room-scale offset, the steps smoothed out. So the sky had parallax and
   bobbed against the eyes. Now the game centres the sky on each eye: it's at infinity for both eyes.
   It centres the weather on your head, the same place for both eyes, so rain keeps its depth.
+- **The people's shadows** (round 2). The game clips each actor's shadow to its light with six clip
+  planes, made in the camera's own space once a frame, for the left eye. The right eye used the left
+  eye's planes, which cut its shadows away. Now the game makes them again for each eye.
 - **The people.** The game's renderer works out a skinned body's bones relative to the first camera
   that draws it in a frame, and keeps them for the frame. Both eyes and the mirror were one frame, so
   the right eye and the mirror drew bodies placed for the left eye. Now each eye is a frame of its
@@ -65,9 +71,8 @@ are drawn for the left eye in both, as before this branch.
 ## Not done, not checked
 
 - I can't run the game, so none of this has been seen yet: the pictures this run saves will show me.
-- The NPCs' cause is worked out, not yet seen. If their shadows still look wrong in your eyes
-  with the bodies right, tell me: the shadows themselves (from the lights, the same for both eyes)
-  are next.
+- Round 1's pictures (your first run) showed the shadows missing from the right eye; the fix for it
+  is worked out and hasn't been seen yet.
 - Which actors cast shadows, and how far away they fade, are worked out once a frame from the left
   eye, as before. A shadow at the very right edge of the right eye may be missing.
 - Trees' leaves, the distant land's LOD and HDR (off in your settings) weren't checked in the

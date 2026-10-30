@@ -94,6 +94,40 @@ mod win {
         unsafe { real(this) }
     }
 
+    /// The world's shadow scene node (`*0xB42F54`) and its actors' shadow lights
+    /// (`ShadowSceneLight`, an `NiTPointerList` at +0xF8: each entry's next at +0, its light at +8).
+    const SHADOW_SCENE: usize = 0x00B4_2F54;
+    const SHADOW_LIGHTS: usize = 0xF8;
+    /// A shadow light's clip planes are made for this frame (u8). Each draw of an actor's shadow on
+    /// what it falls on clips it to the shadow light's frustum with six user clip planes, which
+    /// Direct3D takes in the camera's clip space: the first draw of a frame puts the light's
+    /// planes (+0x150) into the camera's clip space, keeps them (+0x1B4) and sets this; the rest
+    /// take the kept ones (0x7C9CCA, and 0x7FC556 for the SM3 shaders). Only the light's shadow map
+    /// render clears it (0x7D4F67), with the first eye, so the second eye and the mirror clipped
+    /// the shadows with the first eye's planes, which cut them away: the actors' shadows were in
+    /// the left eye only.
+    const CLIP_PLANES_MADE: usize = 0x214;
+
+    /// The actors' shadow lights' clip planes are made again, for the next render's camera.
+    fn shadow_clip_planes_again() {
+        let ssn = mem::deref(SHADOW_SCENE);
+        if ssn == 0 {
+            return;
+        }
+        let mut entry = mem::deref(ssn + SHADOW_LIGHTS);
+        // (Bounded, as a guard against a list being changed: the background thread's lock is held.)
+        for _ in 0..1024 {
+            if entry == 0 {
+                break;
+            }
+            let light = mem::deref(entry + 8);
+            if light != 0 && mem::at::<u8>(light + CLIP_PLANES_MADE).is_some() {
+                unsafe { ((light + CLIP_PLANES_MADE) as *mut u8).write(0) };
+            }
+            entry = mem::deref(entry);
+        }
+    }
+
     /// The world render centres the sky and the weather on the scene graph's camera node
     /// ([`engine::camera_node`], where the game's camera is): at its start it copies the node's
     /// position (`NiAVObject` +0x54) into the "Sky" node (`*0xB333D8`: the dome, the clouds, the
@@ -156,14 +190,14 @@ mod win {
     const SKY_NODE: usize = 0x00B3_33D8;
 
     /// The fixes for what the game makes once a frame from one camera (the sky's centre, a
-    /// skinned model's bones) are on. Testing, `RUSTVR_OBLIVION_MONO_VISUALS=1`: they're off, to
+    /// skinned model's bones, the actors' shadows' clip planes) are on. Testing, `RUSTVR_OBLIVION_MONO_VISUALS=1`: they're off, to
     /// see what they fix.
     fn per_eye_visuals() -> bool {
         static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         *ON.get_or_init(|| {
             let on = !std::env::var("RUSTVR_OBLIVION_MONO_VISUALS").is_ok_and(|v| v == "1");
             if !on {
-                tracing::info!("render: testing: the sky is centred on the game's camera and the eyes share the renderer's frame (RUSTVR_OBLIVION_MONO_VISUALS)");
+                tracing::info!("render: testing: the sky is centred on the game's camera, the eyes share the renderer's frame and the shadows' clip planes (RUSTVR_OBLIVION_MONO_VISUALS)");
             }
             on
         })
@@ -298,6 +332,7 @@ mod win {
             // drawn where they are.
             if eye > 0 && per_eye {
                 engine::next_render_frame();
+                shadow_clip_planes_again();
             }
             if eye == 2 {
                 let s = mirror_cam.expect("a third render is the mirror's");
