@@ -356,9 +356,11 @@ pub fn melee_from_model(model: &rustvr_asset::Model, kind: u32, id: u32, damage:
     add(Damager { kind: DMG_BLUNT, flags: DMGF_GUARD, radius: 0.03, a: [0.0, 0.0, z_lo], b: [0.0, 0.0, z_hi], ..Default::default() });
     // How hard each part has to hit: as the game's own swing moves it there; a power hit as its
     // power attack does (at the middle of the first part that hurts), the arm as its swing's grip.
+    // (A point is no swing's: the game's attacks cut and chop, its only thrust a power attack, so a
+    // stab is the runtime's own.)
     if kind != STAFF {
         let n = (w.count as usize).min(MAX_DAMAGERS);
-        for d in &mut w.damagers[..n] {
+        for d in w.damagers[..n].iter_mut().filter(|d| d.kind != DMG_PIERCE) {
             d.full_a = swing_speeds(kind, speed, Vec3::from_array(d.a).length()).0;
             d.full_b = swing_speeds(kind, speed, Vec3::from_array(d.b).length()).0;
         }

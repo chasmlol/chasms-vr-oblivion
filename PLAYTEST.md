@@ -82,10 +82,14 @@ weapon's damagers over the picture.
 - Anything in a real headset: how a full hit and a power hit feel for a real arm (the thresholds
   are the game's own swings scaled to the runtime's 7 m/s full cut), the strength of the blows'
   push on the guard, the haptics.
-- The side, back and forward power attacks (the test character is a Novice), the block's Master
-  disarm, the knockdown and paralysis perks.
-- A blade stopping on a creature's shield or weapon (the guard parts are sent and followed as
-  bodies; not seen in a capture), and a hit on a blocking creature's guard being the game's block.
+- The side, back and forward power attacks landing (with Blade set to 100 the swings were seen
+  going left, rising and down as power swings, and a chop landed as the standing power attack
+  with its Apprentice bonus, 3 times, 23.3 damage; the sweeps and the thrust missed the short
+  goblin), the block's Master disarm, the knockdown and paralysis perks.
+- A blade stopping on a creature's shield or weapon: the guard parts are there (a skeleton's sword
+  and its shield's two capsules on its forearm, seen in a capture of the debug view) and followed as
+  bodies like the body's parts, but a blade wasn't seen stopping on one. A hit on a blocking
+  creature's guard being the game's block wasn't seen either (the goblins didn't block).
 - The swish and the parry's clash sound (no audio in the checks).
 - Two-handed weapons hitting (the goblin was too close for the claymore's swings), the war axe and
   warhammer.
@@ -104,6 +108,9 @@ weapon's damagers over the picture.
 - **The arm behind a hit:** a hit needs the hand moving (0.5 m/s), counts for no more than the
   hand's speed over 1 m/s (PLANCK's), and a power hit wants the hand as fast as the game's own
   swing moves its grip (4.3 m/s for a one-handed sword, 2.2 for a claymore). Wrist waggles are weak.
+- **Stabs are the runtime's own** (5 m/s full, along the blade): the game's
+  attacks cut and chop, and its only thrust is the forward power attack, so there's no game thrust
+  to measure a normal stab against.
 - **The weakest hit is half the game's** (its exhausted fighter's: `fFatigueBase - fFatigueMult`),
   not nothing, so a deliberate tap still hurts a little and a full swing is the game's own.
 - **A parry** is the guard swung across the blow's blade (1 m/s or more) with the momentum (the
