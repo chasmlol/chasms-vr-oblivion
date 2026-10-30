@@ -46,8 +46,11 @@ icons stay.
    * after a cut, along the edge;
    * after a stab, back from the point.
 
-   It drips from its lowest wet point while it's wet and dries over about 90 s. Drops that land
-   on your hands, or on the blade in the air, stay on them.
+   It drips by itself from its lowest wet point while it's wet, and a shake or a flick throws
+   wet blood off it. Tilt it and blood runs down the blade towards the lower end as a streak, and
+   drips from there. It dries over about 90 s, stays dry for a while, and wears away 3-4 minutes
+   after blood last got there; so does blood on your hands and arms. Drops that land on your
+   hands, or on the blade in the air, stay on them.
 4. **Take a head.** Swing across the neck, anywhere from its base up to the jaw, with the edge
    leading, as the killing blow. The head should come off **with its neck**, wearing the NPC's own
    face, hair and helmet.
@@ -190,6 +193,37 @@ A corpse needs 0.8 of the toughness. So:
 * **The fix (the runtime):** the band stops at the blade's ends, its splats spread over what's left
   of it. A drop that lands on the blade in the air leaves its blood on the blade's line where it
   met it, not where the drop was. So every drip falls from blood that is on the blade.
+
+### Playtest 3: a crash 16 s after a head came off; the sword dripped only when shaken
+
+(Logs in `<builds>\gore\playtest-3`.)
+
+* **The crash** was in the adapter's own `combat::bones`, which walks each creature's tree for its
+  bones every frame (reading an address that was ASCII text). Near the root it went into every child,
+  not just nodes, and read a mesh's fields as if they were a node's children: its effect state as
+  the array and the top half of its data pointer as the count. Then it followed what it found
+  there. The reads are guarded, but the guard remembers readable regions for 50 ms, and one of
+  those garbage pointers led into memory freed in the meantime. The game's blood decals on a
+  body are meshes near its root, so a body that had been hit gave it more garbage to follow.
+  **Fix:** it goes only into nodes (by the game's RTTI). The check moved from `gore.rs` to
+  `engine.rs` for both. This is in `combat.rs`, which the melee and NPC branches also edit.
+* **It dripped only when shaken.** A drip started 5 mm under the blade's line, and a drop within
+  2 cm of a held blade is caught by it, so the blade caught its own drips at once. Only a shake
+  moved the blade away fast enough. **Fix:** a drop doesn't land back on the blade it came from.
+* **Asked for:**
+  * **More when shaken:** where the blade's acceleration at the blood passes 45 m/s² (a shake or
+    a flick; a hand held still is under 15), wet blood flies off with the blade's own velocity
+    there, more the harder it is, and the blood there gets thinner.
+  * **Down the blade:** while the blade is tilted more than about 17° along its length, wet blood
+    starts runs now and then (about one every 1.25 s, at most 3 at once and 8 on a blade). Each
+    is a thin streak (5-8 mm) that grows along the blade's line towards the lower end, at up to
+    5 cm/s when upright and fresh, for 6-22 cm of blood. A streak stops at the end, or when it
+    has spent its blood or dried; it pauses while the blade is held level. A streak is drawn as
+    a capsule: the body's shader takes each splat's other end. The lowest wet point, often a
+    streak's end, is where it drips.
+  * **Wearing away:** blood on the blade and on the player dries over 90 s as before, then fades
+    out between 3 and 4 minutes after blood last got there (it was kept 20 minutes). The world's
+    decals still stay.
 
 ## Frame rate (same scene, your eye size 4147×4406, emulated headset at 120 Hz)
 
