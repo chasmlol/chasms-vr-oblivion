@@ -21,12 +21,15 @@ the Swimming row of `docs/OBLIVION.md`.
    the water (a little pulse says so). Pull it and you're pulled past it the other way, about
    three times as fast as your hand goes. Let go, reach out again (an open hand goes through the
    water freely), catch and pull again. Between strokes you glide.
-   - A relaxed breaststroke (both hands pulled about half a metre in half a second) swims about
-     1.6 times the game's swim speed; a firm one, in a third of a second, 2.3 times; a hard one 3.
-     One firm stroke and a glide carries you about 16 m; a small one about 6.
+   - A relaxed breaststroke (hands out, back and in over most of a second) swims about 1.5 times
+     the game's swim speed, a firm one 2 times. One firm stroke and a glide carries you about
+     16 m.
+   - The grip needn't be timed exactly. A stroke pulls only while your hand goes on away from
+     where that stroke started (or turned back), once it's 10 cm from there. Squeeze a little
+     before the reach ends, or let go a little after your hand starts back, and it just slips.
    - A pull only ever carries you its way: it never slows you. One slower than you already go
      just slips. To stop, pull the other way, or glide out.
-   - A hand holding the water buzzes as it pulls.
+   - A hand holding the water buzzes as it pulls (not as it slips).
    - Your body leans forward as you swim, legs streaming out behind with a flutter kick. You can
      see this when you're under the water.
 3. **Any stroke.** A breaststroke (both hands), a crawl (one hand at a time, letting go as it comes
@@ -112,6 +115,21 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't catc
      glide (by e over 4 s); the hand reaches out again freely. A pull never slows you.
    - Simulated: relaxed breaststrokes 3.3 m/s (1.6 times the game's speed), firm ones 4.8, hard
      ones 6.4; a firm stroke carries you 16 m.
+6. **Crashed on launch, twice,** before swimming ran: both crashes are other features' too (see
+   "Known issues").
+7. **"I like this new approach, but a perfect breaststroke forward pulls me back and forth and
+   to the side."** The log shows the grip still squeezed while your hands moved forward: squeezed
+   as the reach ended, or let go only after they'd started back. Those hands pulled you backwards:
+   at 13:34:43, hands going forward at 0.46 m/s took you from 2.3 m/s to 0.9; at 13:34:46, at
+   0.67 m/s, threw you backwards at 1.9. Turning back from that left a sideways drift. At the
+   surface your pulls (down as well as back) also stored up a rise the game held you from, which
+   slowed the glide.
+   - Now a stroke pulls only while the hand goes on away from where that stroke started (or
+     turned back), once it's 10 cm from there: back over its own stroke, a hand slips.
+   - At the surface a stroke's rise goes into the surface, not into the glide.
+   - Simulated, your stroke with the grip squeezed early and let go late: 2.5 m/s (1.2 times the
+     game's speed), never backwards; before, 1.0 with a dip backwards every stroke. Timed well,
+     3.1 relaxed and 4.2 firm (1.5 and 2 times).
 
 ## Checked in the game (emulated headset, `tools/oblivion.ps1`)
 
@@ -181,6 +199,11 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't catc
   - The hands holding the water take you the other way at 1.5 game swim speeds for each m/s of
     their pace (both hands: their mean), in about 0.08 s. A pull slower than you already go its
     way slips: it never slows you.
+  - A hand pulls only along its own stroke (since playtest 7): the way it goes on away from the
+    point of the stroke it's furthest from, once 10 cm from it. A grip squeezed early or let go
+    late doesn't throw you backwards.
+  - At the surface (your head out) a stroke's rise is lost into the surface, as the game holds
+    you there.
   - The water's drag: your speed glides out by e over 4 s, and sooner when fast (0.04 more for
     each m/s).
   - At the surface a stroke has to take you down faster than 0.2 m/s to dive: every stroke has a
