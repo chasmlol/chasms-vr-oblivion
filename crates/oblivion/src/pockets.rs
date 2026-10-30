@@ -242,6 +242,12 @@ mod game {
     const HEAP_ALLOC: usize = 0x0040_1F00;
     const REFR_CONSTRUCT: usize = 0x004D_9A70;
     const REFR_SIZE: usize = 0x58;
+    /// Its count, for a stack (a purse): an `ExtraCount` (its vtable, size; the count at +0xC) at the
+    /// head of the reference's extra list (+0x44: the list +4, which types it has +8).
+    const EXTRA_COUNT_VTABLE: usize = 0x00A3_583C;
+    const EXTRA_COUNT_SIZE: usize = 0x10;
+    const EXTRA_COUNT: u8 = 0x2A;
+    const EXTRA_LIST: usize = 0x44;
 
     fn vcall(obj: usize, slot: usize) -> Option<usize> {
         let f = mem::deref(mem::deref(obj) + slot);
@@ -616,9 +622,15 @@ mod game {
             }
         }
 
-        /// A reference for the game's card of a template's thing (made once, kept).
+        /// A reference for the game's card of a template's thing (made once, kept), as many as come
+        /// out together.
         fn card_ref(&mut self, template: u32) -> usize {
+            let count = self.descs.get(&template).map_or(1, |t| t.info.count.max(1)) as i16;
             if let Some(&r) = self.card_refs.get(&template) {
+                let extra = mem::deref(r + EXTRA_LIST + 4);
+                if extra != 0 && mem::at::<u8>(extra + 4) == Some(EXTRA_COUNT) {
+                    unsafe { ((extra + 0xC) as *mut i16).write(count) };
+                }
                 return r;
             }
             let Some(form) = self.templates.iter().find(|(_, t)| **t == template).map(|(f, _)| *f) else { return 0 };
@@ -629,6 +641,21 @@ mod game {
             unsafe {
                 std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> usize>(REFR_CONSTRUCT)(r);
                 ((r + REFR_BASE) as *mut usize).write(form);
+            }
+            // (A stack's count, kept up to date above: "Gold (120)".)
+            let extra = unsafe { std::mem::transmute::<usize, unsafe extern "C" fn(usize) -> usize>(HEAP_ALLOC)(EXTRA_COUNT_SIZE) };
+            if extra != 0 {
+                unsafe {
+                    std::ptr::write_bytes(extra as *mut u8, 0, EXTRA_COUNT_SIZE);
+                    (extra as *mut usize).write(EXTRA_COUNT_VTABLE);
+                    ((extra + 4) as *mut u8).write(EXTRA_COUNT);
+                    ((extra + 0xC) as *mut i16).write(count);
+                    let list = r + EXTRA_LIST;
+                    ((extra + 8) as *mut usize).write(mem::deref(list + 4));
+                    ((list + 4) as *mut usize).write(extra);
+                    let bits = (list + 8 + (EXTRA_COUNT / 8) as usize) as *mut u8;
+                    bits.write(bits.read() | 1 << (EXTRA_COUNT % 8));
+                }
             }
             self.card_refs.insert(template, r);
             r

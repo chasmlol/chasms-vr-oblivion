@@ -58,6 +58,8 @@ mod win {
     const HEIGHT: u16 = 0xFCA;
     const WIDTH: u16 = 0xFCB;
     const TRUE: f32 = 2.0;
+    /// Room left of the card for a longer name than it was measured with (the HUD's pixels).
+    const NAME_ROOM: f32 = 96.0;
 
     static REAL: AtomicUsize = AtomicUsize::new(0);
     /// The thing of the world's a hand has (a reference), or 0; a thing out of a pocket a hand has
@@ -120,7 +122,11 @@ mod win {
         let screen = (value(root, WIDTH)?, value(root, HEIGHT)?);
         let mut b = None;
         shown(tile, (0.0, 0.0), 0, &mut b);
-        super::uv_of(b?, screen, 6.0)
+        // (Its name is right-aligned and grows to the left as the game sets it, a frame or more
+        // after the box is measured: "Gold (50)" was cut to "ld (50)". Room to the left for it;
+        // what's there is the HUD's black, nothing.)
+        let b = b?;
+        super::uv_of([b[0] - NAME_ROOM, b[1], b[2], b[3]], screen, 6.0)
     }
 
     unsafe extern "C" fn set_target(target: usize, a: u8, force: u8) -> u8 {
