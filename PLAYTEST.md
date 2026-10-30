@@ -109,6 +109,10 @@ A corpse needs 0.8 of the toughness. So:
 * **A real swing took a head.** A steel longsword swept across a bandit's neck as the killing blow
   (health 5 → −2) gave power 1.47 against 0.55: "cut off". The head was cloned from the NPC's own
   3D: its face, hair and armour pieces.
+* **A real swing took a forearm.** The same sweep at elbow height cut the bandit's left forearm at
+  the elbow (power 1.47 against 0.65).
+* **A severed head was pulled and thrown.** The gloves pulled it from the floor (point, grip, flick
+  back) into the hand, where the NPC's face hangs from the fist, then threw it.
 * **Cuts at every joint looked right.** The `GoreCut` test command took the head, a forearm, a
   calf, an upper arm and a thigh off a bandit, a zombie and a skeleton. The pieces fell and rolled
   on the floor, drawn with their own meshes.
@@ -125,13 +129,13 @@ A corpse needs 0.8 of the toughness. So:
 * **A save loaded with severed bodies and pieces**: no crash; the pieces go with their bodies.
 * **The game's own blood decals** are set to last 600 s (the log says so).
 * **Frame rate**, below.
+* **Blood dust from a skeleton**: the cut puffed grey dust.
 
 ## What wasn't checked
 
-* **Grabbing and throwing a severed piece.** The piece is offered as a grabbable prop and is
-  simulated by the runtime; that much was seen. Nobody's hand took one in a check.
-* **A real swing that cuts an arm or a leg, or cuts into a corpse.** These go through the same
-  code as the neck. The checks used `GoreCut` for limbs.
+* **A real swing that cuts a leg, or cuts into a corpse.** These go through the same code as the
+  neck and the forearm. The checks used `GoreCut` for legs.
+* **Taking a piece by its hand grip** (not the gloves).
 * **Blood running down a wall.** Runs started in the logs. None was seen in a capture.
 * **The game's own blood spray at the stumps.** It's called every 1.6 s for 10 s. It wasn't picked
   out in a capture.

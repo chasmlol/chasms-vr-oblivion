@@ -446,6 +446,8 @@ mod game {
         desc: ObjectDesc,
         born: f64,
         next_spray: f64,
+        /// How a hand had it last frame (`OS_HELD_*`, `OS_PULLED`).
+        held: u32,
     }
 
     struct State {
@@ -666,7 +668,7 @@ mod game {
         // The clone: the actor's 3D as it is, with no controllers or collision (nothing of it is
         // animated or simulated by the game: it's drawn where the runtime has the piece).
         let clone = clone_bare(&nodes);
-        let mut sv = Sever { limb, actor, root, cut_node: nodes[top].ptr, axis_nodes: (axis_from, axis_to), object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), cut, desc, born: crate::link::now(), next_spray: 0.0 };
+        let mut sv = Sever { limb, actor, root, cut_node: nodes[top].ptr, axis_nodes: (axis_from, axis_to), object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), cut, desc, born: crate::link::now(), next_spray: 0.0, held: 0 };
         if clone != 0 {
             let copy = tree(clone);
             if copy.len() == nodes.len() && copy.iter().zip(&nodes).all(|(c, n)| c.name == n.name) {
@@ -987,6 +989,13 @@ mod game {
                             if pos.is_finite() && rot.is_finite() && rot.length_squared() > 1e-6 {
                                 let at = Xf { r: basis.rot_to_game(rot.normalize()), t: basis.point_to_game(pos), s: v.cut.s };
                                 place_clone(v, &at);
+                            }
+                            // (Where the piece is and whether a hand has it, now and then.)
+                            let held = st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT | OS_PULLED);
+                            if s.frames % 240 == 7 || held != v.held {
+                                let me = mem::at::<[f32; 3]>(engine::player() + engine::refr::POS).map(|p| basis.point_from_game(Vec3::from(p))).unwrap_or_default();
+                                tracing::info!("gore: the piece {:#x} ({}) at {:.2?} from the player{}", v.object, v.limb.bone, pos - me, match held { 0 => "", f if f & OS_PULLED != 0 => ", pulled to a hand", _ => ", in a hand" });
+                                v.held = held;
                             }
                         }
                     }
