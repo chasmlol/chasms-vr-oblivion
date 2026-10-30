@@ -200,6 +200,7 @@ mod game {
     const RANDOM: usize = 0x0047_DF80;
     const AV_LUCK: u32 = 7;
     const AV_SNEAK: u32 = 31;
+    const AV_BOUNTY: u32 = 0x25;
     /// `TESObjectREFR::RemoveItem` (vtable +0x100: form, extra list, count, the stealing flag, drop,
     /// whose it goes to, where it's dropped, its angles, 1, 0).
     const VT_REMOVE_ITEM: usize = 0x100;
@@ -235,6 +236,12 @@ mod game {
 
     /// The first template object's id (below the runtime's spawned objects, 0x8000_0000).
     const TEMPLATE_BASE: u32 = 0x7A00_0001;
+    /// A reference of the game's own making for a thing in a hand that has none (as xOBSE's
+    /// inventory references): `FormHeap_Allocate` (cdecl: size), `TESObjectREFR`'s constructor
+    /// (thiscall), its size. Never placed in the world: only for the game's card of it.
+    const HEAP_ALLOC: usize = 0x0040_1F00;
+    const REFR_CONSTRUCT: usize = 0x004D_9A70;
+    const REFR_SIZE: usize = 0x58;
 
     fn vcall(obj: usize, slot: usize) -> Option<usize> {
         let f = mem::deref(mem::deref(obj) + slot);
@@ -428,6 +435,10 @@ mod game {
         next_refresh: f64,
         /// Who had pockets when last said, for the log.
         said: Vec<u32>,
+        /// The references made for the game's card of a thing out of a pocket, by template.
+        card_refs: HashMap<u32, usize>,
+        states: Box<ObjectStates>,
+        bounty: i32,
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -446,6 +457,9 @@ mod game {
             sent: Vec::new(),
             next_refresh: 0.0,
             said: Vec::new(),
+            card_refs: HashMap::new(),
+            states: bytemuck::zeroed_box(),
+            bounty: 0,
         }))
     }
 
@@ -547,6 +561,12 @@ mod game {
 
         /// Who's near and what they carry, again.
         fn refresh(&mut self) {
+            // (What being caught comes to, as the game settles it after: the bounty.)
+            let bounty = combat::actor_value(engine::player(), AV_BOUNTY);
+            if bounty != self.bounty {
+                tracing::info!("pockets: the player's bounty {} -> {bounty}", self.bounty);
+                self.bounty = bounty;
+            }
             let open = crate::player::sneaking() && !crate::menus::menu_mode();
             let Some(me) = player_pos().filter(|_| open) else {
                 self.people.clear();
@@ -564,7 +584,7 @@ mod game {
                 self.people.insert(id, Person { actor, name, things, shut });
             }
             self.people.retain(|id, _| near.contains(id));
-            let mut ids: Vec<u32> = self.people.keys().copied().collect();
+            let mut ids: Vec<u32> = self.people.iter().map(|(&id, p)| id ^ if p.shut { 0x8000_0000 } else { 0 }).collect();
             ids.sort();
             if ids != self.said {
                 let list: Vec<String> = self
@@ -594,6 +614,35 @@ mod game {
             if ok {
                 self.sent = ids;
             }
+        }
+
+        /// A reference for the game's card of a template's thing (made once, kept).
+        fn card_ref(&mut self, template: u32) -> usize {
+            if let Some(&r) = self.card_refs.get(&template) {
+                return r;
+            }
+            let Some(form) = self.templates.iter().find(|(_, t)| **t == template).map(|(f, _)| *f) else { return 0 };
+            let r = unsafe { std::mem::transmute::<usize, unsafe extern "C" fn(usize) -> usize>(HEAP_ALLOC)(REFR_SIZE) };
+            if r == 0 {
+                return 0;
+            }
+            unsafe {
+                std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> usize>(REFR_CONSTRUCT)(r);
+                ((r + REFR_BASE) as *mut usize).write(form);
+            }
+            self.card_refs.insert(template, r);
+            r
+        }
+
+        /// The game's card of what a hand has out of a pocket.
+        fn card(&mut self) {
+            if !crate::link::with_adapter(|a| a.read_object_states(&mut self.states)).unwrap_or(false) {
+                return;
+            }
+            let n = (self.states.count as usize).min(MAX_OBJECTS);
+            let held = self.states.states[..n].iter().find(|s| s.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0 && self.descs.contains_key(&s.desc)).map(|s| s.desc);
+            let refr = held.map_or(0, |t| self.card_ref(t));
+            crate::hud_info::set_pocket_held(refr);
         }
 
         fn answer(&mut self, n: u64, object: u32, outcome: u32) {
@@ -689,10 +738,16 @@ mod game {
                 // The game closes its menu, then catches the player: its crime, the victim's
                 // reaction, and no pickpocketing it again.
                 self.sessions.remove(&ev.actor);
+                let bounty = combat::actor_value(player, AV_BOUNTY);
                 if let Some(f) = vcall(player, VT_CAUGHT) {
                     unsafe { std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize, usize, usize, i32)>(f)(player, actor, thing.form, count) };
                 }
-                tracing::info!("pockets: caught by {name}: {} stays with them", thing.facts.name);
+                tracing::info!(
+                    "pockets: caught by {name}: {} stays with them; the player's bounty {bounty} -> {}{}",
+                    thing.facts.name,
+                    combat::actor_value(player, AV_BOUNTY),
+                    if caught_before(actor) { " (it won't be robbed again)" } else { "" }
+                );
                 self.answer(n, ev.object, PO_CAUGHT);
             }
             let things = self.things(actor);
@@ -807,6 +862,7 @@ mod game {
     /// how aware it is of the player.
     pub fn publish() {
         with_state(|s| {
+            s.card();
             let State { people, table, .. } = s;
             table.count = 0;
             for (&id, p) in people.iter() {

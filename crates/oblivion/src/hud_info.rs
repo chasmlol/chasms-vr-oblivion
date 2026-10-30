@@ -60,8 +60,17 @@ mod win {
     const TRUE: f32 = 2.0;
 
     static REAL: AtomicUsize = AtomicUsize::new(0);
-    /// The thing a hand has (a reference), or 0.
+    /// The thing of the world's a hand has (a reference), or 0; a thing out of a pocket a hand has
+    /// (a reference made for its card, [`crate::pockets`]), or 0; and the one the card is now.
     static HELD: AtomicUsize = AtomicUsize::new(0);
+    static POCKET_HELD: AtomicUsize = AtomicUsize::new(0);
+    static SHOWN: AtomicUsize = AtomicUsize::new(0);
+
+    /// The card's thing: the world's thing in a hand, else a pocket's.
+    fn held() -> usize {
+        let h = HELD.load(Ordering::Acquire);
+        if h != 0 { h } else { POCKET_HELD.load(Ordering::Acquire) }
+    }
     /// Where the card was last found on the HUD.
     static LAST: Mutex<Option<[f32; 4]>> = Mutex::new(None);
 
@@ -116,13 +125,26 @@ mod win {
 
     unsafe extern "C" fn set_target(target: usize, a: u8, force: u8) -> u8 {
         let real: unsafe extern "C" fn(usize, u8, u8) -> u8 = unsafe { std::mem::transmute(REAL.load(Ordering::Acquire)) };
-        let held = HELD.load(Ordering::Acquire);
+        let held = held();
         unsafe { real(if held != 0 { held } else { target }, a, force) }
     }
 
-    /// The thing a hand has now (0: none): the card is its.
+    /// The thing of the world's a hand has now (0: none): the card is its.
     pub fn set_held(refr: usize) {
-        if HELD.swap(refr, Ordering::AcqRel) != refr && REAL.load(Ordering::Acquire) != 0 {
+        HELD.store(refr, Ordering::Release);
+        show();
+    }
+
+    /// The thing out of a pocket a hand has now (a reference made for it; 0: none): the card is its,
+    /// while no hand has a thing of the world's.
+    pub fn set_pocket_held(refr: usize) {
+        POCKET_HELD.store(refr, Ordering::Release);
+        show();
+    }
+
+    fn show() {
+        let refr = held();
+        if SHOWN.swap(refr, Ordering::AcqRel) != refr && REAL.load(Ordering::Acquire) != 0 {
             let real: unsafe extern "C" fn(usize, u8, u8) -> u8 = unsafe { std::mem::transmute(REAL.load(Ordering::Acquire)) };
             crate::hooks::guard_void("hud info", || unsafe {
                 real(refr, 0, 0);
