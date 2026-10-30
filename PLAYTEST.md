@@ -103,6 +103,15 @@ standing, holding, reaching up and with the hands low (`mirror_*.png`; `mirror_c
 the mirror enlarged). Looking down, the belly and both legs show below the hanging arms, each arm
 runs from the shoulder to its controller, and the mirror shows the same pose each time.
 
+`<builds>\ik\pictures\range_user\` is the same run sized as your settings have it (a copy of
+your `settings.toml`: the 1.5 m arm span, the hands from your 1.37 m height), on the range's own
+link (`RUSTVR_LINK`, `RUSTVR_DIR`), with the hands where arms that long put them and a gun's
+grips tilted 45° up as they sit in a hand. In the first run both elbows of the two-handed hold
+rose above the shoulders. That was the script holding the controllers level, which no wrist holds
+a gun's grip at, not the body: with the grips tilted, the support elbow hangs 10° below level and
+the trigger elbow is level (the runtime's log), and the old body held both higher at every tilt
+(`ikeval pose`, below).
+
 ## What to look at in the headset
 
 1. **Look down at yourself standing still, hands at your sides.** The chest and shoulders should be
@@ -130,15 +139,16 @@ runs from the shoulder to its controller, and the mirror shows the same pose eac
    real shoulders. Turn the Body tab's "Elbows and chest from the headset's body tracking" off and
    on to compare.
 
+Your settings have Seated mode on and your height as 1.37 m. Seated, the body is drawn standing
+whatever you do, so 4, 5 and 7 need you on your feet. The height only sizes the hands while you
+play at the character's height: 8.1 cm wrist to knuckle (the model's are 9.8). If 1.37 m isn't
+your standing height, set it in the Body tab first.
+
 ## What I couldn't check
 
 - **Nothing in a real headset or in Oblivion** (the rule for the night). Only the emulated
   headset in the test range: the range's mannequin, not Oblivion's body, and scripted poses, not
   your motion.
-- **The two-handed hold in the mirror** (`mirror_gun.png`): with both hands at shoulder height
-  close in front of the chest, both elbows go out to the sides at about the hands' height. That is
-  how a shouldered rifle is often held, but look at it with a real one: a support elbow hanging
-  lower would look more natural.
 - **How close a real Quest's body tracking is** to the truth fed into the measurements.
 - **Absolute chest placement from the eyes**: motion capture can't settle it (its markers sit on top
   of the shoulders), so it follows ANSUR; look at it first.
@@ -162,6 +172,8 @@ worktree's builds, which `playtest.bat` and `range.bat` install from; delete the
   - `ikeval sheet <clip> --times 1,2 --views 1,2,3`: the pictures;
   - `ikeval trace|frames|spikes|slides <clip> new`: what the body did over time, its worst jolts,
     its sliding feet;
+  - `ikeval pose`: the range's two-handed hold through both solvers, its elbows against level
+    (`IKEVAL_GRIP_PITCH=45` tilts the grips);
   - `ikeval export` / `prior-export`: rows for fitting and for training the prior.
 - `eval\tools\`: the converters (`cmu2clip.py`, `lafan2clip.py`, `convert_all_cmu.py`) and the
   prior's trainer (`train_prior.py`, torch: run with `python`).
@@ -172,4 +184,8 @@ worktree's builds, which `playtest.bat` and `range.bat` install from; delete the
   CC BY-NC-ND), converted to `.clip`.
 - `research\`: the three long research notes `ik.md` is drawn from.
 - `range\body.toml`: an emulated-headset script that stands, looks down, aims, works with the hands,
-  reaches and calls up the mirror, capturing each.
+  reaches and calls up the mirror, capturing each; `range\body_user.toml` is it with the hands
+  where your arm span puts them. Run either on the range's own link:
+  `RUSTVR_LINK=Local\RustVR_v14_ik`, `RUSTVR_DIR=<builds>\ik\rustvr-data` (your settings'
+  copy is there), then
+  `release\rustvr-xrsim.exe run --dir range\out --script range\body.toml -- release\rustvr-play.exe`.
