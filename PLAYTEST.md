@@ -73,7 +73,12 @@ The research and the design are in `docs/research/facesculpt.md`.
 - **Builds and unit tests:**
   - the adapter (32-bit release);
   - the runtime, the range and xrsim (release);
-  - the solver's, the face controls' and the protocol's tests, and the audio and runtime crates'.
+  - the solver's, the face controls' and the protocol's tests, and the audio and runtime crates';
+  - the runtime on the framework's test range with the emulated headset (50 s, 120 frames a second,
+    no warnings): it starts and draws as before. The range has no FaceGen face, so the sculpt sits
+    idle there.
+- **The live face against the composed one:** the real Nord head, ears, eyes and mouth put together
+  with a face, then drawn live from their kept shapes, land on exactly the same vertices.
 - **FaceGen's controls**, read from the game's `si.ctl` into the asset cache (`facegen.toml`): the
   56 named controls, the age and the gender. The named controls are unit vectors and match the race
   menu's slider names and pages, as the game's menu has them.
