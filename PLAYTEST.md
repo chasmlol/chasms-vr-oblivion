@@ -122,6 +122,27 @@ use for what they can pull). It still shows over the thing once a hand has it. I
 can't be picked up, since there's nothing to hold: a person's name, "Open Door", a container. The
 hand icon stays for things, because it turns red when taking one would be stealing.
 
+Then: **"The menus are still see-through."** Your run at 13:41 had the new build (the log says
+`menu_background: 1.0`, and the runtime's `menu_opacity` is 1 with nothing in your settings to change
+it), so turning those down wasn't all of it. What I checked:
+- The game's own art is solid. The parchment of every menu (the chest's `cont_box_background_1`, the
+  big four's and the dialogue's `shared_main_background_1`) is opaque inside its torn edge, and its
+  tiles' `alpha` is 255.
+- So it's in how the UI's alpha reaches the runtime. The runtime draws a piece exactly as opaque as
+  that alpha.
+- I couldn't see your run's alpha (the game can't be run here, and the runtime's log was replaced by
+  the next game's), so the fix is in two places, and a third tells us which one did it:
+  - **The UI pass keeps its alpha:** while the game draws its UI into our copy, alpha is always
+    written and blended as coverage, even if the game masks alpha writes or switches the separate
+    alpha blending off between draws. Its back buffer has no alpha, so it never had to keep that
+    right.
+  - **Menus are pages (`HUDE_SOLID`):** the runtime draws a menu's pieces opaque wherever the game
+    drew half or more, in their own colour. Torn edges and letters' edges stay soft. This makes the
+    parchment solid even if something else in the game's blending thins it.
+  - **The log says:** half a second after a menu opens, the adapter's log gets "hud: piece N
+    (group G) is covered X at its middle". Over parchment that should be 1.00. If it isn't, the
+    runtime's solid drawing is what's holding it, and I'll find the game's blend that thins it.
+
 ## What was checked in the game (emulated headset, captures)
 
 - **The chest.**

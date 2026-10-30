@@ -18,7 +18,10 @@
 //! | anything else | ahead of the player | the menu, cut from the screen |
 //!
 //! **Transparency**: the pieces are as opaque as the game draws them, and the rest of the screen is
-//! clear, so the parchment is solid and cut out. The menus' backgrounds (each menu's image tiles
+//! clear, so the parchment is solid and cut out. A menu's pieces are pages (`HUDE_SOLID`): the
+//! runtime draws them opaque wherever the game drew half or more, so no blending of the game's
+//! leaves its parchment see-through. Half a second after a menu opens, how much of each piece the
+//! UI covers in the HUD copy goes into the log ("hud: piece N ... is covered"). The menus' backgrounds (each menu's image tiles
 //! named `..._background`) can be made see-through (`menu_background` in `rustvr-oblivion.toml`,
 //! 1 by default: solid), so the world shows through them while the text and icons on them stay
 //! solid: the game's own `alpha` of each, set through the game's own update of a tile's value (so
@@ -332,7 +335,8 @@ mod win {
         let n = layout.add_group(group);
         for ((p, _), (b, offset)) in found.iter().zip(boxes.iter().zip(offsets)) {
             if let Some(uv) = tiles::uv_of(*b, screen, MARGIN) {
-                let flags = HUDE_SOFT | if p.point { HUDE_POINT } else { 0 };
+                // (A menu is a page: solid where the game drew it, its cut edges soft.)
+                let flags = HUDE_SOFT | HUDE_SOLID | if p.point { HUDE_POINT } else { 0 };
                 layout.push(HudElement::piece(n, uv, offset, flags));
             }
         }
@@ -614,6 +618,17 @@ mod win {
         }
     }
 
+    /// A menu's pieces to measure (when, and the layout): see [`measure_due`].
+    static MEASURE: Mutex<Option<(f64, HudLayout)>> = Mutex::new(None);
+
+    /// Half a second after a menu's pieces come (it has faded in), the layout whose pieces to
+    /// measure: how much of each the game's UI covers in the HUD copy, for the log
+    /// ([`crate::d3d9::coverage`]: what the runtime is given to draw solid).
+    pub fn measure_due() -> Option<HudLayout> {
+        let mut m = MEASURE.lock().unwrap();
+        if m.as_ref().is_some_and(|(at, _)| crate::link::now() >= *at) { m.take().map(|(_, l)| l) } else { None }
+    }
+
     /// Out of the world (the main menu, loading): the game's screen whole, as before; only the
     /// laser's colours said.
     pub fn outside() -> HudLayout {
@@ -634,6 +649,7 @@ mod win {
         }
         if last.as_ref().is_none_or(|(p, _)| p.count != l.count || p.group_count != l.group_count) {
             tracing::info!("hud: {} pieces in {} groups (the menu on top {:#x})", l.count, l.group_count, if crate::menus::menu_mode() { tiles::top_menu() } else { 0 });
+            *MEASURE.lock().unwrap() = (l.group_count > 0).then_some((now + 0.5, l));
         }
         *last = Some((l, now));
         Some(l)

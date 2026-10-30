@@ -43,8 +43,8 @@ mod win {
     use windows::Win32::Graphics::Direct3D9::*;
     use windows::Win32::Graphics::Direct3D9on12::{D3D9ON12_ARGS, Direct3DCreate9On12, IDirect3DDevice9On12};
     use windows::Win32::Graphics::Direct3D11::{
-        D3D11_SHADER_RESOURCE_VIEW_DESC, D3D11_SHADER_RESOURCE_VIEW_DESC_0, D3D11_TEX2D_SRV, ID3D11Device1, ID3D11Device5, ID3D11DeviceContext4, ID3D11Fence,
-        ID3D11ShaderResourceView, ID3D11Texture2D,
+        D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_SHADER_RESOURCE_VIEW_DESC, D3D11_SHADER_RESOURCE_VIEW_DESC_0, D3D11_TEX2D_SRV,
+        D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING, ID3D11Device1, ID3D11Device5, ID3D11DeviceContext4, ID3D11Fence, ID3D11ShaderResourceView, ID3D11Texture2D,
     };
     use windows::Win32::Graphics::Direct3D12::*;
     use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC};
@@ -64,6 +64,11 @@ mod win {
     /// destination; `D3DBLEND_*`).
     static UI_PASS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     static BLEND: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(5 | (6 << 16));
+    /// The channels the game last asked to write (`D3DRS_COLORWRITEENABLE`; red, green, blue, alpha
+    /// bits): in the UI pass alpha is written too.
+    static WRITE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0xF);
+    const WRITE_COLOUR: u32 = 0x7;
+    const WRITE_ALPHA: u32 = 0x8;
     static REAL_TCL: AtomicUsize = AtomicUsize::new(0);
     static LAST_TCL: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
 
@@ -295,6 +300,20 @@ mod win {
 
     unsafe extern "system" fn set_render_state(dev: *mut c_void, state: D3DRENDERSTATETYPE, value: u32) -> windows::core::HRESULT {
         let real: SetStateFn = unsafe { std::mem::transmute(REAL_SET_STATE.load(Ordering::Acquire)) };
+        let ui = UI_PASS.load(Ordering::Acquire);
+        // In the UI pass the HUD copy's alpha is the UI's coverage, so its alpha blending is ours,
+        // and alpha is written with the colour whatever the game asks (its own back buffer has no
+        // alpha, so it needn't keep it right): a page the game draws solid is solid in the copy.
+        if ui && (state == D3DRS_SEPARATEALPHABLENDENABLE || state == D3DRS_SRCBLENDALPHA || state == D3DRS_DESTBLENDALPHA || state == D3DRS_BLENDOPALPHA) {
+            return windows::core::HRESULT(0);
+        }
+        let mut value = value;
+        if state == D3DRS_COLORWRITEENABLE {
+            WRITE.store(value, Ordering::Release);
+            if ui && value & WRITE_COLOUR != 0 {
+                value |= WRITE_ALPHA;
+            }
+        }
         let hr = unsafe { real(dev, state, value) };
         if state == D3DRS_SRCBLEND || state == D3DRS_DESTBLEND {
             let b = BLEND.load(Ordering::Acquire);
@@ -331,12 +350,18 @@ mod win {
             UI_DRAWN.store(true, Ordering::Release);
             let _ = unsafe { set_state(raw, D3DRS_SEPARATEALPHABLENDENABLE, 1) };
             set_alpha_blend(raw);
+            let write = WRITE.load(Ordering::Acquire);
+            if write & WRITE_COLOUR != 0 {
+                let _ = unsafe { set_state(raw, D3DRS_COLORWRITEENABLE, write | WRITE_ALPHA) };
+            }
         } else {
             UI_PASS.store(false, Ordering::Release);
             if let Some(t) = UI_TARGETS.lock().unwrap().take() {
                 let _ = unsafe { set_target(raw, 0, t.back.as_raw()) };
             }
             let _ = unsafe { set_state(raw, D3DRS_SEPARATEALPHABLENDENABLE, 0) };
+            // (The channels the game asked for again, as it believes they are.)
+            let _ = unsafe { set_state(raw, D3DRS_COLORWRITEENABLE, WRITE.load(Ordering::Acquire)) };
         }
     }
 
@@ -743,6 +768,54 @@ mod win {
 
     /// Copies `kind`'s latest capture into `dst` on the adapter's device (after the copy into the
     /// shared texture is done). False if there's none or the sizes differ.
+    /// Testing what reaches the runtime: how much of the HUD copy the game's UI covers at the middle
+    /// of `uv` (a part of it, 0..1): the alpha's mean and least over a 32-texel patch there.
+    pub fn coverage(gpu: &Gpu, uv: [f32; 4]) -> Option<(f32, f32)> {
+        const N: u32 = 32;
+        let bridge = BRIDGE.lock().unwrap();
+        let b = bridge.as_ref()?;
+        let (w, h) = b.size;
+        if b.ready[HUD] == 0 || w < N || h < N {
+            return None;
+        }
+        let at = |a: f32, b: f32, size: u32| (((a + b) * 0.5 * size as f32) as u32).saturating_sub(N / 2).min(size - N);
+        let (x, y) = (at(uv[0], uv[2], w), at(uv[1], uv[3], h));
+        let desc = D3D11_TEXTURE2D_DESC {
+            Width: N,
+            Height: N,
+            MipLevels: 1,
+            ArraySize: 1,
+            Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            Usage: D3D11_USAGE_STAGING,
+            BindFlags: 0,
+            CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+            MiscFlags: 0,
+        };
+        let mut staging = None;
+        unsafe { gpu.device.CreateTexture2D(&desc, None, Some(&mut staging)) }.ok()?;
+        let staging = staging?;
+        let ctx4 = gpu.ctx.cast::<ID3D11DeviceContext4>().ok()?;
+        let mut m = D3D11_MAPPED_SUBRESOURCE::default();
+        unsafe {
+            ctx4.Wait(&b.fence11, b.ready[HUD]).ok()?;
+            let region = D3D11_BOX { left: x, top: y, front: 0, right: x + N, bottom: y + N, back: 1 };
+            gpu.ctx.CopySubresourceRegion(&staging, 0, 0, 0, 0, &b.shared11[HUD], 0, Some(&region));
+            gpu.ctx.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut m)).ok()?;
+        }
+        let (mut sum, mut least) = (0.0f32, 1.0f32);
+        for row in 0..N as usize {
+            let line = unsafe { std::slice::from_raw_parts((m.pData as *const u8).add(row * m.RowPitch as usize), N as usize * 4) };
+            for px in line.chunks_exact(4) {
+                let a = px[3] as f32 / 255.0;
+                sum += a;
+                least = least.min(a);
+            }
+        }
+        unsafe { gpu.ctx.Unmap(&staging, 0) };
+        Some((sum / (N * N) as f32, least))
+    }
+
     pub fn deliver(gpu: &Gpu, kind: usize, dst: &ID3D11Texture2D) -> bool {
         let bridge = BRIDGE.lock().unwrap();
         let Some(b) = bridge.as_ref() else { return false };

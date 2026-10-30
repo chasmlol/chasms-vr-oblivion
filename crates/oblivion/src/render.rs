@@ -362,6 +362,14 @@ mod win {
             // one before or after.)
             if have_hud {
                 info.hud_layout = a.hud_layout_seq();
+                // (Testing what the runtime gets: how solid a menu's pieces are, once it's open.)
+                if let Some(l) = crate::hud::measure_due() {
+                    for (i, e) in l.entries().iter().enumerate().filter(|(_, e)| e.group != 0) {
+                        if let Some((mean, least)) = d3d9::coverage(&gpu, e.uv) {
+                            tracing::info!("hud: piece {i} (group {}) is covered {mean:.2} at its middle (least {least:.2})", e.group);
+                        }
+                    }
+                }
             }
             a.submit(info);
         });
