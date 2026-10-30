@@ -154,7 +154,7 @@ pub(crate) fn read_str(p: usize) -> String {
 }
 
 /// The named nodes under `root` that are bones (named `Bip01...`), and a few named attachments.
-fn bones(root: usize) -> HashMap<String, usize> {
+pub(crate) fn bones(root: usize) -> HashMap<String, usize> {
     let mut out = HashMap::new();
     let mut stack = vec![(root, 0u32)];
     let mut seen = 0;
@@ -164,7 +164,9 @@ fn bones(root: usize) -> HashMap<String, usize> {
             break;
         }
         let name = read_str(mem::deref(node + NODE_NAME));
-        let descend = depth <= 2 || name.starts_with("Bip01");
+        // (Only into a node: a mesh near the root, as the game's blood decals are, has no
+        // children, and reading its fields as children followed garbage into freed memory.)
+        let descend = (depth <= 2 || name.starts_with("Bip01")) && engine::is_node(node);
         if name.starts_with("Bip01") || name == "Weapon" || name == "Shield" {
             out.insert(name, node);
         }
@@ -265,7 +267,9 @@ fn base_actor_value(_actor: usize, _av: u32) -> i32 {
 
 /// The capsules of a humanoid skeleton: (from bone, to bone, radius, part, material).
 const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
-    ("Bip01 Pelvis", "Bip01 Neck", 0.17, PART_TORSO, MAT_LEATHER),
+    // (The torso to the top of the chest: its round end stops short of the neck, which a blade can
+    // cut through.)
+    ("Bip01 Pelvis", "Bip01 Spine2", 0.17, PART_TORSO, MAT_LEATHER),
     ("Bip01 Neck", "Bip01 Head", 0.1, PART_HEAD, MAT_FLESH),
     ("Bip01 L UpperArm", "Bip01 L Forearm", 0.06, PART_ARM, MAT_FLESH),
     ("Bip01 L Forearm", "Bip01 L Hand", 0.05, PART_ARM, MAT_FLESH),
@@ -306,12 +310,16 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
         let b = bones(root);
         let mut a: Actor = bytemuck::Zeroable::zeroed();
         a.id = id;
-        for &(from, to, r, kind, material) in HUMANOID {
+        for (part, &(from, to, r, kind, material)) in HUMANOID.iter().enumerate() {
+            // (Not a limb the gore has cut off: a head goes with its neck.)
+            if crate::gore::cut_off(id, from) || (kind == PART_HEAD && crate::gore::cut_off(id, to)) {
+                continue;
+            }
             let (Some(p), Some(q)) = (b.get(from).and_then(|&n| node_pos(n)), b.get(to).and_then(|&n| node_pos(n))) else { continue };
-            // The head: from the neck up through the crown.
-            let q = if kind == PART_HEAD { q + (q - p).normalize_or(Vec3::Y) * 0.12 } else { q };
+            // The head: from the neck up through the crown (while it's there).
+            let q = if kind == PART_HEAD && !crate::gore::cut_at(id, to) { q + (q - p).normalize_or(Vec3::Y) * 0.12 } else { q };
             let i = a.count as usize;
-            a.parts[i] = ActorPart { a: p.to_array(), radius: r, b: q.to_array(), kind, material, game_part: i as u32, _pad: [0; 2] };
+            a.parts[i] = ActorPart { a: p.to_array(), radius: r, b: q.to_array(), kind, material, game_part: part as u32, _pad: [0; 2] };
             a.count += 1;
         }
         if a.count == 0 {
@@ -479,9 +487,12 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
                 type Hit = unsafe extern "thiscall" fn(usize, u8, usize, usize);
                 let f = mem::deref(mem::deref(player) + VT_HIT);
                 tracing::info!("combat: the player hits {:#x} (strength {:.2}{})", ev.actor, ev.strength, if power { ", a power attack" } else { "" });
+                let before = crate::gore::health(target);
                 if f != 0 {
                     unsafe { std::mem::transmute::<usize, Hit>(f)(player, power as u8, 0, target) };
                 }
+                // (A blow that kills, or one into a corpse, may take a limb: the gore's.)
+                crate::gore::after_hit(target, ev, before);
             }
             CE_CAST if ev.object == crate::weapons::WEAPON_ID => cast_staff(player, ev, actors),
             CE_CAST => {
@@ -637,6 +648,16 @@ fn log_actors(table: &Actors) {
         })
         .collect();
     tracing::info!("combat: {} creatures: {}", list.len(), list.join("; "));
+}
+
+/// The creatures published last (by id: where each is in the game's memory).
+pub fn known_actors() -> HashMap<u32, usize> {
+    KNOWN.lock().unwrap().as_ref().map(|k| k.actors.clone()).unwrap_or_default()
+}
+
+/// The bones a body part's capsule runs between (its `game_part`), for a humanoid.
+pub fn part_bones(part: u32) -> Option<(&'static str, &'static str)> {
+    HUMANOID.get(part as usize).map(|&(from, to, ..)| (from, to))
 }
 
 /// Before the game's frame: what the hands did since the last one, done by the game.

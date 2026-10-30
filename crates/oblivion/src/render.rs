@@ -316,6 +316,7 @@ mod win {
             time(Part::Items, || hooks::guard_void("torch", || crate::torch::place(view)));
             time(Part::Items, || hooks::guard_void("magic", || crate::magic::place(view)));
         }
+        time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))
     }
 

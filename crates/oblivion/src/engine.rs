@@ -83,6 +83,56 @@ pub fn player() -> usize {
     mem::deref(PLAYER)
 }
 
+/// The game's code: a virtual that isn't in it isn't the game's.
+pub const CODE: std::ops::Range<usize> = 0x0040_1000..0x00A3_0000;
+
+/// Whether `obj` is a `kind` (or one of its kinds), by its `NiRTTI` chain (`NiObject::GetRTTI`,
+/// virtual 1: {name, parent}); cached by vtable.
+#[cfg(target_arch = "x86")]
+pub fn is_a(obj: usize, kind: &'static str) -> bool {
+    use std::collections::HashMap;
+    static KNOWN: std::sync::Mutex<Option<HashMap<(usize, &'static str), bool>>> = std::sync::Mutex::new(None);
+    let vt = mem::deref(obj);
+    if vt == 0 {
+        return false;
+    }
+    let mut known = KNOWN.lock().unwrap_or_else(|e| e.into_inner());
+    let known = known.get_or_insert_with(HashMap::new);
+    if let Some(&k) = known.get(&(vt, kind)) {
+        return k;
+    }
+    let f = mem::deref(vt + 0x04);
+    let mut yes = false;
+    if CODE.contains(&f) {
+        type Rtti = unsafe extern "thiscall" fn(usize) -> usize;
+        let mut rtti = unsafe { std::mem::transmute::<usize, Rtti>(f)(obj) };
+        for _ in 0..16 {
+            if rtti == 0 {
+                break;
+            }
+            if crate::combat::read_str(mem::deref(rtti)) == kind {
+                yes = true;
+                break;
+            }
+            rtti = mem::deref(rtti + 4);
+        }
+    }
+    known.insert((vt, kind), yes);
+    yes
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn is_a(_obj: usize, _kind: &'static str) -> bool {
+    false
+}
+
+/// Whether `obj` is an `NiNode` (or one of its kinds): only a node has children. Another object's
+/// fields where a node keeps its children are something else (a mesh's effect state and the top of
+/// its data's address), and following them reads at random.
+pub fn is_node(obj: usize) -> bool {
+    is_a(obj, "NiNode")
+}
+
 /// The game's window.
 pub fn window() -> usize {
     let os = mem::deref(OS_GLOBALS);

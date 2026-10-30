@@ -97,7 +97,8 @@ pub fn equip_all(_id: u32) -> bool {
 /// of the player's spells by its name, or any spell by its id (a spell the game makes, as the mirror
 /// spell, has no id to know beforehand), `EquipAll <hex id>` equips all the player has of a thing (a
 /// stack of arrows), `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in
-/// front of the player (and that far over their feet), facing them (tests), anything else is
+/// front of the player (and that far over their feet), facing them (tests), `GoreCut <bone>` cuts a
+/// limb off the nearest creature as a killing blow would (`crate::gore`, tests), anything else is
 /// compiled and run as a line of script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
@@ -113,6 +114,15 @@ pub fn run(line: &str) -> bool {
     }
     if let Some(id) = line.strip_prefix("EquipAll ") {
         return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(equip_all);
+    }
+    if let Some(bone) = line.strip_prefix("GoreCut ") {
+        let bone = bone.trim().trim_matches('"');
+        // (`GoreCut <bone> standing`: left alive, to look at the stump on a body that stands.)
+        let (bone, kill) = match bone.strip_suffix(" standing") {
+            Some(b) => (b, false),
+            None => (bone, true),
+        };
+        return crate::gore::test_cut(bone, kill);
     }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();
