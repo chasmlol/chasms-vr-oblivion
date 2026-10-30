@@ -205,6 +205,15 @@ mod win {
     const NO_TURN_FIELD: usize = 0x34;
     /// `TESPackage`'s type; Travel and UseItemAt don't turn to talk (`SayTopic`).
     const PACKAGE_TYPE: usize = 0x20;
+    /// The vtables of a package from the game's data (`TESPackage`) and of the ones it makes as
+    /// things happen: talking to someone, an alarm, fleeing, watching a fight, a trespasser, combat.
+    const PACKAGE_VTABLE: usize = 0x00A6_743C;
+    const DIALOGUE_PACKAGE_VTABLE: usize = 0x00A7_151C;
+    const ALARM_PACKAGE_VTABLE: usize = 0x00A6_EF94;
+    const FLEE_PACKAGE_VTABLE: usize = 0x00A7_1664;
+    const SPECTATOR_PACKAGE_VTABLE: usize = 0x00A7_46AC;
+    const TRESPASS_PACKAGE_VTABLE: usize = 0x00A7_47BC;
+    const COMBAT_VTABLE: usize = 0x00A7_0A14;
 
     /// `TESNPC`: its flags (bit 0 female), its factions' list, its race, its class.
     const NPC_FLAGS: usize = 0x28;
@@ -347,7 +356,21 @@ mod win {
         unsafe { std::mem::transmute::<usize, F>(f)(obj, a) }
     }
 
-    /// A form's name (its `TESFullName`), or "".
+    /// A `BSStringT`'s text (its characters, and their count at +4), whole: a line of dialogue can
+    /// run to hundreds.
+    fn read_text(string: usize) -> String {
+        let chars = mem::deref(string);
+        let count = mem::at::<u16>(string + 4).unwrap_or(0) as usize;
+        if chars == 0 {
+            return String::new();
+        }
+        let bytes = mem::bytes(chars as *const u8, count.clamp(1, 2048)).unwrap_or_default();
+        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        String::from_utf8_lossy(&bytes[..end]).into_owned()
+    }
+
+    /// A form's name (its `TESFullName`), or "" (also for a name with no letters in it: the
+    /// placeholder of a class made up in the race menu).
     fn full_name(form: usize) -> String {
         // (only one of the game's own objects: the cast reads its vtable's type information)
         if form == 0 || !GAME_VTABLES.contains(&mem::deref(form)) {
@@ -355,7 +378,8 @@ mod win {
         }
         type Cast = unsafe extern "C" fn(usize, i32, usize, usize, i32) -> usize;
         let named = unsafe { std::mem::transmute::<usize, Cast>(DYNAMIC_CAST)(form, 0, RTTI_FORM, RTTI_FULL_NAME, 0) };
-        if named == 0 { String::new() } else { combat::read_str(mem::deref(named + 4)) }
+        let name = if named == 0 { String::new() } else { read_text(named + 4).trim().to_string() };
+        if name.chars().any(char::is_alphanumeric) { name } else { String::new() }
     }
 
     fn lookup(id: u32) -> usize {
@@ -445,8 +469,8 @@ mod win {
             if response == 0 {
                 break;
             }
-            let text = combat::read_str(mem::deref(response));
-            let file = combat::read_str(mem::deref(response + 0x10));
+            let text = read_text(response);
+            let file = read_text(response + 0x10);
             if !text.trim().is_empty() {
                 out.push(Said { topic: topic_id, text: text.trim().to_string(), file, own });
             }
@@ -590,8 +614,21 @@ mod win {
         }
         let process = high_process(actor);
         let package = if process != 0 { vcall0(process, VT_PACKAGE) } else { 0 };
-        if package != 0 {
-            out += &format!("{name} is {}. ", doing(mem::at::<u8>(package + PACKAGE_TYPE).unwrap_or(255)));
+        // (the game's own packages say what kind they are; the ones it makes up as things happen
+        // are kinds of their own, their type no guide)
+        let activity = match mem::deref(package) {
+            0 => None,
+            PACKAGE_VTABLE => Some(doing(mem::at::<u8>(package + PACKAGE_TYPE).unwrap_or(255))),
+            DIALOGUE_PACKAGE_VTABLE => Some("about to talk to someone"),
+            ALARM_PACKAGE_VTABLE => Some("raising the alarm"),
+            FLEE_PACKAGE_VTABLE => Some("running from danger"),
+            SPECTATOR_PACKAGE_VTABLE => Some("watching a fight"),
+            TRESPASS_PACKAGE_VTABLE => Some("seeing off a trespasser"),
+            COMBAT_VTABLE => Some("fighting"),
+            _ => None,
+        };
+        if let Some(activity) = activity {
+            out += &format!("{name} is {activity}. ");
         }
         if let Some(hour) = global(GAME_HOUR) {
             out += &format!("It's {}", time_of_day(hour));
