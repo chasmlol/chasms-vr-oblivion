@@ -35,9 +35,10 @@ pub fn ini_path() -> Option<PathBuf> {
 ///   loads more of them as you go (250 MB: the game is large-address-aware on the playtester's
 ///   install, and loads a 7x7 grid there);
 /// * things fade in close: the view distance sliders' objects, items and actors at their most (15),
-///   trees at the game's own limit (`fTreeLODMax`, 2), the grass out to 86 m (its `[Grass]` keys,
-///   the ones it reads), and the distant buildings and tree cards half as far again (40 and 30
-///   cells). A head turns to all of it, so what a flat screen hides past its edges pops in.
+///   trees at the game's own limit (`fTreeLODMax`, 2), the grass out to 57 m (its `[Grass]` keys,
+///   the ones it reads; at 86 m, all round, it cost too much of the frame), and the distant
+///   buildings and tree cards half as far again (40 and 30 cells). A head turns to all of it, so
+///   what a flat screen hides past its edges pops in.
 const VR_FLOORS: [(&str, &str, &str); 15] = [
     ("Display", "iShadowMapResolution", "1024"),
     ("SpeedTree", "fLODTreeMipMapLODBias", "0.0000"),
@@ -50,11 +51,22 @@ const VR_FLOORS: [(&str, &str, &str); 15] = [
     ("LOD", "fLODFadeOutMultItems", "15.0000"),
     ("LOD", "fLODFadeOutMultActors", "15.0000"),
     ("LOD", "fLODMultTrees", "2.0000"),
-    ("Grass", "fGrassEndDistance", "6000.0000"),
-    ("Grass", "fGrassStartFadeDistance", "5000.0000"),
+    ("Grass", "fGrassEndDistance", "4000.0000"),
+    ("Grass", "fGrassStartFadeDistance", "3000.0000"),
     ("General", "uGridDistantCount", "40"),
     ("General", "uGridDistantTreeRange", "30"),
 ];
+
+/// `Section.key=value;...` as (section, key, value)s.
+pub fn test_values(spec: &str) -> Vec<(String, String, String)> {
+    spec.split(';')
+        .filter_map(|item| {
+            let (name, value) = item.split_once('=')?;
+            let (section, key) = name.trim().split_once('.')?;
+            Some((section.trim().to_owned(), key.trim().to_owned(), value.trim().to_owned()))
+        })
+        .collect()
+}
 
 /// `section`'s `key` in INI text.
 pub fn get_key(text: &str, section: &str, key: &str) -> Option<String> {
@@ -171,6 +183,12 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
     if !floors.is_empty() {
         let raised: Vec<String> = floors.iter().map(|(_, k, v)| format!("{k}={v}")).collect();
         tracing::info!("game settings: for the headset: {}", raised.join(", "));
+    }
+    // Testing, `RUSTVR_OBLIVION_INI_TEST="Section.key=value;..."`: any of the game's settings for one
+    // run (put back with the rest), to tell which of its systems a fault is in.
+    for (s, k, v) in test_values(&std::env::var("RUSTVR_OBLIVION_INI_TEST").unwrap_or_default()) {
+        tracing::info!("game settings: testing: [{s}] {k}={v}");
+        set(&s, &k, v);
     }
     if !backup.is_empty() && !dir.join(BACKUP).exists() {
         let _ = std::fs::write(dir.join(BACKUP), &backup);
