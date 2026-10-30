@@ -67,6 +67,40 @@ Look out for:
   something else?
 - **The spheres.** Too bright, too faint, or in the way of the editor?
 
+## Round 3: Oblivion's own sounds for everything
+
+You asked for every one of RustVR's own sounds to be replaced by a suitable Oblivion one. Every
+sound the runtime makes now comes from Oblivion's own sound records: their files, their levels,
+their sets of variations, and whether they play in your head (the menus') or where it happens.
+
+| When | You hear | Picked by |
+|---|---|---|
+| You take a thing, put it away on the body, or let go of it | the inventory's sound for a thing of its kind (a potion's clink, a blade's ring, heavy armour, a book, gold...); letting go is the put-away sound, softer | the game's own choice for that thing (the function its inventory uses) |
+| A thing you hold or throw knocks into the world | the game's collision sound for what it's made of and how heavy it is (glass, metal, wood, cloth, stone...) | the game's own choice from the thing's Havok material and mass |
+| You draw or sheathe the weapon at your hip or back | the game's draw and sheathe for its type (one-handed blade, two-handed blunt, staff, bow); an enchanted weapon's draw also rings with the game's enchanted sound | its type, as the game plays them |
+| The gravity gloves | Telekinesis, which in Oblivion is a Mysticism spell: Mysticism's cast as the thing is pulled, its travel sound while it flies, its hit as it lands in your hand (with the thing's own pick-up sound) | Telekinesis's own record |
+| The gloves lock onto a thing | the spell-ready sound | |
+| A hand finds a slot, the gloves point at a thing | the menus' focus tick (very quiet, as quiet as the game plays it) | |
+| A slot is empty, or the game refuses a use | the game's "nothing happens" sound (from eating an ingredient that does nothing) | |
+| RustVR's own settings menu | the menus' OK click | |
+| Drawing from a slot, putting back, stowing a thing lying about | only the game's own inventory sounds, as before (RustVR adds nothing) | |
+| Opening the holsters' editor | the game's inventory opening (the firm pulse in your hand has no sound of its own now) | |
+
+Try:
+
+1. Pick up a few things lying about in the house (a plate, a bottle, a book, food) and knock each
+   on the table and the floor. Each should sound like what it's made of.
+2. Draw the axe from your hip and put it back, then the shield from your back.
+3. Pull a thing to you with the gravity gloves.
+4. Reach into the slots, empty ones too.
+
+Look out for:
+
+- **Anything that still sounds synthetic:** a beep, a whoosh or a click that isn't Oblivion's.
+- **Levels:** too loud or too quiet next to the game's own sounds. The slot tick is very quiet on
+  purpose (the game's menu focus level); say if you want it louder.
+- **Doubled sounds:** the same action heard twice.
+
 ## The slots you start with (right-handed; mirrored for a left hand)
 
 | Slot | Where | Gives out |
@@ -251,6 +285,28 @@ turns it off).
 - **Keys don't draw:** the game's key model (`clutter\key\key.nif`) is an old NIF version the
   extractor can't read yet, so keys (and lockpicks) have no model and aren't handed out. Two cave
   ingredients have the same problem.
+
+- **Sounds (round 3) are Oblivion's records, played by RustVR as a sound pack:**
+  - This is how the framework lets a game's own sounds replace its own, one for each of its events
+    (Metro's work the same way). `oblivion-extract sounds` writes the pack from `Oblivion.esm` and
+    `Oblivion - Sounds.bsa` into `local_assets/oblivion/sounds` (shared by the worktrees; only this
+    branch writes it).
+  - The levels are the records' own static attenuation. Oblivion's effects volume slider doesn't
+    apply to them; RustVR's own volume does.
+  - Which record plays is the game's own choice wherever it makes one. For each thing, the adapter
+    calls the functions the game uses itself: the inventory's sound choice, and the
+    collision sound for a Havok material and mass.
+  - Letting go of a thing plays its put-away sound at 60%: Oblivion has no sound for letting go of
+    something held, and it knocks into the world with its own collision sound as it lands.
+  - A thing drawn from a slot has no Havok body for the game to ask, so it knocks with the
+    collision sound its kind is usually made of: potions and soul gems glass, weapons, keys and
+    gold metal, scrolls, books and clothes cloth, food organic, bows and arrows wood.
+  - The game plays both bodies' collision sounds in a knock (the thing's and the surface's); RustVR
+    plays the thing's.
+  - Oblivion has no guns or grenades, so the runtime's sounds for them are mapped to the nearest
+    Oblivion ones (a bow's draw, a lock's tumblers, a mine going off). They never play here.
+  - The game's own `WPNBowShoot` record names a file the game hasn't got; its bow uses `bowShoot`,
+    and so does the pack.
 
 ## Archery (the `overnight/archery` branch), when the two are merged
 
