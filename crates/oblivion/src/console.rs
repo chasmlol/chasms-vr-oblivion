@@ -64,9 +64,18 @@ pub fn select_spell(_id: u32) -> bool {
 
 /// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <hex id>` selects a spell,
 /// `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in front of the
-/// player (and that far over their feet), facing them (tests), anything else is compiled and run as
-/// a line of script. True if it ran.
+/// player (and that far over their feet), facing them, `TurnAway <ref hex id>` turns its back to
+/// them (tests), anything else is compiled and run as a line of script. A reference by its hex id that starts
+/// with a digit (`0001c462.additem ...`, a persistent NPC: the script compiler reads it as a
+/// number) runs as the console runs a line on the reference it has picked. True if it ran.
 pub fn run(line: &str) -> bool {
+    if let Some((id, rest)) = line.split_once('.')
+        && id.len() == 8
+        && id.starts_with(|c: char| c.is_ascii_digit())
+        && let Ok(id) = u32::from_str_radix(id, 16)
+    {
+        return run_script_on(id, rest);
+    }
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
     }
@@ -78,6 +87,11 @@ pub fn run(line: &str) -> bool {
         let (Some(r), Some(m)) = (it.next(), it.next().and_then(|m| m.parse::<f32>().ok())) else { return false };
         let up = it.next().and_then(|u| u.parse::<f32>().ok()).unwrap_or(0.0);
         return place_in_front(r, m, up);
+    }
+    if let Some(r) = line.strip_prefix("TurnAway ") {
+        let p = crate::engine::player();
+        let Some(rot) = crate::mem::at::<[f32; 3]>(p + crate::engine::refr::ROT) else { return false };
+        return run(&format!("{}.setangle z {:.1}", r.trim(), rot[2].to_degrees().rem_euclid(360.0)));
     }
     run_script(line)
 }
@@ -93,7 +107,7 @@ fn place_in_front(r: &str, metres: f32, up: f32) -> bool {
     let d = metres * crate::camera::UNITS_PER_METER;
     let (x, y) = (pos[0] + d * h.sin(), pos[1] + d * h.cos());
     let facing = (h + std::f32::consts::PI).to_degrees().rem_euclid(360.0);
-    [format!("{r}.setpos x {x:.1}"), format!("{r}.setpos y {y:.1}"), format!("{r}.setpos z {:.1}", pos[2] + up * crate::camera::UNITS_PER_METER), format!("{r}.setangle z {facing:.1}")].iter().all(|l| run_script(l))
+    [format!("{r}.setpos x {x:.1}"), format!("{r}.setpos y {y:.1}"), format!("{r}.setpos z {:.1}", pos[2] + up * crate::camera::UNITS_PER_METER), format!("{r}.setangle z {facing:.1}")].iter().all(|l| run(l))
 }
 
 /// Compile errors so far (a line ran if it compiled: what the game's run returns is the script's
@@ -101,8 +115,26 @@ fn place_in_front(r: &str, metres: f32, up: f32) -> bool {
 static COMPILE_ERRORS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
 /// Compiles and runs one line of script. True if it compiled (and so ran).
-#[cfg(target_arch = "x86")]
 pub fn run_script(line: &str) -> bool {
+    run_with(line, 0)
+}
+
+/// Runs a line of script on the reference with form id `id` (its calling reference, as the console
+/// does with the one it has picked).
+#[cfg(target_arch = "x86")]
+pub fn run_script_on(id: u32, line: &str) -> bool {
+    type Lookup = unsafe extern "C" fn(u32) -> usize;
+    let refr = unsafe { std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(id) };
+    refr != 0 && run_with(line, refr)
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn run_script_on(_id: u32, _line: &str) -> bool {
+    false
+}
+
+#[cfg(target_arch = "x86")]
+fn run_with(line: &str, calling: usize) -> bool {
     use std::ffi::c_void;
     type ThisFn = unsafe extern "thiscall" fn(*mut c_void);
     type SetTextFn = unsafe extern "thiscall" fn(*mut c_void, *const u8);
@@ -120,14 +152,14 @@ pub fn run_script(line: &str) -> bool {
         std::mem::transmute::<usize, ThisFn>(MARK_TEMPORARY)(script);
         std::mem::transmute::<usize, SetTextFn>(SET_TEXT)(script, text.as_ptr() as *const u8);
         let errors = COMPILE_ERRORS.load(std::sync::atomic::Ordering::Acquire);
-        std::mem::transmute::<usize, RunFn>(COMPILE_AND_RUN)(script, *state, 1, std::ptr::null_mut());
+        std::mem::transmute::<usize, RunFn>(COMPILE_AND_RUN)(script, *state, 1, calling as *mut c_void);
         std::mem::transmute::<usize, ThisFn>(DESTRUCTOR)(script);
         COMPILE_ERRORS.load(std::sync::atomic::Ordering::Acquire) == errors
     }
 }
 
 #[cfg(not(target_arch = "x86"))]
-pub fn run_script(_line: &str) -> bool {
+fn run_with(_line: &str, _calling: usize) -> bool {
     false
 }
 
