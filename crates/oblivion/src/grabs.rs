@@ -19,13 +19,18 @@
 //!   (`KnockbackActor`, every bone Havok's), and then the whole body hangs from the hand. While a
 //!   hand holds it, it can't get up (its knockdown's time is kept fresh); let go, it gets up when
 //!   the game says.
+//! * **Pulled along the ground** while it stands, it's pushed after the pull (its character
+//!   controller's push, the game's knockback without a ragdoll), stumbling along.
 //! * **Choking**: the throat squeezed drains its fatigue (`DamageActorValue`, faster off its feet)
-//!   until the game knocks it out itself; it stays out while it's choked.
+//!   until the game knocks it out itself; it stays out while it's choked. Held up by the throat and
+//!   still conscious, it struggles: its hands go for the hand and its legs kick, weaker as it tires.
 //! * **The reaction is the game's**: a living actor choked, knocked down, thrown or held a while
 //!   has been attacked by the player (`OnAttacked`, as at the end of every blow: its disposition,
 //!   tolerance, fleeing, combat and the assault crime).
 //! * **Throws**: let go, every body keeps what the spring gave it, and gets the hand's throw on top,
 //!   as much of it as the player's pull could give that mass.
+//! * **Pushes** (the runtime's `GamePushes` on creatures' parts): a body that's all physics gets what
+//!   its bone lacks of an open hand's push; a standing one is shoved by a hand coming in fast.
 //!
 //! Engine facts (`Oblivion.exe` 1.2.0.416; thiscall unless said): a skeleton's bone with a body has
 //! a `bhkBlendCollisionObject` at its node's +0xA8 (vtables 0xA9643C and 0xA96384): its flags +0xC,
@@ -884,8 +889,8 @@ mod game {
             let m = mass(h.bone.body);
             let target = to_hk(Vec3::from_array(g.target));
             // The most the hand pulls with, as the force relative to the body's mass the spring
-            // takes (Havok units a second squared); a body still keyframed (it goes physical next
-            // frame) has none.
+            // takes (Havok units a second squared). (A body still keyframed, a standing actor's
+            // pelvis, isn't moved by it: Havok gives keyframed bodies no mass to push.)
             let max_rel = if m > 0.0 { g.force * self.scale.unwrap_or(1.0) / m / HK_METRES } else { 0.0 };
             pull(h.action, target, max_rel);
             let dead = is_dead(h.actor);
@@ -976,7 +981,7 @@ mod game {
             if !dead && state != 0 && throat && now >= h.next_kick && let Some(p) = held {
                 let fatigue = combat::actor_value(h.actor, AV_FATIGUE) as f32;
                 let most = combat::base_actor_value(h.actor, AV_FATIGUE).max(1) as f32;
-                let (actor, root) = (h.actor, mem::deref(h.actor + NI_NODE));
+                let root = mem::deref(h.actor + NI_NODE);
                 if fatigue > 0.0 && root != 0 {
                     let k = (fatigue / most).clamp(0.3, 1.0);
                     let wait = KICK_EVERY + KICK_SPREAD * self.random() as f64;
@@ -999,7 +1004,6 @@ mod game {
                         }
                         h.next_kick = now + wait;
                     }
-                    let _ = actor;
                 }
             }
             let Some(h) = self.holds[hand].as_mut() else { return };
