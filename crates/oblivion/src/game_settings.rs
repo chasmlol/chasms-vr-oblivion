@@ -1,7 +1,8 @@
 //! Oblivion's own settings (`My Games\Oblivion\Oblivion.ini`) while it's in VR: it renders each eye
-//! at the size the headset wants (`iSize W`/`iSize H`) in a window. The player's own values are
-//! kept in `rustvr-oblivion-ini.txt` beside the DLL and put back when the game closes (or, after a
-//! crash, the next time it starts, before anything else).
+//! at the size the headset wants (`iSize W`/`iSize H`) in a window, and a few of its own settings
+//! are at least what a headset needs ([`VR_FLOORS`]). The player's own values are kept in
+//! `rustvr-oblivion-ini.txt` beside the DLL and put back when the game closes (or, after a crash,
+//! the next time it starts, before anything else).
 
 use std::path::{Path, PathBuf};
 
@@ -19,6 +20,43 @@ pub fn ini_path() -> Option<PathBuf> {
 
 #[cfg(not(windows))]
 pub fn ini_path() -> Option<PathBuf> {
+    None
+}
+
+/// The game's own settings a headset needs at least (section, key, value): the player's own higher
+/// values are kept. Seen up close and from a head that never stops moving, the flat game's values
+/// show (`docs/research/oblivion-image-quality.md`):
+/// * the actors' shadow maps at 256 pixels are blocks at arm's length;
+/// * the trees' textures are sharpened by a negative mip bias, which sparkles as the head moves;
+/// * the near trees switch detail as you move (full detail always: the game's own option);
+/// * the water's waves are a 12-frames-a-second loop, which steps at 90..120 Hz (the same 2.7 s
+///   loop at 36);
+/// * the files of the cells ahead are preloaded only up to 25 MB, so crossing into new cells
+///   loads more of them as you go (the game's own 100 MB setting for a 2 GB machine).
+const VR_FLOORS: [(&str, &str, &str); 7] = [
+    ("Display", "iShadowMapResolution", "1024"),
+    ("SpeedTree", "fLODTreeMipMapLODBias", "0.0000"),
+    ("SpeedTree", "fLocalTreeMipMapLODBias", "0.0000"),
+    ("SpeedTree", "bForceFullLOD", "1"),
+    ("Water", "uSurfaceFPS", "36"),
+    ("Water", "uSurfaceFrameCount", "96"),
+    ("General", "iPreloadSizeLimit", "104857600"),
+];
+
+/// `section`'s `key` in INI text.
+pub fn get_key(text: &str, section: &str, key: &str) -> Option<String> {
+    let mut in_section = false;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            in_section = t.eq_ignore_ascii_case(&format!("[{section}]"));
+        } else if in_section
+            && let Some((k, v)) = t.split_once('=')
+            && k.trim().eq_ignore_ascii_case(key)
+        {
+            return Some(v.trim().to_owned());
+        }
+    }
     None
 }
 
@@ -86,6 +124,11 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
             Err(_) => return,
         },
     };
+    // (Which of the floors are above the player's values, read before anything is set.)
+    let floors: Vec<_> = VR_FLOORS
+        .into_iter()
+        .filter(|(s, k, v)| get_key(&text, s, k).and_then(|o| o.parse::<f64>().ok()).is_none_or(|o| o < v.parse::<f64>().unwrap_or(0.0)))
+        .collect();
     let mut backup = String::new();
     let mut set = |s: &str, k: &str, v: String| {
         let old = set_key(&mut text, s, k, &v);
@@ -105,6 +148,13 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
     if let Some((w, h)) = eye {
         set("Display", "iSize W", w.to_string());
         set("Display", "iSize H", h.to_string());
+    }
+    for (s, k, v) in &floors {
+        set(s, k, (*v).to_owned());
+    }
+    if !floors.is_empty() {
+        let raised: Vec<String> = floors.iter().map(|(_, k, v)| format!("{k}={v}")).collect();
+        tracing::info!("game settings: for the headset: {}", raised.join(", "));
     }
     if !backup.is_empty() && !dir.join(BACKUP).exists() {
         let _ = std::fs::write(dir.join(BACKUP), &backup);
