@@ -76,6 +76,7 @@ pub mod proxy;
 pub mod render;
 pub mod repair;
 pub mod resolution;
+pub mod rest;
 pub mod reticle;
 pub mod riding;
 #[cfg(target_arch = "x86")]

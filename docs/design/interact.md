@@ -373,3 +373,49 @@ Calls made:
 
 * Which thing is an offering comes from the shrine's own script (what it names), not a list of ours.
 * Kneeling is the head's height and the way it faces, not a pose of the legs.
+
+## 6. Sitting and sleeping
+
+### How VR games do it
+
+* **Sit for real.** VR games with seats (*Half-Life: Alyx*'s chairs are props, *The Walking Dead:
+  Saints & Sinners*' and *Skyrim VR* mods' chairs, VRChat's stations) let the player sit down in
+  their room and put the avatar in the seat; the one thing they get wrong when they don't is the
+  double drop: the game lowers its camera to the seat and the player's real head drops too, so the
+  view sinks into the floor.
+* **Getting up is standing up.** The seat lets go when the head rises, not on a button.
+* **Sleep is the bed's menu.** Even physical VR games keep the time skip a menu; what's physical is
+  getting into the bed.
+
+### Oblivion
+
+* **Furniture** (`TESFurniture`, form type 0x20): chairs, benches, stools and beds, their markers
+  (`FurnitureMarkerNN`) saying where and how an actor sits or sleeps. The player's activation of
+  furniture decides by its markers: a seat puts the player in it (the game walks them to the marker
+  and plays the sit animation, its first-person camera at the seated eye); a bed asks its own way.
+* **The sit and sleep state** (the process's `GetSitSleepState`): 0 normal, 1 loading
+  the sit idle, 2 want to sit, 3 waiting for the sit animation, 4 sitting, 5 want to stand, 6..10
+  the sleep's own (loading, want to sleep, waiting, sleeping, want to wake). Seated, the player's
+  Activate stands them up (5).
+* **Beds** open the `SleepWaitMenu` (`sleep_wait_menu.xml`) after the game's own checks: "You
+  cannot sleep while trespassing.", "You cannot sleep in an owned bed." (unless rented or the
+  player's), "You cannot sleep while in combat.", "You cannot sleep when enemies are near by.", a
+  prisoner only in a jail bed.
+
+### Design
+
+* **Sitting down for real on a chair, a bench or a bed** (the head below 78% of the standing eye
+  height for 0.3 s, with the furniture's collision under the head within 45 cm along the floor, at a
+  seat's height) is the player's activation of it: the game's furniture as ever (a seat seats them,
+  a bed asks for sleep or wait with its own ownership and trespass rules and crime).
+* **Standing up for real** (the head back over 90% for 0.3 s) while seated is the game's Activate,
+  which stands them up.
+* **The view seated**: the anchor stays at the game's standing eye height over the feet while the
+  game has the player seated in furniture, so the real sitting lowers the view once, not twice.
+
+Calls made:
+
+* The player sits down in their room (a real chair, or the floor); the game's seat follows. A
+  player who activates a chair standing (the trigger at it) is seated by the game, and their view
+  stays where their head is.
+* Lying down isn't asked for: sitting on the bed is enough for the game's own sleep question.

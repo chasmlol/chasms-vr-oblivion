@@ -162,8 +162,9 @@ pub fn mounted() -> bool {
     horse().0 != 0
 }
 
+/// An actor's sit and sleep state (its process's `GetSitSleepState`: 0 normal, 4 seated...).
 #[cfg(target_arch = "x86")]
-fn sit_state(actor: usize) -> u32 {
+pub(crate) fn sit_state(actor: usize) -> u32 {
     let process = mem::deref(actor + PROCESS);
     let f = mem::deref(mem::deref(process) + VT_SIT_SLEEP);
     if process == 0 || !(0x0040_1000..0x00A3_0000).contains(&f) {
@@ -173,7 +174,7 @@ fn sit_state(actor: usize) -> u32 {
 }
 
 #[cfg(not(target_arch = "x86"))]
-fn sit_state(_actor: usize) -> u32 {
+pub(crate) fn sit_state(_actor: usize) -> u32 {
     0
 }
 

@@ -19,6 +19,14 @@ fn bridge() -> std::sync::MutexGuard<'static, Option<input::Bridge>> {
     b
 }
 
+/// Taps the game's control `name` (as the player's own file binds it) for a moment, for the
+/// adapter's own reasons: standing up from a chair as the game's Activate does ([`crate::rest`]).
+pub fn press(name: &str) {
+    if let Some(b) = bridge().as_mut() {
+        b.hold(name, link::now() + 0.12);
+    }
+}
+
 /// The player's rotation (x pitch, positive looking down; z heading, 0 north, turning east).
 pub fn rotation() -> Option<[f32; 3]> {
     let p = engine::player();

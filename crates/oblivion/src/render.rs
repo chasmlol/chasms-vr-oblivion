@@ -199,6 +199,7 @@ mod win {
             crate::sigil::frame(link::now());
             crate::ayleid::frame();
             crate::shrines::frame(link::now());
+            crate::rest::frame();
             crate::slot_menu::frame();
             crate::pockets::frame(link::now());
             crate::alchemy::frame(link::now());
@@ -369,6 +370,9 @@ mod win {
                 }
             }
         };
+        // (Seated in furniture, the anchor stays at the standing eye's height: the player sat down for
+        // real, crate::rest.)
+        let eye = crate::rest::anchor_eye(eye);
         let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, now, dt })?;
         snap.view?;
         log_camera_once(&game);
@@ -396,6 +400,7 @@ mod win {
             time(Part::Items, || hooks::guard_void("sigil", || crate::sigil::place(view, now)));
             time(Part::Items, || hooks::guard_void("ayleid", || crate::ayleid::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("shrines", || crate::shrines::place(view, &snap.frame, now)));
+            time(Part::Items, || hooks::guard_void("rest", || crate::rest::place(view, &snap.frame, now)));
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))

@@ -172,3 +172,25 @@ What I couldn't: anything in the game. The Azura and wayshrine set-outs move you
 (`setpos`): if you arrive in the air or inside rock, say so. Things for offerings are mostly
 ingredients and pelts, which no slot gives by default: give a slot those categories (the holsters'
 editor), or pick the offering up off the ground as here.
+
+## 6. Sitting and sleeping — `playtest-rest.bat`
+
+Chorrol's Grey Mare at night (its chairs and benches; its beds upstairs, owned); saves as
+`rustvr-rest`. Have a real chair behind you.
+
+1. **Sit**: stand with your back to one of the inn's chairs or benches (close to it) and sit down on
+   your real chair. After a moment the game seats you in it (its own sitting). Your view should drop
+   once, as you sat, not twice.
+2. **Stand up**: stand up for real: the game stands you up.
+3. **A bed**: go upstairs, stand by a bed and sit down on it the same way: the game's own answer (an
+   owned bed: "You cannot sleep in an owned bed."). Rent a room from the innkeeper and the bed opens
+   its sleep and wait menu instead (sleep with the laser).
+
+Tell me especially: does the view stay right when seated (not sunk into the chair, not floating)?
+Does it sit you too eagerly (crouching to pick things up near a chair)?
+
+What I checked: builds; unit tests (sitting and standing by the head's height). The sitting, the
+standing up and the bed's checks are the game's own (its activation of the furniture, its Activate).
+
+What I couldn't: anything in the game: the view's anchor while seated (the game's standing eye height
+kept over the feet) is untested.
