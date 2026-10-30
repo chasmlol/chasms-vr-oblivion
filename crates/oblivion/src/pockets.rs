@@ -447,6 +447,20 @@ mod game {
         bounty: i32,
         /// Things just dropped, to set flying as they left the hand once the game has their bodies.
         throws: Vec<Throw>,
+        /// What each hand is on in the pockets, as the runtime last said ([`PE_FEEL`]): whose
+        /// pockets (0: none), the template of the thing under its fingers (0: none), since when.
+        felt: [Felt; 2],
+    }
+
+    /// What a hand is on in the pockets.
+    #[derive(Clone, Copy, Default)]
+    struct Felt {
+        actor: u32,
+        template: u32,
+        since: f64,
+        /// Whose pockets it was last in (kept as it comes out: whom a thing in it is being taken
+        /// from until the game has decided).
+        from: u32,
     }
 
     struct Throw {
@@ -476,6 +490,7 @@ mod game {
             states: bytemuck::zeroed_box(),
             bounty: 0,
             throws: Vec::new(),
+            felt: [Felt::default(); 2],
         }))
     }
 
@@ -671,15 +686,25 @@ mod game {
             r
         }
 
-        /// The game's card of what a hand has out of a pocket.
+        /// The game's card of what a hand has out of a pocket, else of the thing a hand's fingers are
+        /// on in one (the latest hand to come on one); and whom taking it is from, until the game has
+        /// made it the player's.
         fn card(&mut self) {
             if !crate::link::with_adapter(|a| a.read_object_states(&mut self.states)).unwrap_or(false) {
                 return;
             }
             let n = (self.states.count as usize).min(MAX_OBJECTS);
-            let held = self.states.states[..n].iter().find(|s| s.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0 && self.descs.contains_key(&s.desc)).map(|s| s.desc);
-            let refr = held.map_or(0, |t| self.card_ref(t));
-            crate::hud_info::set_pocket_held(refr);
+            let held = self.states.states[..n].iter().find(|s| s.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0 && self.descs.contains_key(&s.desc));
+            let shown = match held {
+                Some(s) => {
+                    let hand = if s.flags & OS_HELD_LEFT != 0 { 0 } else { 1 };
+                    Some((s.desc, if self.taken.contains_key(&s.id) { 0 } else { self.felt[hand].from }))
+                }
+                None => self.felt.iter().filter(|f| f.template != 0).max_by(|a, b| a.since.total_cmp(&b.since)).map(|f| (f.template, f.actor)),
+            };
+            let refr = shown.map_or(0, |(t, _)| self.card_ref(t));
+            let from = shown.and_then(|(_, id)| self.people.get(&id)).map_or(0, |p| p.actor);
+            crate::hud_info::set_pocket_held(refr, from);
         }
 
         fn answer(&mut self, n: u64, object: u32, outcome: u32) {
@@ -717,7 +742,21 @@ mod game {
                         tracing::info!("pockets: {} x{} put in a body slot: the player keeps it", t.name, t.count);
                     }
                 }
-                PE_CLOSE => self.close(ev.actor, player),
+                PE_CLOSE => {
+                    // (Whatever a hand was on in them is gone with them.)
+                    for f in self.felt.iter_mut().filter(|f| f.actor == ev.actor) {
+                        *f = Felt { from: f.from, ..Felt::default() };
+                    }
+                    self.close(ev.actor, player)
+                }
+                PE_FEEL => {
+                    let hand = (ev.hand as usize).min(1);
+                    let f = &mut self.felt[hand];
+                    *f = Felt { actor: ev.actor, template: ev.object, since: crate::link::now(), from: if ev.actor != 0 { ev.actor } else { f.from } };
+                    if let Some(t) = self.people.get(&ev.actor).and_then(|p| p.things.iter().find(|t| t.template == ev.object && ev.object != 0)) {
+                        tracing::info!("pockets: the {} hand's fingers on {} in {}: its card", if hand == 0 { "left" } else { "right" }, t.facts.name, NAMES[t.pocket]);
+                    }
+                }
                 _ => {}
             }
         }

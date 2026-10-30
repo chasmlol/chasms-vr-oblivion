@@ -5,12 +5,25 @@
 //! ([`crate::items`]), it's that thing's: the game's own setting of its target (0x5A4980, called
 //! as the crosshair's target changes) is given the held thing instead. Where the card is on the
 //! HUD is read from the game's own layout of it (its tiles' places and sizes), so the runtime can
-//! put that piece of the HUD over the held thing ([`rustvr_protocol::HUD_HELD`]).
+//! put that piece of the HUD over the held thing ([`rustvr_protocol::HUD_HELD`]). A thing a hand's
+//! fingers are on in someone's pocket has its card too ([`crate::pockets`]).
+//!
+//! **Taking it is a crime:** the game's own sign is the reticle's activate icon in its stealing red
+//! (`hud_reticle.xml`: its `user1`, set by 0x578D50 when 0x4DEBF0 says activating what the
+//! crosshair's on is a crime: someone's thing, or a living person while sneaking, which is their
+//! pickpocketing). While a hand has such a thing, or its fingers are on one in a pocket, the card
+//! says so on its own action line: the button icon and word over its name that only the Xbox shows
+//! (`hudinfo_action_icon`, `hudinfo_action_text`, shown by the card's `user2`). It's given the
+//! reticle's own icon for the thing (its activate icons' sheet, the one 0x4DE980 picks: a hand for
+//! most things) and the game's word (`sSteal`, or `sPickpocket` for someone's pocket), both in the
+//! reticle's stealing red (its `_red_stealing`, `_green_stealing`, `_blue_stealing`).
 //!
 //! Tiles (xOBSE's `GameTiles.h`): a tile's values at +0x14 (a list: +4 its first node; a node is
 //! next, previous, the value), a value's number at +4 and its id at +0x18 (u16); its children at
 //! +0x30 (the same list). Ids: visible 0xFA1 (1 no, 2 yes), locus 0xFA6, y 0xFAC, x 0xFAD, height
 //! 0xFCA, width 0xFCB. A tile's place is from its nearest ancestor with `locus` (the menu itself).
+//! A value's text is at +8 (`BSStringT`: the characters, their count); a tile's name at +8 (the
+//! same). Other values' ids by their names in the menus' files: `Tile::StrToStrID` (0x588EF0).
 
 /// A box `[x0, y0, x1, y1]` grown to take in another.
 pub fn grow(b: Option<[f32; 4]>, r: [f32; 4]) -> Option<[f32; 4]> {
@@ -61,11 +74,42 @@ mod win {
     /// Room left of the card for a longer name than it was measured with (the HUD's pixels).
     const NAME_ROOM: f32 = 96.0;
 
+    /// The HUD reticle's `hudreticle_reticle` rect: its stealing red, and its activate icons.
+    const RETICLE_RECT: usize = 0x00B3_B350;
+    const RETICLE_ACTIVATE: &str = "hudreticle_reticle_activate";
+    const ACTION_ICON: &str = "hudinfo_action_icon";
+    const ACTION_TEXT: &str = "hudinfo_action_text";
+    /// `TESObjectREFR` (thiscall): the reticle's icon for a reference (0x4DE980: 1 a hand, 6 a book,
+    /// 7 talking...; the n-th of its sheet), and whether activating it is a crime (0x4DEBF0).
+    const ICON_OF: usize = 0x004D_E980;
+    const IS_CRIME: usize = 0x004D_EBF0;
+    /// The icon for talking, never red (as 0x578D50 has it).
+    const ICON_TALK: u32 = 7;
+    /// `Tile::UpdateFloat` and `Tile::UpdateString` (thiscall: the tile, a value's id, the value: set,
+    /// and what's drawn from it updated); `Tile::StrToStrID` (cdecl: a value's name to its id).
+    const UPDATE_FLOAT: usize = 0x0058_CEB0;
+    const UPDATE_STRING: usize = 0x0058_CED0;
+    const TRAIT_ID: usize = 0x0058_8EF0;
+    /// The game settings `sSteal` and `sPickpocket` (their text at +0).
+    const S_STEAL: usize = 0x00B3_8D68;
+    const S_PICKPOCKET: usize = 0x00B3_8D70;
+    const TILE_NAME: usize = 0x08;
+    const VALUE_TEXT: usize = 0x08;
+    const USER0: u16 = 0xFAE;
+    const USER2: u16 = 0xFB0;
+    const RED: u16 = 0xFCC;
+    const GREEN: u16 = 0xFCD;
+    const BLUE: u16 = 0xFCE;
+    const FILENAME: u16 = 0xFE6;
+    const FALSE: f32 = 1.0;
+
     static REAL: AtomicUsize = AtomicUsize::new(0);
-    /// The thing of the world's a hand has (a reference), or 0; a thing out of a pocket a hand has
-    /// (a reference made for its card, [`crate::pockets`]), or 0; and the one the card is now.
+    /// The thing of the world's a hand has (a reference), or 0; a thing out of a pocket a hand has,
+    /// or its fingers are on (a reference made for its card, [`crate::pockets`]), or 0, and whose
+    /// pocket it's in (the person, until it's the player's), or 0; and the one the card is now.
     static HELD: AtomicUsize = AtomicUsize::new(0);
     static POCKET_HELD: AtomicUsize = AtomicUsize::new(0);
+    static POCKET_FROM: AtomicUsize = AtomicUsize::new(0);
     static SHOWN: AtomicUsize = AtomicUsize::new(0);
 
     /// The card's thing: the world's thing in a hand, else a pocket's.
@@ -91,6 +135,45 @@ mod win {
 
     fn value(tile: usize, id: u16) -> Option<f32> {
         list(tile + TILE_VALUES).into_iter().find(|&v| mem::at::<u16>(v + VALUE_ID) == Some(id)).and_then(|v| mem::at::<f32>(v + VALUE_NUM)).filter(|v| v.is_finite())
+    }
+
+    /// A value's text (its characters, as the game keeps them: 0 for none).
+    fn text_ptr(tile: usize, id: u16) -> usize {
+        list(tile + TILE_VALUES).into_iter().find(|&v| mem::at::<u16>(v + VALUE_ID) == Some(id)).map_or(0, |v| mem::deref(v + VALUE_TEXT))
+    }
+
+    fn text(tile: usize, id: u16) -> String {
+        let p = text_ptr(tile, id);
+        if p == 0 { String::new() } else { crate::combat::read_str(p) }
+    }
+
+    fn child(tile: usize, name: &str) -> Option<usize> {
+        list(tile + TILE_CHILDREN).into_iter().find(|&c| {
+            let (p, n) = (mem::deref(c + TILE_NAME), mem::at::<u16>(c + TILE_NAME + 4).unwrap_or(0) as usize);
+            n == name.len() && p != 0 && mem::is_readable(p as *const u8, n) && unsafe { std::slice::from_raw_parts(p as *const u8, n) } == name.as_bytes()
+        })
+    }
+
+    /// The id of a value by its name in the menus' files (0: no such value).
+    fn trait_id(name: &std::ffi::CStr) -> u16 {
+        type Lookup = unsafe extern "C" fn(*const std::ffi::c_char) -> u32;
+        (unsafe { std::mem::transmute::<usize, Lookup>(TRAIT_ID)(name.as_ptr()) }) as u16
+    }
+
+    /// Sets a tile's number, through the game, if it isn't that already.
+    fn set_value(tile: usize, id: u16, v: f32) {
+        if id != 0 && value(tile, id) != Some(v) {
+            type Update = unsafe extern "thiscall" fn(usize, u32, f32);
+            unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(tile, id as u32, v) };
+        }
+    }
+
+    /// Sets a tile's text to the characters at `p` (the game copies them), if it isn't that already.
+    fn set_text(tile: usize, id: u16, p: usize) {
+        if p != 0 && text(tile, id) != crate::combat::read_str(p) {
+            type Update = unsafe extern "thiscall" fn(usize, u32, usize);
+            unsafe { std::mem::transmute::<usize, Update>(UPDATE_STRING)(tile, id as u32, p) };
+        }
     }
 
     /// The box of what's shown under `tile` (its place from `origin`, its locus's).
@@ -141,11 +224,61 @@ mod win {
         show();
     }
 
-    /// The thing out of a pocket a hand has now (a reference made for it; 0: none): the card is its,
-    /// while no hand has a thing of the world's.
-    pub fn set_pocket_held(refr: usize) {
+    /// The thing out of a pocket a hand has now, or its fingers are on (a reference made for it; 0:
+    /// none), and the person whose pocket it's in (0: it's the player's): the card is its, while no
+    /// hand has a thing of the world's.
+    pub fn set_pocket_held(refr: usize, from: usize) {
+        POCKET_FROM.store(from, Ordering::Release);
         POCKET_HELD.store(refr, Ordering::Release);
         show();
+    }
+
+    /// The card's action line now: the reticle's icon for the thing and the game's word for taking
+    /// it, when that's a crime (the reticle's own test: someone's thing, someone's pocket).
+    fn action() -> Option<(u32, usize)> {
+        type Of = unsafe extern "thiscall" fn(usize) -> u32;
+        type Crime = unsafe extern "thiscall" fn(usize) -> u8;
+        let (refr, word) = match (HELD.load(Ordering::Acquire), POCKET_HELD.load(Ordering::Acquire), POCKET_FROM.load(Ordering::Acquire)) {
+            (0, 0, _) | (0, _, 0) => return None,
+            (0, _, from) => (from, S_PICKPOCKET),
+            (held, _, _) => (held, S_STEAL),
+        };
+        let icon = unsafe { std::mem::transmute::<usize, Of>(ICON_OF)(refr) } & 0xFF;
+        let crime = icon != 0 && icon != ICON_TALK && unsafe { std::mem::transmute::<usize, Crime>(IS_CRIME)(refr) } != 0;
+        crime.then_some((icon, word))
+    }
+
+    /// Before each picture: the card's action line shown as [`action`] says, or hidden, whenever the
+    /// game's tiles aren't so already.
+    pub fn keep_action() {
+        let menu = mem::deref(mem::deref(HUD_INFO_MENU) + MENU_TILE);
+        if menu == 0 {
+            return;
+        }
+        let Some((kind, word)) = action() else {
+            set_value(menu, USER2, FALSE);
+            return;
+        };
+        let reticle = mem::deref(RETICLE_RECT);
+        let (Some(icon), Some(words), Some(activate)) = (child(menu, ACTION_ICON), child(menu, ACTION_TEXT), (reticle != 0).then(|| child(reticle, RETICLE_ACTIVATE)).flatten()) else { return };
+        let [Some(r), Some(g), Some(b)] = [c"_red_stealing", c"_green_stealing", c"_blue_stealing"].map(|n| value(reticle, trait_id(n))) else { return };
+        // The word, in the stealing red.
+        set_text(menu, USER0, mem::deref(word));
+        for (id, v) in [(RED, r), (GREEN, g), (BLUE, b)] {
+            set_value(words, id, v);
+            set_value(icon, id, v);
+        }
+        // The reticle's icon: its sheet and size, the thing's icon on it (the n-th, as the reticle's
+        // own crop has it), in the stealing red.
+        set_text(icon, FILENAME, text_ptr(activate, FILENAME));
+        let (Some(w), Some(h)) = (value(activate, WIDTH), value(activate, HEIGHT)) else { return };
+        set_value(icon, WIDTH, w);
+        set_value(icon, HEIGHT, h);
+        set_value(icon, trait_id(c"cropx"), w * (kind - 1) as f32);
+        if value(menu, USER2) != Some(TRUE) {
+            set_value(menu, USER2, TRUE);
+            tracing::info!("hud: the card says \"{}\" in the reticle's stealing red ({r} {g} {b}), with its icon {kind}", crate::combat::read_str(mem::deref(word)));
+        }
     }
 
     fn show() {

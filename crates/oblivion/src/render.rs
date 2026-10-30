@@ -171,6 +171,7 @@ mod win {
         let Some((snap, game, cam)) = stereo else { return unsafe { real(this, arg) } };
         let view = snap.view.expect("prepared with a view");
         hooks::guard_void("reticle", crate::reticle::hide_crosshair);
+        hooks::guard_void("hud info action", crate::hud_info::keep_action);
         let Some(dev) = d3d9::device(engine::device() as *mut c_void) else { return unsafe { real(this, arg) } };
         let mut result = 0;
         let mut captured = [false; 2];
