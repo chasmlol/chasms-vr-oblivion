@@ -44,7 +44,7 @@ const FORM_ID: usize = 0x0C;
 const ACTOR_VTABLES: [usize; 2] = [0x00A6_FC9C, 0x00A7_10F4];
 
 /// Whether `actor` is one of the game's actors as it stands (not the player).
-fn is_actor(actor: usize) -> bool {
+pub(crate) fn is_actor(actor: usize) -> bool {
     actor != 0 && ACTOR_VTABLES.contains(&mem::deref(actor))
 }
 /// `TESObjectREFR`: its base form, its 3D root.
@@ -113,8 +113,25 @@ pub(crate) fn read_str(p: usize) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// `NiObject` vtable +0x8: the object as an `NiNode` (itself for one, else 0; +0xC is the same for a
+/// shape). Only nodes have children: what's at a node's children's place in a shape (or a light,
+/// a camera) is something else, and walked as children it's garbage that used up the walk before
+/// the spine and legs.
+const VT_AS_NODE: usize = 0x08;
+
+#[cfg(target_arch = "x86")]
+fn is_node(obj: usize) -> bool {
+    let f = mem::deref(mem::deref(obj) + VT_AS_NODE);
+    (0x0040_1000..0x00A3_0000).contains(&f) && unsafe { std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> usize>(f)(obj) } == obj
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn is_node(_obj: usize) -> bool {
+    false
+}
+
 /// The named nodes under `root` that are bones (named `Bip01...`), and a few named attachments.
-fn bones(root: usize) -> HashMap<String, usize> {
+pub(crate) fn bones(root: usize) -> HashMap<String, usize> {
     let mut out = HashMap::new();
     let mut stack = vec![(root, 0u32)];
     let mut seen = 0;
@@ -128,7 +145,7 @@ fn bones(root: usize) -> HashMap<String, usize> {
         if name.starts_with("Bip01") || name == "Weapon" || name == "Shield" {
             out.insert(name, node);
         }
-        if !descend {
+        if !descend || !is_node(node) {
             continue;
         }
         let data = mem::deref(node + NODE_CHILDREN);
@@ -193,14 +210,14 @@ fn attack_segment(actor: usize, b: &HashMap<String, usize>) -> Option<(Vec3, Vec
 }
 
 /// A node's world position, in the protocol's space.
-fn node_pos(node: usize) -> Option<Vec3> {
+pub(crate) fn node_pos(node: usize) -> Option<Vec3> {
     let p: [f32; 3] = mem::at(node + engine::av::WORLD_TRANSLATE)?;
     Some(camera::basis().point_from_game(Vec3::from(p)))
 }
 
 /// Calls `Actor::GetActorValue`.
 #[cfg(target_arch = "x86")]
-fn actor_value(actor: usize, av: u32) -> i32 {
+pub(crate) fn actor_value(actor: usize, av: u32) -> i32 {
     type F = unsafe extern "thiscall" fn(usize, u32) -> i32;
     let vt = mem::deref(actor);
     let f = mem::deref(vt + VT_GET_AV);
@@ -214,7 +231,7 @@ fn base_actor_value(actor: usize, av: u32) -> i32 {
 }
 
 #[cfg(not(target_arch = "x86"))]
-fn actor_value(_actor: usize, _av: u32) -> i32 {
+pub(crate) fn actor_value(_actor: usize, _av: u32) -> i32 {
     0
 }
 
@@ -515,6 +532,12 @@ struct Known {
 }
 
 static KNOWN: Mutex<Option<Known>> = Mutex::new(None);
+
+/// The creatures published last (by id, where each is in the game's memory: check it's still an
+/// actor, [`is_actor`], before using it).
+pub(crate) fn known_actors() -> Vec<(u32, usize)> {
+    KNOWN.lock().unwrap().as_ref().map(|k| k.actors.iter().map(|(&id, &a)| (id, a)).collect()).unwrap_or_default()
+}
 
 /// Once a game frame (in the world): the creatures, and the spells when they changed.
 pub fn publish() {
