@@ -71,6 +71,8 @@ pub struct Virtual {
     pub stick: [i32; 2],
     /// The mouse wheel turned this frame (120 a notch, up positive): scrolling a menu.
     pub wheel: i32,
+    /// B on the adapter's own menu (the holsters' editor): it closes itself.
+    pub back: bool,
 }
 
 /// A mouse wheel's notch, as DirectInput counts it.
@@ -117,6 +119,8 @@ pub struct GameControls {
     /// Mode closes it (its Escape would open the pause menu over it). The pause menu and its own
     /// (options, load, save) close with Escape.
     pub tab_closes: bool,
+    /// The adapter's own menu is on top (the holsters' editor): B closes it, not the game.
+    pub own_menu: bool,
 }
 
 /// A press holds its key this long.
@@ -199,13 +203,17 @@ impl Bridge {
         } else {
             self.wheel = 0.0;
         }
+        // B on the adapter's own menu: it closes itself.
+        let back = pressed(&counts, Action::MenuBack);
+        v.back = game.own_menu && back;
+        let back = back && !game.own_menu;
         // B on a menu in the world: Menu Mode, which closes it.
-        if game.tab_closes && pressed(&counts, Action::MenuBack) {
+        if game.tab_closes && back {
             self.pulses.push((self.binding("Menu Mode"), now + PULSE));
         }
         // The menu button, and B on a menu (the runtime's "back"): Escape, which closes the game's
         // menus.
-        if pressed(&counts, Action::Menu) || (pressed(&counts, Action::MenuBack) && !game.tab_closes) {
+        if pressed(&counts, Action::Menu) || (back && !game.tab_closes) {
             self.pulses.push((Binding { key: Some(DIK_ESCAPE), mouse: None }, now + PULSE));
         }
         self.pulses.retain(|&(_, until)| until > now);
@@ -253,7 +261,7 @@ mod win {
         wheel: i32,
     }
     static STATE: Mutex<State> = Mutex::new(State {
-        v: super::Virtual { keys: Vec::new(), buttons: 0, stick: [0; 2], wheel: 0 },
+        v: super::Virtual { keys: Vec::new(), buttons: 0, stick: [0; 2], wheel: 0, back: false },
         told_keys: Vec::new(),
         told_buttons: 0,
         sequence: 0x4000_0000,
@@ -535,8 +543,8 @@ mod tests {
         assert_eq!(b.update(&it, GameControls::default(), 0.1).keys, vec![0x1D]);
         assert!(b.update(&it, GameControls::default(), 0.3).keys.is_empty());
         it.held = Action::Sprint.bit();
-        assert_eq!(b.update(&it, GameControls { always_run: false, tab_closes: false }, 0.4).keys, vec![0x2A]);
-        assert!(b.update(&it, GameControls { always_run: true, tab_closes: false }, 0.5).keys.is_empty());
+        assert_eq!(b.update(&it, GameControls { always_run: false, tab_closes: false, own_menu: false }, 0.4).keys, vec![0x2A]);
+        assert!(b.update(&it, GameControls { always_run: true, tab_closes: false, own_menu: false }, 0.5).keys.is_empty());
     }
 
     #[test]

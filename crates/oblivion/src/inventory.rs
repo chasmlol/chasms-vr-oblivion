@@ -200,6 +200,8 @@ mod game {
     const NOT_STAFFS: usize = 0x00B3_88D0;
     /// The player's scroll use (its virtual +0x2D0, `(book, 0)`): one removed, its enchantment cast.
     const VT_USE_SCROLL: usize = 0x2D0;
+    /// The inventory's icon of a thing (cdecl: its form; under `Icons\`).
+    const ICON: usize = 0x005C_0C50;
     const FORM_TYPE: usize = 0x4;
     const FORM_FLAGS: usize = 0x8;
     const FORM_ID: usize = 0xC;
@@ -538,6 +540,23 @@ mod game {
         let after = count_of(player, form);
         tracing::info!("inventory: {} dropped at {at:.2?}: {before} -> {after}", name_of(form));
         after < before
+    }
+
+    /// A stack's name and count as the inventory last had it.
+    pub fn describe(id: u32) -> Option<(String, u32)> {
+        with_state(|s| s.inv.item(id).map(|i| (i.name().to_owned(), i.count)))
+    }
+
+    /// The game's own icon (`Icons\...`) of a thing the player has in a category, for the
+    /// holsters' editor.
+    pub fn category_icon(category: u32) -> Option<String> {
+        type Icon = unsafe extern "C" fn(usize) -> usize;
+        with_state(|s| {
+            let id = s.inv.items().iter().find(|i| i.category == category)?.id;
+            let (form, _) = stack(s, id)?;
+            let path = crate::combat::read_str(unsafe { std::mem::transmute::<usize, Icon>(ICON)(form) });
+            (!path.is_empty()).then(|| format!("Icons\\{path}"))
+        })
     }
 
     /// Once a game frame (where its scripts run): the copies drawn from the slots used or dropped

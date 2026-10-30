@@ -276,6 +276,16 @@ mod win {
     /// A menu nobody has cut yet: the whole of what it draws, as one piece.
     const WHOLE: &[Piece] = &[Piece::of(&[From::All], true)];
 
+    /// The holsters' editor (`crate::slot_menu`), in strips as a container's list is: the
+    /// categories of the slot picked in the middle, the slots on their left (with what each gives
+    /// now), the buttons on their right, and its title over them.
+    const HOLSTERS: &[Piece] = &[
+        Piece::of(&[From::Drawn("hol_categories")], true),
+        Piece::of(&[From::Drawn("hol_slots")], true),
+        Piece::of(&[From::Drawn("hol_buttons")], true),
+        Piece::of(&[From::Drawn("hol_title")], false),
+    ];
+
     /// The menus' trees, each read once a frame as it's needed.
     #[derive(Default)]
     struct Trees(HashMap<u32, tiles::Tree>);
@@ -511,6 +521,10 @@ mod win {
                 }
             }
             0 => {}
+            // The holsters' editor ahead of the player, as their own menus are.
+            crate::slot_menu::MENU_HOLSTERS => {
+                add_group(&mut l, player(top), top, HOLSTERS, screen, &mut trees);
+            }
             kind => {
                 // (The runtime's own settings float beside the game's pause menu.)
                 if kind == MENU_PAUSE {

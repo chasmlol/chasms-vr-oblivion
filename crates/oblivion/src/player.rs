@@ -73,6 +73,10 @@ pub fn before_update() {
         if let Some(b) = bridge().as_mut() {
             v = b.update(&s.frame.intents, game_controls(), link::now());
         }
+        #[cfg(target_arch = "x86")]
+        if v.back {
+            crate::slot_menu::back();
+        }
         static LAST_MOVE: Mutex<[f32; 2]> = Mutex::new([0.0; 2]);
         let mv = s.frame.intents.move_xy;
         let mut last = LAST_MOVE.lock().unwrap();
@@ -189,7 +193,11 @@ fn log_once(yaw: f32) {
 /// The game's state the controls depend on.
 fn game_controls() -> input::GameControls {
     let p = engine::player();
-    input::GameControls { always_run: p != 0 && mem::at::<u8>(p + engine::pc::ALWAYS_RUN).unwrap_or(0) != 0, tab_closes: crate::menus::tab_closes() }
+    input::GameControls {
+        always_run: p != 0 && mem::at::<u8>(p + engine::pc::ALWAYS_RUN).unwrap_or(0) != 0,
+        tab_closes: crate::menus::tab_closes(),
+        own_menu: crate::slot_menu::on_top(),
+    }
 }
 
 /// The player sneaks (its process's movement flags: `GetMovementFlags`, vtable +0x2C0; sneaking

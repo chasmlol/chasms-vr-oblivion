@@ -183,6 +183,7 @@ mod win {
             crate::player::before_update();
             crate::items::frame(link::now());
             crate::inventory::frame(link::now());
+            crate::slot_menu::frame();
         });
         unsafe { real(this) }
     }
