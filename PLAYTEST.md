@@ -14,6 +14,9 @@ Save: rustvr-holsters
 You start with the Fine Iron War Axe at your left hip and the shield on your back.
 `tools\play.ps1 -Close` puts it all away.
 
+The flat game's crosshair is hidden in VR (from the riding branch, by way of the menus branch): only
+the icon of what you can activate shows where you look.
+
 Your things now live in slots on your body. Reach into one and squeeze the grip, and its first thing
 comes out in your fist as the game's own model. Bring food or a drink to your mouth to eat or drink
 it. Let go of something in any slot to put it back. Let go anywhere else and it drops into the
