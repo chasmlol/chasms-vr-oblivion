@@ -10,7 +10,37 @@ What it's built from (players' likes and hates, how other VR games ride, Oblivio
 why it works the way it does: `docs/research/riding.md`.
 
 Run `playtest.bat` in this worktree (`<worktrees>\riding`): it installs this build and boots the save; press
-a key in its window when you're done and it closes the game and puts your settings back.
+a key in its window when you're done and it saves the ride's logs (into `<builds>\riding\logs`),
+closes the game and puts your settings back.
+
+## Round 8: subtle steering, and hands held close to the body
+
+Built and unit-tested; not in the game yet. Your seventh ride's runtime log was lost: another
+playtest started a few minutes after yours and replaced it (the game's log of what the horse was
+told is in `<builds>\riding\playtest-7`). From now on `playtest.bat` saves both logs the moment
+you press the key, before the game is closed.
+
+- **"Way more subtle turns... make it so all the way out to the side is the fast turns."** A turn
+  now grows as the square of how far the reins go past their give, and a full turn is 30 cm past
+  it (was 10 cm, and half linear). A few centimetres turn it a degree or two a second; 10 cm, about
+  7°/s; 15 cm, about 17°/s; 20 cm, about 30°/s; hands well out to a side, the game's full 67.5°/s.
+  Changes are smoothed a little more (0.12 s).
+- **"If I have my controller held a bit close to my body the steering doesn't really work
+  properly."** Both hands to one side was measured from the horse's mane. But your body isn't always
+  over the mane: the view centres on your head as it was when you got on, so if your head was off
+  your body's middle then, your body sits a few centimetres to one side of the horse, and hands held
+  close in front of it read as off-centre (a steady turn). Now it's measured from **your own
+  middle**: where your head sits across the horse, followed slowly (over 10 s, so looking about
+  doesn't move it). Hands centred in front of you go straight, held close or far out. One rein
+  further back than the other is measured hand against hand, as before. If it still misbehaves
+  close in, the log will show it: each hand across from your middle and ahead of the mane.
+
+### Try this round
+
+- Steer with tiny moves (a centimetre or two): a slow drift. Wider: harder. All the way out to a
+  side: the fastest turn.
+- Hold the controllers close to your body, centred in front of you: it should go straight. Move
+  them a little to a side: a gentle turn.
 
 ## Round 7: hands centred on the horse go straight
 
@@ -365,10 +395,12 @@ built, and its unit tests pass.
   pull back one, or move both sideways (a neck rein) or open one out; both are what riders do, and
   an equestrian's opening rein not working was a complaint about another game. One hand alone holds
   both reins (western style).
-- **Steering is measured against the horse** (round 7): the hands' middle across from the mane
-  (the middle of the rider's rein holds) past 3 cm, one hand ahead of the other past 2.5 cm; a
-  full turn 10 cm past that. Measured from where the reins were taken (rounds 2 to 6), "centred"
-  depended on where the hands happened to be then, and a turn could stick.
+- **Steering is measured against the rider and the horse** (rounds 7 and 8): the hands' middle
+  across from the rider's middle (where the head sits across the horse, followed over 10 s, at
+  most 15 cm from the mane) past 3 cm, one hand ahead of the other past 2.5 cm; the turn the square
+  of the way past that, all of it 30 cm past. Measured from where the reins were taken (rounds 2 to
+  6), "centred" depended on where the hands happened to be then, and a turn could stick; measured
+  from the mane (round 7), a rider sitting off the horse's middle turned with hands held close.
 - **Hands at rest do nothing** (round 2): a 5 cm dead zone, inside which a hand's rest follows it
   over 1.5 s (drift is taken up, a deliberate move of a few tenths of a second isn't); the turn
   comes in as half the share past the dead zone plus half its square, so small moves turn gently.
