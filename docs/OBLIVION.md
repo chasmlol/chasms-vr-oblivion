@@ -64,4 +64,4 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | `d3d9on12` | true | Make the device on D3D9On12 (off: plain Direct3D 9, no VR) |
 | `background` | false | Tests: the window is off-screen and never activated, and message boxes are answered |
 | `eye_width`, `eye_height` | 0 | The per-eye size to render at (0: the game's resolution) |
-| `menu_background` | 0.8 | How opaque the menus' parchment is, of what the game makes it (1: as the game draws it) |
+| `menu_background` | 1 | How opaque the menus' parchment is, of what the game makes it (1: solid, as the game draws it) |

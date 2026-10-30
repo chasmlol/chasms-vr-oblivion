@@ -16,11 +16,12 @@ trigger to click. The right stick scrolls, and B closes.
 ## What to try, in order
 
 1. **Look around (the HUD).**
-   - Glance down: the compass sits low in front of you and turns with your body.
    - Raise your left hand and look at the back of your wrist: the health, magicka and fatigue bars
-     and your weapon and spell icons are there, like a watch. Any active effects stack above them.
+     and your weapon and spell icons are there, like a watch, with the compass just up your forearm
+     from them. Any active effects stack above the compass.
    - Look at Jensine: the game's card of what you're looking at (her name) floats just under the
-     point you're looking at. It's the same card that says "Open Door" or gives an item's numbers.
+     point you're looking at, just in front of her. It eases after your head instead of being
+     fixed to it. It's the same card that says "Open Door" or gives an item's numbers.
    - The flat game's crosshair is gone. Where the head looks, only the game's icon of what can be
      activated shows (a hand, a door; red when taking it would be stealing).
 2. **The chest (looting).** Look at the chest and pull the trigger with an empty right hand.
@@ -28,7 +29,7 @@ trigger to click. The right stick scrolls, and B closes.
      line.
    - It comes as three strips: the list (with its column heads, scroll bar, your gold and weight
      under it), the category tabs, and the buttons (Take All, the switch to your own things, Exit).
-   - The parchment is a little see-through; the text on it isn't.
+   - The parchment is solid, cut out round its edges.
    - Point at a row and the game highlights it, with a light tick in your hand each time the
      highlight moves to another row, tab or button. Pull the trigger to take it.
    - Push the right stick to scroll. Dragging the scroll bar with the trigger held should work too.
@@ -62,10 +63,55 @@ trigger to click. The right stick scrolls, and B closes.
      the person offering them.
 7. **Pause.** Press the menu button. The game's pause menu floats ahead, with RustVR's own
    settings beside it on the right.
+   - The laser is in the colours of the game's own cursor: a cream thread in a gold glow, with
+     light running along it, and a gold dot with a dark edge where it points. The dot presses in
+     while the trigger is held.
 8. **A thing's own menu** floats beside the thing: picking a lock beside the locked door or chest,
    an altar's enchanting or spellmaking beside the altar, a sigil stone beside it.
 9. **Everything else** floats ahead of you as one piece, cut out of the flat screen: sleep and
    wait, books, the level-up, alchemy, repair with a hammer and the race menu.
+
+## Playtest 1 (30 October, real headset)
+
+What you said, and what changed:
+
+- **"Put the compass on my hand with the health and stuff, a good size."** The compass is now on
+  the left wrist, just up the forearm from the bars, weapon and spell. It's drawn 1.8 times the
+  game's size there (the bars are 1.3), so with the wrist raised about 40 cm from the eyes its
+  heading letters look as big as when it floated in front.
+- **"Remove the transparency from all the menus. I like how they're cut out."** The parchment is
+  drawn as the game draws it (`menu_background` is now 1), and pieces are no longer see-through as
+  a whole (the runtime's `menu_opacity` is now 1). The cut edges still fade over a few texels.
+- **"A flash of the flat-screen version for a millisecond when opening things."** Two causes, both
+  fixed in the runtime:
+  - The game says it's in a menu as the frame that opens it starts. What the menu's pieces are
+    comes only when that frame is drawn. In between, the runtime showed the whole flat screen.
+    Now a menu over the world whose pieces haven't come shows nothing for up to half a second.
+  - The layout of the pieces and the picture they're cut from came separately, so for a frame the
+    menu's pieces could be cut from the picture before it (or the HUD's from the menu). Each
+    picture now carries the number of the layout it was drawn with, and the runtime waits for the
+    picture before using a newer layout.
+  - Also, for a quarter of a second after a menu closes, the HUD's layout is empty while it fades
+    back in (log: "0 pieces in 0 groups"). The runtime showed the whole HUD flat then; now nothing.
+- **"The names of the NPCs closer to them, stabilised and smoothed, at the same viewing angle."**
+  I took this as the card that comes up when you look at someone (their name), not the name over
+  a speaker's head in dialogue, which is unchanged. The card (and the activate icon) now:
+  - eases after your head (0.18 s) instead of being fixed to it, so it doesn't shake;
+  - floats just in front of what it's about (a person's head, a thing's bound), between 0.6 and
+    3 m, instead of always 1.6 m from your face;
+  - stays the same size to the eye at any distance.
+- **"An Oblivion-themed laser."** The colours are the game's own cursor's
+  (`textures\menus\misc\cursor.dds`, a gold arrow with a cream highlight and a dark outline):
+  - a cream thread (255, 247, 222) in a soft gold glow (255, 203, 57);
+  - motes of light running out along it;
+  - fainter, fading out along its length, when it points at nothing;
+  - where it hits, the gold light it casts and a dot like the cursor (a dark edge, gold, a cream
+    heart), pressed in while the trigger is held.
+  - The game's HUD text over the world is nearly the same cream (254, 244, 183).
+  - The adapter gives the colours (`HudLayout::pointer`), so another game keeps the runtime's blue.
+  - The main menu and loading screens get them too.
+- **The flat game's crosshair** was still showing in this branch's HUD. It's gone now, the same way
+  as on the riding branch.
 
 ## What was checked in the game (emulated headset, captures)
 
@@ -123,15 +169,16 @@ trigger to click. The right stick scrolls, and B closes.
 - **Real transparency.** The game draws its UI into an alpha render target of ours instead of its
   back buffer, so each piece is exactly as opaque as the game's own art and the rest is clear. Each
   piece's cut edges fade over a few texels.
-- **See-through parchment.** The menus' background images (the game's own `..._background`
-  tiles) are drawn at 80% of their alpha, through the game's own tile update, so the text and icons
-  stay solid. Pop-ups stay solid. This is `menu_background` in `rustvr-oblivion.toml`.
+- **Solid parchment** (playtest 1: it was 80% see-through). `menu_background` in
+  `rustvr-oblivion.toml` can still make the menus' background images (the game's own
+  `..._background` tiles) see-through, through the game's own tile update, with the text and icons
+  on them solid. It's 1 by default.
 - **Size from the game's text.** Every piece is sized so a line of the game's text is 1.5 degrees
   tall wherever it floats. The research figure is 1.2 to 1.4; Oblivion's serif font reads harder,
   hence 1.5.
 - **Runtime settings** live in `%LOCALAPPDATA%\RustVR\settings.toml` under `[ui]`:
   - `menu_text_deg` (1.5);
-  - `menu_opacity` (0.94, the whole piece);
+  - `menu_opacity` (1, the whole piece; it was 0.94 before playtest 1);
   - `menu_scroll` (wheel notches a second at full stick).
 - **Where things go.** Everything stays put in the world once placed.
 
@@ -148,8 +195,8 @@ trigger to click. The right stick scrolls, and B closes.
   an open menu instead of closing it. The pause menu and its options, load and save pages still
   close with Escape.
 - **Dialogue.** The speaker's name floats over their head (the flat game shows it in a corner).
-- **The crosshair card** under where you look is fixed to your gaze, because it says what looking
-  there does.
+- **The crosshair card** sits under where you look, because it says what looking there does. It
+  eases after the head and floats at the distance of the thing it's about (playtest 1).
 - **The flat game's crosshair is hidden** (`reticle.rs`, the same commit as the riding branch's, so
   the two merge cleanly). The hands aim in VR, and a dot fixed in the middle of the view is only in
   the way. The reticle's activate icon stays, as it's the game's only warning of a theft. The game's
