@@ -47,6 +47,7 @@ pub mod link;
 pub mod log;
 pub mod mem;
 pub mod menus;
+pub mod mirror_spell;
 pub mod movement;
 pub mod objects;
 pub mod player;

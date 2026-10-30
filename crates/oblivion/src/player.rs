@@ -98,6 +98,10 @@ pub fn before_update() {
     #[cfg(windows)]
     input::set(v, vr || settings::get().background);
     crate::combat::apply_pending();
+    // The mirror spell on the player, and the game's effect for each summons of the mirror.
+    if vr {
+        crate::mirror_spell::tick();
+    }
 }
 
 /// Testing (`RUSTVR_OBLIVION_TRACE_MOVE=1`): for two seconds after the stick changes, the player's
