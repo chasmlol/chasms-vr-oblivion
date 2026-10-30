@@ -142,6 +142,7 @@ mod win {
             crate::player::before_update();
             crate::items::frame(link::now());
             crate::world::frame(link::now());
+            crate::props::frame(link::now());
         });
         unsafe { real(this) }
     }
@@ -250,6 +251,7 @@ mod win {
             time(Part::Lighting, || hooks::guard_void("lighting", || crate::lighting::publish(view, head)));
             time(Part::Items, || hooks::guard_void("items", || crate::items::place(view, now)));
             time(Part::Items, || hooks::guard_void("world", || crate::world::place(now)));
+            time(Part::Items, || hooks::guard_void("props", || crate::props::place(now)));
         }
         Some((snap, game, cam))
     }

@@ -54,6 +54,7 @@ pub mod menus;
 pub mod movement;
 pub mod objects;
 pub mod player;
+pub mod props;
 pub mod proxy;
 pub mod render;
 pub mod resolution;

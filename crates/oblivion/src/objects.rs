@@ -1,7 +1,7 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
-//! ([`crate::weapons`]), the game's things lying about near the player ([`crate::items`]) and the
-//! world's moving parts, its doors and levers ([`crate::world`]), each owner's entries kept apart
-//! and written together. The same for the regions that go with the table: where the game has its
+//! ([`crate::weapons`]), the game's things lying about near the player ([`crate::items`]), the
+//! world's moving parts, its doors and levers ([`crate::world`]), and its loose Havok bodies, its
+//! hanging chains ([`crate::props`]), each owner's entries kept apart and written together. The same for the regions that go with the table: where the game has its
 //! own objects ([`GamePoses`]) and their convex collision ([`GameHulls`]).
 
 use rustvr_protocol::*;
@@ -12,15 +12,17 @@ pub enum Owner {
     Weapons,
     Items,
     World,
+    Props,
 }
 
-const OWNERS: usize = 3;
+const OWNERS: usize = 4;
 
 fn index(owner: Owner) -> usize {
     match owner {
         Owner::Weapons => 0,
         Owner::Items => 1,
         Owner::World => 2,
+        Owner::Props => 3,
     }
 }
 
