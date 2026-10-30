@@ -27,9 +27,9 @@ soldier), `player.placeatme 0003DC25 1 100 0` (a hostile bandit boss),
    can stand, his legs go and he hangs from your hand, his feet off the floor. Keep squeezing: his
    fatigue drains, faster while he's off his feet; his hands clutch at yours (his arms are his own
    while he's choked), and held up his legs kick, weaker as he tires, until the game knocks him
-   out. Let go, or throw him: he lies there and gets up when
-   the game says (a few seconds after a knockdown, longer after a choke-out). Choked while he's
-   standing, he collapses out of your hand when the game knocks him out.
+   out. Let go, or throw him: he lies there and gets up when the game says (a few seconds after a
+   knockdown, longer after a choke-out). Choked while he's standing, he sags from your hand (or out
+   of it) when the game knocks him out.
 4. **The law.** Choking him, knocking him over, throwing him, or holding him for more than four
    seconds is an assault, the game's own: you get the game's bounty (40 gold) and his reaction (a
    Legion soldier comes to arrest you, or fights). One assault a hold.
@@ -43,6 +43,9 @@ soldier), `player.placeatme 0003DC25 1 100 0` (a hostile bandit boss),
    Hands tab has "Strength on creatures" (1500 N a hand at Strength 50).
 7. **A fight.** Place a bandit boss and grab him while he attacks: his held arm is yours (it goes
    where your hand takes it), the rest of him keeps fighting.
+8. **Letting go.** Your hand stays a free hand on his body where it let go, and comes back to the
+   controller from there (it doesn't pass through him). A hand resting on someone still has the
+   trigger: touch a shoulder and pull it to talk.
 
 ## What was checked in the game (emulated headset, captures and logs)
 
@@ -64,14 +67,14 @@ soldier), `player.placeatme 0003DC25 1 100 0` (a hostile bandit boss),
 * With his AI on, the choke is an assault: the player's bounty went from 0 to 40.
 * A shove at 1.7 to 2.8 m/s (his character controller took the push); a dead body pushed by an open
   hand moved.
-* A wolf (37 kg by the game's masses) and a goblin (210 kg) are published with their bodies
-  (grabbable); taking hold of them wasn't tried.
+* A dead wolf (37 kg by the game's masses) taken by its leg and lifted, splayed; a goblin is
+  published at 210 kg.
 * The strain is felt (haptic pulses counted by the emulated headset).
 * The adapter's creatures part of the frame stays at 0.4 ms.
 
-**Not checked in the game:** grabbing creatures that aren't people (wolves, goblins: they're held by
-their own skeleton's bodies, as people are), grabbing someone mid-attack, how far a shove carries a
-person in the room (it moved him a little in the test room), a real headset's feel (only the
+**Not checked in the game:** a living creature that isn't a person (a wolf alive, a goblin), grabbing
+someone mid-attack (the test bandit kept out of reach), how far a shove carries a person (it moved
+him a little in the test room), a body pinned against a wall, a real headset's feel (only the
 emulated one). The framework's test range now takes grabs too (its dummies), built but not run (the
 range wasn't to be started tonight).
 
