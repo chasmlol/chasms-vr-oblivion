@@ -108,23 +108,40 @@ mod win {
     /// the left eye only.
     const CLIP_PLANES_MADE: usize = 0x214;
 
-    /// The actors' shadow lights' clip planes are made again, for the next render's camera.
-    fn shadow_clip_planes_again() {
+    /// The actors' shadow lights, as the list has them (bounded: the background thread's lock is
+    /// held, but a broken list mustn't hang the render).
+    fn shadow_lights() -> Vec<usize> {
         let ssn = mem::deref(SHADOW_SCENE);
-        if ssn == 0 {
-            return;
-        }
-        let mut entry = mem::deref(ssn + SHADOW_LIGHTS);
-        // (Bounded, as a guard against a list being changed: the background thread's lock is held.)
-        for _ in 0..1024 {
-            if entry == 0 {
-                break;
-            }
+        let mut lights = Vec::new();
+        let mut entry = if ssn == 0 { 0 } else { mem::deref(ssn + SHADOW_LIGHTS) };
+        while entry != 0 && lights.len() < 1024 {
             let light = mem::deref(entry + 8);
-            if light != 0 && mem::at::<u8>(light + CLIP_PLANES_MADE).is_some() {
-                unsafe { ((light + CLIP_PLANES_MADE) as *mut u8).write(0) };
+            if light != 0 {
+                lights.push(light);
             }
             entry = mem::deref(entry);
+        }
+        lights
+    }
+
+    /// Testing: what the actors' shadow lights are after a render: how many, how many drew their
+    /// shadow in it (their clip planes made), how many are seen (+0x118, 0xFF: not) and faded in
+    /// (+0xD8), and the first one's clip planes as that render made them (+0x1B4).
+    fn shadow_lights_state() -> String {
+        let lights = shadow_lights();
+        let made = lights.iter().filter(|&&l| mem::at::<u8>(l + CLIP_PLANES_MADE) == Some(1)).count();
+        let seen = lights.iter().filter(|&&l| mem::at::<u16>(l + 0x118).is_some_and(|m| m != 0xFF)).count();
+        let fades: Vec<f32> = lights.iter().filter_map(|&l| mem::at::<f32>(l + 0xD8)).collect();
+        let planes = lights.first().and_then(|&l| mem::at::<[f32; 24]>(l + 0x1B4));
+        format!("{} shadow lights, {made} drew a shadow, {seen} seen, fades {fades:.2?}; the first's clip planes {planes:.3?}", lights.len())
+    }
+
+    /// The actors' shadow lights' clip planes are made again, for the next render's camera.
+    fn shadow_clip_planes_again() {
+        for light in shadow_lights() {
+            if mem::at::<u8>(light + CLIP_PLANES_MADE).is_some() {
+                unsafe { ((light + CLIP_PLANES_MADE) as *mut u8).write(0) };
+            }
         }
     }
 
@@ -316,7 +333,10 @@ mod win {
         });
         let renders = if mirror_cam.is_some() { 3 } else { 2 };
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let log = LOGGED.fetch_add(1, Ordering::Relaxed) % 600 == 30;
+        let frame = LOGGED.fetch_add(1, Ordering::Relaxed);
+        let log = frame % 600 == 30;
+        // (Testing, for the actors' shadows: every 90 frames, the first 200 times.)
+        let log_shadows = frame % 90 == 45 && frame < 90 * 200;
         let mut mirror_done = None;
         let per_eye = per_eye_visuals();
         let eyes = [0, 1].map(|eye| camera::eye_camera(&view, &snap.frame.eyes[eye], &snap.frame.fov[eye], &game));
@@ -343,6 +363,9 @@ mod win {
                 set_lock(false, true);
                 SECOND_EYE.store(true, Ordering::Release);
                 result = time(Part::Eye, || unsafe { real(this, arg) });
+                if log_shadows {
+                    tracing::info!("render: the mirror: {}", shadow_lights_state());
+                }
                 let colour = hooks::guard("capture mirror", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::MIRROR)).unwrap_or(false));
                 let depth = hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
                 mirror_done = (colour && depth).then_some((s.frustum[4], s.frustum[5]));
@@ -372,6 +395,9 @@ mod win {
             set_lock(eye == 0, eye + 1 == renders);
             SECOND_EYE.store(eye == 1, Ordering::Release);
             result = time(Part::Eye, || unsafe { real(this, arg) });
+            if log_shadows {
+                tracing::info!("render: eye {eye}: {}", shadow_lights_state());
+            }
             if log {
                 let sky = mem::at::<[f32; 3]>(mem::deref(SKY_NODE) + engine::av::WORLD_TRANSLATE).map(glam::Vec3::from);
                 tracing::info!(
@@ -405,7 +431,7 @@ mod win {
     }
 
     /// Testing, `RUSTVR_OBLIVION_EYE_PNG=<folder>`: both eyes' pictures (the world, before the HUD)
-    /// are saved there every 10 seconds from 15 seconds in, up to 30 pairs (`<n>-left.png`,
+    /// are saved there every 5 seconds from 5 seconds in, up to 60 pairs (`<n>-left.png`,
     /// `<n>-right.png`), to hold the eyes up to each other.
     fn eye_pictures(now: f64) {
         static DIR: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
@@ -414,12 +440,12 @@ mod win {
         let n = {
             let mut next = NEXT.lock().unwrap();
             if next.0 == 0.0 {
-                next.0 = now + 15.0;
+                next.0 = now + 5.0;
             }
-            if now < next.0 || next.1 >= 30 {
+            if now < next.0 || next.1 >= 60 {
                 return;
             }
-            next.0 = now + 10.0;
+            next.0 = now + 5.0;
             next.1 += 1;
             next.1
         };

@@ -10,9 +10,13 @@ same in the rain.
 Run them from Explorer (double-click). Each one closes a game another .bat left running, and
 closes the game and puts your settings back when you press a key.
 
-Each run saves both eyes' pictures (the world, without the HUD) every 10 seconds for its first five
+Each run saves both eyes' pictures (the world, without the HUD) every 5 seconds for its first five
 minutes, into `<builds>\visuals\playtest\<date-time>-<sky|rain|before>\eyes`, with the runtime's
-log beside them. Each picture costs a short hitch. They let me hold the two eyes up to each other.
+log beside them. Each picture costs a short hitch. They let me hold the two eyes up to each other. The game's log
+also says, for each eye, which actors' shadows it drew.
+
+For the shadows, stay at least half a minute in the market with people in view, and look at their
+feet.
 
 What was wrong, why, and the audit of the rest: `docs/research/visuals.md`.
 
