@@ -94,6 +94,16 @@ Only if a difference isn't clear: the sky on the game's camera, the people's bod
 drawn for the left eye, and no anisotropic filtering, as before this branch. (The runtime's change
 below is in both.)
 
+## Round 10: which kind of draw the streak is (`playtest-leaveout.bat`, one run)
+
+Neither shadow pass was it (round 8). So this run checks every kind at once. Every 5 seconds one
+frame leaves out one kind of the game's draws, in turn, and both eyes' pictures of that frame are
+saved, named after what it left out. The kinds: the far land, grass, leaves, tree branches, the
+distant trees, the ground that takes shadows, skinned bodies, everything else, and the few drawn
+without a shader. Go to where you see the streak and keep it in view for 2..3 minutes. The game
+hitches every 5 seconds (the pictures), and the left-out kind blinks out for one frame. The pictures
+with the streak gone say which kind it is.
+
 ## Round 8: which shadows draw the streak (two short runs)
 
 The streak is the ground drawn again with a shadow's texture laid on it. That's the game's shadow
