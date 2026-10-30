@@ -124,9 +124,12 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
             Err(_) => return,
         },
     };
-    // (Which of the floors are above the player's values, read before anything is set.)
+    // (Which of the floors are above the player's values, read before anything is set. Testing,
+    // `RUSTVR_OBLIVION_FLAT_INI=1`: none, the player's values as they are.)
+    let flat = std::env::var("RUSTVR_OBLIVION_FLAT_INI").is_ok_and(|v| v == "1");
     let floors: Vec<_> = VR_FLOORS
         .into_iter()
+        .filter(|_| !flat)
         .filter(|(s, k, v)| get_key(&text, s, k).and_then(|o| o.parse::<f64>().ok()).is_none_or(|o| o < v.parse::<f64>().unwrap_or(0.0)))
         .collect();
     let mut backup = String::new();
