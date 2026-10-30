@@ -301,7 +301,7 @@ mod game {
             hulls.push(h);
         }
         let descs: Vec<ObjectDesc> = bodies.iter().map(|b| b.desc).collect();
-        let ok = crate::link::with_adapter(|a| crate::objects::publish_hulls(crate::objects::Owner::Props, &hulls, a) && crate::objects::publish(crate::objects::Owner::Props, &descs, a)).unwrap_or(false);
+        let ok = crate::link::with_adapter(|a| crate::objects::publish_hulls(crate::objects::Owner::Props, &hulls, a) && crate::objects::publish(crate::objects::Owner::Props, &descs, &[], a)).unwrap_or(false);
         if ok {
             tracing::info!("props: {} loose bodies offered", descs.len());
         }

@@ -196,7 +196,7 @@ mod game {
                 crackle(true);
                 s.torch = Some(Held { form, node, light, desc, logged: None, next_crackle: 0.0 });
             }
-            crate::objects::publish(crate::objects::Owner::Torch, &descs, a);
+            crate::objects::publish(crate::objects::Owner::Torch, &descs, &[], a);
         });
     }
 
@@ -249,7 +249,7 @@ mod game {
                 t.desc.spawn_seq = s.seq;
                 let desc = t.desc;
                 tracing::info!("torch: left behind at {pos:.2?}: back at the hip");
-                crate::link::with_adapter(|a| crate::objects::publish(crate::objects::Owner::Torch, &[desc], a));
+                crate::link::with_adapter(|a| crate::objects::publish(crate::objects::Owner::Torch, &[desc], &[], a));
             }
         });
     }

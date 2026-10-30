@@ -1265,7 +1265,7 @@ mod game {
             }
             hulls.push(h);
         }
-        let ok = crate::link::with_adapter(|a| crate::objects::publish_hulls(crate::objects::Owner::World, &hulls, a) && crate::objects::publish(crate::objects::Owner::World, &descs, a)).unwrap_or(false);
+        let ok = crate::link::with_adapter(|a| crate::objects::publish_hulls(crate::objects::Owner::World, &hulls, a) && crate::objects::publish(crate::objects::Owner::World, &descs, &[], a)).unwrap_or(false);
         if ok {
             let me = mem::at::<[f32; 3]>(engine::player() + engine::refr::POS).map(|p| camera::basis().point_from_game(Vec3::from(p)));
             tracing::info!("world: {} part(s) of {} thing(s) offered (the player at {me:.2?})", descs.len(), things.len());

@@ -302,6 +302,15 @@ struct Registered {
 
 static REGISTERED: Mutex<Option<Registered>> = Mutex::new(None);
 static MISSING: Mutex<Option<String>> = Mutex::new(None);
+/// A weapon drawn from one of the body's slots and equipped by the game (`crate::inventory`): its
+/// form, and the runtime's copy of it in a hand, whose place it takes as it's registered.
+static REPLACING: Mutex<Option<(usize, u32)>> = Mutex::new(None);
+
+/// The weapon of `form`, equipped from the runtime's copy `copy` in a hand: it takes that copy's
+/// place in the hand when it's registered.
+pub fn replacing(form: usize, copy: u32) {
+    *REPLACING.lock().unwrap() = Some((form, copy));
+}
 
 /// Once a game frame (in the world): the equipped weapon registered with the runtime when it
 /// changes, or taken away when there's none.
@@ -329,6 +338,13 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
         // A bow and its arrows (crate::archery).
         let mut descs = Vec::new();
         crate::archery::register(e, seq, &mut descs, a);
+        // (A bow drawn from a slot takes its copy's place in the hand, as any weapon does.)
+        if let Some((_, copy)) = REPLACING.lock().unwrap().take_if(|(form, _)| *form == e.form)
+            && let Some(d) = descs.iter_mut().find(|d| d.id == WEAPON_ID)
+        {
+            d.replaces = copy;
+            tracing::info!("weapons: {} takes the place of its copy {copy:#x} in the hand", e.name);
+        }
         for d in descs {
             objects.descs[objects.count as usize] = d;
             objects.count += 1;
@@ -339,6 +355,10 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             Ok(model) => {
                 let mut d = object_desc(&model, e, &key, WEAPON_ID);
                 d.spawn_seq = seq;
+                if let Some((_, copy)) = REPLACING.lock().unwrap().take_if(|(form, _)| *form == e.form) {
+                    d.replaces = copy;
+                    tracing::info!("weapons: {} takes the place of its copy {copy:#x} in the hand", e.name);
+                }
                 objects.descs[0] = d;
                 objects.count = 1;
                 melee.weapons[0] = melee_from_model(&model, e.kind, WEAPON_ID, e.damage as f32);
@@ -385,8 +405,21 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
     // An enchanted weapon's shimmer: its enchantment's own effect shader.
     #[cfg(target_arch = "x86")]
     crate::magic::set_weapon_overlay(now.as_ref().filter(|e| e.enchantment != 0).and_then(|e| crate::magic::enchant_overlay(e.enchantment, WEAPON_ID)));
+    // What they sound like: the weapon its type's draw and sheathe, the shield and the arrows as the
+    // inventory sounds them.
+    let mut sounds = Vec::new();
+    if let Some(set) = now.as_ref().and_then(|e| crate::sounds::of_weapon(e.form, e.kind)) {
+        sounds.push((WEAPON_ID, set));
+    }
+    if let Some(set) = shield_now.as_ref().and_then(|(form, _)| crate::sounds::kind(*form)) {
+        sounds.push((SHIELD_ID, set));
+    }
+    #[cfg(all(windows, target_arch = "x86"))]
+    if let Some(set) = now.as_ref().filter(|e| e.kind == crate::archery::BOW).and_then(|_| crate::archery::equipped_arrows()).and_then(|ar| crate::sounds::kind(ar.form)) {
+        sounds.push((crate::archery::ARROWS_ID, set));
+    }
     // The melee table first: when the runtime sees the weapon, its damagers are there.
-    if a.write_melee(&melee) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
+    if a.write_melee(&melee) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], &sounds, a) {
         *reg = Some(Registered { forms, arrows, seq });
     }
 }

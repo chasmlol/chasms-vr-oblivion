@@ -370,6 +370,13 @@ mod win {
         (wrapper != 0).then(|| mem::at::<u32>(wrapper + WRAPPER_MATERIAL)).flatten().filter(|&m| m < 32).map(material)
     }
 
+    /// A body's Bethesda collision material (0..31, as the game's collision sounds take it): its
+    /// shape's own (its Bethesda wrapper's).
+    pub fn body_material(entity: usize) -> Option<u32> {
+        let wrapper = mem::deref(mem::deref(entity + ENTITY_SHAPE) + 8);
+        (wrapper != 0).then(|| mem::at::<u32>(wrapper + WRAPPER_MATERIAL)).flatten().filter(|&m| m < 32)
+    }
+
     /// A body's triangles in the game's world (game units): its own shape where Havok has it now
     /// (one of the things the hands take, [`crate::items`]).
     pub fn body_triangles(entity: usize) -> Vec<[Vec3; 3]> {

@@ -2,9 +2,10 @@
 //! ([`crate::weapons`]), their torch ([`crate::torch`]), their map ([`crate::map`]), the limbs cut off the game's creatures
 //! ([`crate::gore`]), the game's things lying about near the player ([`crate::items`]), the
 //! world's moving parts, its doors and levers ([`crate::world`]), and its loose Havok bodies, its
-//! hanging chains ([`crate::props`]), each owner's entries kept apart and written together. The
-//! same for the regions that go with the table: where the game has its own objects
-//! ([`GamePoses`]) and their convex collision ([`GameHulls`]).
+//! hanging chains ([`crate::props`]), each owner's entries kept apart and written together; with
+//! them, the sound set each sounds like (the game's sound pack, [`crate::sounds`]). The same for
+//! the regions that go with the table: where the game has its own objects ([`GamePoses`]) and their
+//! convex collision ([`GameHulls`]).
 
 use rustvr_protocol::*;
 
@@ -41,6 +42,8 @@ fn index(owner: Owner) -> usize {
 pub struct Parts {
     descs: [Vec<ObjectDesc>; OWNERS],
     seq: u32,
+    /// Each owner's objects' sound sets (object id, set).
+    sounds: [Vec<(u32, String)>; OWNERS],
 }
 
 impl Parts {
@@ -58,6 +61,17 @@ impl Parts {
         table.count = all.len() as u32;
         self.seq = self.seq.wrapping_add(1).max(1);
         table.seq = self.seq;
+    }
+
+    /// Replaces `owner`'s objects' sound sets.
+    pub fn set_sounds(&mut self, owner: Owner, sounds: &[(u32, String)]) {
+        let mine = &mut self.sounds[index(owner)];
+        mine.clear();
+        mine.extend(sounds.iter().cloned());
+    }
+
+    pub fn sounds(&self) -> impl Iterator<Item = &(u32, String)> {
+        self.sounds.iter().flatten()
     }
 }
 
@@ -102,11 +116,14 @@ fn with_table<R>(f: impl FnOnce(&mut Table) -> R) -> R {
     f(t.get_or_insert_with(|| Table { parts: Parts::default(), table: bytemuck::zeroed_box(), regions: Regions::default(), poses: bytemuck::zeroed_box(), hulls: bytemuck::zeroed_box() }))
 }
 
-/// Replaces `owner`'s objects and writes the whole table to the runtime.
-pub fn publish(owner: Owner, descs: &[ObjectDesc], adapter: &rustvr_adapter::Adapter) -> bool {
+/// Replaces `owner`'s objects (and the sound sets they sound like, `sounds`) and writes the whole
+/// table to the runtime, and the sound pack with every object's set.
+pub fn publish(owner: Owner, descs: &[ObjectDesc], sounds: &[(u32, String)], adapter: &rustvr_adapter::Adapter) -> bool {
     with_table(|t| {
         t.parts.set(owner, descs, &mut t.table);
-        adapter.write_objects(&t.table)
+        t.parts.set_sounds(owner, sounds);
+        // (The sounds first: when the runtime sees an object, its set is there.)
+        adapter.set_sound_pack(&crate::sounds::pack(t.parts.sounds())) && adapter.write_objects(&t.table)
     })
 }
 

@@ -1079,7 +1079,7 @@ mod game {
                     a.write_bloods(&t);
                 }
                 if objects {
-                    crate::objects::publish(crate::objects::Owner::Gore, &pieces, a);
+                    crate::objects::publish(crate::objects::Owner::Gore, &pieces, &[], a);
                 }
                 a.write_gore_bodies(&bodies);
                 for ev in &events {

@@ -19,15 +19,15 @@ pub struct Settings {
     /// the game makes them (1: solid, as the game draws them); under 1 the world shows through
     /// them, the text and icons on them staying as the game has them (`crate::hud`).
     pub menu_background: f32,
-    /// The body slot the map is kept in, drawn from by hand (`crate::map`): "hip_right" (the hip the
-    /// game's sword isn't on, [`crate::weapons`]), "hip_left", "belt" (the belt pouch on the weapon
-    /// hand's side), "chest_left" or "chest_right".
+    /// The body slot the map is kept in, drawn from by hand (`crate::map`): "hip_right", "hip_left",
+    /// "belt" (the belt pouch on the weapon hand's side), "chest_left" or "chest_right"; empty (the
+    /// default for now): it isn't on the body.
     pub map_slot: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { d3d9on12: true, background: false, eye_width: 0, eye_height: 0, menu_background: 1.0, map_slot: "hip_right".into() }
+        Settings { d3d9on12: true, background: false, eye_width: 0, eye_height: 0, menu_background: 1.0, map_slot: String::new() }
     }
 }
 

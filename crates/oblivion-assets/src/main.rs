@@ -2,6 +2,7 @@
 //!
 //!     oblivion-extract [--game <Oblivion folder>] check <prefix>...
 //!     oblivion-extract export [--out <folder>] <prefix>...
+//!     oblivion-extract sounds [--out <folder>]
 //!     oblivion-extract preview <model> <png>
 //!     oblivion-extract anims <prefix>...
 //!
@@ -9,8 +10,10 @@
 //! model reader against the real files). `export` writes every model under the prefixes, and the
 //! textures they use, into the runtime's cache (`local_assets/oblivion`, see
 //! `oblivion_assets::export`; a `textures/...` prefix brings every texture under it, e.g. the races'
-//! skins). `preview` draws one converted model from three sides. `anims` lists each model's animations
-//! and what each moves (a door's leaf turned about its hinge, a lever's handle, a gate slid up).
+//! skins). `sounds` writes the game's own sounds as the runtime's sound pack
+//! (`local_assets/oblivion/sounds`, see `oblivion_assets::sounds`). `preview` draws one converted
+//! model from three sides. `anims` lists each model's animations and what each moves (a door's leaf
+//! turned about its hinge, a lever's handle, a gate slid up).
 
 use anyhow::Result;
 use oblivion_assets::export::{self, Part};
@@ -99,6 +102,17 @@ fn main() -> Result<()> {
             }
         }
         Some("export") => export(&archives, &args[1..])?,
+        Some("sounds") => {
+            let out = match args.get(1).map(String::as_str) {
+                Some("--out") if args.len() > 2 => PathBuf::from(&args[2]),
+                _ => rustvr_asset::default_root().join("oblivion").join("sounds"),
+            };
+            let pack = oblivion_assets::sounds::write(&game, &archives, &out)?;
+            println!("{} files and sounds.toml -> {}", pack.files.len(), out.display());
+            for m in &pack.missing {
+                println!("  the game hasn't got {m}");
+            }
+        }
         Some("preview") if args.len() == 3 => {
             // (Several models joined by `+` are drawn together: a head with its eyes and hair.)
             let skeletons = Skeletons::load(&archives)?;
@@ -121,7 +135,7 @@ fn main() -> Result<()> {
             preview::save(&model, std::path::Path::new(&args[2]))?;
             println!("{}: {} meshes, {} bones -> {}", args[1], model.meshes.len(), model.bones.len(), args[2]);
         }
-        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>... | export [--out <folder>] <prefix>... | preview <model> <png>"),
+        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>... | export [--out <folder>] <prefix>... | sounds [--out <folder>] | preview <model> <png>"),
     }
     Ok(())
 }

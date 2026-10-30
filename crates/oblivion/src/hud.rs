@@ -292,6 +292,16 @@ mod win {
     /// How far an open book's two pages tip towards the eye about its spine (radians).
     const BOOK_FOLD: f32 = 0.12;
 
+    /// The holsters' editor (`crate::slot_menu`), in strips as a container's list is: the
+    /// categories of the slot picked in the middle, the slots on their left (with what each gives
+    /// now), the buttons on their right, and its title over them.
+    const HOLSTERS: &[Piece] = &[
+        Piece::of(&[From::Drawn("hol_categories")], true),
+        Piece::of(&[From::Drawn("hol_slots")], true),
+        Piece::of(&[From::Drawn("hol_buttons")], true),
+        Piece::of(&[From::Drawn("hol_title")], false),
+    ];
+
     /// The menus' trees, each read once a frame as it's needed.
     #[derive(Default)]
     struct Trees(HashMap<u32, tiles::Tree>);
@@ -647,6 +657,10 @@ mod win {
             // it there, the part of the picture it's in, and pieces of it here would float where
             // the mirror stands. What it asks over itself still floats, above.)
             0 | crate::menus::MENU_RACE_SEX => {}
+            // The holsters' editor ahead of the player, as their own menus are.
+            crate::slot_menu::MENU_HOLSTERS => {
+                add_group(&mut l, player(top), top, HOLSTERS, screen, &mut trees);
+            }
             kind => {
                 // (The runtime's own settings float beside the game's pause menu.)
                 if kind == MENU_PAUSE {

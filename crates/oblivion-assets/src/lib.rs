@@ -10,3 +10,4 @@ pub mod facegen;
 pub mod horse;
 pub mod nif;
 pub mod preview;
+pub mod sounds;

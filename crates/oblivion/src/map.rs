@@ -51,15 +51,15 @@ pub fn desc(slot: u32) -> ObjectDesc {
 }
 
 /// The body slot the map's kept in (`map_slot`: "belt", "hip_right", "hip_left", "chest_left",
-/// "chest_right").
-pub fn slot_named(name: &str) -> u32 {
+/// "chest_right"), or none: it isn't on the body.
+pub fn slot_named(name: &str) -> Option<u32> {
     match name {
-        "hip_right" => SLOT_HIP_RIGHT,
-        "hip_left" => SLOT_HIP_LEFT,
-        "chest_left" => SLOT_CHEST_LEFT,
-        "chest_right" => SLOT_CHEST_RIGHT,
-        "belt" => SLOT_BELT,
-        _ => SLOT_HIP_RIGHT,
+        "hip_right" => Some(SLOT_HIP_RIGHT),
+        "hip_left" => Some(SLOT_HIP_LEFT),
+        "chest_left" => Some(SLOT_CHEST_LEFT),
+        "chest_right" => Some(SLOT_CHEST_RIGHT),
+        "belt" => Some(SLOT_BELT),
+        _ => None,
     }
 }
 
@@ -139,14 +139,16 @@ mod game {
         with_state(|s| matches!(s.fold, Fold::Closing(_)))
     }
 
-    /// Once (in the world): the folded map to the runtime, in its slot.
+    /// Once (in the world): the folded map to the runtime, in its slot, when it has one.
     pub fn publish(a: &rustvr_adapter::Adapter) {
         with_state(|s| {
             if s.published {
                 return;
             }
-            let slot = slot_named(&crate::settings::get().map_slot);
-            if crate::objects::publish(crate::objects::Owner::Map, &[desc(slot)], a) {
+            // (None by default for now: the body's slots are the holsters' to hand things out
+            // from, and the map isn't one of the game's things.)
+            let Some(slot) = slot_named(&crate::settings::get().map_slot) else { return };
+            if crate::objects::publish(crate::objects::Owner::Map, &[desc(slot)], &[], a) {
                 s.published = true;
                 tracing::info!("map: kept in body slot {slot}");
             }

@@ -192,6 +192,8 @@ mod win {
             crate::props::frame(link::now());
             crate::riding::frame(link::now());
             crate::books::frame();
+            crate::inventory::frame(link::now());
+            crate::slot_menu::frame();
         });
         unsafe { real(this) }
     }
