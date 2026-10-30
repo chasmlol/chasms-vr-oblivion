@@ -64,6 +64,9 @@ pub const DETENT_FORCE: f32 = 25.0;
 /// How hard (newtons, at its end) a button or a switch stone that springs back pushes back pushed
 /// all the way in: a firm press, however heavy the stone.
 pub const PUSH: f32 = 60.0;
+/// What one hand lifts at a lid's edge (newtons): the rig's arm (180 N) at half its strength, so a
+/// lid comes up without a strain (the game gives none of them a mass).
+pub const LID_LIFT: f32 = 90.0;
 /// How much more than its own weight's turn a lid's stay holds at the end of its swing.
 pub const STAY: f32 = 1.3;
 /// How long (seconds) a door's swing takes to die away once let go (its damping's time).
@@ -893,18 +896,28 @@ mod game {
         let mut parts = Vec::new();
         let mut kind = if kind == DOOR { Kind::Door } else { Kind::Activator };
         let mut why = Vec::new();
+        // (A part the game only draws is worked by hand only where none of the thing's moving
+        // parts has a body: a display case's hinges and handles move with its lid.)
+        let bodies: Vec<Option<(usize, usize)>> = a
+            .joints
+            .iter()
+            .map(|j| {
+                let node = *live.get(&a.tracks[j.track].node)?;
+                body_under(node, &joint_nodes.iter().copied().filter(|&n| n != node).collect::<Vec<_>>())
+            })
+            .collect();
+        let drawn_only = bodies.iter().all(Option::is_none);
         for (k, j) in a.joints.iter().enumerate() {
             let tr = &a.tracks[j.track];
             let Some(&node) = live.get(&tr.node) else {
                 why.push(format!("no node '{}'", tr.node));
                 continue;
             };
-            let others: Vec<usize> = joint_nodes.iter().copied().filter(|&n| n != node).collect();
             // Its Havok body, or (a part the game only draws, which its Activate finds by the whole
             // thing's body) its drawn shape, of the material of the body it's on.
-            let body = body_under(node, &others);
-            if body.is_none() && j.points.len() < 4 {
-                why.push(format!("'{}' has no Havok body and nothing drawn", tr.node));
+            let body = bodies[k];
+            if body.is_none() && (!drawn_only || j.points.len() < 4) {
+                why.push(format!("'{}' has no Havok body{}", tr.node, if drawn_only { " and nothing drawn" } else { " (it moves with the others)" }));
                 continue;
             }
             let body_node = body.map_or(0, |b| b.0);
@@ -961,7 +974,13 @@ mod game {
                 continue;
             }
             let (_, half) = crate::items::bounds(&points).unwrap_or((Vec3::ZERO, Vec3::splat(0.05)));
-            let mass = if j.mass > 0.0 { j.mass } else { part_mass(half, j.drawn, material(on)) };
+            let mut mass = if j.mass > 0.0 { j.mass } else { part_mass(half, j.drawn, material(on)) };
+            // A lid (a door on a level hinge) is never heavier than one hand lifts by its edge.
+            if kind == Kind::Door && !slide && axis.y.abs() < std::f32::consts::FRAC_1_SQRT_2 {
+                let (c, _) = crate::items::bounds(&points).unwrap_or_default();
+                let edge = points.iter().map(|p| p.truncate().length()).fold(0.0, f32::max);
+                mass = mass.min(LID_LIFT * edge / (9.81 * c.truncate().length().max(0.05)));
+            }
             let far = j.far / units;
             let size = half.max_element() * 2.0;
             // A door that slides is too heavy for a hand (a ruin's stone, a portcullis); an
