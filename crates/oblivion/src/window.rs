@@ -98,6 +98,12 @@ mod win {
             crate::resolution::apply();
         }
         let background = ours && settings::get().background;
+        // The game makes its window where it was when the game last quit (`Oblivion.ini`
+        // `iLocation X`/`Y`): quit while minimised, that's -32000, off every monitor, where Windows
+        // never makes it the active window, and the game reads no input while it isn't (the player
+        // stood still in the headset, the window out of reach on the desktop). It goes to the
+        // screen's corner instead.
+        let (x, y) = if ours && !background && off_screen(x, y) { (0, 0) } else { (x, y) };
         let (ex, x, y) = if background { (ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW, OFF, OFF) } else { (ex, x, y) };
         let hwnd = unsafe { real(ex, cls, name, style, x, y, w, h, parent, menu, inst, param) };
         if background {
@@ -105,6 +111,15 @@ mod win {
             tracing::info!("window: the game's window made off-screen, never activated (background)");
         }
         hwnd
+    }
+
+    /// A window's corner at (x, y) is on no monitor (Windows' own default place, `CW_USEDEFAULT`,
+    /// isn't a place).
+    fn off_screen(x: i32, y: i32) -> bool {
+        use windows::Win32::Foundation::POINT;
+        use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONULL, MonitorFromPoint};
+        const CW_USEDEFAULT: i32 = i32::MIN;
+        x != CW_USEDEFAULT && y != CW_USEDEFAULT && unsafe { MonitorFromPoint(POINT { x, y }, MONITOR_DEFAULTTONULL) }.is_invalid()
     }
 
     unsafe extern "system" fn show_window(h: HWND, cmd: i32) -> i32 {
