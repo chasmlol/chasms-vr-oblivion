@@ -43,6 +43,8 @@ powershell -File tools\play.ps1 armour -Give "000229A2 1,0001C6D8 1,000229A3 1,0
   hard parts move as one piece each, riding the bones they belong to.
   * Gauntlets: the vambrace (the cuff over the forearm) stays straight on the forearm and rolls
     with it; the plate over the back of the hand moves with the hand; the wrist bends between them.
+    The iron cuff, flare and all, is one rigid piece, and its hand plate slides under the cuff's
+    rim as the wrist bends in and over it as the wrist bends back (playtest 1).
   * Elbows: the couter (the elbow cop) is a rigid cap turning half the elbow's bend about it.
   * Shoulders: pauldrons hang as the game drapes them over the shoulder and lift part of the way
     with the arm, rigid. (Each plate keeps the shape the game gives it standing with the arms at
@@ -137,6 +139,20 @@ otherwise).
   run time; `RUSTVR_ARMOUR=<file>` reads another file, and `local_assets/oblivion/armour/*.toml`
   adds a modder's own.
 * The arm IK is untouched.
+
+## Playtests
+
+1. **The iron cuffs bent like cloth at the wrists** (the headset, `rustvr-base`). The marks loaded
+   and made their plates; the fault was in them. The iron cuff and the plate over the back of the
+   hand are one island, the hand plate a strip of long triangles from the cuff's rim to the
+   knuckles, and the game blends the cuff's whole flare (the last 5 cm, past the wrist) between the
+   forearm and the hand: the right cuff's mostly on the forearm, the left's mostly on the hand.
+   Split by weight (`firm = 0.7`), the flare stayed soft and folded with the hand. Fixed: the
+   framework's marks choose corners by place (`corners_within`) and let a plate come apart at its
+   `seam` (its own copy of the corners it shares); the iron cuff is split at the end of its flare,
+   the cuff rigid on the forearm and the hand plate on the hand, sliding past the cuff's rim. In
+   the preview the steel cuffs fold the same way (and likely the other plated gauntlets: glass,
+   ebony, daedric, dwarven, orcish, mithril, elven); not changed yet.
 
 ## Not done
 

@@ -207,21 +207,25 @@ name = "Iron gauntlets"
 models = ['armor\iron\m\gauntlets.nif']
 covers = "hands"
 
-# The cuff over the forearm and the back of the hand is one island, bent at the wrist by its
-# weights: its forearm part rigid on the forearm (rolling with its twist), its hand part on the hand.
+# The cuff over the forearm, flaring over the wrist, and the plate over the back of the hand are
+# one island: the hand plate is a strip from the cuff's rim (x 0.69-0.72) to the knuckles (x 0.73
+# and on). The game blends the whole flare between the forearm and the hand (the right cuff's
+# mostly on the forearm, the left's mostly on the hand), so its weights don't say where the cuff
+# ends: they're split by place. The cuff is rigid on the forearm (rolling with its twist), the
+# hand plate on the hand, coming apart at the rim so it slides under the cuff as the wrist bends in
+# and over it as the wrist bends back.
 [[piece.plate]]
 name = "vambrace"
 mesh = 0
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+corners_within = { min = [0.5, 1.3, -0.15], max = [0.725, 1.6, 0.15] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
 [[piece.plate]]
 name = "hand plate"
 mesh = 0
-vertices = "Bip01 * Hand"
-firm = 0.7
+corners_within = { min = [0.725, 1.3, -0.15], max = [0.9, 1.6, 0.15] }
+seam = true
 ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
