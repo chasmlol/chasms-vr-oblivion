@@ -12,6 +12,55 @@ why it works the way it does: `docs/research/riding.md`.
 Run `playtest.bat` in this worktree (`<worktrees>\riding`): it installs this build and boots the save; press
 a key in its window when you're done and it closes the game and puts your settings back.
 
+## Round 3: from your second ride
+
+Built and unit-tested; not in the game yet. Your second ride's logs are in
+`<builds>\riding\playtest-2`.
+
+1. **"The second time I tried to get back on... I was offset from the horse loads, floating in the
+   sky to the side above it."** The view was anchored on the game's own camera. On the first mount
+   of a session the game puts it at a seated rider's eye (0.85 m over the saddle), but after getting
+   off and on again it stays at a standing player's eye on the horse's back (1.9 m over the saddle)
+   and doesn't keep up with the horse as it moves: that's the floating, and the drifting to the
+   side. Seated, the view is now anchored on the saddle itself: your eye 0.85 m over its seat (where
+   the game's camera puts it when it gets it right), on the horse's spine as it moves. The game's
+   log says each time how far the game's camera was off it.
+2. **"The horse tended to stop whilst trying to turn while moving... turns like a tank."** That's
+   Oblivion: it reads a rider's stick as a direction, and as soon as the turn is stronger than the
+   forward push it stops treating it as forward at all, and the horse halts and turns on the spot.
+   Every hard turn did it (your log: a gallop at 8.7 m/s down to 0.9 m/s each time the reins turned
+   it past about two thirds). Now, while the horse is going, the forward push is always kept at
+   least as strong as the turn (the game caps the speed, so it doesn't speed up): **it turns as
+   hard as the game turns a horse (67.5° a second) and keeps its gait**. With the stick, pushing it
+   to a side now keeps going too (it goes at how far you push it, in any direction but back); only
+   pulling it back backs up. The right stick still turns on the spot at a stand.
+3. **"The reins... can sometimes bug out slightly on the horse and glitch inside it."** Two causes:
+   - the neck the reins lie on was fitted to the horse's model *through* its surface (about half of
+     the model was outside it, by up to 4 cm). It's now fitted from outside, with the manes: every
+     cross-section holds the model within 7 mm, and the reins keep 1 cm off it;
+   - about a third of the game's pictures are moved on to where your head is by the time they're
+     shown, and the horse moves with them, but the reins stayed where the game had last put the
+     horse (13 cm off at a gallop). Their horse end now goes with the picture of the horse, and
+     they stretch to reach your hands (as you said, a little stretch is fine).
+4. Also from your log: taking the reins at the neck and drawing them in to your lap read as a 30 cm
+   pull and stopped the horse straight away. **Taking up the reins** now: a rein follows your hand
+   (and does nothing) until your hand comes to rest, up to 2.5 s; where it stops is where the rein
+   is held from then on, and a soft tick says so. A trigger squeezed with the grip as you take a
+   rein isn't a spur any more.
+
+### Try this round
+
+- Get on, ride, **get off and back on**, two or three times: the view should sit in the saddle each
+  time, never above or beside the horse.
+- **Turn hard at a gallop** with the reins (one rein right back, or both hands well to a side): it
+  should keep galloping round the turn. Same with the stick pushed fully to a side.
+- **Watch the reins** while riding, turning and galloping: they shouldn't go into the neck or head,
+  or flicker into them.
+- **Take the reins** at the neck and draw your hands in to where they're comfortable: nothing
+  should happen until a soft tick, then the reins are live from there.
+- If the turns still aren't sharp enough: 67.5°/s is the game's own horse (`iHorseTurnDegreesPerSecond`
+  45, times the game's 1.5 for a full turn); say so and I'll look at raising it the game's way.
+
 ## Round 2: from your first ride on the headset
 
 What you said, what was wrong, and what changed. None of this has been in the game yet: it's
@@ -101,8 +150,9 @@ built, and its unit tests pass.
    1.2 s. Let the pull go and it stands.
 7. **Let go of the reins** at a gallop: it keeps going about 2.5 s, then slows a gait every 1.5 s to
    a stand.
-8. **The sticks ride too.** Left stick forward walks at its push (click it: gallop), back backs up,
-   sideways steers; let go and it stops. The right stick steers alone (without stopping it).
+8. **The sticks ride too.** Left stick ahead or to a side goes at its push and steers (click it:
+   gallop), pulled back it backs up; let go and it stops. The right stick steers alone (without
+   stopping it; at a stand, it turns on the spot).
 9. **A** jumps (galloping: the game's horse jump).
 10. **Get off.** Hold the trigger of a hand that isn't on a rein (0.6 s), or hold the saddle horn
     and lean well out over one side (35 cm). The view fades; the game's dismount.
@@ -175,6 +225,19 @@ built, and its unit tests pass.
 - **Gaits are the game's**: walk and gallop (Oblivion has no trot). A spur steps up one, a pull
   steps down; the speeds and the turn rate are the game's own (`iHorseTurnDegreesPerSecond` 45,
   ramping at 80 per second, times 1.5 at full rein like the turn keys).
+- **Turning never stops the horse** (round 3): the game takes a stick that points more to the side
+  than ahead as a slide, which on a horse halts it and turns it on the spot (the player's update,
+  the game's). While the horse goes, the forward axis given to the game is kept at least the turn
+  axis; the game caps the pace at 1, so a full pace is unchanged (a slow stick pace turning hard
+  goes a little faster).
+- **The view sits on the saddle** (round 3): seated, its anchor is the rider's eye 0.85 m over the
+  saddle's seat (on the horse's live spine), not the game's camera, which after a re-mount stays at
+  a standing player's height on the horse's back. 0.85 m is where the game's camera was on every
+  first mount of both rides; it's the one riding value read off the game in play rather than its
+  data (nothing in its files says where a first-person rider's eye is).
+- **Taking up the reins** (round 3): a rein follows its hand until the hand is still (under
+  0.15 m/s for 0.25 s, at least 0.3 s after taking it; 2.5 s at most), so drawing the reins in from
+  the neck doesn't pull them.
 - **The head never steers.** The view's yaw follows the horse (smoothly by default, steps of 30° as
   an option); its pitch and roll never do.
 - **No bob by default**: the view is anchored on the rider's eye held steady on the horse (eased
@@ -197,12 +260,15 @@ built, and its unit tests pass.
   stretch of strap in it), mirrored along the rein so it has no seams. Rope (the game has
   `clutter\rope.dds`) was the other choice; the bridle's own leather matches what the reins hang
   from.
-- **The reins lie on the neck**: the exporter measures the horse's neck (its five neck bones) and
-  head (four places along it) as cross-sections, an ellipse fitted to the top of each from the
-  game's own models; the adapter sends them on the live bones; a rein that would pass through is
-  put on the surface (below an ellipse's middle the neck is taken to go straight down: the throat
-  and chest are wider than the ellipse). Each rein's length is its way from the bit along the neck
-  to where it's held, plus 12% slack.
+- **The reins lie on the neck**: the exporter measures the horse's neck (its five neck bones, with
+  the three manes) and head (four places along it) as cross-sections, an ellipse fitted to the top
+  of each from outside the game's own models (round 3: a point left outside costs 200 times one
+  inside, and the top may sit up to 4 units over a flat crest; every section holds the model to
+  within 7 mm); the adapter sends them on the live bones; a rein that would pass through is put on
+  the surface, 1 cm off it (below an ellipse's middle the neck is taken to go straight down). Each
+  rein's length is its way from the bit along the neck to where it's held, plus 12% slack; one
+  with further to go stretches. Their horse end is where each eye's picture shows the horse (a
+  picture moved to the head's newer place moves the horse in it).
 - **No fighting from the saddle**: the game's rule. The hands still swing, nothing lands; casting
   is off too.
 - **The ridden horse isn't one of the hands' creatures**, so the hands don't push against it.
@@ -211,6 +277,9 @@ built, and its unit tests pass.
 
 ## Not done
 
+- Round 3 isn't checked in the game yet (built and unit-tested only).
+- The body's legs and seat are still where the game last put the horse, not where a moved picture
+  shows it (as the reins were); at a gallop they can sit a few centimetres off the picture's horse.
 - Round 2 isn't checked in the game yet (built and unit-tested only): the reins' look, the
   crosshair, and how the controls feel.
 - The reins don't swing or bounce on their own: their shape follows the bit and the hands each
