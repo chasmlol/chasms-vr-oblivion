@@ -74,9 +74,12 @@ Set up in the game's folder at your request, for the stutter and the distance:
 12. **The far hills.** From the shore at Weye, look out over the hills past the lake: their shape
     should hold further out. Tell me if you see a seam, a step or a crack in the far land, and roughly
     where (towards which town).
-13. **The streaks in the trees.** If you see them, note where and roughly when: the game's log now has
-    what the leaves were given every 10 seconds, and any leaf corner that wasn't a number is
-    collapsed instead of streaking.
+13. **The streaks in the trees.** If you see them, note where and roughly when: the game's log has
+    what the leaves were given and which draws were widened, every 10 seconds.
+14. **Pop-in.** Things should appear much further out: trees, rocks, people, grass. It costs frames:
+    if the game judders (frames repeating, smooth motion going uneven), try the headset at 90 Hz in
+    Virtual Desktop. At 120 Hz the game has 8 ms a frame, and your last run made 110..135 frames a
+    second, so it missed some.
 
 ## `playtest-rain.bat`
 
@@ -93,6 +96,19 @@ below is in both.)
 
 ## What changed
 
+- **Round 7, pop-in.** Your `Oblivion.ini` now loads a 7x7 grid of cells around you, not 5x5
+  (`uGridsToLoad=7`, its cell buffer 64; your old file is `Oblivion.ini.rustvr-before-grids`). That
+  one stays when you play flat too: a save made at 7 can crash the game if it's loaded at 5. While in
+  VR, things fade in much further out: objects, items and people at the sliders' most (15), trees
+  at the game's limit, grass out to 86 m (was 43), and the far buildings and tree cards half as far
+  again.
+- **Round 7, stutter.** Stutter Remover's log showed the 240 ms hitch: up to a dozen threads queued
+  on the renderer's texture lock, the one lock I had kept. It's off now, as Stutter Remover's own
+  default.
+- **Round 7, the streaks.** The leaves' constants were all sound in your run, so it isn't them. The
+  next suspect: vertex buffers in system memory, which D3D9On12 copies only as far as each draw's
+  hints say, where Direct3D 9 read them whole. Those draws are now widened to the whole buffer, and
+  the log counts them.
 - **Round 6, stutter.** The eye pictures every 10 seconds were the 140 ms hitches: they're off.
   xOBSE, and with it Stutter Remover, now loads when the playtest starts the game, as it does when
   Steam starts it.
