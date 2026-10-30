@@ -347,6 +347,13 @@ pub fn face() -> Option<FaceDesc> {
             *t = if v.is_finite() { v } else { 0.0 };
         }
     }
+    // The eyes: the race's (they turn to look).
+    for (side, i) in [LEFT_EYE, RIGHT_EYE].into_iter().enumerate() {
+        let model = read_str(mem::deref(race + RACE_FACE_MODELS + i * MODEL_SIZE + 4));
+        if !model.is_empty() {
+            set_name(&mut f.eyes[side], &format!("oblivion/{}", model_key(&model)));
+        }
+    }
     let rgb = mem::at::<[u8; 3]>(base + NPC_HAIR_COLOR).unwrap_or([128; 3]);
     f.hair_color = [rgb[0] as f32 / 255.0, rgb[1] as f32 / 255.0, rgb[2] as f32 / 255.0, 1.0];
     // The age map: FaceGen's age (truncated, as the game's ftol does), the head's texture with M or F
