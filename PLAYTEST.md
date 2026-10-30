@@ -9,6 +9,76 @@ about two metres behind you, a little to the left. The two horses in the paddock
 What it's built from (players' likes and hates, how other VR games ride, Oblivion's engine facts) and
 why it works the way it does: `docs/research/riding.md`.
 
+Run `playtest.bat` in this worktree (`<worktrees>\riding`): it installs this build and boots the save; press
+a key in its window when you're done and it closes the game and puts your settings back.
+
+## Round 2: from your first ride on the headset
+
+What you said, what was wrong, and what changed. None of this has been in the game yet: it's
+built, and its unit tests pass.
+
+1. **"The flatscreen crosshair is still visible."** Gone, everywhere (not just on the horse). It's
+   the dot in the middle of Oblivion's own reticle; the reticle's other image, the icon of what you
+   can activate (a hand, a door; red when taking it is stealing), still shows when you look at
+   something, since it's the game's only warning of a theft. The game's own Crosshair option isn't
+   used: it hides that icon too.
+2. **"The controls feel a bit off when holding the reins... I kinda just walk backwards and start
+   moving sideways."** Your ride's log showed three causes:
+   - pulling the reins while the horse stood **backed it up at once** (a bug: the time it stopped
+     was never set, so "held a second at a stand" was always true). Taking the left rein, your hand
+     only had to move 7 cm back and it backed;
+   - the dead zone was **2.5 cm**: an ordinary drift of a resting hand turned the horse, and moving
+     both hands sideways together (a neck rein) turned it too;
+   - **flicks did nothing while the reins counted as pulled** (four of your flicks in a row), so the
+     horse kept backing.
+
+   Now:
+   - **hands resting on the reins do nothing**: a 5 cm dead zone, and while a hand stays inside it
+     its rest quietly follows it (over 1.5 s), so drift never adds up to a turn or a pull;
+   - **turning** starts past the dead zone, gently, and is full at 17 cm;
+   - **slowing** takes a deliberate pull of both reins, 10 cm back; held, it slows a gait at a time
+     to a stand **and stays standing**;
+   - **backing up is its own request**: at a stand, ease the reins forward, pull them back again
+     and hold for 1.2 s. Ease off and it stands;
+   - **a spur is always heard** (a flick, or the trigger of a rein hand), even with the reins held
+     back: they're given (where your hands are becomes their rest).
+   - The menu's Comfort tab, Riding: a new "Reins do nothing until moved" (the dead zone), with the
+     full turn and the pull to slow.
+   - **The log** now says, twice a second while a rein is held, how far each hand is from its rest
+     (across and back), the pull, and the gait, pace and steering sent; when the reins start, change
+     or stop turning the horse; pulls, eases and spurs; and in the game's log the axes and Run the
+     horse itself was given.
+3. **"The reins visual is also bad. I can see it through the horse... I want it to be a real
+   Oblivion texture."** The reins are now **leather straps cut from the horse's own tack texture**
+   (`creatures\horse\tack.dds`: the bridle's plain black cheek strap, with its normal map and the
+   saddle's material), 16 mm wide and 4 mm thick, **drawn with your body** as anything you hold is:
+   the game's depth hides them behind the horse, and the game's sun, ambient and lamps light them as
+   they light your arms. They **lie on the neck** instead of passing through it: the horse's neck
+   and head are measured from its own model as cross-sections, and a rein that would go through
+   them goes round. Let go, each hangs along its side of the neck back to the withers; held, it
+   rises along the neck to your fist; with both hands, the bight hangs between them; with one hand,
+   both reins come up their own side of the neck to the withers and then to that hand.
+
+### Try this round
+
+- Get on, take both reins and **just sit**: hands still and relaxed for a while. Nothing should
+  happen. Then drift your hands about a little: still nothing.
+- **Steer**: pull one rein back slowly; the turn should come in gently and grow. Then try moving
+  both hands to one side.
+- **Spur on** with a flick, ride, then **slow** with a firm pull of both reins: down a gait; hold:
+  it stops and stays stopped.
+- **Back up** on purpose: at a stand, ease forward, pull back again and hold a second. Then try to
+  back it up by accident: it shouldn't.
+- With the reins held back after stopping, **flick**: it should walk on.
+- **Look at the reins**: from the bit, along the neck, into your fists. Lean over to see the far
+  side: the far rein should be hidden by the neck where the neck is in front of it. Ride past a
+  lamp or a fire at night, or into shade: they should darken and light like your gloves. The
+  leather should be the bridle's black.
+- **Look at the middle of your view** on foot and on the horse: no crosshair dot. Look at a door or
+  an item: its icon shows (red on someone else's things).
+- Tell me how the dead zone, the turn and the pull feel: they're in the menu if you want to try
+  other values, and the log will show what your hands did.
+
 ## Try it, in this order
 
 1. **Get on by the saddle.** Turn round, walk up to your horse's left side and close a hand on the
@@ -18,16 +88,17 @@ why it works the way it does: `docs/research/riding.md`.
    Activate).
 2. **Look down and round.** Your body sits in the saddle, legs astride, round the horse's barrel.
    Look about freely: your head never steers it. The horse's head and neck stay in front of you.
-3. **Take the reins.** They lie on the neck from the bit up behind the ears and back to its base,
-   just in front of the saddle horn, either side of the mane: close a hand there (either hand, or
-   both). A tick in the hand says you have one; the rein runs from the bit to your fist.
+3. **Take the reins.** They lie along the neck from the bit back to its base, just in front of the
+   saddle horn, either side of the mane: close a hand there (either hand, or both). A tick in the
+   hand says you have one; the rein runs from the bit along the neck to your fist.
 4. **Spur on.** A flick of the reins (snap a rein hand down a few centimetres, quickly, and stop) or
    the trigger of a hand on a rein: walk. Again: gallop. A pulse in the rein hands each time.
 5. **Steer.** Pull one rein back towards you (left rein: left), or move both hands to one side (a
-   neck rein), or open one rein out to its side. Full turn at 12 cm. The view turns with the horse,
-   smoothly; a vignette closes in while it turns hard or gallops.
-6. **Slow and stop.** Pull both reins back (7 cm): down a gait. Keep holding: it walks, stands, and
-   after a second backs up. Let the pull go and it stands.
+   neck rein), or open one rein out to its side. Nothing within 5 cm; full turn at 17 cm. The view
+   turns with the horse, smoothly; a vignette closes in while it turns hard or gallops.
+6. **Slow and stop.** Pull both reins back (10 cm): down a gait. Keep holding: it walks, then
+   stands, and stays standing. To back up: at a stand, ease the reins, pull them back again and hold
+   1.2 s. Let the pull go and it stands.
 7. **Let go of the reins** at a gallop: it keeps going about 2.5 s, then slows a gait every 1.5 s to
    a stand.
 8. **The sticks ride too.** Left stick forward walks at its push (click it: gallop), back backs up,
@@ -39,7 +110,8 @@ why it works the way it does: `docs/research/riding.md`.
     crime (a watching guard arrests you).
 12. **Comfort settings**: the runtime's menu (menu button), Comfort tab, "Riding": the view turns
     with the horse smoothly or in steps (and the step), the riding vignette's strength, the fade
-    while getting on and off, how far the reins move for a full turn and for slowing, the flick,
+    while getting on and off, how far the reins move before they do anything, for a full turn and
+    for slowing, the flick,
     how long it keeps its pace with the reins let go, the stride in the hands. The Comfort tab's
     "Camera bob / shake" brings the gait's bob back on horseback too.
 
@@ -94,6 +166,12 @@ why it works the way it does: `docs/research/riding.md`.
   pull back one, or move both sideways (a neck rein) or open one out; both are what riders do, and
   an equestrian's opening rein not working was a complaint about another game. One hand alone holds
   both reins (western style).
+- **Hands at rest do nothing** (round 2): a 5 cm dead zone, inside which a hand's rest follows it
+  over 1.5 s (drift is taken up, a deliberate move of a few tenths of a second isn't); the turn
+  comes in as half the share past the dead zone plus half its square, so small moves turn gently.
+  A held pull slows only to a stand; backing is asked for on its own (a pull begun at a stand, held
+  1.2 s), so it can't follow from slowing down. A spur always counts, and gives reins held back.
+  The values are guesses for the headset (5, 17 and 10 cm): the menu has them all.
 - **Gaits are the game's**: walk and gallop (Oblivion has no trot). A spur steps up one, a pull
   steps down; the speeds and the turn rate are the game's own (`iHorseTurnDegreesPerSecond` 45,
   ramping at 80 per second, times 1.5 at full rein like the turn keys).
@@ -109,11 +187,22 @@ why it works the way it does: `docs/research/riding.md`.
   barrel at a rider's proportions (knee 0.43 m below the seat, ankle 0.89 m).
 - **The reins are where a rider holds them**: half way from the saddle horn to the base of the neck,
   9 cm either side of the mane. Oblivion's horses have a bridle and bit but **no reins** (its bridle
-  is the size of the head), so the runtime draws them: leather straps from the bit's rings (measured
-  at the corners of the horse's mouth on its own head model), over the neck behind the ears, to the
-  hands, in the colour of the game's own tack texture, lit by the game's sun and ambient. They're
-  flat ribbons turned to the eye, unlit by the game's lamps and not hidden behind the world: a
-  stand-in for straps drawn with the body, lit and hidden as it is.
+  is the size of the head), so the runtime draws them (round 2): straps from the bit's rings
+  (measured at the corners of the horse's mouth on its own head model) to the hands, **drawn with
+  the body** as held things are (the avatar's held models, a "bent" one: each cross-section of the
+  strap its own bone), so they're in the game's depth and lit by its lights. **Their leather is the
+  tack's**: the saddle's material (`Tack.dds` and its normal map, its shine; the bridle wears the
+  same texture, but its model is an older NIF the extractor can't read) and the bridle's plain
+  cheek strap in that texture (texels 79-103 by 236-466: chosen by eye, the one plain straight
+  stretch of strap in it), mirrored along the rein so it has no seams. Rope (the game has
+  `clutter\rope.dds`) was the other choice; the bridle's own leather matches what the reins hang
+  from.
+- **The reins lie on the neck**: the exporter measures the horse's neck (its five neck bones) and
+  head (four places along it) as cross-sections, an ellipse fitted to the top of each from the
+  game's own models; the adapter sends them on the live bones; a rein that would pass through is
+  put on the surface (below an ellipse's middle the neck is taken to go straight down: the throat
+  and chest are wider than the ellipse). Each rein's length is its way from the bit along the neck
+  to where it's held, plus 12% slack.
 - **No fighting from the saddle**: the game's rule. The hands still swing, nothing lands; casting
   is off too.
 - **The ridden horse isn't one of the hands' creatures**, so the hands don't push against it.
@@ -122,8 +211,15 @@ why it works the way it does: `docs/research/riding.md`.
 
 ## Not done
 
-- The reins as real straps drawn with the body (lit by the game's lamps, hidden behind the world,
-  textured): they're flat ribbons for now.
+- Round 2 isn't checked in the game yet (built and unit-tested only): the reins' look, the
+  crosshair, and how the controls feel.
+- The reins don't swing or bounce on their own: their shape follows the bit and the hands each
+  frame (no rope physics), and they don't touch your body or the saddle, only the horse's neck and
+  head.
+- Shadowmere's tack (`tack_db.dds`) isn't used for its reins: every horse's reins are the ordinary
+  tack's leather.
+- The HUD is still this branch's (the reticle's piece at gaze); the menus branch reworks it, and the
+  crosshair is hidden in the game itself, so its reticle piece will show only the activate icon too.
 - The game's own riding pose for the body (the game doesn't animate it in first person); the legs
   don't swing with the gait (the seat does, with the horse's spine).
 - Mounted combat (the game's rule kept).
