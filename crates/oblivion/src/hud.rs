@@ -37,7 +37,7 @@
 //! | the health, magicka and fatigue bars, the weapon and the spell | `hud_main_menu.xml` | the back of the off-hand wrist (Alyx's glove) |
 //! | the spells and potions working on the player | `hud_main_menu.xml` | up the forearm from the bars |
 //! | the compass | `hud_main_menu.xml` | low in front of the body |
-//! | the crosshair, what it can activate, the sneak eye | `hud_reticle.xml` | where the head looks |
+//! | what the reticle can activate (its crosshair is hidden, [`crate::reticle`]), the sneak eye | `hud_reticle.xml` | where the head looks |
 //! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that; over the thing while a hand has one |
 //! | a foe's health | `hud_reticle.xml` | over the foe |
 //! | spoken lines | `hud_subtitle_menu.xml` | the caption strip |
@@ -573,8 +573,8 @@ mod win {
         piece(l, trees, HUD_SUBTITLES, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_text")]);
         piece(l, trees, HUD_HINTS, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_icon"), From::Drawn("hudsubtitle_notice")]);
         piece(l, trees, HUD_HINTS, MENU_HUD, &[From::Drawn("hudmain_region")]);
-        // At gaze: the reticle where it is from the screen's middle (the crosshair on the point
-        // looked at), and the card of what it's on under it.
+        // At gaze: the reticle where it is from the screen's middle (its activate icon on the point
+        // looked at; its crosshair is hidden, as the hands aim), and the card of what it's on under it.
         let (w, h) = screen;
         let offset = |b: [f32; 4]| [((b[0] + b[2]) * 0.5 - w * 0.5) / h, -((b[1] + b[3]) * 0.5 - h * 0.5) / h, 0.0];
         let reticle = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_reticle"), From::Drawn("hudreticle_sneak")], false));
