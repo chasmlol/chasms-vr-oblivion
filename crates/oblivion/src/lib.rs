@@ -55,6 +55,7 @@ pub mod player;
 pub mod proxy;
 pub mod render;
 pub mod resolution;
+pub mod reticle;
 #[cfg(target_arch = "x86")]
 pub mod scene;
 pub mod settings;
