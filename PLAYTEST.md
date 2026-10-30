@@ -116,6 +116,28 @@ with the unit tests of every crate touched passing. Look out for:
   of ingredient that's under a second. If you hear menu sounds repeating while it does, or the game
   stutters, say so.
 
+## Up against the tables (and anything else)
+
+The game's body is wider than yours: 30 cm round you, where you're about 12 cm from your eyes to
+your front. It used to stop your view 35 cm from a table's edge, with your hands and IK body short
+of touching it. Now, pushing on against what stopped it, your view carries on inside the game's
+body until your front is at its edge: up against the table.
+
+- **With the stick:** walk into a table and keep pushing. The body stops as before, then the view
+  goes on about 17 cm more, at walking pace, and stops. Let go and walk away as usual.
+- **On your feet:** step up to a table. The game's body follows you and stops at it; the last 17 cm
+  of your step are taken off how far your head is from that body. That means you can also lean
+  17 cm further over the table before the view is held back.
+- **Walls too:** walk into a wall with the stick. You stop with your eyes about 12 cm from it, and
+  the view shouldn't fade (it fades when your head goes into a wall).
+- **Look out for:** the view jumping as you push into something or walk away from it, the view
+  creeping on while you walk slowly in the open (it shouldn't), and anything you can now see into
+  or through.
+
+Nothing of this was checked in the game: built, with the adapter's and the Oblivion adapter's unit
+tests passing. It changes the framework's tracking mapping, so it's in every game the framework
+runs, but only for a game whose adapter gives the body's size (only Oblivion does).
+
 ## What was checked of the row of tables
 
 Nothing in the game, emulated or real: it was set out after the second playtest and only compiled,
@@ -255,6 +277,17 @@ Each of these was checked with scripted hands, in captures and logs:
     character's skill knows. Every form and potion is the game's.
   - The pack's food was taken out so each note lists its own table's potions. The character's own
     ingredients stay, so "from your pack" can still be seen (Damage Health).
+- **Up against things, without changing the game's body.** The game's body is a round shape
+  (made from the skeleton's `BBX` box, half 23.1 by 17.6 units across): 20.4 units
+  times the actor's scale, plus Havok's 0.7 units round that, so at least 0.30 m. Making the
+  player's shape thinner would let the game's body itself get close, but its bottom is a cone sized
+  to that radius that lets it climb steps, so thinning it would change how stairs are climbed, which
+  I couldn't check without the game. So the game's body stays as it is. The view may lead it by up
+  to 0.29 - 0.12 = 0.17 m, inside it, towards a push it was held up on: moving slower than 10 cm/s
+  along a push of at least a fifth of the stick. It goes on at 1 m/s for a full push. When the body
+  is walked after your head, the view stays where your head is and the lead comes off how far your
+  head is from the body. A jump of the body (more than 25 cm in a frame: a load, a door) or a
+  recentre puts the view back on the body.
 - **Set out at every boot, not saved.** I can't run the game to make a new save, so the set-out is
   console lines run as the save loads (`tools/alchemy-row.txt`). Two console test commands are new
   for it:
@@ -287,3 +320,8 @@ Each of these was checked with scripted hands, in captures and logs:
   note each. Drop a fifth mortar near the row and fill bowls, and some card or note may not show.
 - **A save of the row.** It's set out at each boot; a `rustvr-alchemy` with the row in it would
   boot straight into it.
+- **The body walked after your head while it's held up.** Standing at a table with your head more
+  than 5 cm past where the view leads the body, the game still walks its body into the table, as
+  before (its walk, and its footsteps if it makes any).
+- **Merging:** the view's lead is in the framework's `tracking.rs` (`set_body_radius`, the lead in
+  `update`), which other branches may also change.

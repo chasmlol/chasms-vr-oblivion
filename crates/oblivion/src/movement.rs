@@ -11,6 +11,13 @@
 //! stay the game's (the character controller in the air, state 1 or 2 at +0x1EC, or the swimming
 //! flag 0x800), as does the step's rise and fall.
 
+/// How far round the player the game's body reaches (metres). Its character controller's shape
+/// (made at 0x895190) is round, as wide as the middle of the actor's box: the skeleton's `BBX`
+/// (half 23.1 by 17.6 units across), so 20.4 units times the actor's scale, and Havok's 0.1 (0.7
+/// units) round that. At least 0.30 m, then; a little less, so that the view leading the body
+/// there ([`rustvr_adapter::TrackingMapper::set_body_radius`]) stays inside it.
+pub const BODY_RADIUS: f32 = 0.29;
+
 /// The frame's step in the actor's own space (x right, y ahead, game units) for the stick (x right,
 /// y ahead, its length 0..1 how far it's pushed) at the game's `speed` (units a second).
 pub fn step(stick: [f32; 2], speed: f32, dt: f32) -> [f32; 2] {

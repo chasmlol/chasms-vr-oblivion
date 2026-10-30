@@ -28,7 +28,9 @@ pub fn init(gpu: Gpu, w: u32, h: u32) {
     if a.is_none() {
         let mut cfg = AdapterConfig::new("oblivion");
         cfg.request = request(w, h);
-        *a = Some(Adapter::new(gpu, cfg));
+        let mut adapter = Adapter::new(gpu, cfg);
+        adapter.tracking.set_body_radius(crate::movement::BODY_RADIUS);
+        *a = Some(adapter);
     }
 }
 
