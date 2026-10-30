@@ -125,6 +125,8 @@ A corpse needs 0.8 of the toughness. So:
   * The skeleton's arm is capped with bone and puffs dust.
 * **Blood:**
   * sprays from wounds and stumps, landing as splats, splatters and pools;
+  * the neck's spurts, seen as a fountain going up and coming down round the body;
+  * blood that came down on the player, seen on the glove;
   * pools under a decapitated body;
   * blood on the blade along the edge that cut, seen in captures;
   * red splats on the hand from drops.
@@ -138,9 +140,11 @@ A corpse needs 0.8 of the toughness. So:
 * **A real swing that cuts a leg, or cuts into a corpse.** These go through the same code as the
   neck and the forearm. The checks used `GoreCut` for legs.
 * **Taking a piece by its hand grip** (not the gloves).
-* **Blood running down a wall.** Runs started in the logs. None was seen in a capture.
-* **The game's own blood spray at the stumps.** It's called every 1.6 s for 10 s. It wasn't picked
-  out in a capture.
+* **Blood running down a wall.** Runs started in the logs (13 at once in the frame-rate run). None
+  was seen in a capture.
+* **The game's own blood spray at the stumps.** It's made every 1.6 s for 10 s (the log says the
+  first one is). It wasn't picked out in a capture.
+* **The thump in the hand** when a limb comes off: it's sent, but the emulated headset can't feel it.
 * **The real headset**, lighting outdoors, and fog.
 * **Creatures without the people's skeleton.** Wolves, bears and rats can't lose limbs: their
   combat body is one capsule. Zombies, skeletons and other `Bip01`-limbed creatures can.
@@ -149,17 +153,18 @@ A corpse needs 0.8 of the toughness. So:
 
 The scene: the bandit room, one bandit killed. **Before** with no gore. **After** with five limbs
 cut off one bandit at once (head, a forearm, a calf, an upper arm, a thigh). That gives 640
-decals, 157 of them pools, five stumps, five severed pieces, and up to 300 drops in the air while
-it sprays.
+decals (half of them pools), 13 runs down the walls at once, five stumps spurting, five severed
+pieces, and up to 300 drops in the air while it sprays. The After numbers are from the final
+build, with the spurts at full strength.
 
 | | Before | After (spraying, then at rest) |
 |---|---|---|
-| Game frames/s (unthrottled) | 207–224 | 176–203 |
-| Game's two eye renders, ms/frame | 2.3–2.4 | 2.9–3.2 |
+| Game frames/s (unthrottled) | 207–224 | 182–209 |
+| Game's two eye renders, ms/frame | 2.3–2.4 | 2.6–3.0 |
 | Runtime frames (120 Hz) | 120.0/s, 0 late | 120.0/s, 0 late |
-| Runtime CPU, ms/frame | 0.4 (95% under 0.5–0.6) | 0.5 (95% under 0.6–0.8) |
+| Runtime CPU, ms/frame | 0.4 (95% under 0.5–0.6) | 0.5 (95% under 0.6–0.7) |
 
-* **The game:** the extra 0.6 ms is the five pieces' clones. Each draws only the meshes that show
+* **The game:** the extra 0.4 ms is the five pieces' clones. Each draws only the meshes that show
   its limb. Before that fix the five cost 1.4 ms.
 * **The runtime:** blood costs about 0.1 ms of CPU, under 160 world ray casts a frame, and no
   dropped frames. Decals, caps and drops are a few instanced draws per kind of blood (one per texture).
