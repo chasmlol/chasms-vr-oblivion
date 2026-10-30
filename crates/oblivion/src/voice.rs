@@ -692,6 +692,7 @@ mod win {
         }
         vcall1(process, VT_SAY_TO_LOOK, player);
         if mem::at::<u8>(SUBTITLES_ON).is_some_and(|on| on != 0)
+            && !text.trim().is_empty()
             && let Ok(c_text) = std::ffi::CString::new(text)
         {
             unsafe { std::mem::transmute::<usize, Subtitle>(SUBTITLE)(c_text.as_ptr() as *const u8, mem::deref(process + VOICE_SLOT), 0, -1.0) };
