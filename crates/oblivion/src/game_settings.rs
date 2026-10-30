@@ -38,8 +38,12 @@ pub fn ini_path() -> Option<PathBuf> {
 ///   trees at the game's own limit (`fTreeLODMax`, 2), the grass out to 57 m (its `[Grass]` keys,
 ///   the ones it reads; at 86 m, all round, it cost too much of the frame), and the distant
 ///   buildings and tree cards half as far again (40 and 30 cells). A head turns to all of it, so
-///   what a flat screen hides past its edges pops in.
-const VR_FLOORS: [(&str, &str, &str); 15] = [
+///   what a flat screen hides past its edges pops in;
+/// * people's faces (FaceGen) and lip files load on the game's own background threads, and its
+///   morpher, blood and path finding run on theirs, not on the frame's (off in the player's file:
+///   the hitches as people came into view). The threaded particles and temporary effects stay as
+///   they are: those are the ones reported to crash.
+const VR_FLOORS: [(&str, &str, &str); 20] = [
     ("Display", "iShadowMapResolution", "1024"),
     ("SpeedTree", "fLODTreeMipMapLODBias", "0.0000"),
     ("SpeedTree", "fLocalTreeMipMapLODBias", "0.0000"),
@@ -55,6 +59,11 @@ const VR_FLOORS: [(&str, &str, &str); 15] = [
     ("Grass", "fGrassStartFadeDistance", "3000.0000"),
     ("General", "uGridDistantCount", "40"),
     ("General", "uGridDistantTreeRange", "30"),
+    ("BackgroundLoad", "bLoadBackgroundFaceGen", "1"),
+    ("BackgroundLoad", "bBackgroundLoadLipFiles", "1"),
+    ("General", "bUseThreadedMorpher", "1"),
+    ("General", "bUseThreadedBlood", "1"),
+    ("Pathfinding", "bBackgroundPathing", "1"),
 ];
 
 /// `Section.key=value;...` as (section, key, value)s.
