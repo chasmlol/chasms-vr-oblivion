@@ -124,7 +124,9 @@ fn bones(root: usize) -> HashMap<String, usize> {
             break;
         }
         let name = read_str(mem::deref(node + NODE_NAME));
-        let descend = depth <= 2 || name.starts_with("Bip01");
+        // (Only into a node: a mesh near the root, as the game's blood decals are, has no
+        // children, and reading its fields as children followed garbage into freed memory.)
+        let descend = (depth <= 2 || name.starts_with("Bip01")) && engine::is_node(node);
         if name.starts_with("Bip01") || name == "Weapon" || name == "Shield" {
             out.insert(name, node);
         }
