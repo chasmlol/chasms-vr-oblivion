@@ -76,6 +76,9 @@ pub fn before_update() {
     {
         crate::movement::set_swim(snap.filter(|_| vr).and_then(strokes));
         crate::swim::set_head(snap.and_then(|s| s.view).map(|v| crate::camera::basis().point_to_game(v.head_pos).z));
+        if let Some(s) = snap.filter(|_| vr) {
+            crate::swim::hands(&s);
+        }
     }
     let mut v = input::Virtual::default();
     if let Some(s) = snap {
