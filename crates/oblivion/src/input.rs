@@ -139,6 +139,9 @@ impl Bridge {
         let counts = self.presses.update(it);
         let started = |a: Action| it.held & a.bit() != 0 && self.last_held & a.bit() == 0;
         let long_menu = started(Action::FlashlightHold);
+        // (The runtime's player rig holds Jump while an empty hand's A is down, rather than
+        // counting presses: its start is the press, so A jumps, out of the water too.)
+        let jump = started(Action::Jump);
         self.last_held = it.held;
         let mut v = Virtual::default();
         let hold = |b: Binding, v: &mut Virtual| {
@@ -165,7 +168,7 @@ impl Bridge {
             (Action::Inventory, "Menu Mode"),
             (Action::UseHold, "Rest"),
         ] {
-            if pressed(&counts, a) {
+            if pressed(&counts, a) || (a == Action::Jump && jump) {
                 self.pulses.push((self.binding(name), now + PULSE));
             }
         }
