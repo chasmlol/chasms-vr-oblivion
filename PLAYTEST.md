@@ -2,9 +2,11 @@
 
 Save: rustvr-menus
 
-`tools\play.ps1 menus` boots this build into **rustvr-menus**: Jensine's Good as New Merchandise in
-the Imperial City Market District at noon. A test chest full of everything is on the floor in front
-of you, and Jensine is at her counter to your right. `tools\play.ps1 -Close` puts it all away.
+`playtest.bat` in this worktree (not committed: double-click it in Explorer) puts away any game left
+running, then `tools\play.ps1 menus` boots this build into **rustvr-menus**: Jensine's Good as New
+Merchandise in the Imperial City Market District at noon. A test chest full of everything is on the
+floor in front of you, and Jensine is at her counter to your right. A key in the .bat's window closes
+the game (`tools\play.ps1 -Close`) and keeps the runtime's log in `<builds>\menus\playtest-<n>`.
 
 Every menu now floats in the world as pieces of Oblivion's own UI (its parchment, fonts, icons and
 buttons). The world is still drawn around and behind it, your hands too, and the game still runs
@@ -19,6 +21,8 @@ trigger to click. The right stick scrolls, and B closes.
      and your weapon and spell icons are there, like a watch. Any active effects stack above them.
    - Look at Jensine: the game's card of what you're looking at (her name) floats just under the
      point you're looking at. It's the same card that says "Open Door" or gives an item's numbers.
+   - The flat game's crosshair is gone. Where the head looks, only the game's icon of what can be
+     activated shows (a hand, a door; red when taking it would be stealing).
 2. **The chest (looting).** Look at the chest and pull the trigger with an empty right hand.
    - Its list floats above the chest, at about the chest's distance and a little under your eye
      line.
@@ -146,6 +150,10 @@ trigger to click. The right stick scrolls, and B closes.
 - **Dialogue.** The speaker's name floats over their head (the flat game shows it in a corner).
 - **The crosshair card** under where you look is fixed to your gaze, because it says what looking
   there does.
+- **The flat game's crosshair is hidden** (`reticle.rs`, the same commit as the riding branch's, so
+  the two merge cleanly). The hands aim in VR, and a dot fixed in the middle of the view is only in
+  the way. The reticle's activate icon stays, as it's the game's only warning of a theft. The game's
+  own Crosshair setting isn't used, because it hides the icons too.
 - **Only the pause menu gets RustVR's settings beside it.** They used to open next to every game menu,
   a chest's list included.
 - **The pointer.** The laser's dot is the pointer (the game's cursor goes where it points), and the
