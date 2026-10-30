@@ -1030,7 +1030,7 @@ mod game {
                 let w = 4.0 / back;
                 (inertia * w * w, 2.0 * inertia * w)
             } else {
-                // A door (or a lever) let go mid-swing slows to a stop over about a second, as a
+                // A door (or a lever) let go mid-swing slows to a stop over a couple of seconds, as a
                 // real one on its hinges does, rather than drifting on.
                 (0.0, inertia / SETTLE)
             };

@@ -18,7 +18,7 @@ locked display cases: a lid on a hinge).
    130 kg) and put your palm on it, then push. It gives a hair at first (its latch: it rattles in its
    frame), and pushed to the end of that, the game opens it (its own Activate: its open state, its
    script if it has one). From there your hand swings it. Shove it and let go: it swings on and slows
-   to a stop within about a second.
+   to a stop over a couple of seconds.
 2. **Take it by any part of it.** Grip anywhere on the leaf (no handle to hunt for): the fingers
    close where they are and nothing jumps. Pull and push it about; near the hinge it barely moves,
    at its edge it swings (the leverage is your arm's, capped at about 180 N). Walk into its swing: it
@@ -101,7 +101,7 @@ Not checked in the game:
   area as a 4.5 cm plank of its Havok material (a house door about 65 kg, the big cave door 130),
   or, of metal, as heavy for its size as the game's own cell gates, whose 100 kg is the model's;
   levers and stones weigh their drawn shape's volume of their material. Hinge friction is its pins' (a friction of 0.3 on 1 cm pins under its weight). A
-  swing dies away over 0.8 s once let go, and a lever's two positions hold against 25 N at its end:
+  swing dies away over about 2 s once let go, and a lever's two positions hold against 25 N at its end:
   those two are design values, not the game's.
 - **Sliding doors are the game's to move:** a hand can't lift a stone slab, so a tug opens it with
   the game's own animation.
