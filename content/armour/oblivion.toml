@@ -181,11 +181,16 @@ firm = 0.7
 ride = { "Bip01 * UpperArm" = 1.0 }
 layer = 1
 
-# The couters: half on the upper arm, half on the forearm, turning about the elbow.
+# The couters: half on the upper arm, half on the forearm, turning about the elbow. Each is a
+# plate round the back of the elbow (its texture's u 0.70-0.845, v from 0.53; the band's edges are
+# drawn above it) and the leather strap holding it on across the inside of the elbow, one island:
+# only the plate is rigid, the strap bending with the elbow from its ends (rigid, the arm went
+# through it at the least bend).
 [[piece.plate]]
 name = "couter"
 mesh = 1
 bone = "Bip01 * Forearm"
+uv_within = { min = [0.70, 0.53], max = [0.845, 0.70] }
 ride = { "Bip01 * UpperArm" = 0.5, "Bip01 * Forearm" = 0.5 }
 layer = 2
 
@@ -213,11 +218,14 @@ covers = "hands"
 # mostly on the forearm, the left's mostly on the hand), so its weights don't say where the cuff
 # ends: they're split by place. The cuff is rigid on the forearm (rolling with its twist), the
 # hand plate on the hand, coming apart at the rim so it slides under the cuff as the wrist bends in
-# and over it as the wrist bends back.
+# and over it as the wrist bends back. Only the cuff's metal (the texture's lower part, v from 0.6)
+# is rigid: the leather under the forearm and its straps (the glove's leather and the strap band
+# above the metal in the texture) bend with the wrist.
 [[piece.plate]]
 name = "vambrace"
 mesh = 0
 corners_within = { min = [0.5, 1.3, -0.15], max = [0.725, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.6], max = [1.0, 1.0] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
