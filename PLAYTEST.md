@@ -185,6 +185,13 @@ otherwise).
    joints, not the marks). Unmarked still: the steel sleeve's plates under the rerebrace, glass's
    lames under the pauldron (rigid, they'd poke through it raising the arm), knuckle plates.
 
+3. **The game started "tabbed out" on the PC, couldn't be tabbed into, and the player couldn't
+   walk.** Not the armour: `Oblivion.ini` had `iLocation X`/`Y` at -32000 (a game quit while
+   minimised saves that), so every boot since about 14:30, any feature's, made the window off every
+   monitor, where Windows never makes it the active window, and Oblivion reads no input while it
+   isn't (the stick reached the adapter, the game read nothing). The ini's values were put back to
+   0, and the adapter now opens a window the game makes off every monitor at the screen's corner.
+
 ## Not done
 
 * Helmets and shields (the helmet isn't drawn in first person; the shield is held), and the other
