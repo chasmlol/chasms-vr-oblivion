@@ -25,8 +25,9 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | Weapons | The equipped weapon (the game's model) hangs at the left hip, or on the back if two-handed, and the hand draws it. The equipped shield is taken from over the left shoulder. Edges, points, heads and guards are measured on each model. | `weapons.rs` |
 | Combat | Hits are the game's own hit with the equipped weapon (damage, skill, enchantments). A blow met by the weapon or shield is the game's block. Spells charge in the palm and go off as the game's own cast: target spells from the palm along the aim, touch spells into what the hand touches, self spells on the player. | `combat.rs` |
 | Things in the world | Everything the player can take near them (weapons, armour, clothes, books, potions, ingredients, keys, soul gems, sigil stones, apparatus, carriable lights, clutter) is the hands' to take or pull with the gloves: its collision its own Havok shape, its weight its Havok mass, drawn by the game where the hand has it (a candle still burns), and let go, the game's again, flying on with the throw. A card beside it says what it is: its name, damage or armour, weight, value, condition, and whether it's stolen. Let go in any body slot (a hip, a shoulder, the chest, the belt), the player takes it: the game's own pick-up, with its stealing and its message. | `items.rs`, `objects.rs` |
+| Alchemy | Every mortar and pestle near the player is a bench: the runtime draws it as two pieces from the game's model (the mortar, a bowl the hands use; the pestle, the hands' own), the game's own model hidden. Up to four ingredients go into the bowl, each kind once (the game's menu's rules), and lie in it as themselves, shrinking as the pestle grinds them; the alembic, calcinator and retort within 75 cm count, the best of each kind. Whenever what's in the bowl changes, the game's own alchemy menu is made for a moment and gone again (no menu mode) to work out what it would make, shown on a card of its own art, icons and fonts over the mortar. All ground, its Create makes the potion (the ingredients picked up and used, the skill, the message, the sound) and the bottle rises out of the mortar to be taken; with no effect shared, the game's own failure words and sound, the ingredients lost. Not in combat (the game's rule). See [research/alchemy.md](research/alchemy.md). | `alchemy.rs` |
 | Menus | While a menu is open it's a panel; the game's cursor follows the laser and the trigger clicks. | `menus.rs` |
-| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <id>`, `PlaceInFront <ref> <metres>`, or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
+| Tests | `rustvr-console-test` runs timed commands from the game's frame: `LoadGame <save>`, `SelectSpell <id>`, `PlaceInFront <ref> <metres>`, `PlaceAt <base> <ahead> <right> <up> [<turn>]` (a new one of a base form there, the player's own, settled where it falls: a bench set out), or any line of script (base forms by hex id). Compile errors are logged. | `console.rs` |
 
 ## Setting up
 
@@ -34,6 +35,14 @@ The game's models are converted once into `local_assets/oblivion` (never committ
 
 ```
 cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters
+```
+
+For alchemy, the mortars and pestles split and measured, and the game's fonts and menu art for its
+cards:
+
+```
+cargo run --release -p oblivion-assets --bin oblivion-extract -- bench meshes/clutter/magesguild/mortarpestle
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export-ui fonts textures/menus/alchemy textures/menus/icons/magic textures/menus/icons/clutter
 ```
 
 Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
@@ -52,6 +61,7 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Laser + trigger on a menu | The game's cursor and click |
 | Grip at the left hip / over a shoulder | Draw the weapon / take the shield |
 | Grip on a thing in the world, or point and flick (the gloves) | Take it in the hand; let go in a body slot to take it into the inventory |
+| An ingredient let go over a mortar; the pestle worked round in it | Into the bowl; ground, the game makes the potion and its bottle rises out of the mortar |
 | Swing | Attack (the game's hit; a fast committed swing is a power attack) |
 | Weapon or shield across a blow | Block |
 
