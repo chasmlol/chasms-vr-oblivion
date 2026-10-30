@@ -363,6 +363,8 @@ mod game {
     use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
 
+    const FORM_FLAGS: usize = 0x8;
+    const DELETED: u32 = 0x20;
     const FORM_ID: usize = 0xC;
     const REFR_BASE: usize = 0x1C;
     const REFR_NODE: usize = 0x3C;
@@ -510,10 +512,17 @@ mod game {
         Some((b.point_from_game(Vec3::from(t)), b.rot_from_game(items::ni_matrix(r)).normalize()))
     }
 
+    /// The mortar's model is still the one the station knows (not taken, its 3D not made again).
+    fn alive(b: &Station) -> bool {
+        mem::deref(b.refr + REFR_NODE) == b.node && b.node != 0 && mem::at::<u32>(b.refr + FORM_FLAGS).is_some_and(|f| f & DELETED == 0)
+    }
+
     /// Hides (or shows again) a mortar's game model: the runtime draws its pieces.
     fn hide(b: &mut Station, hidden: bool) {
         let at = b.node + av::FLAGS;
-        if !mem::is_readable(at as *const u8, 2) {
+        // (Only while the reference still has that model: taken, or its 3D made again, it's gone.)
+        if !alive(b) || !mem::is_readable(at as *const u8, 2) {
+            b.flags = None;
             return;
         }
         match (hidden, b.flags) {
@@ -578,7 +587,9 @@ mod game {
                 (format!("textures\\menus\\icons\\{icon}"), items::facts(o.refr).name)
             })
             .collect();
+        let t0 = std::time::Instant::now();
         let brewed = if forms.is_empty() { None } else { crate::hooks::guard("alchemy menu", None, || menu::brew(apparatus, &forms, false)) };
+        let took = t0.elapsed().as_secs_f32() * 1000.0;
         let shown = Shown {
             name: brewed.as_ref().filter(|b| !b.effects.is_empty()).map(|b| b.name.clone()).unwrap_or_default(),
             effects: brewed.as_ref().map(|b| b.effects.iter().map(|(icon, words)| (format!("textures\\menus\\{icon}"), words.clone())).collect()).unwrap_or_default(),
@@ -586,7 +597,7 @@ mod game {
             apparatus: apparatus.iter().filter(|&&f| f != 0).map(|&f| format!("textures\\menus\\icons\\{}", crate::combat::read_str(mem::deref(f + APPA_ICON)))).collect(),
         };
         tracing::info!(
-            "alchemy: {} in the mortar ({:#x}; alembic {:#x}, calcinator {:#x}, retort {:#x}): the game would make {:?}, {:?}, weight {:.2}, value {}",
+            "alchemy: {} in the mortar ({:#x}; alembic {:#x}, calcinator {:#x}, retort {:#x}): the game would make {:?}, {:?}, weight {:.2}, value {} ({took:.1} ms)",
             forms.len(),
             form_id(apparatus[0]),
             form_id(apparatus[1]),
@@ -683,6 +694,13 @@ mod game {
                     tracing::info!("alchemy: {} ({:#x}{}) is a bench: its pestle out of it, its bowl the hands'", f.name, o.id, if f.stolen { ", someone else's" } else { "" });
                     s.benches.insert(o.id, b);
                 }
+                // Its 3D made again (the cell reloaded): the new one hidden.
+                let node = mem::deref(o.refr + REFR_NODE);
+                if let Some(b) = s.benches.get_mut(&o.id).filter(|b| b.node != node && node != 0) {
+                    b.node = node;
+                    b.flags = None;
+                    hide(b, true);
+                }
             }
             // Gone (taken, out of reach): the game's own model of it again.
             s.benches.retain(|id, b| {
@@ -761,7 +779,7 @@ mod game {
                 }
             }
             recs.push(r);
-            if let Some(pose) = node_pose(b.node) {
+            if let Some(pose) = node_pose(b.node).filter(|_| alive(b)) {
                 // (The game's weight is about pounds: a kilogram is two.)
                 let weight = mem::at::<f32>(mem::deref(b.refr + REFR_BASE) + APPA_WEIGHT).filter(|w| w.is_finite() && *w > 0.0).unwrap_or(1.0);
                 let mass = weight * 0.45 * pestle_share(b.bench);
