@@ -42,8 +42,12 @@ activate shows where you look.
 4. **The law.** Choking him, knocking him over, throwing him, or holding him for more than four
    seconds is an assault, the game's own: you get the game's bounty (40 gold) and his reaction (a
    Legion soldier comes to arrest you, or fights). One assault a hold.
-5. **Shove.** Push the soldier in the chest with an open hand, fast (1.5 m/s or more): he's shoved
-   back. Leaning on him slowly doesn't move him.
+5. **Touch and shove.** Without grabbing, push the soldier's face, an arm, his chest: the part gives
+   under your hand and springs back with a little wobble once you let it be. His face turns on his
+   neck; an arm swings from the shoulder, loosely; pushed in the chest he leans back a little and
+   his head and arms swing with it; a leg hardly gives (he's standing on it). Slap an arm and it
+   swings away and back. Push him fast with an open hand (1.5 m/s or more) and he's shoved back
+   as well.
 6. **Heavy and strong.** Holding a body that holds your hand back, you feel a low rumble in the
    controller, harder the further back it's held. Past an arm's reach (60 cm between your hand and
    the controller) your grip slips. Your strength is the game's: Strength 50 lifts a person
@@ -55,6 +59,29 @@ activate shows where you look.
 8. **Letting go.** Your hand stays a free hand on his body where it let go, and comes back to the
    controller from there (it doesn't pass through him). A hand resting on someone still has the
    trigger: touch a shoulder and pull it to talk.
+
+## Playtest 1 (real headset)
+
+It works. Asked for:
+
+* **Soft bodies without grabbing:** push a face, an arm, a chest and it should give and wobble.
+  Now a standing person's bones about a touch go partly physical, through the game's own blend
+  between animation and ragdoll (a heir and a velocity gain below 1: a spring that overshoots, read
+  from its blend code). The arms hang loose (a lean moves them most of the way, and they wobble
+  back over about a second), the spine and the neck are firm (a third of the way, back in a
+  quarter of a second), the legs stiff. Left alone for 1.5 s, the bones blend back to the animation
+  in 0.4 s. (Step 5.)
+* **The hitboxes didn't cover armour:** they were fixed-size capsules of a bare body. Now each part
+  is fitted to the models the game draws on that person (the skinned body, armour and clothes, the
+  head, hair and helmet): as thick as nine in ten of its vertices reach, the torso as deep as its
+  front and back, and reaching to the crown, the fingertips, the heel and the toes. Hands and feet
+  are hitboxes of their own now (14 parts a person). Fitted again whenever what they wear changes.
+  The adapter log has a line per person fitted (`shapes: ... fitted to N models`): each part's
+  thickness and how far its ends reach.
+
+Look out for: a hand stopping short of someone or sinking into them (and where), a part that
+flops too much or too little when pushed, the face and arms coming back too slowly or too fast,
+anything twitching while you hold someone.
 
 ## What was checked in the game (emulated headset, captures and logs)
 
@@ -88,6 +115,14 @@ emulated one). The framework's test range now takes grabs too (its dummies), bui
 range wasn't to be started tonight).
 
 ## Decisions
+
+* **A touch is the game's blend, not a spring of ours.** The bones about a touch get a heir and a
+  velocity gain below 1 (loose 0.2 and 0.1, firm 0.5 and 0.3, stiff 0.7 and 0.5); Oblivion has no
+  value for how much a body gives, so these are ours. The pelvis stays the animation's: it holds
+  him up. A held person isn't touched (the grab moves him).
+* **The torso's thickness is its depth.** A capsule as wide as the shoulders would stop a hand
+  in front of the chest; as deep as the chest, a hand on the waist's side sinks in a little (the
+  arms hang there).
 
 * **The game simulates the body; the runtime has the hand.** The hand is drawn on the part where
   the game has it (so its weight holds the hand back, the way HIGGS draws it);
