@@ -13,6 +13,15 @@ Run `playtest.bat` in this worktree (`<worktrees>\riding`): it installs this bui
 a key in its window when you're done and it saves the ride's logs (into `<builds>\riding\logs`),
 closes the game and puts your settings back.
 
+## Round 9: the loop between the hands just hangs
+
+Built and unit-tested; not in the game yet.
+
+- **"The rein in the middle between the hands is trying to float up and being all weird, just make
+  it hang naturally."** The loop between your hands was simulated and kept off the neck like the
+  reins, and above the withers it got pushed up over the neck's rounded end, where there's no neck.
+  Now it simply hangs between your fists, sagging by its slack, nothing else.
+
 ## Round 8: subtle steering, and hands held close to the body
 
 Built and unit-tested; not in the game yet. Your seventh ride's runtime log was lost: another
