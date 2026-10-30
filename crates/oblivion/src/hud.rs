@@ -345,12 +345,18 @@ mod win {
         boxes.into_iter().fold(None, tiles::grow)
     }
 
-    /// Menu `kind`'s pieces as a group held in the hands, as `held` says.
+    /// Menu `kind`'s pieces as a group held in the hands, as `held` says. (Held, they're drawn as
+    /// solid as what the game drew: it draws its book and map pages as light added, with no
+    /// coverage.)
     fn add_held_group(layout: &mut HudLayout, group: HudGroup, held: HudHeld, kind: u32, pieces: &[Piece], screen: (f32, f32), trees: &mut Trees) -> Option<[f32; 4]> {
         let b = add_group(layout, group, kind, pieces, screen, trees)?;
         let n = layout.group_count as usize;
         layout.groups[n - 1].anchor = ANCHOR_HELD;
         layout.held[n - 1] = held;
+        let count = layout.count as usize;
+        for e in layout.elements[..count].iter_mut().filter(|e| e.group == n as u32) {
+            e.flags |= HUDE_OPAQUE;
+        }
         Some(b)
     }
 
@@ -388,11 +394,14 @@ mod win {
         if n == 0 {
             return;
         }
+        // (A book's pages, as the map's, are drawn by the game as light added, with no coverage,
+        // though they're solid paper: they're as solid as what the game drew.)
+        let flags = HUDE_POINT | HUDE_OPAQUE;
         for b in boxes {
             let margin = if scroll { MARGIN } else { 0.0 };
             if let Some(uv) = tiles::uv_of(b, screen, margin) {
                 let offset = [((b[0] + b[2]) * 0.5 - centre.0) / h, -((b[1] + b[3]) * 0.5 - centre.1) / h, 0.0];
-                l.push(HudElement::piece(n, uv, offset, HUDE_POINT));
+                l.push(HudElement::piece(n, uv, offset, flags));
             }
         }
         static SAID: Mutex<u32> = Mutex::new(0);

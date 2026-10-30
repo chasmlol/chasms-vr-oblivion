@@ -10,8 +10,8 @@
 //! The map menu (`menus\main\map_menu.xml`, `MapMenu`, menu type 0x3FF) is opened the way the
 //! game's Menu Mode opens the last of the big four: the interface's menu root keeps which that was
 //! (its value 6001, 0x1771: the map is 1023), so that's set to the map and Menu Mode pressed. Its
-//! page is the menu's `user0` (1 the local map, 2 the world map, 3 to 5 the journal), and its tabs'
-//! clicks (`HandleClick(1..5)`) turn to them.
+//! pages are `map_page_1` (the local map), `map_page_2` (the world map) and three of the journal,
+//! the one that shows the one open; its tabs' clicks (`HandleClick(1..5)`) turn to them.
 
 use crate::{mem, tiles};
 use rustvr_protocol::*;
@@ -100,10 +100,15 @@ mod game {
         crate::hooks::guard_void("map value", || unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(tile, id, v) });
     }
 
-    /// The map menu's page now (`PAGE_*`, or the journal's 3 to 5).
+    /// The map menu's page now (`PAGE_*`, or the journal's 3 to 5): the one of its pages
+    /// (`map_page_1` to `map_page_5`) that shows.
     pub fn page() -> Option<f32> {
         let t = tiles::menu_tile(MENU_MAP);
-        (t != 0).then(|| tiles::value(t, tiles::USER0)).flatten()
+        if t == 0 {
+            return None;
+        }
+        let tree = tiles::Tree::read(t);
+        (1..=5).find(|k| tree.find(&format!("map_page_{k}")).is_some_and(|p| p.shown)).map(|k| k as f32)
     }
 
     /// The map menu shows, the big four on top.

@@ -296,6 +296,20 @@ mod win {
     unsafe extern "system" fn set_render_state(dev: *mut c_void, state: D3DRENDERSTATETYPE, value: u32) -> windows::core::HRESULT {
         let real: SetStateFn = unsafe { std::mem::transmute(REAL_SET_STATE.load(Ordering::Acquire)) };
         let hr = unsafe { real(dev, state, value) };
+        // Testing (`RUSTVR_OBLIVION_TRACE_UI=1`): the blending the game's UI draws with, each new
+        // way once.
+        static TRACE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        if *TRACE.get_or_init(|| std::env::var("RUSTVR_OBLIVION_TRACE_UI").is_ok_and(|v| v == "1"))
+            && UI_PASS.load(Ordering::Acquire)
+            && (state == D3DRS_SRCBLEND || state == D3DRS_DESTBLEND || state == D3DRS_ALPHABLENDENABLE || state == D3DRS_ALPHATESTENABLE)
+        {
+            static SEEN: std::sync::Mutex<Vec<(i32, u32)>> = std::sync::Mutex::new(Vec::new());
+            let mut seen = SEEN.lock().unwrap();
+            if !seen.contains(&(state.0, value)) && seen.len() < 64 {
+                seen.push((state.0, value));
+                tracing::info!("d3d9: the UI sets render state {} to {value}", state.0);
+            }
+        }
         if state == D3DRS_SRCBLEND || state == D3DRS_DESTBLEND {
             let b = BLEND.load(Ordering::Acquire);
             let b = if state == D3DRS_SRCBLEND { (b & 0xFFFF_0000) | value } else { (b & 0xFFFF) | (value << 16) };
