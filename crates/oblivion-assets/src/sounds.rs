@@ -20,6 +20,7 @@
 //!   player's pick of the game's whooshes); Telekinesis's travel as it flies (a Mysticism effect:
 //!   its bolt's, from its `MGEF` record); landing in the hand, a thing is taken as any is (its
 //!   kind's sound of being taken); a thing locked onto has no sound, only its pulse in the hand;
+//! - a bite or a gulp of what's held at the mouth: the game's chewing and swallowing;
 //! - a hand finding a slot, and the runtime's own menu: the menus' focus and OK.
 
 use std::collections::{BTreeMap, HashMap};
@@ -216,13 +217,17 @@ const DEFAULTS: &[(&str, &[(&str, f32)])] = &[
     ("pouch", &[("ITMAmmoUp", 1.0)]),
     ("glove_hover", &[("UIMenuFocus", 1.0)]),
     // (Locking onto a thing is felt only: no `glove_lock`, so the pack plays nothing for it.)
-    ("glove_flick", &[("WPNSwishLarge", 0.35)]),
+    ("glove_flick", &[("WPNSwishLarge", 0.175)]),
     ("glove_travel", &[("SPLMysticismTravelLP", 1.0)]),
     ("glove_catch", &[("ITMGenericUp", 1.0)]),
     ("impact", &[("CWoodSmall", 1.0)]),
     ("ui_hover", &[("UIMenuFocus", 1.0)]),
     ("ui_click", &[("UIMenuOK", 1.0)]),
     ("melee", &[("WPNHitHand", 1.0)]),
+    // A bite of what's held at the mouth, a gulp of a drink: the game's own chewing and swallowing
+    // (its `use` sounds of food and potions, the item-sound choice's).
+    ("bite", &[("NPCHumanChew", 1.0)]),
+    ("gulp", &[("NPCHumanSwallow", 1.0)]),
     ("knife_throw", &[("WPNSwishSmall", 1.0)]),
     ("knife_stick", &[("WPNHitArrow", 1.0)]),
     ("mag_out", &[("ITMAmmoUp", 1.0)]),
