@@ -12,6 +12,27 @@ why it works the way it does: `docs/research/riding.md`.
 Run `playtest.bat` in this worktree (`<worktrees>\riding`): it installs this build and boots the save; press
 a key in its window when you're done and it closes the game and puts your settings back.
 
+## Round 7: hands centred on the horse go straight
+
+Built and unit-tested; not in the game yet. Your sixth ride's logs are in
+`C:ustvr-wtiding\playtest-6`.
+
+- **"It just kept turning one direction whilst I had both my hands centred on the horse."** The
+  reins measured steering from where each hand was when it took its rein (or when a spur last
+  "gave" the reins, once with your hands 35 cm back). So hands you'd centred over the mane could
+  read as 10 to 19 cm to one side: your log shows a full right turn held for two and a half
+  seconds that way. Steering is now measured **against the horse itself**:
+  - both hands to one side: from the **mane** (the middle between where a rider holds the
+    reins); hands centred over it go straight, with 3 cm of give;
+  - one rein back: **one hand against the other**; level hands go straight, with 2.5 cm of give;
+  - a full turn 10 cm past that. Slowing is measured as before (it was right).
+
+### Try this round
+
+- Ride about, turn a lot, then put both hands centred over the mane and level: it should go
+  straight, every time.
+- Move both hands a little to one side of the mane: a gentle turn that way; further, harder.
+
 ## Round 6: a rider's grip on the reins
 
 Built and unit-tested; not in the game yet.
@@ -344,6 +365,10 @@ built, and its unit tests pass.
   pull back one, or move both sideways (a neck rein) or open one out; both are what riders do, and
   an equestrian's opening rein not working was a complaint about another game. One hand alone holds
   both reins (western style).
+- **Steering is measured against the horse** (round 7): the hands' middle across from the mane
+  (the middle of the rider's rein holds) past 3 cm, one hand ahead of the other past 2.5 cm; a
+  full turn 10 cm past that. Measured from where the reins were taken (rounds 2 to 6), "centred"
+  depended on where the hands happened to be then, and a turn could stick.
 - **Hands at rest do nothing** (round 2): a 5 cm dead zone, inside which a hand's rest follows it
   over 1.5 s (drift is taken up, a deliberate move of a few tenths of a second isn't); the turn
   comes in as half the share past the dead zone plus half its square, so small moves turn gently.
