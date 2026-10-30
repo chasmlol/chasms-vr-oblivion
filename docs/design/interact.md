@@ -270,3 +270,55 @@ Calls made:
   the smallest that fits; the flight doesn't change which).
 * The choices that are menus in the game (which effects, how strong, the name) stay its menu, at the
   altar: only the gem and the item are laid on it.
+
+## 4. The big magic moments: the Sigil Stone, Ayleid wells, Welkynd and Varla stones
+
+### How VR games do it
+
+* **The climax is taken by hand.** VR's big set pieces (*Half-Life: Alyx*'s cores pulled from their
+  sockets, *Asgard's Wrath*'s relics) have the player physically take the thing: it resists a
+  little, comes free, and the world answers.
+* **Magic is touched, not clicked**: a hand put into light or energy to draw from it, felt building
+  in the controller before it gives.
+* **Consumables are used by a gesture with the thing itself** (crushed, eaten, drunk), not a button.
+
+### Oblivion
+
+* **The Sigil Stone** (activators named "Sigil Stone", `Oblivion\Sigil\SigilStone01.NIF`; the Great
+  Sigil Stone `SigilStoneGREAT01.NIF`), hanging in its column of fire (`SigilLightTower`, a separate
+  reference) at the top of the Sigil Keep (`Sigillum Sanguis`, e.g. `OblivionRDCitadel01Lord`). Its
+  script (`SigilStoneRandomSCRIPT`; the main quest's have their own) on the player's
+  activation plays its `Unequip` sequence, and once that's done: a sigil stone into the player's
+  inventory (`LL2SigilStones100`), fame, the fire shield shader on the player, its parent activated
+  (the gate's collapse: the player out to Tamriel) and the stone destroyed. Its model's sequences:
+  `SpecialIdle` (its turning), `Unequip` (taken, `AMBSigilStoneTakePU`).
+* **Ayleid wells** (`ARWellGrate01`, outside the ruins), their script `AyleidWell`
+  gives, on the player's activation, once a day (`GetDayOfWeek`), "You draw power from the
+  well." and the `AyleidPower` spell cast on the player, its `forward` animation; on the same day
+  again: "A drained well recharges slowly." Between uses its `Backward` loop (its light and sound).
+* **Welkynd stones** (misc 0x191) and **Varla stones** (0x194),
+  used from the inventory (the misc item's use: the inventory's click is
+  `Actor::EquipItem`): a Welkynd stone restores the player's magicka ("You have used a Welkynd
+  Stone's power...", `ITMWelkyndStoneUse`); a Varla stone recharges every enchanted thing the player
+  has on (refused in combat unless `iAllowRechargeDuringCombat`); each is used up.
+
+### Design
+
+* **The Sigil Stone is taken by hand**: offered to the hands as one of the game's own props on the
+  game's constraints (as the hanging chains are, `OBJF_CONSTRAINED`), a ball the size of the stone.
+  Taken in a hand where it is, it comes out of the flame after the hand (dragged a tenth of a second
+  behind), the game's own 3D with it; pulled 30 cm out, it's the player's own activation, and its
+  script does the rest (its art, the stone into the pack, the collapse), the stone still in the hand
+  until the game takes it. Let go before then, it drifts back into its flame.
+* **A hand into a well's light** (a column 45 cm round its middle, from 20 cm over the well to 3 m)
+  held there half a second, felt building, is the player's activation of the well: its own script,
+  so once a day, its words and its spell.
+* **Welkynd and Varla stones crushed in the hand**: the trigger squeezed hard on one held (drawn from
+  the pack's right pouch, the Ayleid Stones slot, or taken from where it lies in a ruin, then picked
+  up by the game first) is its use as the inventory's click: its power, its words, its sound, the
+  stone gone. A crack in the hand.
+
+Calls made:
+
+* The stone follows the hand without turning with it (its own turning is its art's).
+* The well's light is a fixed column round its reference's place, not measured on its model.

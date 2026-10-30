@@ -32,6 +32,7 @@
 
 pub mod alchemy;
 pub mod archery;
+pub mod ayleid;
 pub mod body;
 pub mod books;
 pub mod camera;
@@ -80,6 +81,7 @@ pub mod riding;
 #[cfg(target_arch = "x86")]
 pub mod scene;
 pub mod settings;
+pub mod sigil;
 pub mod shapes;
 pub mod slot_menu;
 pub mod soul;

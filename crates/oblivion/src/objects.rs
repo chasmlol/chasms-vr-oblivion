@@ -23,9 +23,11 @@ pub enum Owner {
     Map,
     Pockets,
     Alchemy,
+    /// The world's magic the hands take: a Sigil Stone in its flame ([`crate::sigil`]).
+    Magic,
 }
 
-const OWNERS: usize = 9;
+const OWNERS: usize = 10;
 
 /// Where an owner's entries go in the table: the player's own things first, then the limbs cut
 /// off (so they're never the ones the table's size leaves out), then what lies about (and the
@@ -38,9 +40,10 @@ fn index(owner: Owner) -> usize {
         Owner::Gore => 3,
         Owner::Items => 4,
         Owner::Alchemy => 5,
-        Owner::Pockets => 6,
-        Owner::World => 7,
-        Owner::Props => 8,
+        Owner::Magic => 6,
+        Owner::Pockets => 7,
+        Owner::World => 8,
+        Owner::Props => 9,
     }
 }
 

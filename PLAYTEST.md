@@ -111,3 +111,33 @@ game's own code (its soul trap; its recharge and enchanting menus' own clicks).
 What I couldn't: anything in the game; the soul trap hook and the flying art are untested. Not done:
 armour, clothes and jewellery carried but not worn can't be held (the holsters don't hand out
 apparel), so they're enchanted (and repaired) through the game's own lists.
+
+## 4. The Sigil Stone, Ayleid wells, Welkynd and Varla stones — `playtest-sigil.bat`, `playtest-ayleid.bat`
+
+`playtest-sigil.bat`: the top of a Sigil Keep (a random gate's Sigillum Sanguis), its stone in its
+flame; saves as `rustvr-sigil`.
+
+1. **Take the Sigil Stone**: reach into the fire and close your hand on the stone. It's solid; pull it
+   towards you and it comes out of the flame after your hand. Let go early and it drifts back.
+2. **Pull it 30 cm out**: a jolt, and the game takes over: its own art, the sigil stone into your pack
+   (the Sigil Stones category), fame, and the gate collapses round you.
+
+`playtest-ayleid.bat`: beside the Ayleid well outside Vilverin, with three Welkynd and two Varla
+stones, the Longsword of Soul Embers on (its charge at 20%), your magicka drained, and a Welkynd stone
+lying on the ground ahead; saves as `rustvr-ayleid`.
+
+3. **The well**: put a hand into the column of light over it and hold it there: it builds for half a
+   second, then the game's own well: "You draw power from the well." and its spell. Again the same
+   day: "A drained well recharges slowly." (the game's rule).
+4. **A Welkynd stone**: the right pouch at the small of your back ("Ayleid Stones", new) gives one.
+   Squeeze the trigger hard on it: it's crushed, the game's own use (your magicka back, its words and
+   sound), gone.
+5. **A Varla stone**: the same: the sword's charge comes back.
+6. **The stone lying ahead**: pick it up and crush it: taken and used at once.
+
+What I checked: builds; unit tests (the stone after the hand, the well's column). The activations and
+uses are the game's own (the stone's and the well's scripts, the inventory's use).
+
+What I couldn't: anything in the game. The stone's grab (one of the runtime's constrained props, as
+the chains are) and its 3D moved by hand are untested; the well's column is a guess at its light's
+size (tell me if the hand has to be somewhere else).

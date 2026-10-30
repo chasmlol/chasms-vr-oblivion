@@ -29,7 +29,7 @@ use rustvr_protocol::*;
 
 /// The categories the slots draw from, as the runtime knows them (their names are what the
 /// player's slots remember).
-pub const CATEGORIES: [&str; 16] = ["Food", "Potions", "Poisons", "Ingredients", "Scrolls", "Arrows", "Weapons", "Soul Gems", "Keys", "Books", "Sigil Stones", "Apparatus", "Misc", "Torches", "Lockpicks", "Hammers"];
+pub const CATEGORIES: [&str; 17] = ["Food", "Potions", "Poisons", "Ingredients", "Scrolls", "Arrows", "Weapons", "Soul Gems", "Keys", "Books", "Sigil Stones", "Apparatus", "Misc", "Torches", "Lockpicks", "Hammers", "Ayleid Stones"];
 pub const FOOD: u32 = 0;
 pub const POTIONS: u32 = 1;
 pub const POISONS: u32 = 2;
@@ -51,6 +51,10 @@ pub const HAMMERS: u32 = 15;
 /// Their forms: the lockpick, the Skeleton Key, the repair hammer.
 pub const LOCKPICK_FORMS: [u32; 2] = [0x0000_000A, 0x0000_000B];
 pub const HAMMER_FORM: u32 = 0x0000_000C;
+/// The Ayleids' stones: Welkynd (magicka) and Varla (recharging), crushed in the hand to use them
+/// ([`crate::ayleid`]).
+pub const AYLEID_STONES: u32 = 16;
+pub const AYLEID_STONE_FORMS: [u32; 2] = [0x0000_0191, 0x0000_0194];
 
 use crate::items::{AMMO, APPARATUS as APPA, BOOK, INGREDIENT, KEY, LIGHT, MISC as MISC_FORM, POTION, SIGIL_STONE, SOUL_GEM, WEAPON};
 
@@ -61,6 +65,7 @@ pub fn category(kind: u8, id: u32, food: bool, poison: bool, scroll: bool) -> Op
     Some(match kind {
         MISC_FORM if LOCKPICK_FORMS.contains(&id) => LOCKPICKS,
         MISC_FORM if id == HAMMER_FORM => HAMMERS,
+        MISC_FORM if AYLEID_STONE_FORMS.contains(&id) => AYLEID_STONES,
         POTION if poison => POISONS,
         POTION if food => FOOD,
         POTION => POTIONS,
@@ -145,9 +150,11 @@ pub fn defaults() -> Vec<SlotDesc> {
         slot("Lockpicks", [-0.13, -0.28, 0.12], 0.06, 0.03, &[LOCKPICKS], RULE_VALUE, 0),
         // The repair hammer at the front of the belt on the right, for the hammer hand.
         slot("Hammers", [0.08, -0.5, 0.16], 0.065, 0.03, &[HAMMERS], RULE_MOST, 0),
-        // Soul gems in the pack at the small of the back, where a trapped soul flies to: the
-        // strongest soul first (to recharge with), then the biggest empty gem.
-        slot("Soul Gems", [0.0, -0.42, -0.16], 0.08, 0.04, &[SOUL_GEMS], RULE_STRONGEST, 0),
+        // Soul gems in the pack at the small of the back (its left pouch), where a trapped soul flies
+        // to: the strongest soul first (to recharge with), then the biggest empty gem. The
+        // Ayleids' stones in its right pouch.
+        slot("Soul Gems", [-0.07, -0.42, -0.16], 0.065, 0.04, &[SOUL_GEMS], RULE_STRONGEST, 0),
+        slot("Ayleid Stones", [0.07, -0.42, -0.16], 0.065, 0.04, &[AYLEID_STONES], RULE_VALUE, 0),
     ]
 }
 
@@ -390,6 +397,8 @@ mod game {
         published: f64,
         /// Each copy drawn from a slot, by its object.
         drawn: HashMap<u32, Out>,
+        /// Copies to use as their use at the mouth would (a stone crushed in the hand).
+        to_use: Vec<u32>,
         states: Box<ObjectStates>,
         logged: usize,
     }
@@ -408,6 +417,7 @@ mod game {
             next_scan: 0.0,
             published: -100.0,
             drawn: HashMap::new(),
+            to_use: Vec::new(),
             states: bytemuck::zeroed_box(),
             logged: usize::MAX,
         }))
@@ -658,6 +668,23 @@ mod game {
         })
     }
 
+    /// The copy `id` in a hand used, as a thing held at the mouth is (the game's own use), in the
+    /// next game frame: a stone crushed in the hand.
+    pub fn use_copy(id: u32) {
+        with_state(|s| {
+            if !s.to_use.contains(&id) {
+                s.to_use.push(id);
+            }
+        });
+    }
+
+    /// One of a thing of `form` the player has used now, as the inventory's click does (its
+    /// `EquipItem`): one just taken from the world into the hand and crushed.
+    pub fn use_now(form: usize) -> bool {
+        let player = engine::player();
+        player != 0 && use_one(player, form, 0, 0)
+    }
+
     /// A stack's name and count as the inventory last had it.
     pub fn describe(id: u32) -> Option<(String, u32)> {
         with_state(|s| s.inv.item(id).map(|i| (i.name().to_owned(), i.count)))
@@ -709,7 +736,8 @@ mod game {
                     let (uses, let_go) = (d.uses, d.let_go);
                     let flags = s.inv.item(st.parent).map_or(0, |i| i.flags);
                     let mut take = false;
-                    if st.shots > uses {
+                    if st.shots > uses || s.to_use.contains(&st.id) {
+                        s.to_use.retain(|&i| i != st.id);
                         take = use_one(player, form, list, flags);
                     }
                     // A weapon, a torch, or arrows while a bow is on, in a hand: the game equips it,
