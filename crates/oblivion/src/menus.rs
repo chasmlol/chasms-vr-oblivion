@@ -22,14 +22,21 @@ const TILE_MENUS: usize = 0x00B1_3970;
 const MENU_FIRST: u32 = 0x3E9;
 pub const MENU_LOADING: u32 = 0x3EF;
 pub const MENU_MAIN: u32 = 0x414;
+/// The race menu (`RaceSexMenu`: a new game's character creation, or `showracemenu`).
+pub const MENU_RACE_SEX: u32 = 0x40C;
 /// `PlayerCharacter*`, and a reference's cell (`TESObjectREFR::parentCell`).
 const PLAYER: usize = 0x00B3_33C4;
 const PARENT_CELL: usize = 0x40;
 
 /// The menu of this type is open (`kMenuType_*`).
 pub fn menu_open(kind: u32) -> bool {
+    tile_menu(kind) != 0
+}
+
+/// The open menu of this type's tile (`TileMenu*`), or 0.
+pub fn tile_menu(kind: u32) -> usize {
     let data = mem::deref(TILE_MENUS + 4);
-    kind >= MENU_FIRST && data != 0 && mem::deref(data + 4 * (kind - MENU_FIRST) as usize) != 0
+    if kind >= MENU_FIRST && data != 0 { mem::deref(data + 4 * (kind - MENU_FIRST) as usize) } else { 0 }
 }
 
 /// A game is loaded and the player is in it: in a cell, not at the main menu or a loading screen.

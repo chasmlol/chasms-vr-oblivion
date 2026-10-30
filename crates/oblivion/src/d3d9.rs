@@ -43,9 +43,13 @@ mod win {
     use windows::Win32::System::Threading::{CreateEventW, INFINITE, WaitForSingleObject};
     use windows::core::{IUnknown, Interface, PCWSTR, s};
 
-    /// Copies: the left eye, the right eye, the HUD (or the whole picture outside the world).
-    pub const KINDS: usize = 3;
+    /// Copies: the left eye, the right eye, the HUD (or the whole picture outside the world), the
+    /// mirror's world (`crate::render`).
+    pub const KINDS: usize = 4;
     pub const HUD: usize = 2;
+    pub const MIRROR: usize = 3;
+    /// Depths: the left eye's, the right eye's, the mirror's world's.
+    const DEPTHS: usize = 3;
 
     static REAL_CREATE9: AtomicUsize = AtomicUsize::new(0);
     static REAL_CREATE_DEVICE: AtomicUsize = AtomicUsize::new(0);
@@ -98,8 +102,8 @@ mod win {
         srv: Vec<ID3D11ShaderResourceView>,
         allocators: Vec<ID3D12CommandAllocator>,
         lists: Vec<ID3D12GraphicsCommandList>,
-        used: [u64; 2],
-        ready: [u64; 2],
+        used: [u64; DEPTHS],
+        ready: [u64; DEPTHS],
     }
     unsafe impl Send for Bridge {}
     static BRIDGE: Mutex<Option<Bridge>> = Mutex::new(None);
@@ -368,7 +372,7 @@ mod win {
         anyhow::ensure!(footprint.Footprint.Format != DXGI_FORMAT_UNKNOWN && bytes > 0 && bytes != u64::MAX, "the depth plane doesn't copy");
         let dev11: ID3D11Device1 = gpu.device.cast()?;
         let (mut buffers, mut resolved, mut shared12, mut srv, mut allocators, mut lists) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
-        for _ in 0..2 {
+        for _ in 0..DEPTHS {
             let desc = D3D12_RESOURCE_DESC {
                 Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
                 Width: bytes,
@@ -406,7 +410,7 @@ mod win {
             }
         }
         tracing::info!("d3d9: depth bridge ready ({w}x{h}{})", if multisampled { ", resolved from its samples" } else { "" });
-        Ok(Depth { size: (w, h), footprint, buffers, resolved, shared12, srv, allocators, lists, used: [0; 2], ready: [0; 2] })
+        Ok(Depth { size: (w, h), footprint, buffers, resolved, shared12, srv, allocators, lists, used: [0; DEPTHS], ready: [0; DEPTHS] })
     }
 
     /// Copies the game's depth buffer as it is now (after `eye`'s render) into that eye's shared

@@ -102,6 +102,44 @@ const BLOCK_HOLD: f64 = 0.5;
 /// Spell types the hand casts: a spell, a power, a lesser power.
 const CASTABLE_TYPES: [u32; 3] = [0, 2, 3];
 
+/// The game's magic effects by their codes (`NiTPointerMap<EffectSetting>`: buckets at +8, as many
+/// as +4 says, a code's bucket the code modulo that; each entry {next, code, effect}).
+const EFFECT_SETTINGS: usize = 0x00B3_3508;
+/// `EffectItem`: its code; a script effect's info (`ScriptEffectInfo`: its visual effect's code at
+/// +0x10).
+const EFFECT_CODE: usize = 0x00;
+const EFFECT_SCRIPT_INFO: usize = 0x18;
+const SCRIPT_VISUAL: usize = 0x10;
+pub const SCRIPT_EFFECT: u32 = u32::from_le_bytes(*b"SEFF");
+
+/// The game's magic effect (`EffectSetting`) with this code, or 0.
+pub fn effect_setting(code: u32) -> usize {
+    let buckets = mem::at::<u32>(EFFECT_SETTINGS + 4).unwrap_or(0) as usize;
+    let table = mem::deref(EFFECT_SETTINGS + 8);
+    if buckets == 0 || table == 0 {
+        return 0;
+    }
+    let mut entry = mem::deref(table + (code as usize % buckets) * 4);
+    let mut guard = 0;
+    while entry != 0 && guard < 256 {
+        guard += 1;
+        if mem::at::<u32>(entry + 4) == Some(code) {
+            return mem::deref(entry + 8);
+        }
+        entry = mem::deref(entry);
+    }
+    0
+}
+
+/// The magic effect an effect looks like: its own, or for a script effect the one it was given the
+/// look of (its visual effect), as the game shows it.
+fn looks_like(effect: usize) -> usize {
+    let info = mem::deref(effect + EFFECT_SCRIPT_INFO);
+    let visual = if mem::at::<u32>(effect + EFFECT_CODE) == Some(SCRIPT_EFFECT) && info != 0 { mem::at::<u32>(info + SCRIPT_VISUAL).unwrap_or(0) } else { 0 };
+    let shown = if visual != 0 { effect_setting(visual) } else { 0 };
+    if shown != 0 { shown } else { mem::deref(effect + EFFECT_SETTING) }
+}
+
 pub(crate) fn read_str(p: usize) -> String {
     let mut out = Vec::new();
     for i in 0..128 {
@@ -365,7 +403,7 @@ pub fn spells() -> (Box<Spells>, HashMap<u32, usize>) {
             let r = mem::at::<u32>(effect + EFFECT_RANGE).unwrap_or(0);
             range = range.max(r.min(2));
             if colour.is_none() {
-                let light = mem::deref(mem::deref(effect + EFFECT_SETTING) + SETTING_LIGHT);
+                let light = mem::deref(looks_like(effect) + SETTING_LIGHT);
                 colour = mem::at::<[u8; 4]>(light + LIGHT_COLOUR).filter(|_| light != 0);
             }
         }
@@ -483,6 +521,7 @@ fn cast(player: usize, spell: usize, ev: &CombatEvent, actors: &HashMap<u32, usi
         rot.add(2).write(old_heading);
     }
     *LAUNCH.lock().unwrap() = None;
+    crate::mirror_spell::cast(spell);
 }
 
 #[cfg(not(target_arch = "x86"))]
@@ -529,7 +568,8 @@ pub fn publish() {
     let spells_now = (k.frame % 10 == 1).then(spells);
     crate::link::with_adapter(|a| {
         crate::weapons::publish(a);
-        if k.frame % 30 == 3 {
+        // (Every frame while the race menu changes the body and the face as the player watches.)
+        if k.frame % 30 == 3 || crate::menus::menu_open(crate::menus::MENU_RACE_SEX) {
             crate::body::publish(a);
         }
         a.write_actors(&table);

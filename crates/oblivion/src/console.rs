@@ -62,16 +62,26 @@ pub fn select_spell(_id: u32) -> bool {
     false
 }
 
-/// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <hex id>` selects a spell,
-/// `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in front of the
-/// player (and that far over their feet), facing them (tests), anything else is compiled and run as
-/// a line of script. True if it ran.
+/// The form id of the player's spell called `name` (as the magic menu lists their spells and
+/// powers), if they have one.
+fn spell_named(name: &str) -> Option<u32> {
+    let (table, _) = crate::combat::spells();
+    table.spells[..table.count as usize].iter().find(|s| rustvr_protocol::name_str(&s.name).eq_ignore_ascii_case(name)).map(|s| s.id)
+}
+
+/// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <name or hex id>` selects one
+/// of the player's spells by its name, or any spell by its id (a spell the game makes, as the mirror
+/// spell, has no id to know beforehand), `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a
+/// reference that far in front of the player (and that far over their feet), facing them (tests),
+/// anything else is compiled and run as a line of script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
     }
-    if let Some(id) = line.strip_prefix("SelectSpell ") {
-        return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(select_spell);
+    if let Some(spell) = line.strip_prefix("SelectSpell ") {
+        let spell = spell.trim().trim_matches('"');
+        let id = spell_named(spell).or_else(|| u32::from_str_radix(spell.trim_start_matches("0x"), 16).ok());
+        return id.is_some_and(select_spell);
     }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();

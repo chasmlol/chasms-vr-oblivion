@@ -17,7 +17,7 @@ mod win {
     use crate::d3d9::{self, HUD};
     use crate::link::{self, GameFrame, Snapshot};
     use crate::{engine, hooks, mem};
-    use rustvr_protocol::{DEPTH_LINEAR, SLOT_DEPTH, SLOT_HUD, SLOT_MENU, SLOT_STEREO, SlotInfo};
+    use rustvr_protocol::{DEPTH_LINEAR, MIR_RENDER, SLOT_AUX, SLOT_DEPTH, SLOT_HUD, SLOT_MENU, SLOT_MIRROR, SLOT_STEREO, SlotInfo};
     use std::ffi::c_void;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -33,6 +33,8 @@ mod win {
         /// Each eye's depth was copied, and the projection's near and far planes (game units).
         depth: [bool; 2],
         near_far: (f32, f32),
+        /// The mirror's world was rendered and copied with its depth, and its near and far planes.
+        mirror: Option<(f32, f32)>,
     }
     static EYES: Mutex<Option<Eyes>> = Mutex::new(None);
     static LAST: Mutex<f64> = Mutex::new(0.0);
@@ -104,6 +106,8 @@ mod win {
     const TES: usize = 0x00B3_33A0;
     /// The texture the game draws the world into behind its menus (`Main::Render`'s argument then).
     const WORLD_TEXTURE: usize = 0x00B3_33E8;
+    /// A reference's 3D (`TESObjectREFR` +0x3C): the player's third-person body.
+    const PLAYER_3D: usize = 0x3C;
     static REAL_GRID_REDRAW: AtomicUsize = AtomicUsize::new(0);
 
     unsafe extern "thiscall" fn grid_redraw(this: *mut c_void) {
@@ -183,9 +187,38 @@ mod win {
         if let Some(f) = arms_flags {
             unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f | engine::av::APP_CULLED) };
         }
+        // Nor, while the race menu shows the player from outside, the game's own third-person
+        // player: the runtime draws the player, in the world and in the mirror.
+        let race_menu = crate::menus::menu_open(crate::menus::MENU_RACE_SEX);
+        let outside = if race_menu { mem::deref(engine::player() + PLAYER_3D) } else { 0 };
+        let outside_flags = if outside != 0 { crate::mem::at::<u16>(outside + engine::av::FLAGS) } else { None };
+        if let Some(f) = outside_flags {
+            unsafe { ((outside + engine::av::FLAGS) as *mut u16).write(f | engine::av::APP_CULLED) };
+        }
+        // The mirror's world, rendered after the eyes from the camera the runtime asked for: the
+        // head reflected in the glass, looking through it, its near plane on the glass.
+        let mirror = snap.frame.mirror;
+        let mirror_cam = (mirror.flags & MIR_RENDER != 0 && mirror.camera.valid != 0 && mirror.near > 0.0).then(|| {
+            let mut s = camera::eye_camera(&view, &mirror.camera, &mirror.fov, &game);
+            s.frustum[4] = (mirror.near * view.world_per_meter * camera::UNITS_PER_METER).min(s.frustum[5] * 0.5);
+            s
+        });
+        let renders = if mirror_cam.is_some() { 3 } else { 2 };
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let log = LOGGED.fetch_add(1, Ordering::Relaxed) % 600 == 30;
-        for eye in 0..2 {
+        let mut mirror_done = None;
+        for eye in 0..renders {
+            if eye == 2 {
+                let s = mirror_cam.expect("a third render is the mirror's");
+                camera::write(cam, &s);
+                set_lock(false, true);
+                SECOND_EYE.store(true, Ordering::Release);
+                result = time(Part::Eye, || unsafe { real(this, arg) });
+                let colour = hooks::guard("capture mirror", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::MIRROR)).unwrap_or(false));
+                let depth = hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
+                mirror_done = (colour && depth).then_some((s.frustum[4], s.frustum[5]));
+                continue;
+            }
             let s = camera::eye_camera(&view, &snap.frame.eyes[eye], &snap.frame.fov[eye], &game);
             if log {
                 tracing::info!(
@@ -204,7 +237,7 @@ mod win {
                 );
             }
             camera::write(cam, &s);
-            set_lock(eye == 0, eye == 1);
+            set_lock(eye == 0, eye + 1 == renders);
             SECOND_EYE.store(eye == 1, Ordering::Release);
             result = time(Part::Eye, || unsafe { real(this, arg) });
             captured[eye] = time(Part::Capture, || hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false)));
@@ -216,10 +249,13 @@ mod win {
         if let Some(f) = arms_flags {
             unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f) };
         }
+        if let Some(f) = outside_flags {
+            unsafe { ((outside + engine::av::FLAGS) as *mut u16).write(f) };
+        }
         hooks::guard_void("Render end", || {
             // The menus are drawn next: alone on black, they're the HUD layer.
             let _ = unsafe { dev.Clear(0, std::ptr::null(), D3DCLEAR_TARGET as u32, 0, 1.0, 0) };
-            *EYES.lock().unwrap() = Some(Eyes { snap, captured, depth, near_far: (game.frustum[4], game.frustum[5]) });
+            *EYES.lock().unwrap() = Some(Eyes { snap, captured, depth, near_far: (game.frustum[4], game.frustum[5]), mirror: mirror_done });
         });
         result
     }
@@ -235,9 +271,36 @@ mod win {
             *last = now;
             dt.clamp(0.0, 0.25)
         };
-        // (A menu over the world: the runtime shows the menus as a panel to point at.)
+        // (A menu over the world: the runtime shows the menus as a panel to point at. The race menu
+        // keeps the world round it, before the mirror, its menu the part of the picture it's in.)
         let menu = crate::menus::menu_mode();
-        let snap = link::game_frame(&GameFrame { eye: Some(game.eye()), look_yaw: game.look_yaw(), menu, now, dt })?;
+        let race_menu = crate::menus::menu_open(crate::menus::MENU_RACE_SEX).then(|| crate::hud_info::menu_uv(crate::menus::MENU_RACE_SEX).unwrap_or([0.0, 0.0, 0.5, 1.0]));
+        {
+            static SAID: Mutex<Option<[f32; 4]>> = Mutex::new(None);
+            let mut said = SAID.lock().unwrap();
+            if race_menu.is_some() && *said != race_menu {
+                tracing::info!("render: the race menu is open, its menu at {:.3?} of the picture: the world stays round it, before the mirror", race_menu.unwrap());
+            }
+            *said = race_menu;
+        }
+        // The race menu puts the game's camera in front of the player's face, looking back at them:
+        // the player stays where they stood (the eye and its look before it opened), so the world
+        // doesn't jump forward and back as it opens and closes.
+        let (eye, look_yaw) = {
+            static STOOD: Mutex<Option<(glam::Vec3, f32)>> = Mutex::new(None);
+            let mut stood = STOOD.lock().unwrap();
+            match (race_menu.is_some(), *stood) {
+                (true, Some(s)) => s,
+                _ => {
+                    let s = (game.eye(), game.look_yaw());
+                    if race_menu.is_none() {
+                        *stood = Some(s);
+                    }
+                    s
+                }
+            }
+        };
+        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, now, dt })?;
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);
@@ -279,6 +342,7 @@ mod win {
             let hud = d3d9::capture(dev, &gpu, HUD);
             let mut have_hud = false;
             let mut have_depth = false;
+            let mut have_mirror = false;
             {
                 let Some(slot) = a.begin_slot() else { return };
                 for eye in 0..2 {
@@ -293,6 +357,10 @@ mod win {
                 if let (true, Some(d)) = (e.depth == [true, true], slot.depth.as_ref()) {
                     have_depth = (0..2).all(|eye| d3d9::deliver_depth(&gpu, eye, &d[eye], e.near_far.0, e.near_far.1));
                 }
+                // The mirror's world and its depth.
+                if let (Some((near, far)), Some(aux), Some(aux_depth)) = (e.mirror, slot.aux.as_ref(), slot.aux_depth.as_ref()) {
+                    have_mirror = d3d9::deliver(&gpu, d3d9::MIRROR, &aux.tex) && d3d9::deliver_depth(&gpu, 2, aux_depth, near, far);
+                }
             }
             let mut info: SlotInfo = bytemuck::Zeroable::zeroed();
             info.frame_index = e.snap.frame.frame_index;
@@ -300,6 +368,11 @@ mod win {
             info.fov = e.snap.frame.fov;
             info.eye_map = [view.slot_map(); 2];
             info.flags = SLOT_STEREO | if have_hud { SLOT_HUD } else { 0 } | if have_depth { SLOT_DEPTH } else { 0 };
+            if have_mirror {
+                info.flags |= SLOT_AUX | SLOT_MIRROR;
+                info.aux_frame = e.snap.frame.mirror.frame;
+                info.aux_pose = e.snap.frame.mirror.camera;
+            }
             if have_depth {
                 info.depth_near = e.near_far.0 / crate::camera::UNITS_PER_METER;
                 info.depth_far = e.near_far.1 / crate::camera::UNITS_PER_METER;
@@ -318,7 +391,7 @@ mod win {
 
     fn menu(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32) {
         // Keeps the link alive and says the game is in its menus.
-        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, now: link::now(), dt: 0.0 });
+        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, now: link::now(), dt: 0.0 });
         link::with_adapter(|a| {
             let gpu = a.gpu().clone();
             if !d3d9::capture(dev, &gpu, HUD) {

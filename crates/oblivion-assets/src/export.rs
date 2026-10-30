@@ -127,6 +127,9 @@ impl Skeleton {
 pub struct Converted {
     pub model: Model,
     pub textures: Vec<String>,
+    /// Each mesh's vertices' linear map from the game's model space into the cache's (what a move
+    /// of the vertex, a FaceGen morph's, becomes).
+    pub linear: Vec<Vec<Mat3>>,
 }
 
 /// Which of a model's nodes to keep.
@@ -144,11 +147,30 @@ pub enum Part<'a> {
 /// model's own nodes are its bones). `exists`: whether the game has a file (a texture's normal
 /// map, `<texture>_n.dds`).
 pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part, exists: &dyn Fn(&str) -> bool) -> Converted {
+    convert_on(nif, source, skeleton, part, exists, None)
+}
+
+/// Converts a rigid part of the head (the hair, ears, eyes, mouth, teeth, tongue) as the game puts
+/// it on a body: on the skeleton's bone `bone` (`Bip01 Head`), its vertices in the model's own axes
+/// about that bone's place (docs/research/mirror.md), carrying the skeleton's bones.
+pub fn convert_attached(nif: &Nif, source: &str, skeleton: &Skeleton, bone: &str, exists: &dyn Fn(&str) -> bool) -> Converted {
+    convert_on(nif, source, Some(skeleton), Part::All, exists, skeleton.find(bone))
+}
+
+/// The hair shader's highlight table, by (N·L, N·H).
+const HAIR_ANISO: &str = "textures\\effects\\aniso.dds";
+
+/// A texture the skin shader draws: the races' skins and heads (not the eyes, nor the hair).
+fn skin_texture(path: &str) -> bool {
+    path.starts_with("textures\\characters\\") && !path.contains("\\hair\\") && !path.contains("\\eyes\\")
+}
+
+fn convert_on(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part, exists: &dyn Fn(&str) -> bool, attach: Option<usize>) -> Converted {
     let parents = nif.parents();
     let own;
     let skinned = nif.blocks.iter().any(|b| matches!(b, Block::Shape { skin, .. } if *skin >= 0));
     let skeleton = match skeleton {
-        Some(s) if skinned => Some(s),
+        Some(s) if skinned || attach.is_some() => Some(s),
         _ if skinned => {
             own = Skeleton::from_nif(nif);
             Some(&own)
@@ -176,6 +198,7 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
         false
     };
     let mut meshes = Vec::new();
+    let mut linear = Vec::new();
     let mut textures: Vec<String> = Vec::new();
     for (i, b) in nif.blocks.iter().enumerate() {
         let i = i as i32;
@@ -216,19 +239,38 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
                 }
             }
         }
-        let rigid = nif.world(i, &parents);
-        let rigid_bone = skeleton.and_then(|sk| nearest_bone(nif, &parents, i, sk));
+        let mut rigid = nif.world(i, &parents);
+        let mut rigid_bone = skeleton.and_then(|sk| nearest_bone(nif, &parents, i, sk));
+        // A head's part: its vertices as they are, in the model's axes about its bone's place. (The
+        // game's FaceGen takes a part's one shape alone: the mouth, teeth and tongue hang under a
+        // node turned as the head bone is, which it doesn't apply.)
+        if let (Some(k), Some(sk)) = (attach, skeleton) {
+            rigid = Transform { translation: sk.world[k].translation, ..Transform::IDENTITY };
+            rigid_bone = Some(k);
+        }
+        // The hair (its texture under `characters\hair\`): its vertex colour is its tint's mask,
+        // in the green (the hair shader's `v1.y`).
+        let hair = av.properties.iter().any(|&p| match nif.get(p) {
+            Some(Block::Texturing(t)) => matches!(nif.get(t.base), Some(Block::SourceTexture { file }) if normalise(file, "textures\\").starts_with("characters\\hair\\")),
+            _ => false,
+        });
         let mut vertices = Vec::with_capacity(d.vertices.len());
+        let mut maps = Vec::with_capacity(d.vertices.len());
         for (v, &p) in d.vertices.iter().enumerate() {
             let n = d.normals.get(v).copied().unwrap_or(Vec3::Z);
             // The vertex colour, which the game multiplies the base texture by: grey in every model
             // the player wears or holds, so its brightness alone.
-            let ao = d.colors.get(v).map_or(255, |c| (((c[0] + c[1] + c[2]) / 3.0).clamp(0.0, 1.0) * 255.0).round() as u8);
+            let ao = match d.colors.get(v) {
+                Some(c) if hair => (c[1].clamp(0.0, 1.0) * 255.0).round() as u8,
+                Some(c) => (((c[0] + c[1] + c[2]) / 3.0).clamp(0.0, 1.0) * 255.0).round() as u8,
+                None => 255,
+            };
             let mut vert = Vertex { uv: d.uvs.get(v).copied().unwrap_or_default(), ao, ..Default::default() };
             let w = &mut weights[v];
             if w.is_empty() || skin_to.is_empty() {
                 vert.pos = point(rigid.apply(p)).to_array();
                 vert.normal = direction(rigid.rotation * n).to_array();
+                maps.push(SWAP * rigid.rotation * (rigid.scale / UNITS_PER_METRE));
                 if let Some(k) = rigid_bone {
                     vert.bones[0] = k as u8;
                     vert.weights[0] = 255;
@@ -237,11 +279,13 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
                 w.sort_by(|a, b| b.1.total_cmp(&a.1));
                 w.truncate(4);
                 let total: f32 = w.iter().map(|x| x.1).sum::<f32>().max(1e-6);
-                let (mut pos, mut nrm) = (Vec3::ZERO, Vec3::ZERO);
+                let (mut pos, mut nrm, mut map) = (Vec3::ZERO, Vec3::ZERO, Mat3::ZERO);
                 for &(j, wt) in w.iter() {
                     pos += skin_to[j].apply(p) * (wt / total);
                     nrm += skin_to[j].rotation * n * (wt / total);
+                    map += skin_to[j].rotation * (skin_to[j].scale * wt / total);
                 }
+                maps.push(SWAP * map / UNITS_PER_METRE);
                 vert.pos = point(pos).to_array();
                 vert.normal = direction(nrm).to_array();
                 // Weights in 255ths, summing to 255 exactly.
@@ -273,13 +317,25 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
                 Some(Block::Texturing(t)) => {
                     if let Some(Block::SourceTexture { file }) = nif.get(t.base) {
                         let path = format!("textures\\{}", normalise(file, "textures\\"));
-                        if path.starts_with("textures\\characters\\") && !path.contains("\\hair\\") {
+                        if skin_texture(&path) {
                             material.shader = Shader::GamebryoSkin;
+                        } else if hair {
+                            material.shader = Shader::GamebryoHair;
                         }
                         let normal = path.strip_suffix(".dds").map(|s| format!("{s}_n.dds"));
+                        // The hair's layer map (`<texture>_hl.dds`: its strands over the base, by
+                        // its alpha), where the others have a glow map.
+                        let layer = path.strip_suffix(".dds").map(|s| format!("{s}_hl.dds")).filter(|_| hair);
                         texture = add(path, &mut textures);
                         if let Some(n) = normal.filter(|n| exists(n)) {
                             material.bump = add(n, &mut textures);
+                        }
+                        if let Some(l) = layer.filter(|l| exists(l)) {
+                            material.detail = add(l, &mut textures);
+                        }
+                        // The hair's highlight, from the game's table (its hair shader's AnisoMap).
+                        if hair && exists(HAIR_ANISO) {
+                            material.env = add(HAIR_ANISO.to_owned(), &mut textures);
                         }
                     }
                     if let Some(Block::SourceTexture { file }) = nif.get(t.glow) {
@@ -300,6 +356,7 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
         }
         let indices = d.triangles.iter().flat_map(|t| [t[0] as u32, t[1] as u32, t[2] as u32]).collect();
         meshes.push(Mesh { texture, vertices, indices, name: av.name.clone(), material });
+        linear.push(maps);
     }
     let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
     for v in meshes.iter().flat_map(|m| &m.vertices) {
@@ -313,6 +370,7 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
     Converted {
         model: Model { version: FORMAT_VERSION, source: source.to_owned(), meshes, bones, bounds_min: lo.to_array(), bounds_max: hi.to_array() },
         textures,
+        linear,
     }
 }
 

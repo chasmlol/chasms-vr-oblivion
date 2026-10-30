@@ -86,7 +86,10 @@ pub fn before_update() {
         if s.frame.intents.flags & rustvr_protocol::INT_CURSOR != 0 {
             crate::menus::point(s.frame.intents.cursor_uv);
         }
-        if let Some(view) = s.view {
+        // (Not while the race menu is open: it shows the player in third person, turned to its
+        // camera, and rebuilds their third-person body as the race or sex changes; taken back to
+        // first person under it, that body was gone and the game crashed.)
+        if let Some(view) = s.view.filter(|_| !crate::menus::menu_open(crate::menus::MENU_RACE_SEX)) {
             log_once(view.look_yaw);
             first_person();
             set_look(view.look_yaw, view.look_pitch);
@@ -95,6 +98,10 @@ pub fn before_update() {
     #[cfg(windows)]
     input::set(v, vr || settings::get().background);
     crate::combat::apply_pending();
+    // The mirror spell on the player, and the game's effect for each summons of the mirror.
+    if vr {
+        crate::mirror_spell::tick();
+    }
 }
 
 /// Testing (`RUSTVR_OBLIVION_TRACE_MOVE=1`): for two seconds after the stick changes, the player's
