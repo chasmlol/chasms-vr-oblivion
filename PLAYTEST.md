@@ -67,6 +67,20 @@ Look out for:
   something else?
 - **The spheres.** Too bright, too faint, or in the way of the editor?
 
+## Round 7: the index finger rests the same on and off the trigger
+
+You asked for the index finger not to lift whenever your finger leaves the trigger, and not to
+change when you rest it on the trigger (the Quest 3's touch sensor).
+
+- It now always rests as it did with your finger on the trigger, and curls only as you pull.
+- The touch sensor doesn't move it at all.
+- This is the framework's finger pose, so both the drawn hand and the physics fingers follow it.
+- A gun's index rests on its trigger the same way (it used to lie along the frame until touched).
+  That doesn't come up in Oblivion.
+- There's no pointing pose any more (a lifted index): nothing used it.
+
+Try: rest your finger on the trigger, lift it off, and pull, and watch the index.
+
 ## Round 6: the shoulders easier to reach
 
 You said the shoulders were still too hard to reach. Both over-the-shoulder places are bigger now
