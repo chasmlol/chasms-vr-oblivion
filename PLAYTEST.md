@@ -67,7 +67,8 @@ world.
    a second and a half. You feel a firm pulse. Whatever came out goes back, and the editor floats
    in front of you. It's made of Oblivion's own parchment, rows, icons and buttons, in three
    strips: the slots, the categories, the buttons. Point with the laser and pull the trigger:
-   - **A slot** on the left picks it. Under its name is what it gives out now.
+   - **A slot** on the left picks it. Under its name is what it gives out now, and that thing
+     shows, still, at the slot's place on your body: look down to see where it is.
    - **A category** in the middle puts it in the slot, last. Its place in the order shows on the
      right of the row, and the picked one shows as `< 2 >`. Pick it again to take it out of the
      slot.
@@ -125,6 +126,8 @@ turns it off).
     - the runtime saved both into the settings.
   - Move: the food slot was placed by the left hand's squeeze at the left thigh, and saved there.
   - New slot: a fifth slot, placed by the right hand's squeeze at the chest.
+  - The picked slot's first thing (the food slot's leek) showed at the right hip while the editor
+    was open, and went when it closed.
   - B closed it.
 - **Weapons from a slot.** A slot of weapons at the right hip:
   - the Iron Longsword drawn from it was equipped by the game and became the weapon in the hand;
@@ -220,8 +223,9 @@ turns it off).
 
 ## Not done
 
-- **No ghost of what's in a slot.** You find a slot by its tick and learn what it holds by drawing,
-  or in the editor, which shows each slot's first thing.
+- **No ghost of what's in a slot during play.** You find a slot by its tick and learn what it holds
+  by drawing, or in the editor: it lists each slot's first thing, and shows the picked slot's
+  first thing at its place on your body.
 - **Slots don't move with the body's crouch or lean:** they hang off the head-following anchor the
   holsters always have, as the research recommends.
 - **Torches** aren't a category (section 5's). **Apparel** isn't either.
