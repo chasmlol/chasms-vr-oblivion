@@ -72,8 +72,9 @@ fist (the grip squeezed): the other hand still swims.
 - **Scripted breaststrokes** moved the player about 8.6 m in 10 s, up to 93% of the game's speed,
   surging and gliding. Swimming into the big rock slid along it, the game's collision. In the
   shallows the game stood the player up.
-- **Diving** with palms-up pushes reached 1.5 m/s down. Surfacing with palms-down pushes, 1.7 m/s
-  up.
+- **Diving** with palms-up pushes (from low, the hands staying under the water) went from the
+  surface to the bottom, about 4 m down, at up to 1.5 m/s. Surfacing with palms-down pushes,
+  1.7 m/s up.
 - **Athletics** experience rose while swimming, both with the stick (game's own) and with strokes.
 - **Underwater:** the game's underwater fog on the world, the hands and body. The breath meter
   showing at the top of the view, from the game's own layout.
@@ -124,7 +125,7 @@ fist (the grip squeezed): the other hand still swims.
     goes with how squarely the palm meets its motion.
   - The push is the hand's velocity against the head, reversed, past a 0.25 m/s dead zone.
   - Strokes accelerate you and the water's drag glides it out over 1.4 s.
-  - At the surface a stroke has to take you down faster than 0.2 m/s to dive. Every stroke has a
+  - At the surface a stroke has to take you down faster than 0.1 m/s to dive. Every stroke has a
     little up and down in it, and the game floats a swimmer back up only once they stop: before
     this, a long swim at the surface sank you a couple of centimetres a second. Now you stay within
     about 5 cm of the game's float.
