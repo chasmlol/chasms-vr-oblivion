@@ -169,7 +169,7 @@ mod game {
     /// far from it (a yank).
     const LIFT: f32 = 0.12;
     const LIFT_TIME: f64 = 0.12;
-    const YANK: f32 = 0.6;
+    const YANK: f32 = 0.55;
     /// A leg is tripped sooner: pulled this far from where the standing body has it.
     const TRIP: f32 = 0.35;
     /// Let go of faster than this (m/s), a standing actor is thrown down.
@@ -181,9 +181,10 @@ mod game {
     const CHOKE_TIME: f32 = 6.0;
     const CHOKE_LIFTED: f32 = 1.5;
     const CHOKE_SQUEEZE: f32 = 0.15;
-    /// The choke takes its fatigue this far below nothing (a share of its most): out cold for a few
-    /// seconds after it's let go, as the game's own knockout from fatigue.
-    const CHOKED_OUT: f32 = 0.25;
+    /// The choke takes its fatigue this far below nothing (a share of its most): out cold for a while
+    /// after it's let go (as long as it takes the game to bring its fatigue back up from there: a
+    /// quarter of it had it up again in a second and a half), the game's own knockout from fatigue.
+    const CHOKED_OUT: f32 = 1.0;
     /// Held this long, a living actor takes it as an attack (seconds).
     const HELD_ATTACK: f64 = 4.0;
     /// A standing actor pulled further than this (metres, along the ground) from where its body has
