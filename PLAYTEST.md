@@ -52,6 +52,19 @@ hand instead of the flat screen.
 - **The map is in front of your hand**: it lies a hand's depth in front of the hand holding it (or
   both, spread), so your fingers don't come through it.
 
+## Since the fifth headset play (2026-10-30)
+
+- **A let-go book stays let go**: an open book you let go of used to leap into your other hand and
+  stay held there without the grip (for a moment the game's book was open on a book no hand had,
+  which is how a book you look at on a shelf is brought to the hand). It now just shuts and falls.
+- **A more forgiving flick** (the same speed):
+  - flicking again and again works: the next flick counts as soon as the hand slows to come back,
+    where before it had to all but stop;
+  - your fingertip brushing the pages as a flick starts no longer counts as pressing them (that
+    stopped the flick): a press is the fingertip going into the page, not across it;
+  - a flick that arcs (half sideways is enough), and a hand through the pages or out past their
+    edges, count.
+
 The flat game's crosshair is gone (taken from the menus branch, which has it from riding): where you
 look shows only the icon of what you can activate, red when taking it is stealing.
 
@@ -152,9 +165,12 @@ look shows only the icon of what you can activate, red when taking it is stealin
   eyes from its middle (the first build laid it on the cover, where it turned with the wrist), just
   in front of the book and the fingers round it.
 - **Turning by a flick**: the free hand's controller velocity, sideways as the eyes see it (level),
-  0.45 m/s or more with most of its speed sideways, the hand over the pages or near them (30 cm in
-  front, 12 cm behind, 40% past their sides, top and bottom: "on the UI or near it"); the hand empty,
-  not gripping and not pressing a button; none in the 0.4 s after the pages appear. The first build's sweep had to start well out on a page and cross
+  0.45 m/s or more with half its speed sideways at least, the hand over the pages or near them (30
+  cm in front, 25 cm behind, half their size past their sides, top and bottom: "on the UI or near
+  it"); the hand empty and not gripping; none in the 0.4 s after the pages appear. The next counts
+  once its sideways speed is under half a flick's (the fifth play's waited for the whole hand to be
+  under 0.18 m/s, which a hand flicking again and again never was). A flick fast enough that
+  didn't count is logged with why (`rustvr.log`, "didn't count"). The first build's sweep had to start well out on a page and cross
   the spine within a few centimetres (in the first play the buttons turned the pages instead); the
   second's flick was the hand's speed against the pages, near them, and turned pages at random as
   the pages turned with the head and moved with the book. A trigger pinch pulled across still turns
@@ -176,8 +192,9 @@ look shows only the icon of what you can activate, red when taking it is stealin
   trigger). Within 6 cm in front of a piece the game's cursor follows the fingertip (the game lights
   what's under it); the fingertip within 1 cm of it, come from in front, holds the game's button
   down there until it's 2.5 cm off again (a click where it's let go, so sliding off a button before
-  lifting doesn't press it). A fingertip sweeping across faster than 0.35 m/s isn't pressing, so a
-  flick that brushes the pages doesn't press Take. What floats (a question over the map) still has
+  lifting doesn't press it). A fingertip sweeping across faster than 0.35 m/s, or moving more across
+  the page than into it, isn't pressing, so a flick that brushes the pages doesn't press Take (nor
+  stop the flick). What floats (a question over the map) still has
   the laser.
 - **A sheet faces you, centred on the hand, in front of it.** The map, and a book read from the pack,
   are held at their middle, 8 cm in front of the hand towards your eyes (a hand's depth: the
@@ -192,6 +209,9 @@ look shows only the icon of what you can activate, red when taking it is stealin
   free here, and a hip is a 13 cm place where the hand drops by itself; the belt pouch is 8.5 cm in
   front of the belly with nothing to see there, and in the first play it wasn't found. The holsters
   branch keeps food at the right hip, so the two will need sharing out when they're merged.
+- **A book read where it lies comes to the off hand held without the grip** (the shelf's look and
+  trigger): grip and let go to drop it. A book a hand had open is never brought back (let go of, it
+  shuts and falls).
 - **The game is paused while a book or the map is open** (as in the flat game), but your hands aren't:
   you can move the book, hand it over, let it go, spread the map.
 

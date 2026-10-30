@@ -18,6 +18,7 @@
 
 use crate::{mem, tiles};
 use rustvr_protocol::Action;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub const MENU_BOOK: u32 = 0x402;
 const BOOK_REF: usize = 0x30;
@@ -65,11 +66,15 @@ pub fn held_book() -> Option<u32> {
 }
 
 /// The thing (the runtime's object) the book menu is reading where it lies (on a shelf, activated
-/// by looking at it), if it's one the hands can take.
+/// by looking at it), if it's one the hands can take: never one a hand had while it was open (let
+/// go of, it's being shut; brought back, it would leap into the other hand and stay there).
 pub fn lying_book() -> Option<u32> {
     let (_, refr) = open()?;
-    (refr != 0).then(|| crate::items::offered(refr)).flatten()
+    (refr != 0 && HELD_OPEN.load(Ordering::Relaxed) != refr).then(|| crate::items::offered(refr)).flatten()
 }
+
+/// The reference of the book being read, once a hand has had it open (until its menu shuts).
+static HELD_OPEN: AtomicUsize = AtomicUsize::new(0);
 
 /// Shuts the book with the game's own Exit.
 fn shut(menu: usize) {
@@ -149,6 +154,9 @@ pub fn frame() {
     match book {
         Some((m, refr)) if refr != 0 => {
             let in_hand = held.iter().any(|h| h.refr == refr);
+            if in_hand {
+                HELD_OPEN.store(refr, Ordering::Relaxed);
+            }
             if s.reading == Some(refr) && !in_hand {
                 tracing::info!("books: let go of: shut");
                 shut(m);
@@ -157,6 +165,9 @@ pub fn frame() {
                 s.reading = Some(refr);
             }
         }
-        _ => s.reading = None,
+        _ => {
+            s.reading = None;
+            HELD_OPEN.store(0, Ordering::Relaxed);
+        }
     }
 }
