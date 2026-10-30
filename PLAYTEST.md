@@ -13,7 +13,7 @@ Everything you read is the game's own book menu: its parchment, its fonts, its o
 the book's text and pictures, its page-turn sound, its Take and Exit. It floats on the book in your
 hand instead of the flat screen.
 
-## How it is now (after eight headset plays, 2026-10-30)
+## How it is now (after nine headset plays, 2026-10-30)
 
 - **A book is held like anything else.** Take one in your hand and the game plays on as ever: you
   walk, turn, fight, the HUD's there, time passes. The only difference is the book's pages float
@@ -21,8 +21,9 @@ hand instead of the flat screen.
 - **It opens as soon as it's in your hand**, and shuts when you let go, or with its Exit.
 - **Your fingertip works it**: lift your free hand's index finger off the trigger to point it and
   touch Take, Exit, or the page arrows. No laser.
-- **A page turns with a swipe of your fingertip** across the pages, right to left onwards, left to
-  right back: on them or a few centimetres off, barely a flick.
+- **Turn pages with your other hand's grip**: hold the grip anywhere near the book and drag
+  sideways. Every 5 cm is a page, leftwards onwards, rightwards back, as many as you drag. Near the
+  book that hand's grip grabs nothing else.
 - **The pages are steady**: smoothed while you hold the book still, following closely as you move it.
 - **The map** is at your right hip, centred on your hand a hand's depth in front of it, stays in your
   hand on every tab, and goes straight back to the hip when you let go. (The map is still the game's
@@ -42,10 +43,10 @@ look shows only the icon of what you can activate, red when taking it is stealin
      into your **off hand** and opens there.
    - It's about as big as a large open book (38 by 28 cm): bring it nearer to read it bigger. Your
      other hand in front of the pages covers them, as a real hand would.
-2. **Turn a page.** Swipe your free hand's fingertip across the pages, right to left: the page turns
-   onwards, with the game's own sound and a tick in your hand. Left to right turns back. It wants
-   hardly any speed; let the finger slow (or leave the pages) before the next swipe, and pause a beat
-   before swiping back the other way. Touching the page arrows turns them too.
+2. **Turn a page.** Hold the grip with your free hand anywhere near the book (in front of the pages,
+   behind them or a little off their sides: a tick says it has them) and drag it to the left: every
+   5 cm turns a page onwards, with the game's own sound and a tick. Drag right to go back. Let go
+   when you're done. Touching the page arrows with your fingertip turns them too.
 3. **Take it, or put it down.** Point your free hand's index finger and touch a button (it presses
    as your fingertip goes in onto it and comes off still on it; a tick as it goes in):
    - **Take**: the game takes it into your pack (it's the shop's: the owner reacts as the game has
@@ -58,8 +59,8 @@ look shows only the icon of what you can activate, red when taking it is stealin
    up, or find one): opening it raises the skill exactly as the flat game does.
 5. **From your pack.** Open your inventory (B on the left hand) and click the guide or the note:
    - it's held in your **off hand** like a sheet, centred on the hand, always turned to your eyes;
-   - swipe the guide's pages the same way; the note is the game's scroll, rollers and all (a swipe
-     scrolls it);
+   - turn the guide's pages the same way (the grip, dragged); the note is the game's scroll,
+     rollers and all (the grip dragged scrolls it);
    - B shuts it, back to the inventory. (This one is over the inventory, a menu, so the game's paused
      as with any open menu.)
 6. **The map.** Reach to your **right hip**, at the belt (you feel a tick as your hand gets there),
@@ -90,6 +91,8 @@ look shows only the icon of what you can activate, red when taking it is stealin
 8. A book shouldn't be a menu at all, just a held thing with its pages floating on it; the flick was
    still hard and flashed something big in the face (a page turn was a mouse-wheel notch, which the
    game, running under the book, also took for its camera zoom). Now: no menu, fingertip swipes.
+9. The book as a held thing works; the swipe still often missed. Now: the other hand's grip near the
+   book, dragged across, turns the pages.
 
 ## What wasn't checked
 
@@ -97,8 +100,8 @@ look shows only the icon of what you can activate, red when taking it is stealin
   run: Oblivion never shows its book menu with no menu up on the flat screen. Things to look for:
   the pages not showing (or not changing as they turn), the HUD missing more than the middle, the
   game doing something odd when a book opens or shuts, a crash.
-- **The page arrows and scrolling a note** by fingertip and swipe, now done on the menu's own
-  values rather than the game's mouse.
+- **The page arrows and scrolling a note** by fingertip and the grip, done on the menu's own values
+  rather than the game's mouse.
 - **Fast travel** from the held map (a fingertip's tap on a place, the game's question).
 - **The local map's picture**: indoors the local map's window showed the parchment and your arrow
   but not the drawing of the room (see *Not done*).
@@ -131,18 +134,17 @@ look shows only the icon of what you can activate, red when taking it is stealin
 - **Pages over the closed book, facing you.** Oblivion has no open book models, so the game's own book
   art floats over the closed book, centred on its model, turned to your eyes from its middle, just in
   front of the book and the fingers round it.
-- **Turning by a swipe of the fingertip**: the free hand's index fingertip (the rig's, where the drawn
-  finger is) moving across the pages at 0.15 m/s or more, more across them than in or out, within
-  10 cm of them and a quarter of their size past their edges; the hand empty and not gripping; none
-  in the 0.3 s after the pages appear. The next counts once it's slowed below half that or left the
-  pages; the way back is shut for 0.45 s after the swipe's stroke ends (the finger coming straight
-  back isn't a swipe back). A trigger pinch at a page's edge pulled across still turns one. A
-  fingertip swipe fast enough that didn't count is logged with why (`rustvr.log`, "didn't count").
-  (Before: a controller flick near the pages, which was hard to make and random.)
+- **Turning by the other hand's grip** (round 9: "hold the grip anywhere near the book with second
+  hand and flip the pages, nice and simple"): the free hand's grip within 25 cm in front of the pages
+  or behind, and half their size past their edges, holds them (a tick); then every 5 cm it moves
+  across them (along the pages' right) turns one, leftwards onwards, rightwards back, as many as it
+  goes, until it lets go. Near the pages, and while it holds them, that hand's grip takes nothing
+  (the rig's hover for it is nothing and its gloves pull nothing), so it never takes the book from
+  the other hand or a book off a shelf. (Before: flicks and swipes timed by speed, which missed.)
 - **Pressing with a fingertip**: within 6 cm in front of a piece it's over it; within 1 cm, come from
-  in front and going in more than across, it presses until it's 2.5 cm off again; a swipe that began
-  as a press lets go on nothing. In a menu (the pack's book, the map) the press is the game's
-  cursor and click; in play it's the adapter's (above).
+  in front and going in more than across, it presses until it's 2.5 cm off again. In a menu (the
+  pack's book, the map) the press is the game's cursor and click; in play it's the adapter's (above).
+  A gripping hand doesn't press.
 - **Drawn with the body.** Pages and the map are drawn in the body's depth: a hand in front of a page
   covers it, the fingers behind the map are hidden.
 - **Solid paper.** Oblivion draws its book and map pages as light added over the screen, with no
@@ -152,9 +154,10 @@ look shows only the icon of what you can activate, red when taking it is stealin
   So text doesn't shake, but a page can trail the book a centimetre or two as it moves. Spread
   between both hands the map follows them exactly.
 - **A sheet faces you, centred on the hand, in front of it.** The map, and a book read from the pack,
-  are held at their middle, 8 cm in front of the hand (the fingers holding it stay behind it).
-  Spread between the hands, the points each hand took stay in them; handed over, the second hand
-  keeps it where it took it.
+  are held at their middle, 8 cm in front of the hand (the fingers holding it stay behind it). The
+  map spread between the hands keeps the points each hand took in them; handed over, the second hand
+  keeps it where it took it. (A book from the pack isn't spread: the other hand's grip turns its
+  pages.)
 - **The map never leaves the hand but by letting go**: every page of the map menu, the journal's too,
   stays in the hand. Let go, it's on its way back to the hip at once, nothing of it shown as it shuts.
 - **The map lives at the right hip** (`map_slot` in `rustvr-oblivion.toml`: hip_right, hip_left,
