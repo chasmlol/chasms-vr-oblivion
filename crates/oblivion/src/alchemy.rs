@@ -195,9 +195,15 @@ pub const NOTE_WIDTH: f32 = 0.26;
 pub const NOTE_HALF_THICK: f32 = 0.002;
 /// A sheet of paper's weight (kilograms), as near as the hands' physics takes one.
 pub const NOTE_MASS: f32 = 0.05;
-/// Where the note is put when a bench appears: this far from the mortar towards the player
-/// (metres), its page towards them.
+/// Where the note is put: this far from the mortar towards the player (metres), its page towards
+/// them.
 pub const NOTE_OUT: f32 = 0.2;
+/// When it's put there: once the player is at the bench, this near its mortar (metres, along the
+/// floor) and facing it, the mortar within this angle (radians) of the way they look. So with
+/// benches in a row, each one's note faces the player where they stand at it, not where they were
+/// when they first came in sight of it.
+pub const NOTE_NEAR: f32 = 2.0;
+pub const NOTE_FACING: f32 = 0.6;
 /// Where the writing goes: inside the scroll's frame (the book menu's text starts at 115, 156 of
 /// the scroll), down to its foot.
 const WRITE_X: f32 = 160.0;
@@ -1384,7 +1390,7 @@ mod game {
             }
             // (The notes' states apart: the notes are the state's to change.)
             let note_states: Vec<ObjectState> = states.iter().filter(|st| st.id & 0xFF00_0000 == NOTE).copied().collect();
-            notes(s, &note_states, &offered);
+            notes(s, view, &note_states, &offered);
             publish(s, &offered);
             // A bottle rising out of a mortar: where it is now, still, until a hand has it.
             if let Some(r) = &s.rising {
@@ -1409,12 +1415,19 @@ mod game {
         });
     }
 
+    /// Whether the player (their head) is at the bench whose mortar is at `mp`: [`NOTE_NEAR`] it
+    /// and facing it.
+    fn at_bench(view: &rustvr_adapter::View, mp: Vec3) -> bool {
+        let to = Vec3::new(mp.x - view.head_pos.x, 0.0, mp.z - view.head_pos.z);
+        let look = Vec3::new(view.look_dir.x, 0.0, view.look_dir.z);
+        to.length() <= NOTE_NEAR && to.try_normalize().zip(look.try_normalize()).is_some_and(|(t, l)| t.dot(l) >= NOTE_FACING.cos())
+    }
+
     /// Where a bench's note is put: on what the mortar stands on, [`NOTE_OUT`] from it towards the
-    /// player, its page the right way up to them.
-    fn note_place(mortar: (Vec3, Quat), bench: &Bench) -> (Vec3, Quat) {
+    /// player's head at `head`, its page the right way up to them.
+    fn note_place(mortar: (Vec3, Quat), bench: &Bench, head: Vec3) -> (Vec3, Quat) {
         let (mp, mq) = mortar;
-        let player = game_pos(engine::player()).map(|p| camera::basis().point_from_game(p)).unwrap_or(mp + Vec3::Z);
-        let d = Vec3::new(player.x - mp.x, 0.0, player.z - mp.z).try_normalize().unwrap_or(Vec3::Z);
+        let d = Vec3::new(head.x - mp.x, 0.0, head.z - mp.z).try_normalize().unwrap_or(Vec3::Z);
         let foot = (mp + mq * Vec3::new(0.0, bench.bottom, 0.0)).y;
         let at = Vec3::new(mp.x, foot + NOTE_HALF_THICK + 0.01, mp.z) + d * NOTE_OUT;
         // Its top (+Z) away from the player.
@@ -1424,11 +1437,11 @@ mod game {
     /// The notes: a hand taking one up or putting it down (the game's scroll sounds), a fingertip
     /// on one (a page turned: a recipe chosen, back to the list, the list turned over), and each
     /// one's page as the bench gets on with its recipe.
-    fn notes(s: &mut State, states: &[ObjectState], offered: &[items::Offered]) {
+    fn notes(s: &mut State, view: &rustvr_adapter::View, states: &[ObjectState], offered: &[items::Offered]) {
         let fonts = note_fonts();
         for (id, b) in s.benches.iter_mut() {
             if b.note.at.is_none() {
-                b.note.at = node_pose(b.node).filter(|_| alive(b)).map(|p| note_place(p, b.bench));
+                b.note.at = node_pose(b.node).filter(|(mp, _)| alive(b) && at_bench(view, *mp)).map(|p| note_place(p, b.bench, view.head_pos));
             }
             let n = &mut b.note;
             if let Some(st) = states.iter().find(|st| st.id == note_id(*id)) {
@@ -1516,8 +1529,9 @@ mod game {
             if let Some(shown) = b.shown.as_ref().filter(|_| !b.contents.is_empty()) {
                 cards.push(card(*id, b.revision, shown, fonts()));
             }
-            if let Some(c) = &b.note.card {
-                cards.push(*c);
+            // (A note's page only once it's down: with nothing to lie on it would float.)
+            if let Some(c) = b.note.card.filter(|_| b.note.at.is_some()) {
+                cards.push(c);
             }
         }
         recs.sort_by_key(|r| r.id);
