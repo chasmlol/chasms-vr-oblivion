@@ -445,6 +445,15 @@ mod game {
         card_refs: HashMap<u32, usize>,
         states: Box<ObjectStates>,
         bounty: i32,
+        /// Things just dropped, to set flying as they left the hand once the game has their bodies.
+        throws: Vec<Throw>,
+    }
+
+    struct Throw {
+        form: usize,
+        at: Vec3,
+        lin: Vec3,
+        until: f64,
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -466,6 +475,7 @@ mod game {
             card_refs: HashMap::new(),
             states: bytemuck::zeroed_box(),
             bounty: 0,
+            throws: Vec::new(),
         }))
     }
 
@@ -699,6 +709,8 @@ mod game {
                     remove_item(player, t.form, 0, t.count, false, true, 0, Some((pos, [0.0, 0.0, heading])));
                     tracing::info!("pockets: {} x{} let go in the world: the game's own there now, dropped at {pos:?}", t.name, t.count);
                     self.answer(n, ev.object, PO_DROPPED);
+                    // It flies on as it left the hand, once the game has its body.
+                    self.throws.push(Throw { form: t.form, at: Vec3::from_array(ev.pos), lin: Vec3::from_array(ev.vel), until: crate::link::now() + 1.0 });
                 }
                 PE_STOW => {
                     if let Some(t) = self.taken.remove(&ev.object) {
@@ -877,6 +889,13 @@ mod game {
             for (n, ev) in &events {
                 s.handle(*n, ev);
             }
+            s.throws.retain(|t| {
+                let thrown = items::throw_new(t.form, t.at, t.lin, Vec3::ZERO);
+                if thrown {
+                    tracing::info!("pockets: the dropped thing flies on at {:.2} m/s", t.lin.length());
+                }
+                now < t.until && !thrown
+            });
             if now >= s.next_refresh {
                 s.next_refresh = now + REFRESH;
                 s.refresh();

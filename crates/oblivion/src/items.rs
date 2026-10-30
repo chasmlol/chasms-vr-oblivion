@@ -559,6 +559,20 @@ mod game {
         }))
     }
 
+    /// A thing of base form `base` just put in the world at `at` (the runtime's world): set moving
+    /// at `lin` and turning at `ang` (m/s, rad/s, the runtime's world), as a thing let go of is, once
+    /// the game has given it its 3D and its Havok body. False until then.
+    pub fn throw_new(base: usize, at: Vec3, lin: Vec3, ang: Vec3) -> bool {
+        let found = nearby(at, 0.6).into_iter().find(|&(r, _, _)| mem::deref(r + REFR_BASE) == base);
+        let Some((refr, _, _)) = found else { return false };
+        let body = body_of(mem::deref(refr + REFR_NODE));
+        if body == 0 {
+            return false;
+        }
+        launch(body, lin, ang);
+        true
+    }
+
     /// The reference of the thing offered as object `id`, while it's offered.
     pub fn reference(id: u32) -> Option<usize> {
         with_state(|s| s.items.get(&id).filter(|i| i.taken_at.is_none()).map(|i| i.refr))
