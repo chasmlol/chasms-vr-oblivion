@@ -180,6 +180,17 @@ A corpse needs 0.8 of the toughness. So:
   as the game adds one, and, when the piece goes, taken off, let go of and freed. So a
   severed head keeps the blood that was on it.
 
+### Playtest 2: drips from past the sword's point
+
+* **Heads came off without a crash.**
+* **The sword dripped a little past its point, from nothing.** A cut bloodies the edge in a band
+  either side of where it met the body, as far as it went in (up to 11 cm each way). Nothing stopped
+  that band at the point, and a drip falls from the lowest wet blood, so a cut near the point left
+  blood, and drips, in the air past it.
+* **The fix (the runtime):** the band stops at the blade's ends, its splats spread over what's left
+  of it. A drop that lands on the blade in the air leaves its blood on the blade's line where it
+  met it, not where the drop was. So every drip falls from blood that is on the blade.
+
 ## Frame rate (same scene, your eye size 4147×4406, emulated headset at 120 Hz)
 
 The scene: the bandit room, one bandit killed. **Before** with no gore. **After** with five limbs
