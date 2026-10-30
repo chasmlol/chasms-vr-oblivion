@@ -44,7 +44,7 @@ const FORM_ID: usize = 0x0C;
 const ACTOR_VTABLES: [usize; 2] = [0x00A6_FC9C, 0x00A7_10F4];
 
 /// Whether `actor` is one of the game's actors as it stands (not the player).
-fn is_actor(actor: usize) -> bool {
+pub(crate) fn is_actor(actor: usize) -> bool {
     actor != 0 && ACTOR_VTABLES.contains(&mem::deref(actor))
 }
 /// `TESObjectREFR`: its base form, its 3D root.
@@ -114,7 +114,7 @@ pub(crate) fn read_str(p: usize) -> String {
 }
 
 /// The named nodes under `root` that are bones (named `Bip01...`), and a few named attachments.
-fn bones(root: usize) -> HashMap<String, usize> {
+pub(crate) fn bones(root: usize) -> HashMap<String, usize> {
     let mut out = HashMap::new();
     let mut stack = vec![(root, 0u32)];
     let mut seen = 0;
@@ -193,14 +193,14 @@ fn attack_segment(actor: usize, b: &HashMap<String, usize>) -> Option<(Vec3, Vec
 }
 
 /// A node's world position, in the protocol's space.
-fn node_pos(node: usize) -> Option<Vec3> {
+pub(crate) fn node_pos(node: usize) -> Option<Vec3> {
     let p: [f32; 3] = mem::at(node + engine::av::WORLD_TRANSLATE)?;
     Some(camera::basis().point_from_game(Vec3::from(p)))
 }
 
 /// Calls `Actor::GetActorValue`.
 #[cfg(target_arch = "x86")]
-fn actor_value(actor: usize, av: u32) -> i32 {
+pub(crate) fn actor_value(actor: usize, av: u32) -> i32 {
     type F = unsafe extern "thiscall" fn(usize, u32) -> i32;
     let vt = mem::deref(actor);
     let f = mem::deref(vt + VT_GET_AV);
@@ -208,18 +208,18 @@ fn actor_value(actor: usize, av: u32) -> i32 {
 }
 
 #[cfg(target_arch = "x86")]
-fn base_actor_value(actor: usize, av: u32) -> i32 {
+pub(crate) fn base_actor_value(actor: usize, av: u32) -> i32 {
     type F = unsafe extern "thiscall" fn(usize, u32) -> u32;
     unsafe { std::mem::transmute::<usize, F>(GET_BASE_AV)(actor, av) as i32 }
 }
 
 #[cfg(not(target_arch = "x86"))]
-fn actor_value(_actor: usize, _av: u32) -> i32 {
+pub(crate) fn actor_value(_actor: usize, _av: u32) -> i32 {
     0
 }
 
 #[cfg(not(target_arch = "x86"))]
-fn base_actor_value(_actor: usize, _av: u32) -> i32 {
+pub(crate) fn base_actor_value(_actor: usize, _av: u32) -> i32 {
     0
 }
 
@@ -533,6 +533,7 @@ pub fn publish() {
             crate::body::publish(a);
         }
         a.write_actors(&table);
+        crate::grabs::publish(a, &table, &k.actors);
         if let Some((s, by_id)) = spells_now {
             let key: Vec<(u32, u32, u32)> = s.spells[..s.count as usize].iter().map(|x| (x.id, x.flags, x.cost as u32)).collect();
             if k.sent.as_ref() != Some(&key) {

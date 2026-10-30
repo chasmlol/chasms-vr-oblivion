@@ -35,6 +35,7 @@ pub mod engine;
 #[cfg(all(windows, target_arch = "x86"))]
 pub mod entry;
 pub mod game_settings;
+pub mod grabs;
 pub mod hooks;
 pub mod hud;
 pub mod hud_info;

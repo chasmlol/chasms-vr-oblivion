@@ -1,0 +1,880 @@
+//! Oblivion's side of grabbing people and creatures (the framework's `rustvr_protocol::grab`):
+//! a hand on any part of an actor moves it with the game's own Havok ragdoll, the skeleton's bodies
+//! (`docs/research/npcs.md`).
+//!
+//! * **What grabbing needs** ([`publish`], with the creatures every frame): each part's rotation
+//!   (its bone's), velocity and mass (its Havok body's), the body's mass, whether it's all Havok's
+//!   now (dead, knocked down), and how strong the player is (the game's Strength: 50 is 1).
+//! * **A grab** ([`apply`], before the game's frame) is the game's own grab, as holding Activate on
+//!   a dead body does: a `bhkMouseSpringAction` on the Havok body of the bone held, at the point the
+//!   hand has, pulled every frame to where the hand would have it, no harder than the hand pulls.
+//!   A dead or knocked-down body is all Havok's, so any part of it drags the whole body.
+//! * **A living actor** keeps animating. The bones from the one held out to the limb's end go
+//!   physical (their blend objects' heir and velocity gains 0: each bone where its body is), and
+//!   the spine partly (a heir between: it leans after a pulled limb, softly, and comes back): the
+//!   limb hangs from the body that's still animated and the hand moves it. Let go, they blend back
+//!   to the animation.
+//! * **Off its feet**: pulled up by the head, the neck or the torso past where the standing body
+//!   goes, or yanked far from where its body is, it's knocked down: the game's own knockback
+//!   (`KnockbackActor`, every bone Havok's), and then the whole body hangs from the hand. While a
+//!   hand holds it, it can't get up (its knockdown's time is kept fresh); let go, it gets up when
+//!   the game says.
+//! * **Choking**: the throat squeezed drains its fatigue (`DamageActorValue`, faster off its feet)
+//!   until the game knocks it out itself; it stays out while it's choked.
+//! * **The reaction is the game's**: a living actor choked, knocked down, thrown or held a while
+//!   has been attacked by the player (`OnAttacked`, as at the end of every blow: its disposition,
+//!   tolerance, fleeing, combat and the assault crime).
+//! * **Throws**: let go, every body keeps what the spring gave it, and gets the hand's throw on top,
+//!   as much of it as the player's pull could give that mass.
+//!
+//! Engine facts (`Oblivion.exe` 1.2.0.416; thiscall unless said): a skeleton's bone with a body has
+//! a `bhkBlendCollisionObject` at its node's +0xA8 (vtables 0xA9643C and 0xA96384): its flags +0xC,
+//! its `bhkRigidBody` +0x10 (the `hkRigidBody` at +8 of that), its heir gain +0x14 and velocity gain
+//! +0x18. Every frame its update keyframes the body to the bone (heir 1), puts the bone where the
+//! body is (heir 0, velocity 0: a ragdoll), or blends the two (between), switching the body's motion
+//! type itself. `hkRigidBody`: its world +8, its filter info +0x30 (layer bits 0-6, 8 the biped;
+//! the body part bits 8-12), its motion +0x50 (a pointer: transform +0x10, translation +0x40, the
+//! centre of mass +0x60, inverse mass +0xC0, velocities +0xD0 and +0xE0). Havok's unit is 7 game
+//! units. A living actor's bodies aren't in Havok's world while they're keyframed; 0x88CE30 (cdecl:
+//! root, on, recurse, force) puts them all in and takes them out again.
+
+#[cfg(all(windows, target_arch = "x86"))]
+pub use game::*;
+
+#[cfg(not(all(windows, target_arch = "x86")))]
+pub fn publish(_a: &rustvr_adapter::Adapter, _table: &rustvr_protocol::Actors, _by_id: &std::collections::HashMap<u32, usize>) {}
+
+#[cfg(not(all(windows, target_arch = "x86")))]
+pub fn apply(_now: f64) {}
+
+/// Body part codes (a body's filter info, bits 8-12; nif.xml's order).
+pub const HEAD: u32 = 1;
+pub const PELVIS: u32 = 2;
+pub const SPINE1: u32 = 3;
+pub const SPINE2: u32 = 4;
+pub const TAIL: u32 = 17;
+
+/// The bones that go physical when a living actor is held by the bone with this part code (out to
+/// the limb's end), and the ones that bend after it softly (the spine).
+pub fn limb(code: u32) -> (&'static [u32], &'static [u32]) {
+    match code {
+        HEAD => (&[HEAD], &[SPINE2]),
+        PELVIS | SPINE1 | SPINE2 => (&[], &[SPINE1, SPINE2]),
+        5..=7 => (&[5, 6, 7], &[SPINE2]),
+        11..=13 => (&[11, 12, 13], &[SPINE2]),
+        8..=10 => (&[8, 9, 10], &[]),
+        14..=16 => (&[14, 15, 16], &[]),
+        TAIL => (&[TAIL], &[]),
+        _ => (&[], &[]),
+    }
+}
+
+/// The parts a hand pulls up to lift the whole body by (the head, the neck, the torso).
+pub fn lifts_by(code: u32) -> bool {
+    matches!(code, HEAD | PELVIS | SPINE1 | SPINE2)
+}
+
+#[cfg(all(windows, target_arch = "x86"))]
+mod game {
+    use super::*;
+    use crate::engine::{self, av, refr};
+    use crate::{camera, combat, mem};
+    use glam::{Mat3, Vec3};
+    use rustvr_protocol::*;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    const NODE_NAME: usize = 0x08;
+    const NODE_CHILDREN: usize = 0xB0;
+    const NODE_COUNT: usize = 0xB6;
+    const NODE_COLLISION: usize = 0xA8;
+    /// `bhkBlendCollisionObject` (and the subclass that adds a rotation).
+    const BLEND_VTABLES: [usize; 2] = [0x00A9_643C, 0x00A9_6384];
+    const BLEND_BODY: usize = 0x10;
+    const BLEND_HEIR: usize = 0x14;
+    const BLEND_VEL: usize = 0x18;
+    const HK_OBJ: usize = 0x8;
+    const BODY_WORLD: usize = 0x8;
+    const BODY_FILTER: usize = 0x30;
+    const BODY_MOTION: usize = 0x50;
+    const MOTION_ROT: usize = 0x10;
+    const MOTION_POS: usize = 0x40;
+    const MOTION_COM: usize = 0x60;
+    const MOTION_MASS_INV: usize = 0xC0;
+    const MOTION_LIN_VEL: usize = 0xD0;
+    const MOTION_SAVED: usize = 0xF0;
+    const LAYER_BIPED: u32 = 8;
+    const BODIES_IN_WORLD: usize = 0x0088_CE30;
+    const ACTIVATE: usize = 0x008A_6410;
+
+    /// The game's grab: its allocator (cdecl: size), a mouse spring's construction info (64 bytes,
+    /// set to the game's defaults by 0x47F9F0: +4 the body, +0x10 the point in the body, +0x20 the
+    /// target in the world, +0x30 damping, +0x34 elasticity, +0x38 the most force relative to the
+    /// body's mass, +0x3C the body's own damping), the `bhkMouseSpringAction` made from it
+    /// (0x47DE90: 16 bytes, refcounted at +4, its `hkMouseSpringAction` at +8), added to the cell's
+    /// `bhkWorld` (vtable +0x5C) and taken out (+0x60); `setMousePosition` (0x8B8A10) moves its
+    /// target. The `hkMouseSpringAction`: damping +0x40, elasticity +0x44, most force +0x48.
+    const ALLOC: usize = 0x0040_1F00;
+    const SPRING_INFO: usize = 0x0047_F9F0;
+    const SPRING_NEW: usize = 0x0047_DE90;
+    const VT_ADD_TO_WORLD: usize = 0x5C;
+    const VT_REMOVE: usize = 0x60;
+    const SET_MOUSE: usize = 0x008B_8A10;
+    const SPRING_MAX_FORCE: usize = 0x48;
+    /// `TESObjectREFR::GetParentCell`, and a cell's `bhkWorld`.
+    const PARENT_CELL: usize = 0x006E_CC80;
+    const CELL_WORLD: usize = 0x0044_40C0;
+
+    /// `Actor`: its process (+0x58), its 3D (+0x3C); `IsDead(0)` (vtable +0x198), `OnAttacked`
+    /// (+0x3A8: attacker, 0), `DamageActorValue` (+0x2A4: value, amount (negative hurts), attacker).
+    const PROCESS: usize = 0x58;
+    const NI_NODE: usize = 0x3C;
+    const VT_IS_DEAD: usize = 0x198;
+    const VT_ON_ATTACKED: usize = 0x3A8;
+    const VT_DAMAGE_AV: usize = 0x2A4;
+    const AV_STRENGTH: u32 = 0;
+    const AV_FATIGUE: u32 = 10;
+    /// The process: whether it's below the high process (vtable +8: 0 for a high one), its knock
+    /// state (+0x11C: 0 standing, 1 knocked down, 2 its lead-in, 3 knocked out, 4 its lead-in,
+    /// 5 its get-up queued, 6 getting up), when it was knocked down (+0x14, the game's hour) and its
+    /// `KnockbackActor` (+0x2F0: the actor, where the push comes from (game units), the force).
+    const VT_NOT_HIGH: usize = 0x08;
+    const KNOCK_STATE: usize = 0x11C;
+    const KNOCK_TIME: usize = 0x14;
+    const VT_KNOCKBACK: usize = 0x2F0;
+    /// The game's clock: the hour (`GameHour`'s value).
+    const GAME_TIME: usize = 0x00B3_32E0;
+    const CODE: std::ops::Range<usize> = 0x0040_1000..0x00A3_0000;
+
+    /// Metres in a Havok unit.
+    const HK_METRES: f32 = crate::collision::HAVOK_SCALE / camera::UNITS_PER_METER;
+    /// A person's mass (kg): Oblivion's ragdolls weigh more than people do (a man about 600 of its
+    /// units), so the player's own ragdoll is taken as this, and every body weighs in proportion.
+    const PERSON_KG: f32 = 75.0;
+    /// The spring: how much of the way it pulls the point each step, how much of its own speed it
+    /// takes off there, and how much of the body's speed is kept each step. The game's own grab of
+    /// a body (0.2, 0.5, 0.75) drags it a bone at a time; it's measured against the bone held alone,
+    /// so a whole body hanging from one bone sags far below it: stiffer, it hangs a hand's breadth
+    /// below a hand strong enough to lift it, and livelier, so a swing carries.
+    const SPRING_ELASTICITY: f32 = 0.7;
+    const SPRING_DAMPING: f32 = 0.6;
+    const SPRING_BODY_DAMPING: f32 = 0.85;
+    /// A held spine's heir: how much of the animation it keeps each frame (the rest is where the
+    /// limb's pull bends it).
+    const SPINE_HEIR: f32 = 0.5;
+    /// Let go, a living actor's limb blends back to its animation over this long (seconds).
+    const BACK_TIME: f64 = 0.4;
+    /// A standing actor is knocked down when the hand lifts its head, neck or torso this far above
+    /// where the body has it (metres) for this long, or pulls any part this far from it.
+    const LIFT: f32 = 0.12;
+    const LIFT_TIME: f64 = 0.12;
+    const YANK: f32 = 0.45;
+    /// Let go of faster than this (m/s), a standing actor is thrown down.
+    const THROW_DOWN: f32 = 2.5;
+    /// How long the hand's pull acts on a throw (seconds): the most it adds to the whole body is
+    /// the pull times this, over its mass.
+    const THROW_TIME: f32 = 0.3;
+    /// Squeezed fully, a throat's fatigue is gone in this long (seconds); off its feet, quicker.
+    const CHOKE_TIME: f32 = 6.0;
+    const CHOKE_LIFTED: f32 = 1.5;
+    const CHOKE_SQUEEZE: f32 = 0.15;
+    /// The choke takes its fatigue this far below nothing (a share of its most): out cold for a few
+    /// seconds after it's let go, as the game's own knockout from fatigue.
+    const CHOKED_OUT: f32 = 0.25;
+    /// Held this long, a living actor takes it as an attack (seconds).
+    const HELD_ATTACK: f64 = 4.0;
+
+    #[repr(C, align(16))]
+    #[derive(Clone, Copy, Default)]
+    struct V4([f32; 4]);
+
+    #[repr(C, align(16))]
+    struct SpringInfo([u8; 64]);
+
+    /// A bone of a skeleton with a Havok body.
+    #[derive(Clone, Copy, Debug)]
+    struct Bone {
+        node: usize,
+        blend: usize,
+        body: usize,
+        code: u32,
+    }
+
+    fn read_str(p: usize) -> String {
+        combat::read_str(p)
+    }
+
+    /// The bones under `root` with bodies on the biped layer.
+    fn skeleton(root: usize) -> Vec<Bone> {
+        let mut out = Vec::new();
+        let mut stack = vec![(root, 0u32)];
+        let mut seen = 0;
+        while let Some((node, depth)) = stack.pop() {
+            seen += 1;
+            if seen > 800 || depth > 48 || !mem::is_readable(node as *const u8, 0xB8) {
+                continue;
+            }
+            let name = read_str(mem::deref(node + NODE_NAME));
+            let blend = mem::deref(node + NODE_COLLISION);
+            if blend != 0 && BLEND_VTABLES.contains(&mem::deref(blend)) {
+                let body = mem::deref(mem::deref(blend + BLEND_BODY) + HK_OBJ);
+                if body != 0
+                    && mem::is_readable(body as *const u8, 0xC4)
+                    && let Some(filter) = mem::at::<u32>(body + BODY_FILTER)
+                    && filter & 0x7F == LAYER_BIPED
+                {
+                    out.push(Bone { node, blend, body, code: (filter >> 8) & 0x1F });
+                }
+            }
+            if depth > 2 && !name.starts_with("Bip01") {
+                continue;
+            }
+            let data = mem::deref(node + NODE_CHILDREN);
+            let n = mem::at::<u16>(node + NODE_COUNT).unwrap_or(0).min(64) as usize;
+            if data == 0 {
+                continue;
+            }
+            for i in 0..n {
+                let child = mem::deref(data + i * 4);
+                if child != 0 {
+                    stack.push((child, depth + 1));
+                }
+            }
+        }
+        out
+    }
+
+    fn motion(body: usize) -> usize {
+        let m = mem::deref(body + BODY_MOTION);
+        if m != 0 && mem::is_readable(m as *const u8, 0xF0) { m } else { 0 }
+    }
+
+    /// A body's mass (kg): a keyframed one's from its own motion, kept aside while it's keyframed
+    /// (`hkKeyframedRigidMotion::savedMotion`).
+    fn mass(body: usize) -> f32 {
+        let m = motion(body);
+        let inv = |m: usize| mem::at::<f32>(m + MOTION_MASS_INV).filter(|x| *x > 1e-5 && x.is_finite());
+        let saved = || {
+            let s = mem::deref(m + MOTION_SAVED);
+            (s != 0 && mem::is_readable(s as *const u8, 0xD0)).then(|| inv(s)).flatten()
+        };
+        inv(m).or_else(saved).map_or(0.0, |x| 1.0 / x)
+    }
+
+    /// A body's transform in Havok's units: its rotation's columns and its translation.
+    fn transform(body: usize) -> Option<(Mat3, Vec3)> {
+        let m = motion(body);
+        let c: [[f32; 4]; 3] = mem::at(m + MOTION_ROT)?;
+        let t: [f32; 4] = mem::at(m + MOTION_POS)?;
+        let r = Mat3::from_cols(Vec3::new(c[0][0], c[0][1], c[0][2]), Vec3::new(c[1][0], c[1][1], c[1][2]), Vec3::new(c[2][0], c[2][1], c[2][2]));
+        let t = Vec3::new(t[0], t[1], t[2]);
+        (r.is_finite() && t.is_finite()).then_some((r, t))
+    }
+
+    /// A point of the runtime's world in Havok's units, and back.
+    fn to_hk(p: Vec3) -> Vec3 {
+        camera::basis().point_to_game(p) / crate::collision::HAVOK_SCALE
+    }
+
+    fn from_hk(p: Vec3) -> Vec3 {
+        camera::basis().point_from_game(p * crate::collision::HAVOK_SCALE)
+    }
+
+    /// Where a body's centre of mass is (the runtime's world).
+    fn centre(body: usize) -> Option<Vec3> {
+        let c: [f32; 4] = mem::at(motion(body) + MOTION_COM)?;
+        let p = from_hk(Vec3::new(c[0], c[1], c[2]));
+        p.is_finite().then_some(p)
+    }
+
+    /// A body's velocity (the runtime's world, m/s).
+    fn velocity(body: usize) -> Vec3 {
+        let v: [f32; 4] = mem::at(motion(body) + MOTION_LIN_VEL).unwrap_or_default();
+        camera::basis().dir_from_game(Vec3::new(v[0], v[1], v[2])) * HK_METRES
+    }
+
+    /// Sets a body moving (the runtime's world, m/s) and wakes it.
+    fn set_velocity(body: usize, v: Vec3) {
+        let m = motion(body);
+        if m == 0 || !v.is_finite() {
+            return;
+        }
+        let g = camera::basis().dir_to_game(v) / HK_METRES;
+        unsafe { ((m + MOTION_LIN_VEL) as *mut [f32; 4]).write_unaligned([g.x, g.y, g.z, 0.0]) };
+        activate(body);
+    }
+
+    fn activate(body: usize) {
+        type Activate = unsafe extern "thiscall" fn(usize) -> u32;
+        unsafe { std::mem::transmute::<usize, Activate>(ACTIVATE)(body) };
+    }
+
+    fn virt(obj: usize, slot: usize) -> Option<usize> {
+        let f = mem::deref(mem::deref(obj) + slot);
+        (obj != 0 && CODE.contains(&f)).then_some(f)
+    }
+
+    fn is_dead(actor: usize) -> bool {
+        type F = unsafe extern "thiscall" fn(usize, u8) -> u8;
+        virt(actor, VT_IS_DEAD).is_some_and(|f| unsafe { std::mem::transmute::<usize, F>(f)(actor, 0) } != 0)
+    }
+
+    /// The actor's high process, if it has one (only those are knocked down).
+    fn high_process(actor: usize) -> Option<usize> {
+        let p = mem::deref(actor + PROCESS);
+        type F = unsafe extern "thiscall" fn(usize) -> u32;
+        let f = virt(p, VT_NOT_HIGH)?;
+        (unsafe { std::mem::transmute::<usize, F>(f)(p) } == 0).then_some(p)
+    }
+
+    fn knock_state(actor: usize) -> u8 {
+        high_process(actor).and_then(|p| mem::at::<u8>(p + KNOCK_STATE)).unwrap_or(0)
+    }
+
+    fn game_hour() -> Option<f32> {
+        mem::at::<f32>(mem::deref(GAME_TIME + 0xC) + 0x24)
+    }
+
+    /// The game's knockback with no push: the actor goes down where it is, every bone Havok's.
+    fn knock_down(actor: usize) -> bool {
+        let Some(p) = high_process(actor) else { return false };
+        let (Some(f), Some(at)) = (virt(p, VT_KNOCKBACK), mem::at::<[f32; 3]>(actor + refr::POS)) else { return false };
+        if knock_state(actor) != 0 || is_dead(actor) {
+            return false;
+        }
+        type F = unsafe extern "thiscall" fn(usize, usize, f32, f32, f32, f32);
+        unsafe { std::mem::transmute::<usize, F>(f)(p, actor, at[0], at[1], at[2], 0.0) };
+        knock_state(actor) != 0
+    }
+
+    /// The player attacks `actor`, as far as the actor is concerned (the end of every blow).
+    fn attacked(actor: usize) {
+        type F = unsafe extern "thiscall" fn(usize, usize, u32);
+        let player = engine::player();
+        if let Some(f) = virt(actor, VT_ON_ATTACKED)
+            && player != 0
+        {
+            unsafe { std::mem::transmute::<usize, F>(f)(actor, player, 0) };
+        }
+    }
+
+    fn damage(actor: usize, av: u32, amount: f32) {
+        type F = unsafe extern "thiscall" fn(usize, u32, f32, usize);
+        if let Some(f) = virt(actor, VT_DAMAGE_AV) {
+            unsafe { std::mem::transmute::<usize, F>(f)(actor, av, -amount, engine::player()) };
+        }
+    }
+
+    fn bodies_in_world(root: usize, on: bool) {
+        type F = unsafe extern "C" fn(usize, u8, u8, u8) -> u8;
+        unsafe { std::mem::transmute::<usize, F>(BODIES_IN_WORLD)(root, on as u8, 1, 1) };
+    }
+
+    fn set_gains(blend: usize, heir: f32, vel: f32) {
+        unsafe {
+            ((blend + BLEND_HEIR) as *mut f32).write(heir);
+            ((blend + BLEND_VEL) as *mut f32).write(vel);
+        }
+    }
+
+    fn gains(blend: usize) -> (f32, f32) {
+        (mem::at::<f32>(blend + BLEND_HEIR).unwrap_or(1.0), mem::at::<f32>(blend + BLEND_VEL).unwrap_or(1.0))
+    }
+
+    /// The `bhkWorld` the actor is in.
+    fn world_of(actor: usize) -> usize {
+        type Cell = unsafe extern "thiscall" fn(usize) -> usize;
+        let cell = unsafe { std::mem::transmute::<usize, Cell>(PARENT_CELL)(actor) };
+        if cell == 0 {
+            return 0;
+        }
+        unsafe { std::mem::transmute::<usize, Cell>(CELL_WORLD)(cell) }
+    }
+
+    /// A mouse spring on `body` at `point` (Havok units, the world) pulling it to the same point
+    /// (no pull yet), in `world`: the game's own grab.
+    fn spring(body: usize, point: Vec3, world: usize) -> usize {
+        let Some((r, t)) = transform(body) else { return 0 };
+        let local = r.transpose() * (point - t);
+        let mut info = SpringInfo([0; 64]);
+        type Info = unsafe extern "thiscall" fn(*mut SpringInfo);
+        type New = unsafe extern "thiscall" fn(usize, *const SpringInfo) -> usize;
+        type Alloc = unsafe extern "C" fn(usize) -> usize;
+        type Add = unsafe extern "thiscall" fn(usize, usize) -> u8;
+        unsafe {
+            std::mem::transmute::<usize, Info>(SPRING_INFO)(&mut info);
+            let base = info.0.as_mut_ptr();
+            (base.add(4) as *mut usize).write(body);
+            (base.add(0x10) as *mut [f32; 4]).write([local.x, local.y, local.z, 0.0]);
+            (base.add(0x20) as *mut [f32; 4]).write([point.x, point.y, point.z, 0.0]);
+            (base.add(0x30) as *mut [f32; 4]).write([SPRING_DAMPING, SPRING_ELASTICITY, 0.0, SPRING_BODY_DAMPING]);
+            let m = std::mem::transmute::<usize, Alloc>(ALLOC)(16);
+            if m == 0 {
+                return 0;
+            }
+            let action = std::mem::transmute::<usize, New>(SPRING_NEW)(m, &info);
+            if action == 0 {
+                return 0;
+            }
+            // Ours: one reference held until it's let go.
+            let rc = (action + 4) as *const std::sync::atomic::AtomicU32;
+            (*rc).fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            if let Some(f) = virt(action, VT_ADD_TO_WORLD) {
+                std::mem::transmute::<usize, Add>(f)(action, world);
+            }
+            action
+        }
+    }
+
+    /// Moves a spring's target (Havok units) and sets the most it pulls with (relative to its body's
+    /// mass).
+    fn pull(action: usize, to: Vec3, max_rel: f32) {
+        let hk = mem::deref(action + HK_OBJ);
+        if hk == 0 || !to.is_finite() {
+            return;
+        }
+        let v = V4([to.x, to.y, to.z, 0.0]);
+        type Set = unsafe extern "thiscall" fn(usize, *const V4) -> u32;
+        unsafe {
+            ((hk + SPRING_MAX_FORCE) as *mut f32).write(max_rel);
+            std::mem::transmute::<usize, Set>(SET_MOUSE)(hk, &v);
+        }
+    }
+
+    /// Takes a spring out of the world and lets it go (the body woken, as the game's own let-go).
+    fn unspring(action: usize, body: usize) {
+        type Remove = unsafe extern "thiscall" fn(usize) -> u32;
+        type Delete = unsafe extern "thiscall" fn(usize, u32);
+        unsafe {
+            if let Some(f) = virt(action, VT_REMOVE) {
+                std::mem::transmute::<usize, Remove>(f)(action);
+            }
+            if body != 0 {
+                activate(body);
+            }
+            let rc = (action + 4) as *const std::sync::atomic::AtomicU32;
+            if (*rc).fetch_sub(1, std::sync::atomic::Ordering::AcqRel) == 1
+                && let Some(f) = virt(action, 0)
+            {
+                std::mem::transmute::<usize, Delete>(f)(action, 1);
+            }
+        }
+    }
+
+    /// A hand's hold on an actor.
+    struct Hold {
+        serial: u32,
+        actor_id: u32,
+        actor: usize,
+        bone: Bone,
+        action: usize,
+        /// The point held, in the body's own frame (Havok units).
+        local: Vec3,
+        since: f64,
+        /// Lifted (pulled up past the standing body) since.
+        lifting: Option<f64>,
+        choking: bool,
+        attacked: bool,
+    }
+
+    /// A living actor whose bodies the hands put in Havok's world, and the bones they made
+    /// physical (their gains before).
+    struct Limp {
+        actor: usize,
+        root: usize,
+        bones: Vec<(usize, f32, f32)>,
+        since: f64,
+        /// Let go by every hand: blending back since; back to its gains (its bodies out of the
+        /// world the frame after).
+        back: Option<f64>,
+        restored: bool,
+    }
+
+    struct State {
+        holds: [Option<Hold>; 2],
+        /// The last grab each hand let go of (so its last word isn't taken as a new grab).
+        done: [u32; 2],
+        limp: HashMap<u32, Limp>,
+        /// The actors published, by id, and each part's bone (the node its capsule starts at).
+        actors: HashMap<u32, usize>,
+        part_nodes: HashMap<(u32, usize), usize>,
+        bodies: Box<ActorBodies>,
+        grabs: Box<CreatureGrabs>,
+        last: f64,
+        /// The game's masses per kilogram (see [`PERSON_KG`]), once known.
+        scale: Option<f32>,
+    }
+
+    static STATE: Mutex<Option<State>> = Mutex::new(None);
+
+    fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
+        let mut s = STATE.lock().unwrap();
+        f(s.get_or_insert_with(|| State {
+            holds: [None, None],
+            done: [0; 2],
+            limp: HashMap::new(),
+            actors: HashMap::new(),
+            part_nodes: HashMap::new(),
+            bodies: bytemuck::zeroed_box(),
+            grabs: bytemuck::zeroed_box(),
+            last: 0.0,
+            scale: None,
+        }))
+    }
+
+    /// The game's masses per kilogram: the player's own ragdoll is a person's.
+    fn mass_scale(s: &mut State) -> f32 {
+        if let Some(k) = s.scale {
+            return k;
+        }
+        let player = engine::player();
+        let root = if player != 0 { mem::deref(player + NI_NODE) } else { 0 };
+        let total: f32 = if root != 0 { skeleton(root).iter().map(|b| mass(b.body)).sum() } else { 0.0 };
+        if total <= 0.0 {
+            return 1.0;
+        }
+        let k = (total / PERSON_KG).clamp(1.0, 20.0);
+        tracing::info!("grabs: the player's ragdoll weighs {total:.0}: the game's masses are {k:.2} to the kilogram");
+        s.scale = Some(k);
+        k
+    }
+
+    /// Every frame, with the creatures (`table`, in its order; `by_id` the actors): what grabbing
+    /// them needs.
+    pub fn publish(a: &rustvr_adapter::Adapter, table: &Actors, by_id: &HashMap<u32, usize>) {
+        let player = engine::player();
+        with_state(|s| {
+            let k = mass_scale(s);
+            s.actors = by_id.clone();
+            s.part_nodes.clear();
+            let out = &mut s.bodies;
+            out.count = 0;
+            out.frame += 1;
+            out.strength = if player != 0 { (combat::actor_value(player, AV_STRENGTH) as f32 / 50.0).clamp(0.2, 3.0) } else { 1.0 };
+            let b = camera::basis();
+            for actor in &table.actors[..(table.count as usize).min(MAX_ACTORS)] {
+                let mut body: ActorBody = bytemuck::Zeroable::zeroed();
+                body.id = actor.id;
+                if let Some(&ptr) = by_id.get(&actor.id).filter(|&&p| combat::is_actor(p)) {
+                    let root = mem::deref(ptr + NI_NODE);
+                    let bones = if root != 0 { skeleton(root) } else { Vec::new() };
+                    let named = combat::bones(root);
+                    body.mass = bones.iter().map(|x| mass(x.body)).sum::<f32>() / k;
+                    let dead = is_dead(ptr);
+                    let knocked = knock_state(ptr);
+                    body.flags = if bones.is_empty() { 0 } else { BODY_GRABBABLE }
+                        | if dead || !matches!(knocked, 0 | 6) { BODY_RAGDOLL } else { 0 }
+                        | if !dead && !matches!(knocked, 3 | 4) && combat::actor_value(ptr, AV_FATIGUE) >= 0 { BODY_CONSCIOUS } else { 0 };
+                    // Each part's bone: the one at its capsule's start (where the creatures' capsules
+                    // begin), turned as it is; its body's mass and speed.
+                    for (i, part) in actor.parts[..(actor.count as usize).min(MAX_ACTOR_PARTS)].iter().enumerate() {
+                        let a = Vec3::from_array(part.a);
+                        let node = named.values().copied().find(|&n| combat::node_pos(n).is_some_and(|p| p.distance(a) < 0.002));
+                        let Some(node) = node else { continue };
+                        s.part_nodes.insert((actor.id, i), node);
+                        let Some(rot) = mem::at::<[f32; 9]>(node + av::WORLD_ROTATE) else { continue };
+                        let q = b.rot_from_game(crate::items::ni_matrix(rot)).normalize();
+                        let own = bones.iter().find(|x| x.node == node);
+                        body.parts[i] = PartBody {
+                            rot: if q.is_finite() { q.to_array() } else { [0.0; 4] },
+                            vel: own.map_or(Vec3::from_array(actor.velocity), |x| velocity(x.body)).to_array(),
+                            mass: own.map_or(0.0, |x| mass(x.body) / k),
+                        };
+                    }
+                }
+                let i = out.count as usize;
+                out.bodies[i] = body;
+                out.count += 1;
+            }
+            if out.frame % 120 == 5 && out.count > 0 {
+                let list: Vec<String> = out.bodies[..out.count as usize]
+                    .iter()
+                    .map(|b| format!("{:#x}: {:.0} kg, flags {:#x}, {} parts turned", b.id, b.mass, b.flags, b.parts.iter().filter(|p| p.rot != [0.0; 4]).count()))
+                    .collect();
+                tracing::info!("grabs: bodies {}; strength {:.2}", list.join("; "), out.strength);
+            }
+            a.write_actor_bodies(out);
+        });
+    }
+
+    /// Before the game's frame: each hand's grab, done by the game.
+    pub fn apply(now: f64) {
+        if engine::player() == 0 {
+            return;
+        }
+        with_state(|s| {
+            let dt = ((now - s.last) as f32).clamp(0.0, 0.1);
+            s.last = now;
+            let mut grabs = std::mem::replace(&mut s.grabs, bytemuck::zeroed_box());
+            let read = crate::link::with_adapter(|a| a.read_creature_grabs(&mut grabs)).unwrap_or(false);
+            if !read {
+                // No runtime: nothing holds anyone.
+                grabs.grabs = [CreatureGrab::default(); 2];
+            }
+            for hand in 0..2 {
+                let g = grabs.grabs[hand];
+                let ours = s.holds[hand].as_ref().map(|h| h.serial);
+                let held = g.flags & GRAB_HELD != 0;
+                match ours {
+                    Some(serial) if serial == g.serial && held => s.hold(hand, &g, now, dt),
+                    Some(serial) => {
+                        // Let go (its last word, with the throw), or a new grab in its place.
+                        let throw = (serial == g.serial && g.flags & GRAB_SLIPPED == 0).then(|| Vec3::from_array(g.vel));
+                        s.let_go(hand, throw, g.force, now);
+                        if held && g.serial != serial {
+                            s.take(hand, &g, now);
+                        }
+                    }
+                    None if held && g.serial != 0 && g.serial != s.done[hand] => s.take(hand, &g, now),
+                    None => {}
+                }
+            }
+            s.grabs = grabs;
+            s.blend_back(now);
+        });
+    }
+
+    impl State {
+        /// Hand `hand` takes hold of an actor (`g`: its first word). A standing actor's bodies go into
+        /// Havok's world first, and the hold is taken the frame after, with them in their bones'
+        /// places.
+        fn take(&mut self, hand: usize, g: &CreatureGrab, now: f64) {
+            let Some(&actor) = self.actors.get(&g.actor).filter(|&&a| combat::is_actor(a)) else {
+                self.done[hand] = g.serial;
+                return;
+            };
+            let root = mem::deref(actor + NI_NODE);
+            if root == 0 {
+                self.done[hand] = g.serial;
+                return;
+            }
+            let dead = is_dead(actor);
+            let standing = !dead && knock_state(actor) == 0;
+            if standing && !self.limp.contains_key(&g.actor) {
+                bodies_in_world(root, true);
+                self.limp.insert(g.actor, Limp { actor, root, bones: Vec::new(), since: now, back: None, restored: false });
+                return;
+            }
+            self.done[hand] = g.serial;
+            let bones = skeleton(root);
+            // Where the hand has it: the point in its part's frame (its bone's), where the bone is
+            // now; else where the hand touched it.
+            let b = camera::basis();
+            let frame = self.part_nodes.get(&(g.actor, g.part as usize)).and_then(|&n| {
+                let rot: [f32; 9] = mem::at(n + av::WORLD_ROTATE)?;
+                Some((combat::node_pos(n)?, b.rot_from_game(crate::items::ni_matrix(rot)).normalize()))
+            });
+            let at = frame.map_or(Vec3::from_array(g.target), |(p, q)| p + q * Vec3::from_array(g.point));
+            // The bone held: on the throat, the head's; else the one whose body's middle is nearest.
+            let throat = (g.flags & GRAB_THROAT != 0).then(|| bones.iter().find(|b| b.code == HEAD)).flatten();
+            let nearest = || bones.iter().filter_map(|b| Some((b, centre(b.body)?.distance(at)))).min_by(|x, y| x.1.total_cmp(&y.1)).map(|x| x.0);
+            let Some(&bone) = throat.or_else(nearest) else {
+                tracing::info!("grabs: {:#x} has no bodies to take hold of", g.actor);
+                return;
+            };
+            if standing && let Some(l) = self.limp.get_mut(&g.actor) {
+                l.back = None;
+                l.restored = false;
+                let (full, soft) = limb(bone.code);
+                for b in &bones {
+                    let heir = if full.contains(&b.code) {
+                        0.0
+                    } else if soft.contains(&b.code) {
+                        SPINE_HEIR
+                    } else {
+                        continue;
+                    };
+                    if !l.bones.iter().any(|x| x.0 == b.blend) {
+                        let (h0, v0) = gains(b.blend);
+                        l.bones.push((b.blend, h0, v0));
+                    }
+                    set_gains(b.blend, heir, if heir == 0.0 { 0.0 } else { 1.0 });
+                }
+            }
+            let world = world_of(actor);
+            let point = to_hk(at);
+            let in_world = mem::deref(bone.body + BODY_WORLD) != 0;
+            let action = if world != 0 && in_world { spring(bone.body, point, world) } else { 0 };
+            let local = transform(bone.body).map_or(Vec3::ZERO, |(r, t)| r.transpose() * (point - t));
+            tracing::info!(
+                "grabs: the {} hand takes {:#x} by its bone {} at {at:.2?} ({:.1} kg of {:.0}){}{}: spring {action:#x}{}",
+                if hand == 0 { "left" } else { "right" },
+                g.actor,
+                bone.code,
+                mass(bone.body),
+                bones.iter().map(|b| mass(b.body)).sum::<f32>(),
+                if dead { ", dead" } else if standing { ", standing" } else { ", down" },
+                if g.flags & GRAB_THROAT != 0 { ", by the throat" } else { "" },
+                if in_world { "" } else { " (its body isn't in Havok's world)" }
+            );
+            if action == 0 {
+                return;
+            }
+            self.holds[hand] = Some(Hold { serial: g.serial, actor_id: g.actor, actor, bone, action, local, since: now, lifting: None, choking: false, attacked: false });
+        }
+
+        /// A hand holding on: its spring pulled to where the hand would have the point, the actor
+        /// knocked down when it's lifted or yanked, kept down while it's held, choked.
+        fn hold(&mut self, hand: usize, g: &CreatureGrab, now: f64, dt: f32) {
+            let Some(h) = self.holds[hand].as_mut() else { return };
+            if !combat::is_actor(h.actor) || mem::deref(h.actor + NI_NODE) == 0 {
+                tracing::info!("grabs: {:#x} went from the hand", h.actor_id);
+                let h = self.holds[hand].take().unwrap();
+                self.done[hand] = h.serial;
+                self.limp.remove(&h.actor_id);
+                return;
+            }
+            let m = mass(h.bone.body);
+            let target = to_hk(Vec3::from_array(g.target));
+            // The most the hand pulls with, as the force relative to the body's mass the spring
+            // takes (Havok units a second squared); a body still keyframed (it goes physical next
+            // frame) has none.
+            let max_rel = if m > 0.0 { g.force * self.scale.unwrap_or(1.0) / m / HK_METRES } else { 0.0 };
+            pull(h.action, target, max_rel);
+            let dead = is_dead(h.actor);
+            let state = knock_state(h.actor);
+            let held = transform(h.bone.body).map(|(r, t)| from_hk(t + r * h.local));
+            if (now / 1.0).floor() != ((now - dt as f64) / 1.0).floor() {
+                let hk = mem::deref(h.action + HK_OBJ);
+                let kind = {
+                    type F = unsafe extern "thiscall" fn(usize) -> u32;
+                    let m = motion(h.bone.body);
+                    virt(m, 8).map_or(99, |f| unsafe { std::mem::transmute::<usize, F>(f)(m) })
+                };
+                tracing::info!(
+                    "grabs: holding {:#x}: its point at {held:.2?} for {:.2?} ({:.2} m off), moving {:.2} m/s; body type {kind}, {:.1} kg, in world {}; spring entity {:#x} world {:#x} target {:?} force {:?}; knock state {state}; flags {:#x}, squeeze {:.2}, fatigue {}",
+                    h.actor_id,
+                    Vec3::from_array(g.target),
+                    held.map_or(0.0, |p| p.distance(Vec3::from_array(g.target))),
+                    velocity(h.bone.body).length(),
+                    m,
+                    mem::deref(h.bone.body + BODY_WORLD) != 0,
+                    mem::deref(hk + 0x18),
+                    mem::deref(hk + 0x8),
+                    mem::at::<[f32; 3]>(hk + 0x30),
+                    mem::at::<f32>(hk + SPRING_MAX_FORCE),
+                    g.flags,
+                    g.squeeze,
+                    combat::actor_value(h.actor, AV_FATIGUE),
+                );
+            }
+            let to = Vec3::from_array(g.target);
+            // Standing: lifted by the head, neck or torso, or yanked away, it goes down.
+            if !dead && state == 0 && let Some(p) = held {
+                let up = to.y - p.y;
+                h.lifting = (lifts_by(h.bone.code) && up > LIFT).then(|| h.lifting.unwrap_or(now));
+                let lifted = h.lifting.is_some_and(|t| now - t > LIFT_TIME);
+                if lifted || to.distance(p) > YANK {
+                    let actor = h.actor;
+                    if knock_down(actor) {
+                        tracing::info!("grabs: {:#x} {} by the hand: knocked down", h.actor_id, if lifted { "lifted off its feet" } else { "yanked over" });
+                        self.limp.entry(h.actor_id).and_modify(|l| l.bones.clear());
+                        attacked(actor);
+                        h.attacked = true;
+                    }
+                }
+            }
+            // Down and held: it can't get up while a hand has it.
+            if !dead && state == 1
+                && let (Some(p), Some(hour)) = (high_process(h.actor), game_hour())
+            {
+                unsafe { ((p + KNOCK_TIME) as *mut f32).write(hour) };
+            }
+            // On the throat: its fatigue goes, as hard as it's squeezed.
+            if !dead && g.flags & GRAB_THROAT != 0 && g.squeeze > CHOKE_SQUEEZE {
+                let most = combat::base_actor_value(h.actor, AV_FATIGUE).max(1) as f32;
+                let rate = most / CHOKE_TIME * g.squeeze * if state != 0 { CHOKE_LIFTED } else { 1.0 };
+                let left = combat::actor_value(h.actor, AV_FATIGUE) as f32 + most * CHOKED_OUT;
+                damage(h.actor, AV_FATIGUE, (rate * dt).min(left.max(0.0)));
+                if !h.choking {
+                    h.choking = true;
+                    tracing::info!("grabs: {:#x} choked (fatigue {} of {most})", h.actor_id, combat::actor_value(h.actor, AV_FATIGUE));
+                    if !h.attacked {
+                        attacked(h.actor);
+                        h.attacked = true;
+                    }
+                }
+            } else {
+                h.choking = false;
+            }
+            // Held a while, a living actor takes it as an attack.
+            if !dead && !h.attacked && now - h.since > HELD_ATTACK {
+                attacked(h.actor);
+                h.attacked = true;
+            }
+        }
+
+        /// Hand `hand` lets go: the spring off, and the throw (none: it slipped). A standing actor
+        /// let go of fast is thrown down; a living one's limb blends back to its animation once no
+        /// hand has it.
+        fn let_go(&mut self, hand: usize, throw: Option<Vec3>, force: f32, now: f64) {
+            let Some(h) = self.holds[hand].take() else { return };
+            self.done[hand] = h.serial;
+            unspring(h.action, h.bone.body);
+            let alive = combat::is_actor(h.actor) && mem::deref(h.actor + NI_NODE) != 0;
+            let speed = throw.map_or(0.0, |v| v.length());
+            tracing::info!("grabs: the {} hand lets go of {:#x}{}", if hand == 0 { "left" } else { "right" }, h.actor_id, if throw.is_some() { format!(" at {speed:.2} m/s") } else { ": its grip slipped".into() });
+            if alive && let Some(v) = throw.filter(|_| speed > 0.3) {
+                let dead = is_dead(h.actor);
+                if !dead && knock_state(h.actor) == 0 && speed > THROW_DOWN && knock_down(h.actor) {
+                    tracing::info!("grabs: {:#x} thrown down", h.actor_id);
+                    self.limp.entry(h.actor_id).and_modify(|l| l.bones.clear());
+                    if !h.attacked {
+                        attacked(h.actor);
+                    }
+                }
+                if dead || knock_state(h.actor) != 0 {
+                    // The whole body takes what the hand's pull could give it, the held bone the
+                    // rest of the hand's speed.
+                    let bones = skeleton(mem::deref(h.actor + NI_NODE));
+                    let total: f32 = bones.iter().map(|b| mass(b.body)).sum::<f32>().max(1.0);
+                    let want = v - velocity(h.bone.body);
+                    let most = force * self.scale.unwrap_or(1.0) * THROW_TIME / total;
+                    let dv = want.clamp_length_max(most);
+                    for b in &bones {
+                        let extra = if b.body == h.bone.body { (want - dv) * 0.5 } else { Vec3::ZERO };
+                        set_velocity(b.body, velocity(b.body) + dv + extra);
+                    }
+                    tracing::info!("grabs: {:#x} thrown: {:.2} m/s on all {:.0} kg of it", h.actor_id, dv.length(), total);
+                }
+            }
+            let still_held = self.holds.iter().flatten().any(|o| o.actor_id == h.actor_id);
+            if !still_held && let Some(l) = self.limp.get_mut(&h.actor_id) {
+                l.back = Some(now);
+            }
+        }
+
+        /// The limbs let go of blending back to the animation; done, the bodies out of the world.
+        fn blend_back(&mut self, now: f64) {
+            let held: Vec<u32> = self.holds.iter().flatten().map(|h| h.actor_id).collect();
+            self.limp.retain(|id, l| {
+                let gone = !combat::is_actor(l.actor) || mem::deref(l.actor + NI_NODE) != l.root;
+                if gone {
+                    return false;
+                }
+                // Put in for a hold that never came (let go at once): back as it was.
+                if l.back.is_none() && !held.contains(id) && now - l.since > 0.25 {
+                    l.back = Some(now);
+                }
+                let Some(t0) = l.back else { return true };
+                // Knocked down meanwhile, the game has its bones now.
+                let down = is_dead(l.actor) || knock_state(l.actor) != 0;
+                if l.restored || down {
+                    bodies_in_world(l.root, false);
+                    tracing::info!("grabs: {id:#x} let go{}", if down { " (down: its bones are the game's)" } else { ": back to its animation" });
+                    return false;
+                }
+                let k = ((now - t0) / BACK_TIME).clamp(0.0, 1.0) as f32;
+                for &(blend, h0, v0) in &l.bones {
+                    if k < 1.0 {
+                        set_gains(blend, h0 * k, v0.min(1.0) * k.max(0.05));
+                    } else {
+                        set_gains(blend, h0, v0);
+                    }
+                }
+                l.restored = k >= 1.0;
+                true
+            });
+        }
+    }
+}
