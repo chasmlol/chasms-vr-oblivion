@@ -9,10 +9,11 @@ powershell -File tools\play.ps1 armour
 ```
 
 To bring the other vanilla sets along, add `-Give` (each set's four pieces; equip them from the
-inventory):
+inventory), and strength enough to carry four heavy sets on top of the iron without being stuck in
+place (the playtest's `playtest.bat` boots it this way):
 
 ```
-powershell -File tools\play.ps1 armour -Give "000229A2 1,0001C6D8 1,000229A3 1,000229A5 1,00036343 1,00036340 1,00036342 1,00036341 1,0003635B 1,00036358 1,0003635A 1,00036359 1,0002AD85 1,00036352 1,00036354 1,00036353 1"
+powershell -File tools\play.ps1 armour -Give "000229A2 1,0001C6D8 1,000229A3 1,000229A5 1,00036343 1,00036340 1,00036342 1,00036341 1,0003635B 1,00036358 1,0003635A 1,00036359 1,0002AD85 1,00036352 1,00036354 1,00036353 1" -Commands "player.setav strength 100"
 ```
 
 | Set | Cuirass | Gauntlets | Greaves | Boots |
