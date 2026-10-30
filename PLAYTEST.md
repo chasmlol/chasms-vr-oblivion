@@ -15,7 +15,7 @@ portcullis, a turning switch) and `WarehouseAyleidRooms03` (Ayleid wall switches
 
 ## Round 1 (the first headset run, 30 October): what changed
 
-Your notes, and what was done (logs in `C:ustvr-wt\world\playtest-1`):
+Your notes, and what was done (logs in `<builds>\world\playtest-1`):
 
 - **"Everything is insanely way too heavy."** The arm pulling a door or a lever was damped on the
   part's own speed, so a 126 kg door trailed a moving hand by about a quarter of a metre (and a
