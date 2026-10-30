@@ -261,7 +261,8 @@ fn with_normal(path: &str) -> (String, String, String) {
 
 /// The avatar for a body: the skeleton, a worn item's model over each slot it covers, the race's
 /// skin on the slots nothing covers, rings and the amulet, a beast's tail; the head's parts, the
-/// hair unless something worn covers it, and the helmet or hood.
+/// hair unless something worn covers it, and the helmet or hood; and the race's skin under what's
+/// worn (`rustvr_protocol::UNDER`).
 pub fn avatar(b: &Body) -> AvatarDesc {
     let mut d: AvatarDesc = bytemuck::Zeroable::zeroed();
     let name = |path: &str| format!("oblivion/{}", model_key(path));
@@ -328,6 +329,15 @@ pub fn avatar(b: &Body) -> AvatarDesc {
     if let Some((model, texture)) = b.hair.as_ref().filter(|_| covered & HAIR == 0) {
         d.push_part(&name(model));
         swap_onto(&mut d, model, texture);
+    }
+    // Under what's worn, the skin all the same: the game never shows it (its armour bends with the
+    // body, closed), but a rigid plate's open end does as the joint bends out of it (a cuff with the
+    // hand bent away), and the arm inside shows there, not the armour's hollow. (Last: with too many
+    // parts, it's what goes.)
+    for (slot, male, female) in SKIN {
+        if covered & slot != 0 {
+            d.push_part(&format!("{}{UNDER}", name(&format!("characters\\_male\\{}", if b.female { female } else { male }))));
+        }
     }
     d
 }
@@ -476,8 +486,9 @@ mod tests {
         let parts: Vec<&str> = (0..d.count as usize).map(|i| d.part(i)).collect();
         assert_eq!(parts[0], format!("oblivion/{}", model_key("clothes\\robe.nif")));
         assert_eq!(parts[1], format!("oblivion/{}", model_key("clothes\\ring.nif")));
-        // Hands and feet are the skin's; the upper and lower body aren't.
-        assert_eq!(parts[2..], [format!("oblivion/{}", model_key("characters\\_male\\hand.nif")), format!("oblivion/{}", model_key("characters\\_male\\foot.nif"))]);
+        // Hands and feet are the skin's; the upper and lower body aren't, but are under the robe.
+        assert_eq!(parts[4..], [format!("oblivion/{}:under", model_key("characters\\_male\\upperbody.nif")), format!("oblivion/{}:under", model_key("characters\\_male\\lowerbody.nif"))]);
+        assert_eq!(parts[2..4], [format!("oblivion/{}", model_key("characters\\_male\\hand.nif")), format!("oblivion/{}", model_key("characters\\_male\\foot.nif"))]);
         assert_eq!(name_str(&d.skeleton), format!("oblivion/{}", model_key("characters\\_male\\skeleton.nif")));
         // A Nord's skin for the Imperial one.
         assert_eq!(d.swap(0), (texture_key("textures\\characters\\imperial\\male\\upperbodymale.dds").as_str(), texture_key("textures\\characters\\nord\\male\\upperbodymale.dds").as_str()));
