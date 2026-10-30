@@ -11,7 +11,16 @@
 //! So while a leaf shader is bound, the constants the game sets are checked. A value that isn't
 //! finite is made 0: on Direct3D 9 a leaf with no wind weight multiplied a broken wind matrix away
 //! (0 times anything is 0 there), where D3D9On12 follows IEEE and gets NaN. What they hold is summed
-//! up in the log every 10 s, and a value far out of range is logged as it comes.
+//! up in the log every 10 s, and a value far out of range is logged as it comes. (Playtest 7: all
+//! sound. The streaks are the shadow pass's: `docs/research/visuals.md`.)
+//!
+//! The cards face the camera's `BillboardRight` and `BillboardUp`: square to the way it looks, and
+//! leaning with it. A flat screen's camera never leans and turns little; a head leans and turns all
+//! the time, and every leaf on every tree turned and leaned with it. So for each draw the cards are
+//! given a right that's level and square to the line from the eye to the tree, and the game's up
+//! without its lean toward that right ([`facing`]): they turn as you walk round a tree, not as your
+//! head turns or leans. The eye in the tree's own space is where its model-view-projection takes
+//! x, y and w to 0 ([`eye_in_model`]).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -26,6 +35,7 @@ pub struct Layout {
     pub rustle: (u32, u32),
     pub wind: (u32, u32),
     pub corners: (u32, u32),
+    pub mvp: (u32, u32),
 }
 
 const NAMES: [&str; 5] = ["billboard", "rocking", "rustle", "wind", "corners"];
@@ -77,7 +87,56 @@ pub fn leaf_layout(tokens: &[u32]) -> Option<Layout> {
     let (right, up) = (get("BillboardRight").unwrap_or_default(), get("BillboardUp").unwrap_or_default());
     // (Right and up are next to each other in every leaf shader; one range covers both.)
     let billboard = if up.0 == right.0 + right.1 { (right.0, right.1 + up.1) } else { right };
-    Some(Layout { billboard, rock: get("RockParams").unwrap_or_default(), rustle: get("RustleParams").unwrap_or_default(), wind, corners })
+    Some(Layout { billboard, rock: get("RockParams").unwrap_or_default(), rustle: get("RustleParams").unwrap_or_default(), wind, corners, mvp: get("ModelViewProj").unwrap_or_default() })
+}
+
+/// The eye in a model's own space: where its model-view-projection (`row_major`, the rows as set)
+/// takes x, y and w to 0, which is the eye for any perspective projection, off-centre or not.
+pub fn eye_in_model(mvp: &[f32; 16]) -> Option<[f32; 3]> {
+    let row = |i: usize| [mvp[i * 4] as f64, mvp[i * 4 + 1] as f64, mvp[i * 4 + 2] as f64, mvp[i * 4 + 3] as f64];
+    let (a, b, c) = (row(0), row(1), row(3));
+    let det3 = |x: [f64; 3], y: [f64; 3], z: [f64; 3]| x[0] * (y[1] * z[2] - y[2] * z[1]) - x[1] * (y[0] * z[2] - y[2] * z[0]) + x[2] * (y[0] * z[1] - y[1] * z[0]);
+    // (Cramer's rule on the three rows' x, y and z columns.)
+    let (cx, cy, cz) = ([a[0], b[0], c[0]], [a[1], b[1], c[1]], [a[2], b[2], c[2]]);
+    let rhs = [-a[3], -b[3], -c[3]];
+    let det = det3(cx, cy, cz);
+    if det.abs() < 1e-12 {
+        return None;
+    }
+    let e = [det3(rhs, cy, cz) / det, det3(cx, rhs, cz) / det, det3(cx, cy, rhs) / det];
+    e.iter().all(|v| v.is_finite()).then(|| [e[0] as f32, e[1] as f32, e[2] as f32])
+}
+
+/// The leaf cards' right and up for a tree seen from `eye` (its own space, its origin at the trunk,
+/// up its +z): right level and square to the line from the eye to the tree, up the game's `up`
+/// without its lean toward that right. Each as long as the game's and pointing its way, `w` as the
+/// game set it.
+pub fn facing(eye: [f32; 3], right: [f32; 4], up: [f32; 4]) -> Option<([f32; 4], [f32; 4])> {
+    let len3 = |v: [f32; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    let (rl, ul) = (len3([right[0], right[1], right[2]]), len3([up[0], up[1], up[2]]));
+    if rl < 1e-6 || ul < 1e-6 {
+        return None;
+    }
+    let (dx, dy) = (-eye[0], -eye[1]);
+    let d = (dx * dx + dy * dy).sqrt();
+    let (mut rx, mut ry) = if d > 1e-3 {
+        (-dy / d, dx / d)
+    } else {
+        // (Right over the trunk: the game's right, level.)
+        let h = (right[0] * right[0] + right[1] * right[1]).sqrt();
+        if h < 1e-6 {
+            return None;
+        }
+        (right[0] / h, right[1] / h)
+    };
+    if rx * right[0] + ry * right[1] < 0.0 {
+        (rx, ry) = (-rx, -ry);
+    }
+    let lean = up[0] * rx + up[1] * ry;
+    let u = [up[0] - lean * rx, up[1] - lean * ry, up[2]];
+    let l = len3(u);
+    let u = if l < 1e-6 { [0.0, 0.0, 1.0] } else { [u[0] / l, u[1] / l, u[2] / l] };
+    Some(([rx * rl, ry * rl, 0.0, right[3]], [u[0] * ul, u[1] * ul, u[2] * ul, up[3]]))
 }
 
 /// A value far out of range for any of them: leaf sizes are tens of units, the rest angles,
@@ -117,11 +176,14 @@ pub struct Seen {
     pub largest: [(f32, u32); 5],
     pub not_finite: u64,
     pub first_bad: Option<(usize, u32, f32)>,
+    /// Draws whose cards were turned to the eye, and those that couldn't be.
+    pub faced: u64,
+    pub unfaced: u64,
 }
 
 impl Default for Seen {
     fn default() -> Self {
-        Seen { binds: 0, uploads: 0, corner_uploads: (u32::MAX, 0), largest: [(0.0, 0); 5], not_finite: 0, first_bad: None }
+        Seen { binds: 0, uploads: 0, corner_uploads: (u32::MAX, 0), largest: [(0.0, 0); 5], not_finite: 0, first_bad: None, faced: 0, unfaced: 0 }
     }
 }
 
@@ -130,12 +192,14 @@ impl Seen {
         let largest: Vec<String> = NAMES.iter().zip(self.largest).map(|(n, (v, r))| format!("{n} {v:.3} (c{r})")).collect();
         let corners = if self.corner_uploads.1 == 0 { "none".to_string() } else { format!("{}..{}", self.corner_uploads.0, self.corner_uploads.1) };
         format!(
-            "leaves: {} leaf shaders bound, {} uploads to them; corners uploaded {} at a time; largest: {}; {} values not finite (made 0)",
+            "leaves: {} leaf shaders bound, {} uploads to them; corners uploaded {} at a time; largest: {}; {} values not finite (made 0); {} draws' cards turned to the eye, {} not",
             self.binds,
             self.uploads,
             corners,
             largest.join(", "),
-            self.not_finite
+            self.not_finite,
+            self.faced,
+            self.unfaced
         )
     }
 }
@@ -146,12 +210,24 @@ pub fn enabled() -> bool {
     *ON.get_or_init(|| !std::env::var("RUSTVR_OBLIVION_LEAVES_AS_GAME").is_ok_and(|v| v == "1"))
 }
 
+/// Testing, `RUSTVR_OBLIVION_GAME_LEAF_FACING=1`: the cards square to the way the head looks, leaning
+/// with it, as the game has them.
+pub fn faces_eye() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| !std::env::var("RUSTVR_OBLIVION_GAME_LEAF_FACING").is_ok_and(|v| v == "1"))
+}
+
 struct State {
     shaders: HashMap<usize, Layout>,
     bound: Option<Layout>,
     seen: Seen,
     since: Option<Instant>,
     last_alarm: Option<Instant>,
+    /// The game's own model-view-projection, right and up, as last set while a leaf shader was bound.
+    mvp: [f32; 16],
+    right: [f32; 4],
+    up: [f32; 4],
+    have: [bool; 3],
 }
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -160,7 +236,17 @@ static BOUND: AtomicBool = AtomicBool::new(false);
 
 fn with<R>(f: impl FnOnce(&mut State) -> R) -> R {
     let mut s = STATE.lock().unwrap();
-    f(s.get_or_insert_with(|| State { shaders: HashMap::new(), bound: None, seen: Seen::default(), since: None, last_alarm: None }))
+    f(s.get_or_insert_with(|| State {
+        shaders: HashMap::new(),
+        bound: None,
+        seen: Seen::default(),
+        since: None,
+        last_alarm: None,
+        mvp: [0.0; 16],
+        right: [0.0; 4],
+        up: [0.0; 4],
+        have: [false; 3],
+    }))
 }
 
 /// The game made a vertex shader (`shader`) from `tokens`: one of the leaves' is remembered.
@@ -195,6 +281,22 @@ pub fn set(start: u32, data: &[f32]) -> Option<Vec<f32>> {
         let before = s.seen.first_bad;
         let far_before = s.seen.largest;
         let fixed = check(&layout, start, data, &mut s.seen);
+        // The game's own values (the cards are turned at the draw, from these).
+        let values = fixed.as_deref().unwrap_or(data);
+        for (i, v) in values.chunks_exact(4).enumerate() {
+            let reg = start + i as u32;
+            if layout.mvp.1 >= 4 && reg >= layout.mvp.0 && reg < layout.mvp.0 + 4 {
+                let row = (reg - layout.mvp.0) as usize;
+                s.mvp[row * 4..row * 4 + 4].copy_from_slice(v);
+                s.have[0] = true;
+            } else if layout.billboard.1 >= 2 && reg == layout.billboard.0 {
+                s.right.copy_from_slice(v);
+                s.have[1] = true;
+            } else if layout.billboard.1 >= 2 && reg == layout.billboard.0 + 1 {
+                s.up.copy_from_slice(v);
+                s.have[2] = true;
+            }
+        }
         // As they come, at most once a second: a value that isn't finite, or one far out of range.
         let alarm = s.last_alarm.is_none_or(|t| now - t > Duration::from_secs(1));
         if alarm {
@@ -216,5 +318,31 @@ pub fn set(start: u32, data: &[f32]) -> Option<Vec<f32>> {
             s.since = Some(now);
         }
         fixed
+    })
+}
+
+/// A leaf shader's draw: its cards' right and up turned to the eye, as (first register, the two
+/// registers' values to set before it, the game's to put back after it: other shaders use them).
+pub fn facing_now() -> Option<(u32, [f32; 8], [f32; 8])> {
+    if !faces_eye() {
+        return None;
+    }
+    with(|s| {
+        let layout = s.bound?;
+        let turned = (s.have == [true; 3] && layout.billboard.1 >= 2)
+            .then(|| eye_in_model(&s.mvp))
+            .flatten()
+            .and_then(|eye| facing(eye, s.right, s.up));
+        match turned {
+            Some((r, u)) => {
+                s.seen.faced += 1;
+                let (gr, gu) = (s.right, s.up);
+                Some((layout.billboard.0, [r[0], r[1], r[2], r[3], u[0], u[1], u[2], u[3]], [gr[0], gr[1], gr[2], gr[3], gu[0], gu[1], gu[2], gu[3]]))
+            }
+            None => {
+                s.seen.unfaced += 1;
+                None
+            }
+        }
     })
 }

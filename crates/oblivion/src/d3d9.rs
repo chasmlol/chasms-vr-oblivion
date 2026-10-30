@@ -244,11 +244,14 @@ mod win {
             }
             // IDirect3DDevice9::CreateVertexBuffer (slot 26), DrawIndexedPrimitive (82) and
             // SetStreamSource (100): system memory vertex buffers drawn whole ([`crate::sysmem`]).
+            // (The draw also turns the leaves' cards to the eye: [`crate::leaves::facing_now`].)
+            if crate::sysmem::enabled() || crate::leaves::enabled() {
+                let draw = unsafe { *(*(dev as *const *const usize)).add(82) };
+                hooks::install_into(draw as *const (), draw_indexed_primitive as *const (), "IDirect3DDevice9::DrawIndexedPrimitive", &REAL_DRAW_INDEXED);
+            }
             if crate::sysmem::enabled() {
                 let create_vb = unsafe { *(*(dev as *const *const usize)).add(26) };
                 hooks::install_into(create_vb as *const (), create_vertex_buffer as *const (), "IDirect3DDevice9::CreateVertexBuffer", &REAL_CREATE_VB);
-                let draw = unsafe { *(*(dev as *const *const usize)).add(82) };
-                hooks::install_into(draw as *const (), draw_indexed_primitive as *const (), "IDirect3DDevice9::DrawIndexedPrimitive", &REAL_DRAW_INDEXED);
                 let stream = unsafe { *(*(dev as *const *const usize)).add(100) };
                 hooks::install_into(stream as *const (), set_stream_source as *const (), "IDirect3DDevice9::SetStreamSource", &REAL_SET_STREAM);
             } else {
@@ -366,7 +369,16 @@ mod win {
     unsafe extern "system" fn draw_indexed_primitive(dev: *mut c_void, kind: u32, base: i32, min: u32, count: u32, start: u32, prims: u32) -> windows::core::HRESULT {
         let real: DrawIndexedFn = unsafe { std::mem::transmute(REAL_DRAW_INDEXED.load(Ordering::Acquire)) };
         let (min, count) = if crate::sysmem::bound() { hooks::guard("DrawIndexedPrimitive", None, || crate::sysmem::draw(base, min, count)).unwrap_or((min, count)) } else { (min, count) };
-        unsafe { real(dev, kind, base, min, count, start, prims) }
+        let facing = if crate::leaves::bound() { hooks::guard("DrawIndexedPrimitive", None, crate::leaves::facing_now) } else { None };
+        let Some((reg, ours, game)) = facing else {
+            return unsafe { real(dev, kind, base, min, count, start, prims) };
+        };
+        // (Straight to the device: these aren't the game's to check again. Its own go back after.)
+        let set: SetVertexShaderConstantFFn = unsafe { std::mem::transmute(REAL_SET_VS_F.load(Ordering::Acquire)) };
+        let _ = unsafe { set(dev, reg, ours.as_ptr(), 2) };
+        let hr = unsafe { real(dev, kind, base, min, count, start, prims) };
+        let _ = unsafe { set(dev, reg, game.as_ptr(), 2) };
+        hr
     }
 
     type SetVertexShaderFn = unsafe extern "system" fn(*mut c_void, *mut c_void) -> windows::core::HRESULT;
