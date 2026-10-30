@@ -63,7 +63,7 @@ mod win {
     }
 
     /// Swimming by the arms: the frame's step is the strokes', the stick's swimming (the game's
-    /// own step) added while it's pushed, never further than the game's speed takes the player.
+    /// own step) added while it's pushed, never further than the faster of the two takes the player.
     fn swim_step(this: usize, dt: f32, d: &mut [f32; 3], v: [f32; 3], stick: [f32; 2]) {
         let Some(rot) = mem::at::<[f32; 3]>(this + crate::engine::refr::ROT) else { return };
         let s = crate::swim::stroke_step(v, rot[2], rot[0], dt);

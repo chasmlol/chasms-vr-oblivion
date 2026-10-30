@@ -17,23 +17,29 @@ the Swimming row of `docs/OBLIVION.md`.
    above the water, as it does any swimmer. Nothing pulls you up or down. Your body treads water
    under you: legs hanging, thighs a little forward, kicking slowly. Put your hands in the water and
    look at them: you see them under the surface, a little of the water's colour over them.
-2. **Breaststroke.** Hands together in front, sweep them out and back firmly, then bring them
-   forward again. Which way your palms face doesn't matter, only which way your hands move.
-   - Each stroke surges you on, then you glide, slowing over a couple of seconds.
-   - One firm stroke takes you most of the way to the game's own full swim speed, a gentle one
-     about a third. Nothing goes faster than the game's speed for your Speed, Athletics, armour
-     and load.
-   - Reaching forward again (the recovery) pushes you back only a little.
+2. **Breaststroke.** Hands together in front, sweep them out and back, then bring them forward
+   again. Which way your palms face doesn't matter, only which way your hands move.
+   - How fast your hands move is how fast you go: a small slow stroke moves you a little (about
+     half a metre), a hard fast one shoots you along. A firm one surges to about two and a half
+     times the game's swim speed, and between strokes you glide at about its own. Your Speed,
+     Athletics, armour and load still count: the game's speed is the strokes' scale.
+   - Reaching forward again (the recovery) holds you back only a little.
    - Each pushing hand buzzes with the water's resistance.
    - Your body leans forward as you swim, legs streaming out behind with a flutter kick. You can
      see this when you're under the water.
 3. **Other strokes.** Any stroke works: a crawl (one arm at a time), a dog paddle, side strokes.
    You go the other way to your hands, not a gesture to match.
-4. **Turning.** Strokes never turn you. Turn your body, or use the right stick as on land. Looking
-   about, or walking about the room, pushes nothing.
+4. **Steering.** Your strokes drive you where your head looks, up and down too: look down and
+   breaststroke to dive at that angle, look up to come up. Within about 12 degrees of level you
+   swim level. Strokes never turn you: turn your body, or use the right stick as on land.
+   - Turn and stroke a new way: your hands in the water stop the old way's glide, so you don't
+     drift off sideways. (Glancing aside while you glide slows you a little, for the same reason.)
+   - Walking about the room pushes nothing.
 5. **Treading water.** Small sculling movements, or nothing at all: you stay where you are at the
    surface.
-6. **Dive.** Push your hands up: down you go. You can also look down and push the left stick. With
+6. **Dive.** Look down and stroke, or push your hands up: down you go. You can also look down and
+   push the left stick. At the surface it takes a look about 20 degrees down, so a stroke's wobble
+   doesn't dive you. With
    your head under:
    - the game's underwater fog and tint (your hands and body get them too);
    - the game's breath meter at the top of the view.
@@ -41,7 +47,8 @@ the Swimming row of `docs/OBLIVION.md`.
    that's the game's `fActorSwimBreath*` and your Endurance. Under a third left, your heart beats
    in both hands, faster and harder as it runs out, and the game gasps.
    **Don't drown:** dying and the game's reload crash Oblivion in VR (see "Known issues").
-8. **Surface.** Push your hands down: up you go. The game stops you at its surface.
+8. **Surface.** Look up and stroke, or push your hands down: up you go. The game stops you at its
+   surface.
 9. **Duck your face into the water** from the surface: the underwater fog comes on when your eyes
    go under, even though the game still has you floating.
 10. **Slap the water.** Bring a hand down into the water fast: the game's own splash (its droplets
@@ -55,7 +62,7 @@ the Swimming row of `docs/OBLIVION.md`.
     does in the flat game.
 14. **Settings.** In the runtime's menu, Controls tab:
     - "Swim with your arms": turn it off and only the stick swims.
-    - "Stroke ease": above 1, a smaller stroke gets you to full speed.
+    - "Stroke ease": above 1, every stroke is stronger (a smaller one goes as far).
 
 Hands holding something (a weapon, a torch, a thing you've picked up) don't stroke. Neither does a
 fist (the grip squeezed): the other hand still swims.
@@ -73,6 +80,20 @@ fist (the grip squeezed): the other hand still swims.
      recovery) pushes back only a fifth as much. Each stroke surges harder and glides out more
      slowly (two seconds). Looking about no longer pushes (it was counted as the hands sweeping
      round the head).
+2. **Forward worked, but weak:** 30 to 90% of the game's speed. "WAY faster, it can go over the
+   game's speed." It felt like two modes, horizontal and vertical, where you should breaststroke
+   anywhere and choose up or down by looking. Stroking one way, then turning and stroking another,
+   drifted you on the first way. Strokes should be precise: small ones for little moves, hard fast
+   ones to shoot along.
+   - Now each hand meets the water as a hand does: the faster it goes through the water, the harder
+     it pushes (with the square of its speed), and you go the other way. How fast your hands move
+     is how fast you can go, scaled by the game's swim speed so its skills still count, up to four
+     times it. Your pull back drives you where you look, up or down. Going that way your hands slice
+     through; any other way they hold you back, which stops the old way's drift after a turn.
+   - The numbers, simulated before the build: a firm breaststroke (hands at 1.2 m/s) surges to
+     5.4 m/s and glides to 2.4 between strokes, about 10 m in 4 s; a gentle one (0.5 m/s) 1 to
+     1.6 m/s; a small one (0.3 m/s for a third of a second) half a metre. Turned 90 degrees with
+     the hands still, two thirds of the old glide is gone in half a second.
 
 ## Checked in the game (emulated headset, `tools/oblivion.ps1`)
 
@@ -116,7 +137,8 @@ fist (the grip squeezed): the other hand still swims.
   - the buzz and heartbeat on real controllers.
 
   The numbers to tune are at the top of `framework/crates/runtime/src/swim.rs` (dead zone,
-  recovery, glide, full push) and `framework/crates/ik/src/swim.rs` (the body's lean and kicks).
+  recovery, level, the hands' strength and drag, the body's drag and glide, the most speed) and
+  `framework/crates/ik/src/swim.rs` (the body's lean and kicks).
 - **The floating legs in a picture of the game.** The emulated views from your own eyes don't show
   your legs well. They were checked as stick figures and numbers only.
 - **The game's other water,** checked only as code: Water Walking, Water Breathing,
@@ -129,21 +151,22 @@ fist (the grip squeezed): the other hand still swims.
 
 ## Decisions
 
-- **The game decides when you swim, how fast, and your breath.** The runtime only turns strokes
-  into the velocity the game's own swimming moves you at. That's its character controller, with
-  its collision, its surface and its Athletics. There are no hand-tuned speeds:
-  - a full steady stroke holds the game's full swim speed (its running pace with Always Run, or Run
-    held, its walking pace otherwise);
-  - a gentle stroke gets less.
-- **The stroke model** (after playtest 1).
-  - A hand pushes when it's under the surface, empty and not gripping. Its palm doesn't matter:
-    with a controller in the hand, it can't say which way a stroke sweeps.
-  - The push is the hand's velocity against the head, reversed, past a 0.25 m/s dead zone.
-  - A hand reaching ahead (where your face looks, or, looking down, where the top of your head
-    points) is recovering: a fifth of that reach pushes.
-  - Strokes accelerate you and the water's drag glides it out over 2 s. A steady push of 0.6 m/s
-    (both hands, past the dead zone) holds the game's full speed: a firm breaststroke's pull
-    surges you to about 80% of it.
+- **The game decides when you swim and your breath, and its speed is the strokes' scale.** The
+  runtime only turns strokes into the velocity the game's own swimming moves you at. That's its
+  character controller, with its collision, its surface and its Athletics. Your strokes may go
+  past the game's speed (you asked for it in playtest 2), but they scale with it: its running pace
+  with Always Run, or Run held, its walking pace otherwise, and your skills and load.
+- **The stroke model** (after playtest 2).
+  - A hand meets the water when it's under the surface, empty and not gripping. Its palm doesn't
+    matter: with a controller in the hand, it can't say which way a stroke sweeps.
+  - Its stroke is its velocity against the head past a 0.1 m/s dead zone, made as strong as the
+    game's swimmer (a hand at 0.28 m/s past it moves the water at the game's swim speed). Its pull
+    back is turned the way the head looks (level within 12 degrees).
+  - Through the water it goes at your speed plus its stroke's, and the water pushes back with the
+    square of that (0.55 per metre). Along the way your head looks it slices (a tenth); any other
+    way, it meets the water fully: still hands hold back a drift.
+  - Your own drag is a quarter of a hand's, plus a glide of 2 s at slow speeds. Nothing passes
+    four times the game's speed. The numbers are at the top of `framework/crates/runtime/src/swim.rs`.
   - At the surface a stroke has to take you down faster than 0.1 m/s to dive. Every stroke has a
     little up and down in it, and the game floats a swimmer back up only once they stop: before
     this, a long swim at the surface sank you a couple of centimetres a second. Now you stay within
@@ -154,9 +177,10 @@ fist (the grip squeezed): the other hand still swims.
 - **No buoyancy, no auto-surfacing.** Oblivion has none under water: a still swimmer hangs where
   they are. That's also the comfortable choice, since nothing moves your view but you. When breath
   runs low you're warned (the meter, the gasp, the heartbeat in the hands), and surfacing is yours.
-- **Strokes go where the hands push, the stick where the head looks.** The game turns any
-  swimming step down by the player's pitch (the head's). The strokes' step is turned back first,
-  so looking down while stroking forward doesn't dive.
+- **Strokes and the stick both go where the head looks** (since playtest 2; before, strokes went
+  only where the hands pushed). The game turns any swimming step down by the player's pitch (the
+  head's). The strokes' step is turned back first, since the runtime has already turned the pull
+  the head's way, past its 12 degrees of level.
 - **The game sees a swimmer.** While the arms swim with the stick let go, the game's joystick is
   nudged, as little as it reads, the way the strokes go. That gives the game its movement flags, so
   it trains Athletics, makes its wading ripples and plays its swimming. The step itself is the
