@@ -3,7 +3,12 @@
 Save: rustvr-gore
 
 `powershell -File tools\play.ps1 gore` boots it. `-Save rustvr-gore-undead` has a zombie and a
-skeleton instead. `-Close` puts it away.
+skeleton instead. `-Close` puts it away. On the real headset, `playtest.bat` and
+`playtest-undead.bat` in the worktree do the same from Explorer, and keep each run's runtime log in
+`<builds>\gore\playtest-<n>`.
+
+The flat game's crosshair is hidden in VR (`reticle.rs`, from the riding branch); its activate
+icons stay.
 
 ## The saves
 
