@@ -67,6 +67,8 @@ fist (the grip squeezed): the other hand still swims.
   - the swim speed: 143 units/s (2.05 m/s) running;
   - breath draining from 1.00 to 0.00 over about 20 s with the head under;
   - the water's colour and fog.
+- **Breaststrokes while looking down 60 degrees** swam along the surface, not down (the
+  strokes go where the hands push).
 - **Scripted breaststrokes** moved the player about 8.6 m in 10 s, up to 93% of the game's speed,
   surging and gliding. Swimming into the big rock slid along it, the game's collision. In the
   shallows the game stood the player up.
@@ -122,6 +124,10 @@ fist (the grip squeezed): the other hand still swims.
     goes with how squarely the palm meets its motion.
   - The push is the hand's velocity against the head, reversed, past a 0.25 m/s dead zone.
   - Strokes accelerate you and the water's drag glides it out over 1.4 s.
+  - At the surface a stroke has to take you down faster than 0.2 m/s to dive. Every stroke has a
+    little up and down in it, and the game floats a swimmer back up only once they stop: before
+    this, a long swim at the surface sank you a couple of centimetres a second. Now you stay within
+    about 5 cm of the game's float.
 - **Ducking while swimming isn't crouching.** The game's swimmer isn't crouched, so a crouch pressed
   in the water would still be on at the shore. Ducking your face into the water just puts it there.
 - **The comfort vignette** (if it's on) closes in while the arms swim you, as it does for the stick.
