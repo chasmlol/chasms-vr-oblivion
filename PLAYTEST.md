@@ -72,26 +72,37 @@ The research and the design are in `docs/research/mirror.md`.
   - the menu stands beside the mirror, cropped to the menu itself;
   - the laser works it: the Age slider was dragged both ways;
   - the face changes live as the slider moves: its coordinates every frame, the age map at each
-    decade, the body put together again in 2 to 13 ms and on the GPU in 2 to 4 ms.
+    decade, the body put together again in 2 to 13 ms and on the GPU in 2 to 4 ms;
+  - the Race page under the laser: Nord to Khajiit, then male to female. The mirror showed each as
+    it was made (the Khajiit head, ears and braids, the female armour), and the game didn't crash
+    (it did before: see Decisions);
+  - the face up close: the Nord head under the iron helmet, lit by a candle; the hair (Loose)
+    without the helmet.
 - **Called by the gesture** (`rustvr-weye`, made female with `player.sexchange`):
   - the mirror appears and goes again;
   - the female Nord shows with the iron helmet on (hair hidden under it) and her face lit by the
     room's candles;
   - looked at close up and from the side.
-- **Frame rate:** 140 to 300 game frames a second with the mirror up (a third world render a
-  frame), in the test saves' interiors.
+- **Frame rate:**
+  - 140 to 300 game frames a second with the mirror up (a third world render a frame), in the test
+    saves' interiors;
+  - about 370 while turned away from it (its render skipped);
+  - after turning back, its world is back the next frame.
 - **In first person** the head, hair and helmet stay out of your view.
 
 ## What wasn't checked
 
 - **On a real headset.** Everything above is the emulated headset's captures. Watch for:
   - the reflection's depth and parallax;
-  - whether the eyes' gaze looks right;
+  - whether the eyes' gaze looks right (at capture resolution the eyes are a few pixels);
   - comfort at 1.2 m.
-- **Outdoors** in daylight, at night, in fog or rain, and the mirror's cost there (bigger scenes
-  make the extra render dearer).
-- **The other races** in the mirror (a Khajiit's or Argonian's head, ears and hair on the beast
-  skeleton; elves' ears), and the hoods and helmets that cover only part of the head.
+- **Outdoors.** The test saves and `coc` all landed in interiors, so the mirror wasn't seen in
+  daylight, at night, in fog or rain, nor its cost in a big outdoor scene (bigger scenes make the
+  extra render dearer).
+- **The other races** in the mirror: Argonians, the elves' ears, the Orcs. Also the hoods and
+  helmets that cover only part of the head. Khajiit and Nord were checked.
+- **The race menu's Hair, Eyes and Face sub-pages**, one by one. They go through the same paths
+  as race, sex and age, which were checked.
 - **The gesture** made by real hands.
 
 ## Decisions
