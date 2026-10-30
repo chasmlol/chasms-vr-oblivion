@@ -78,7 +78,7 @@ their sets of variations, and whether they play in your head (the menus') or whe
 | You take a thing, put it away on the body, or let go of it | the inventory's sound for a thing of its kind (a potion's clink, a blade's ring, heavy armour, a book, gold...); letting go is the put-away sound, softer | the game's own choice for that thing (the function its inventory uses) |
 | A thing you hold or throw knocks into the world | the game's collision sound for what it's made of and how heavy it is (glass, metal, wood, cloth, stone...) | the game's own choice from the thing's Havok material and mass |
 | You draw or sheathe the weapon at your hip or back | the game's draw and sheathe for its type (one-handed blade, two-handed blunt, staff, bow); an enchanted weapon's draw also rings with the game's enchanted sound | its type, as the game plays them |
-| The gravity gloves | Telekinesis, which in Oblivion is a Mysticism spell: Mysticism's cast as the thing is pulled, its travel sound while it flies, its hit as it lands in your hand (with the thing's own pick-up sound) | Telekinesis's own record |
+| The gravity gloves | Telekinesis, which in Oblivion is a Mysticism spell: Mysticism's cast as the thing is pulled (being replaced: you're choosing a whoosh), its travel sound while it flies; landing in your hand, the thing's own pick-up sound, as when you take anything | Telekinesis's own record |
 | The gloves lock onto a thing | the spell-ready sound | |
 | A hand finds a slot, the gloves point at a thing | the menus' focus tick (very quiet, as quiet as the game plays it) | |
 | A slot is empty, or the game refuses a use | the game's "nothing happens" sound (from eating an ingredient that does nothing) | |

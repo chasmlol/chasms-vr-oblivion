@@ -17,7 +17,8 @@
 //!   (`WPN<type>Equip`, `WPN<type>Unequip`), an enchanted one's draw with its enchanted ring over
 //!   it, as the game layers it ([`weapon_set`]);
 //! - the gravity gloves: Telekinesis, which is Mysticism's (its `MGEF` record's sounds): its cast
-//!   as a thing is pulled, its bolt's travel as it flies, its hit as it lands in the hand;
+//!   as a thing is pulled, its bolt's travel as it flies; landing in the hand, a thing is taken as
+//!   any is (its kind's sound of being taken);
 //! - a hand finding a slot, and the runtime's own menu: the menus' focus and OK.
 
 use std::collections::{BTreeMap, HashMap};
@@ -216,7 +217,7 @@ const DEFAULTS: &[(&str, &[(&str, f32)])] = &[
     ("glove_lock", &[("SPLEquip", 1.0)]),
     ("glove_flick", &[("SPLMysticismCast", 1.0)]),
     ("glove_travel", &[("SPLMysticismTravelLP", 1.0)]),
-    ("glove_catch", &[("SPLMysticismHit", 1.0), ("ITMGenericUp", 1.0)]),
+    ("glove_catch", &[("ITMGenericUp", 1.0)]),
     ("impact", &[("CWoodSmall", 1.0)]),
     ("ui_hover", &[("UIMenuFocus", 1.0)]),
     ("ui_click", &[("UIMenuOK", 1.0)]),
@@ -263,7 +264,7 @@ pub fn build(records: &HashMap<String, SoundRecord>, names: &[&str]) -> Pack {
         p.event(&mut t, "release", &[(down.as_str(), 0.6)]);
         p.event(&mut t, "holster_out", &[(up.as_str(), 1.0)]);
         p.event(&mut t, "holster_in", &[(down.as_str(), 1.0)]);
-        p.event(&mut t, "glove_catch", &[("SPLMysticismHit", 1.0), (up.as_str(), 1.0)]);
+        p.event(&mut t, "glove_catch", &[(up.as_str(), 1.0)]);
         p.event(&mut t, "impact", &[(*collision, 1.0)]);
         for c in COLLISIONS.iter().filter(|c| records.contains_key(&c.to_ascii_lowercase())) {
             let _ = write!(t, "\n[sets.\"{}\"]\nextends = \"{kind}\"\n", with_collision(&kind, c));
