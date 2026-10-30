@@ -20,7 +20,8 @@
 //!   Continue and Load load a save, which replaces the world as it does from a game.
 //!
 //! `menu_world = false` in `rustvr-oblivion.toml` keeps the flat main menu; `menu_spot` names the
-//! spot (or several, taken in turn as the game starts).
+//! spot (or several, taken in turn as the game starts), and `RUSTVR_OBLIVION_MENU_SPOT` overrides it
+//! for a playtest.
 
 use rustvr_protocol::{SIDE_LEFT, SIDE_RIGHT};
 
@@ -307,7 +308,10 @@ mod win {
                 // (A different one of the named spots each time the game starts.)
                 static TURN: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
                 let turn = *TURN.get_or_init(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as usize));
-                let spot = spot_named(&crate::settings::get().menu_spot, turn);
+                // (`RUSTVR_OBLIVION_MENU_SPOT` names it for a playtest: the test tools write the
+                // settings afresh each time the game starts.)
+                let named = std::env::var("RUSTVR_OBLIVION_MENU_SPOT").ok().filter(|s| !s.trim().is_empty());
+                let spot = spot_named(named.as_deref().unwrap_or(&crate::settings::get().menu_spot), turn);
                 tracing::info!("worldmenu: the main menu without a game: to {} ({:?} at {:?}, facing {}, at {} o'clock)", spot.name, spot.cell, spot.pos, spot.heading, spot.hour);
                 w.spot = Some(spot);
                 w.state = State::Going { since: now, from: cell };
