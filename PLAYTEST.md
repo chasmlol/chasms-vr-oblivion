@@ -107,6 +107,14 @@ and puts your settings back like `playtest.bat`.
 
 ## What changed
 
+- **Round 9, the leaves.** They no longer turn or lean with your head: each tree's leaf cards face
+  your eye and stay upright, so they only turn as you walk round the tree.
+- **Round 9, stutter.** Your last run's real hitches (40..120 ms, every 10..30 s while moving) were
+  the game attaching newly loaded cells, and drawing new things the first time. Your `Oblivion.ini`
+  had the game's own background loading of people's faces and lip files off, and its threaded face
+  morpher, blood and path finding: they're on now while in VR. The 7x7 grid (round 7) makes each
+  cell crossing load 7 cells instead of 5. If the hitches matter more to you than the pop-in, that's
+  the one to take back.
 - **Round 8, frame rate.** Your last run made 75..90 frames a second, down from 110..135: the longer
   distances doubled what the game draws for each eye. The grass, all round you at 86 m, was the
   heaviest: it's back to 57 m (still beyond the 43 m before). The rest stays. The headset is at
