@@ -174,7 +174,7 @@ pub use stubs::*;
 #[cfg(all(windows, target_arch = "x86"))]
 mod game {
     use super::*;
-    use crate::engine::{self, av};
+    use crate::engine::{self, av, is_a, is_node};
     use crate::items::{ni_matrix, ni_rows};
     use crate::{camera, mem};
     use glam::{Mat3, Quat, Vec3};
@@ -205,8 +205,6 @@ mod game {
     const COLLISION: usize = 0xA8;
     const CHILDREN: usize = 0xB0;
     const CHILD_COUNT: usize = 0xB6;
-    /// `NiObject::GetRTTI` (virtual 1): `NiRTTI` {name, parent}.
-    const VT_RTTI: usize = 0x04;
     /// `NiObject::Clone` (thiscall): a copy of the object and everything under it.
     const CLONE: usize = 0x0070_0900;
     /// `NiNode::AttachChild(child, first free)`, `DetachChild(out, child)` (virtuals).
@@ -293,43 +291,6 @@ mod game {
         ptr: usize,
         parent: Option<usize>,
         name: String,
-    }
-
-    /// Whether `obj` is an `NiNode` (or one of its kinds), by its `NiRTTI` chain.
-    fn is_node(obj: usize) -> bool {
-        is_a(obj, "NiNode")
-    }
-
-    /// Whether `obj` is a `kind` (or one of its kinds), by its `NiRTTI` chain; cached by vtable.
-    fn is_a(obj: usize, kind: &'static str) -> bool {
-        static KNOWN: Mutex<Option<HashMap<(usize, &'static str), bool>>> = Mutex::new(None);
-        let vt = mem::deref(obj);
-        if vt == 0 {
-            return false;
-        }
-        let mut known = KNOWN.lock().unwrap();
-        let known = known.get_or_insert_with(HashMap::new);
-        if let Some(&k) = known.get(&(vt, kind)) {
-            return k;
-        }
-        let f = mem::deref(vt + VT_RTTI);
-        let mut yes = false;
-        if CODE.contains(&f) {
-            type Rtti = unsafe extern "thiscall" fn(usize) -> usize;
-            let mut rtti = unsafe { std::mem::transmute::<usize, Rtti>(f)(obj) };
-            for _ in 0..16 {
-                if rtti == 0 {
-                    break;
-                }
-                if crate::combat::read_str(mem::deref(rtti)) == kind {
-                    yes = true;
-                    break;
-                }
-                rtti = mem::deref(rtti + 4);
-            }
-        }
-        known.insert((vt, kind), yes);
-        yes
     }
 
     /// `NiGeometry`'s skin instance; `NiSkinInstance`'s data (its bone count at +0x40) and bones.
