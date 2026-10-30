@@ -17,37 +17,36 @@ the Swimming row of `docs/OBLIVION.md`.
    above the water, as it does any swimmer. Nothing pulls you up or down. Your body treads water
    under you: legs hanging, thighs a little forward, kicking slowly. Put your hands in the water and
    look at them: you see them under the surface, a little of the water's colour over them.
-2. **Push the water.** Put your hands under the water and push them hard one way: you go the
-   other way, as in real water. Bring them back slowly, or reach forward again fingertips first
-   (your hand slices through the water then, as a real hand does), and push hard again. That's all
-   there is: no strokes to learn, no palms, nowhere to look.
-   - The harder and faster you push, the harder you go (with the square of your hands' speed): a
-     small slow push nudges you about a metre, a hard one shoves you along. Pulling back at
-     1.2 m/s and reaching forward again at 0.4 surges you to about two and a half times the game's
-     swim speed each stroke, and you glide down to about its speed before the next.
-   - A breaststroke at your pace from playtest 4 averages about 1.3 times the game's speed, and
-     never pushes you backwards.
-   - Pushing forward fingertips first (the controller pointing forward) slices: to swim backwards,
-     push with your fingers pointing up or out.
-   - Each hand meeting the water buzzes with its resistance: a hand slicing hardly does.
+2. **Catch the water and pull.** Put a hand under the water and squeeze its grip: that hand holds
+   the water (a little pulse says so). Pull it and you're pulled past it the other way, about
+   three times as fast as your hand goes. Let go, reach out again (an open hand goes through the
+   water freely), catch and pull again. Between strokes you glide.
+   - A relaxed breaststroke (both hands pulled about half a metre in half a second) swims about
+     1.6 times the game's swim speed; a firm one, in a third of a second, 2.3 times; a hard one 3.
+     One firm stroke and a glide carries you about 16 m; a small one about 6.
+   - A pull only ever carries you its way: it never slows you. One slower than you already go
+     just slips. To stop, pull the other way, or glide out.
+   - A hand holding the water buzzes as it pulls.
    - Your body leans forward as you swim, legs streaming out behind with a flutter kick. You can
      see this when you're under the water.
-3. **Any stroke.** A breaststroke, a crawl (one arm at a time), a dog paddle, treading water: each
-   works because of how it pushes the water, not as a gesture.
-4. **Any direction.** Push down and you rise, up and you dive, to a side and you go the other way,
-   wherever you look. Strokes never turn your view: turn your body, or use the right stick as on
-   land. Your momentum glides on for a few seconds. Walking about the room pushes nothing.
-5. **Treading water.** Small movements, or nothing at all: you stay where you are at the surface.
-6. **Dive.** Push water up and you go down. You can also look down and push the left stick. At the
-   surface a stroke has to take you down faster than 0.2 m/s to dive, so a stroke's wobble
-   doesn't. With your head under:
+3. **Any stroke.** A breaststroke (both hands), a crawl (one hand at a time, letting go as it comes
+   round), a dog paddle: squeeze for the pull, let go to reach.
+4. **Any direction.** Pull back and you go forward, pull up and you dive, push down and you rise,
+   pull to a side and you go that way: where your hands pull, wherever you look. Strokes never turn
+   your view: turn your body, or use the right stick as on land. Your glide lasts several seconds.
+   Walking about the room pulls nothing.
+5. **Treading water.** Let go of the grips, or keep your hands still: you stay where you are at the
+   surface.
+6. **Dive.** Catch the water and pull it up: you go down. You can also look down and push the left
+   stick. At the surface a stroke has to take you down faster than 0.2 m/s to dive, so a stroke's
+   wobble doesn't. With your head under:
    - the game's underwater fog and tint (your hands and body get them too);
    - the game's breath meter at the top of the view.
 7. **Hold your breath.** The meter drains. With the save's Endurance it lasts about 20 seconds;
    that's the game's `fActorSwimBreath*` and your Endurance. Under a third left, your heart beats
    in both hands, faster and harder as it runs out, and the game gasps.
    **Don't drown:** dying and the game's reload crash Oblivion in VR (see "Known issues").
-8. **Surface.** Push water down and you come up. The game stops you at its surface.
+8. **Surface.** Catch the water and push it down: you come up. The game stops you at its surface.
 9. **Duck your face into the water** from the surface: the underwater fog comes on when your eyes
    go under, even though the game still has you floating.
 10. **Slap the water.** Bring a hand down into the water fast: the game's own splash (its droplets
@@ -61,9 +60,9 @@ the Swimming row of `docs/OBLIVION.md`.
     does in the flat game.
 14. **Settings.** In the runtime's menu, Controls tab:
     - "Swim with your arms": turn it off and only the stick swims.
-    - "Stroke strength": above 1, the water pushes back harder on every stroke.
+    - "Stroke strength": above 1, every pull carries you faster.
 
-Hands holding something (a weapon, a torch, a thing you've picked up) don't push the water.
+Hands holding something (a weapon, a torch, a thing you've picked up) don't catch the water.
 
 ## Playtests on the headset
 
@@ -99,6 +98,20 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't push
    - A hand coming back into tracking jumped from where it was lost and launched you (twice in the
      log: up at 4.4 m/s, and to four times the game's speed). Now only a hand tracked both frames
      moves, and a jump faster than any arm counts for nothing.
+5. **"Still just terrible, so unnatural, and the speed is shit: I need more speed, and to glide
+   more. Research proper good swimming in VR and implement it."** (This run's log was replaced by
+   the next feature's playtest before it was kept.)
+   - The well-liked VR swimmers don't simulate water pushing on a hand. Freediver: Triton Down
+     (grown from Lone Echo's zero-gravity movement) has you pull the trigger and swing your arms:
+     "you essentially pull yourself through the world". Marine Life Exploration: hold the side
+     buttons, pull back, let go. Hubris reads the palms, which a controller can't show (build 1).
+     Unreal developers' advice: anchor an open hand in the water like a climbing hold, and use a
+     button where the hand can't say.
+   - So now: squeeze the grip and that hand holds the water; you're pulled past it, at about
+     three times its pace (the game's swim speed's worth per 0.65 m/s of hand). Let go and you
+     glide (by e over 4 s); the hand reaches out again freely. A pull never slows you.
+   - Simulated: relaxed breaststrokes 3.3 m/s (1.6 times the game's speed), firm ones 4.8, hard
+     ones 6.4; a firm stroke carries you 16 m.
 
 ## Checked in the game (emulated headset, `tools/oblivion.ps1`)
 
@@ -141,8 +154,8 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't push
   - the comfort of the surge and glide;
   - the buzz and heartbeat on real controllers.
 
-  The numbers to tune are at the top of `framework/crates/runtime/src/swim.rs` (the water's
-  strength on a hand, its slicing, the glide and drag, the most speed) and
+  The numbers to tune are at the top of `framework/crates/runtime/src/swim.rs` (the catch, the
+  pull's pace, the glide and drag, the most speed) and
   `framework/crates/ik/src/swim.rs` (the body's lean and kicks).
 - **The floating legs in a picture of the game.** The emulated views from your own eyes don't show
   your legs well. They were checked as stick figures and numbers only.
@@ -162,17 +175,20 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't push
   the game's speed (you asked for it in playtest 2), up to four times it, but they scale with it:
   its running pace with Always Run, or Run held, its walking pace otherwise, and your skills and
   load.
-- **Only the physics of hands in water** (since playtest 3).
-  - A hand under the surface (eased over its last few centimetres), not holding anything, pushes
-    you the other way to its velocity against the head, as hard as the square of its speed:
-    1.5 game swim speeds a second for each (m/s)² of hand speed.
-  - Fingertips first, a hand slices (since playtest 4): the part of its motion along its fingers
-    pushes a tenth as hard. Wrist first it doesn't: a swimmer holds the hand flat across a pull,
-    which a hand round a controller can't show, and it pulls back wrist first.
-  - The water's drag on you: your speed glides out by e over 3 s, and sooner when fast (0.1 more
-    for each m/s).
+- **Catch the water and pull yourself past it** (since playtest 5), as in Freediver: Triton Down.
+  - A hand catches the water under the surface (1 cm down) with its grip squeezed past 0.6, holding
+    nothing else, and lets go below 0.35. Its velocity is against the head.
+  - The hands holding the water take you the other way at 1.5 game swim speeds for each m/s of
+    their pace (both hands: their mean), in about 0.08 s. A pull slower than you already go its
+    way slips: it never slows you.
+  - The water's drag: your speed glides out by e over 4 s, and sooner when fast (0.04 more for
+    each m/s).
   - At the surface a stroke has to take you down faster than 0.2 m/s to dive: every stroke has a
     little up and down in it, and the game floats a swimmer back up only once they stop.
+  - Before: builds 1 to 5 made the water push on every hand as real water does (palms, then the
+    head, then the strokes' way, then plain physics, then fingertips slicing). A controller can't
+    show a palm catching the water and slicing back through it, so the recovery always held you
+    back and the strokes felt mushy.
 - **Ducking while swimming isn't crouching.** The game's swimmer isn't crouched, so a crouch pressed
   in the water would still be on at the shore. Ducking your face into the water just puts it there.
 - **The comfort vignette** (if it's on) closes in while the arms swim you, as it does for the stick.
