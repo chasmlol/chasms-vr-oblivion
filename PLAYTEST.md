@@ -78,8 +78,8 @@ their sets of variations, and whether they play in your head (the menus') or whe
 | You take a thing, put it away on the body, or let go of it | the inventory's sound for a thing of its kind (a potion's clink, a blade's ring, heavy armour, a book, gold...); letting go is the put-away sound, softer | the game's own choice for that thing (the function its inventory uses) |
 | A thing you hold or throw knocks into the world | the game's collision sound for what it's made of and how heavy it is (glass, metal, wood, cloth, stone...) | the game's own choice from the thing's Havok material and mass |
 | You draw or sheathe the weapon at your hip or back | the game's draw and sheathe for its type (one-handed blade, two-handed blunt, staff, bow); an enchanted weapon's draw also rings with the game's enchanted sound | its type, as the game plays them |
-| The gravity gloves | Telekinesis, which in Oblivion is a Mysticism spell: Mysticism's cast as the thing is pulled (being replaced: you're choosing a whoosh), its travel sound while it flies; landing in your hand, the thing's own pick-up sound, as when you take anything | Telekinesis's own record |
-| The gloves lock onto a thing | the spell-ready sound | |
+| The gravity gloves | the flick: a big weapon's swish, quiet (your pick, round 3); while it flies, Telekinesis's travel sound (a Mysticism spell in Oblivion); landing in your hand, the thing's own pick-up sound, as when you take anything | Telekinesis's own record for the travel |
+| The gloves lock onto a thing | nothing: only the pulse in your hand (your pick, round 3) | |
 | A hand finds a slot, the gloves point at a thing | the menus' focus tick (very quiet, as quiet as the game plays it) | |
 | A slot is empty, or the game refuses a use | the game's "nothing happens" sound (from eating an ingredient that does nothing) | |
 | RustVR's own settings menu | the menus' OK click | |

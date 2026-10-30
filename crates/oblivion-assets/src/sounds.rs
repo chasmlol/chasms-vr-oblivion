@@ -16,9 +16,10 @@
 //! - the weapon on the body drawn and sheathed: the game's draw and sheathe of its type
 //!   (`WPN<type>Equip`, `WPN<type>Unequip`), an enchanted one's draw with its enchanted ring over
 //!   it, as the game layers it ([`weapon_set`]);
-//! - the gravity gloves: Telekinesis, which is Mysticism's (its `MGEF` record's sounds): its cast
-//!   as a thing is pulled, its bolt's travel as it flies; landing in the hand, a thing is taken as
-//!   any is (its kind's sound of being taken);
+//! - the gravity gloves: a big weapon's swish, quiet, as a thing is flicked to the hand (the
+//!   player's pick of the game's whooshes); Telekinesis's travel as it flies (a Mysticism effect:
+//!   its bolt's, from its `MGEF` record); landing in the hand, a thing is taken as any is (its
+//!   kind's sound of being taken); a thing locked onto has no sound, only its pulse in the hand;
 //! - a hand finding a slot, and the runtime's own menu: the menus' focus and OK.
 
 use std::collections::{BTreeMap, HashMap};
@@ -214,8 +215,8 @@ const DEFAULTS: &[(&str, &[(&str, f32)])] = &[
     ("zone_tick", &[("UIMenuFocus", 1.0)]),
     ("pouch", &[("ITMAmmoUp", 1.0)]),
     ("glove_hover", &[("UIMenuFocus", 1.0)]),
-    ("glove_lock", &[("SPLEquip", 1.0)]),
-    ("glove_flick", &[("SPLMysticismCast", 1.0)]),
+    // (Locking onto a thing is felt only: no `glove_lock`, so the pack plays nothing for it.)
+    ("glove_flick", &[("WPNSwishLarge", 0.35)]),
     ("glove_travel", &[("SPLMysticismTravelLP", 1.0)]),
     ("glove_catch", &[("ITMGenericUp", 1.0)]),
     ("impact", &[("CWoodSmall", 1.0)]),
