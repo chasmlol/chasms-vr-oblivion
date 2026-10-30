@@ -8,6 +8,15 @@ half a metre to your right. To get more people: `player.placeatme 0018B118 1 100
 soldier), `player.placeatme 0003DC25 1 100 0` (a hostile bandit boss),
 `player.placeatme 0006E912 1 100 0` (a wolf); `tgm` keeps you alive, `tai` stops everyone's AI.
 
+On the real headset the keyboard doesn't reach the game, so two .bat files in the worktree (not
+committed) boot it with the console lines already run, each in god mode (`tgm`): `playtest.bat` is the
+save as it is (steps 1 to 6 and 8), `playtest-fight.bat` adds a hostile bandit boss 4 m in front and a
+living wolf 4 m behind (step 7, and a living creature that isn't a person). Each keeps the run's
+runtime log in `<builds>\npcs\playtest-<n>\` once the game is closed.
+
+The flat game's crosshair is hidden in VR (from the riding branch): only the icon of what you can
+activate shows where you look.
+
 ## What to try, in order
 
 1. **The dead bandit.** Reach down, put a hand on any part of him (an arm, a leg, the head, the
