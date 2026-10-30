@@ -142,6 +142,13 @@ const HIT: usize = 0x005F_EBF0;
 const ATTACK_FATIGUE: usize = 0x005E_4010;
 const RECOIL: usize = 0x005F_4F00;
 const BLOCK_DISARM: usize = 0x005F_C2B0;
+/// A blocked blow's sound (cdecl: the attacker's weapon type, the blocker's (-1: a hand), the
+/// attacker's place, the blocker's place, enchanted): the game's `WPNBlockBlade`, `WPNBlockBlunt`...
+const BLOCK_SOUND: usize = 0x006A_FFF0;
+/// A blow's sounds (cdecl: attacker, damage, block, target, ...): with no target, the swish of the
+/// attacker's weapon (`WPNSwishSmall`, `Medium`, `Large` by its weight; `WPNSwishHand` without one),
+/// as the game sounds a blow that finds nothing.
+const BLOW_SOUND: usize = 0x006A_F880;
 /// The skill each weapon type uses (actor values, by `TESObjectWEAP::type`).
 const WEAPON_SKILLS: usize = 0x00B0_86A0;
 /// Game settings: `fFatigueBase`, `fFatigueMult` (the fatigue term of a blow's damage), and the
@@ -613,6 +620,11 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
                 let before = actor_value(player, AV_FATIGUE);
                 type Fatigue = unsafe extern "thiscall" fn(usize, u32);
                 unsafe { std::mem::transmute::<usize, Fatigue>(ATTACK_FATIGUE)(player, power as u32) };
+                // Missed: the game's own swish of the weapon through the air.
+                if ev.actor == 0 {
+                    type Sound = unsafe extern "C" fn(usize, f32, u32, usize, i32, i32, i32, u32, u32);
+                    unsafe { std::mem::transmute::<usize, Sound>(BLOW_SOUND)(player, 0.0, 0, 0, -1, -1, -1, 0, 0) };
+                }
                 tracing::info!(
                     "combat: a swing ({:.2} of a full hit{}, the swing {}, {}): fatigue {before} -> {}",
                     ev.strength,
@@ -637,6 +649,18 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
                     type Disarm = unsafe extern "thiscall" fn(usize, usize) -> u8;
                     unsafe { std::mem::transmute::<usize, Recoil>(RECOIL)(attacker) };
                     let disarmed = unsafe { std::mem::transmute::<usize, Disarm>(BLOCK_DISARM)(player, attacker) } != 0;
+                    // The clash: the game's own sound of the two weapons meeting (a shield's is its
+                    // own blocked hit's, which a parried blow never comes to: the runtime's knock).
+                    let kind = |actor: usize| {
+                        let form = equipped_weapon(actor);
+                        if form == 0 { -1 } else { mem::at::<u32>(form + 0x90).map_or(-1, |t| t as i32) }
+                    };
+                    if ev.object != crate::weapons::SHIELD_ID
+                        && let (Some(a), Some(b)) = (mem::at::<[f32; 3]>(attacker + refr::POS), mem::at::<[f32; 3]>(player + refr::POS))
+                    {
+                        type Sound = unsafe extern "C" fn(i32, i32, f32, f32, f32, f32, f32, f32, u32);
+                        unsafe { std::mem::transmute::<usize, Sound>(BLOCK_SOUND)(kind(attacker), kind(player), a[0], a[1], a[2], b[0], b[1], b[2], 0) };
+                    }
                     tracing::info!("combat: {:#x} recoils from the parry{}", ev.actor, if disarmed { " and drops its weapon" } else { "" });
                 }
             }
