@@ -1,5 +1,5 @@
 //! Oblivion's models: NetImmerse/Gamebryo `.nif` files, version 20.0.0.4 or 20.0.0.5 (user version
-//! 11). Those versions store no block sizes, so every block a file holds has to be read field by
+//! 11), and the game's older 10.2.0.0 ones (a common key, candles, some books). Those versions store no block sizes, so every block a file holds has to be read field by
 //! field: this reader knows the blocks Oblivion's weapons, armour, clothes, bodies and hands use
 //! (layouts from the NifTools project's format description, `nif.xml`) and stops at the first one
 //! it doesn't, keeping the blocks before it.
@@ -146,6 +146,8 @@ pub struct Nif {
 struct Reader<'a> {
     b: &'a [u8],
     at: usize,
+    /// The file's version (fields come and go with it).
+    version: u32,
 }
 
 impl Reader<'_> {
@@ -235,6 +237,9 @@ fn av_object(r: &mut Reader) -> Result<AvObject> {
 fn tex_desc(r: &mut Reader) -> Result<i32> {
     let source = r.i32()?;
     r.skip(4 + 4 + 4)?; // clamp, filter, UV set
+    if r.version <= 0x0A04_0001 {
+        r.skip(2 + 2)?; // the PS2's L and K
+    }
     if r.bool()? {
         r.skip(8 + 8 + 4 + 4 + 8)?; // translation, scale, rotation, method, centre
     }
@@ -268,7 +273,9 @@ fn geometry_data(r: &mut Reader) -> Result<ShapeData> {
         }
     }
     r.skip(2)?; // consistency
-    let _additional = r.i32()?;
+    if r.version >= 0x1400_0004 {
+        let _additional = r.i32()?;
+    }
     Ok(d)
 }
 
@@ -702,12 +709,17 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
 impl Nif {
     pub fn parse(data: &[u8]) -> Result<Nif> {
         let Some(nl) = data.iter().position(|&c| c == b'\n') else { bail!("no header line") };
-        let mut r = Reader { b: data, at: nl + 1 };
+        let mut r = Reader { b: data, at: nl + 1, version: 0 };
         let version = r.u32()?;
-        if version != 0x1400_0004 && version != 0x1400_0005 {
-            bail!("NIF version {version:#x} (only 20.0.0.4/5 are read)");
+        r.version = version;
+        // (10.2.0.0, the format of the game's older models, a common key's among them: the same
+        // blocks as 20.0.0.4 for what's read here, with no endianness byte in the header.)
+        if version != 0x1400_0004 && version != 0x1400_0005 && version != 0x0A02_0000 {
+            bail!("NIF version {version:#x} (only 20.0.0.4/5 and 10.2.0.0 are read)");
         }
-        let _endian = r.u8()?;
+        if version >= 0x1400_0003 {
+            let _endian = r.u8()?;
+        }
         let _user = r.u32()?;
         let count = r.u32()? as usize;
         let _user2 = r.u32()?;
