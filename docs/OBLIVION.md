@@ -57,8 +57,8 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Grip at the left hip / over a shoulder | Draw the weapon / take the shield |
 | Grip on a thing in the world, or point and flick (the gloves) | Take it in the hand; let go in a body slot to take it into the inventory |
 | A book or note taken in a hand | Read it (the game's book menu over the book) |
-| The free hand flicked across an open book's pages (or the trigger pinched at a page's edge and pulled across) | Turn the page (right to left: on) |
-| Grip at the right hip | Draw the map (the game's map in the hand); the other hand: spread it (its far side), drag it (its face), point at it (fast travel) |
+| A flick of the free hand, anywhere, while a book is open (or the trigger pinched at a page's edge and pulled across) | Turn the page (right to left: on) |
+| Grip at the right hip | Draw the map (the game's map in the hand); the other hand: spread it (either side), drag it (its face), point at it (fast travel) |
 | Swing | Attack (the game's hit; a fast committed swing is a power attack) |
 | Weapon or shield across a blow | Block |
 

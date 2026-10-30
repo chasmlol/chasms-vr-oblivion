@@ -17,10 +17,20 @@ hand instead of the flat screen.
 - **A book opens as soon as it's in your hand**: no grip with the other hand.
 - **Its pages face you** however you turn the book: they float over it, upright, turned to your eyes,
   just in front of it.
-- **Flick to turn**: a quick flick of your free hand across the pages, anywhere over them or a
-  hand's breadth in front, turns a page. Right to left goes on, left to right goes back.
+- **Flick to turn**: a flick of your free hand turns a page. Right to left goes on, left to right
+  goes back.
 - **The map is at your right hip**, the side the sword isn't on: the belt pouch at the front was too
   small a place to find by feel.
+
+## Since the second headset play (2026-10-30)
+
+- **Flick anywhere**: a medium sideways flick of your empty free hand turns the page, wherever the
+  hand is. It's the controller's own speed now, not the hand's against the pages: those turn with
+  your head and move with the book, so pages turned by themselves and real flicks were missed.
+- **The map stays in your hand** whatever you click on it: the journal's tabs used to send it to
+  float ahead of you. Let go, and it goes straight back to the hip with nothing left floating (it
+  used to show ahead of you for a moment as it shut).
+- **The map is centred on your hand**, not held out to one side by its edge.
 
 The flat game's crosshair is gone (taken from the menus branch, which has it from riding): where you
 look shows only the icon of what you can activate, red when taking it is stealing.
@@ -36,10 +46,10 @@ look shows only the icon of what you can activate, red when taking it is stealin
      into your **off hand** and opens there.
    - It's about as big as a large open book (38 by 28 cm): bring it nearer to read it bigger. Your
      other hand in front of the pages covers them, as a real hand would.
-2. **Turn a page.** Flick your free hand across the pages, quickly, right to left: the page turns
-   onwards. Left to right turns back. It needn't start or end anywhere in particular, just over the
-   pages or a hand's breadth in front of them. Let the hand slow before the next flick; bringing it
-   back after a flick doesn't turn the page back. Or pull the trigger at a page's edge and pull it
+2. **Turn a page.** Flick your free hand sideways, right to left, a medium flick: the page turns
+   onwards. Left to right turns back. Anywhere: the hand needn't be near the pages. Let the hand slow
+   before the next flick; bringing it back after a flick doesn't turn the page back (the way back is
+   shut for a little over a second after a turn). Or pull the trigger at a page's edge and pull it
    across. You feel a tick and hear the game's own page turn. The right stick turns pages too.
 3. **Take it, or put it down.** The laser comes from your free hand while you hold a book:
    - point at **Take** and pull the trigger: the game takes it into your pack (it's the shop's: the
@@ -52,24 +62,26 @@ look shows only the icon of what you can activate, red when taking it is stealin
    up, or find one): opening it raises the skill exactly as the flat game does (the game's message shows
    once it's shut).
 5. **From your pack.** Open your inventory (B on the left hand) and click the guide or the note:
-   - it's held in your **off hand** like a sheet, by its left edge, always turned to your eyes;
+   - it's held in your **off hand** like a sheet, centred on the hand, always turned to your eyes;
    - turn the guide's pages the same way; the note is the game's scroll, rollers and all, in one
      piece (a sweep or the stick scrolls it);
    - B shuts it, back to the inventory.
 6. **The map.** Reach to your **right hip**, at the belt (you feel a tick as your hand gets there),
    and grip:
-   - the game's map opens in your hand, held by its edge like a sheet of paper, turned to your eyes:
-     the **local map** indoors, the **world map** outside (step out of the shop's door for it);
-   - its tabs are under it (local map, world map, and the journal's three pages);
-   - grip its **far side** with your other hand: it's held in both hands; pull them apart to make it
-     bigger, and it stays that big;
+   - the game's map opens in your hand, centred on it like a sheet of paper held from behind,
+     turned to your eyes: the **local map** indoors, the **world map** outside (step out of the
+     shop's door for it);
+   - its tabs are under it (local map, world map, and the journal's three pages): the journal's pages
+     stay in your hand too;
+   - grip **either side** with your other hand: it's held in both hands, where each took it; pull them
+     apart to make it bigger, and it stays that big;
    - with one hand on it, grip its **face** with the other and move: the game drags its map (its own
      pan; the hand in front of the map covers it);
-   - holding it in both hands, let go with the first: the other hand has it;
+   - holding it in both hands, let go with the first: the other hand has it, where it took it;
    - point at a place with the laser (it comes from your free hand) and pull the trigger: the game's
      own fast travel, its question and its rules;
-   - put it back at the hip, or just let go of it: it goes back to the hip and the map shuts.
-   - A journal tab sends the journal to float ahead, as before.
+   - put it back at the hip, or just let go of it, anywhere: it goes back to the hip and the map
+     shuts.
 
 ## What was checked in the game (emulated headset, captures)
 
@@ -116,12 +128,14 @@ look shows only the icon of what you can activate, red when taking it is stealin
   art (an open book) floats over the closed book, centred on it, big enough to read, turned to your
   eyes from its middle (the first build laid it on the cover, where it turned with the wrist), just
   in front of the book and the fingers round it.
-- **Turning by a flick**: the free hand's speed across the pages, 0.6 m/s or more, anywhere over them
-  within 20 cm in front or 8 cm behind (a hand that goes through them). The first build's sweep had
-  to start well out on a page and cross the spine within a few centimetres; in the first play the
-  buttons turned the pages instead. A trigger pinch pulled across still turns one. The hand has to
-  slow before it flicks again, and the way back after a turn is shut for a second, so the hand
-  coming back doesn't turn it back.
+- **Turning by a flick**: the free hand's controller velocity, sideways as the eyes see it (level),
+  1 m/s or more with most of its speed sideways, anywhere; the hand empty and not gripping; none in
+  the 0.4 s after the pages appear. The first build's sweep had to start well out on a page and cross
+  the spine within a few centimetres (in the first play the buttons turned the pages instead); the
+  second's flick was the hand's speed against the pages, near them, and turned pages at random as
+  the pages turned with the head and moved with the book. A trigger pinch pulled across still turns
+  one. The hand has to slow before it flicks again, and the way back after a turn is shut for 1.2 s,
+  so the hand coming back doesn't turn it back.
 - **The game's own page turn**: a notch of its mouse wheel over the book (its wheel turns a book's
   pages, with its sound).
 - **Drawn with the body.** Pages and the map are drawn in the body's depth: a hand in front of a page
@@ -129,9 +143,13 @@ look shows only the icon of what you can activate, red when taking it is stealin
 - **Solid paper.** Oblivion draws its book and map pages as light added over the screen, with no
   coverage (its UI starts on the world's last blending); in the hand they're as solid as what the
   game drew, and the black it leaves is clear.
-- **A sheet faces you.** The map, and a book read from the pack, are always turned to your eyes from
-  their middle, upright, a little smoothed (a sheet held at its edge swings far with a little turn of
-  the wrist). A book in your hand isn't: its pages lie on it and move with it.
+- **A sheet faces you, centred on the hand.** The map, and a book read from the pack, are held at
+  their middle (the hand behind them, hidden), always turned to your eyes, upright, a little smoothed.
+  Spread between the hands, the points of it each hand took stay in them (a pinch to zoom: nothing
+  jumps as the second hand takes it), and handed over, the second hand keeps it where it took it.
+- **The map never leaves the hand but by letting go**: every page of the map menu, the journal's
+  too, stays in the hand (only the map's pages are dragged by a grip). Let go, it's on its way back
+  to the hip at once and nothing of the map is shown while the game shuts it.
 - **The map lives at the right hip** (`map_slot` in `rustvr-oblivion.toml`: hip_right, hip_left,
   belt, chest_left, chest_right). The game's one-handed weapon is on the left hip, so the right is
   free here, and a hip is a 13 cm place where the hand drops by itself; the belt pouch is 8.5 cm in

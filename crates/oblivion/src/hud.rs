@@ -280,7 +280,8 @@ mod win {
     const WHOLE: &[Piece] = &[Piece::of(&[From::All], true)];
 
     /// The map drawn from the belt, in the hand: its page (the local or the world map in its frame,
-    /// on its parchment) and its tabs; the big four's switcher stays behind.
+    /// or a page of the journal, on its parchment) and its tabs; the big four's switcher stays
+    /// behind.
     const MAP_HELD: &[Piece] = &[Piece::of(&[From::Drawn("map_background")], true), Piece::of(MAP_TABS, true)];
 
     /// How far an open book's two pages tip towards the eye about its spine (radians).
@@ -577,9 +578,14 @@ mod win {
         let big_four = |l: &mut HudLayout, trees: &mut Trees| {
             // (All four are there, hidden, from when a game loads: the one that shows.)
             let kind = [MENU_INVENTORY, MENU_STATS, MENU_MAGIC, MENU_MAP].into_iter().find(|&k| tiles::shows(k))?;
-            // The map drawn from the belt: in the hand, its own page and tabs.
+            // The map drawn from the belt: in the hand, its own page and tabs (a grip on a map page
+            // drags it; the journal's aren't dragged). Going back to the belt: nothing.
+            if kind == MENU_MAP && crate::map::put_away() {
+                return None;
+            }
             if kind == MENU_MAP && crate::map::held_open() {
-                let held = HudHeld { object: crate::map::MAP_ID, flags: HELD_SHEET | HELD_DRAG, ..Default::default() };
+                let drag = if crate::map::held_map_page() { HELD_DRAG } else { 0 };
+                let held = HudHeld { object: crate::map::MAP_ID, flags: HELD_SHEET | drag, ..Default::default() };
                 return add_held_group(l, HudGroup { id: BIG_FOUR ^ crate::map::MAP_ID, ..Default::default() }, held, kind, MAP_HELD, screen, trees).map(|b| (kind, b));
             }
             let pieces = match kind {

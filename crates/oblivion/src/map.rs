@@ -5,7 +5,8 @@
 //! outside, and the map's page lies in the hand as a sheet of paper ([`crate::hud`]:
 //! `ANCHOR_HELD`, `HELD_SHEET`): the other hand spreads it (bigger), grips its face to drag the
 //! map (the game's own pan), and points at it with the laser (a place's name, fast travel with the
-//! game's own question and rules). Put back (or let go), it folds away: the game's menu shut.
+//! game's own question and rules; its tabs, the journal's pages too, stay in the hand). Put back (or
+//! let go), it folds away: the game's menu shut, and nothing of it shown while it shuts.
 //!
 //! The map menu (`menus\main\map_menu.xml`, `MapMenu`, menu type 0x3FF) is opened the way the
 //! game's Menu Mode opens the last of the big four: the interface's menu root keeps which that was
@@ -117,9 +118,21 @@ mod game {
         tiles::shows(MENU_MAP) && tiles::top_menu() == tiles::BIG_FOUR
     }
 
-    /// The map held open in a hand: its page lies there (the local or the world map).
+    /// The map held open in a hand: its page lies there, whichever it is (a journal tab turned to
+    /// from the map in the hand is read there too: nothing leaves the hand but by letting go).
     pub fn held_open() -> bool {
-        with_state(|s| s.hand.is_some() && s.fold == Fold::Open) && shows() && page().is_some_and(|p| p == PAGE_LOCAL || p == PAGE_WORLD)
+        with_state(|s| s.hand.is_some() && s.fold == Fold::Open) && shows() && page().is_some()
+    }
+
+    /// The page in the hand is a map (the local or the world map): what a grip on it drags.
+    pub fn held_map_page() -> bool {
+        page().is_some_and(|p| p == PAGE_LOCAL || p == PAGE_WORLD)
+    }
+
+    /// Let go of (or put back), the game's map is shutting: nothing of it is shown meanwhile (it would
+    /// float ahead for a frame or two as a menu nothing holds).
+    pub fn put_away() -> bool {
+        with_state(|s| matches!(s.fold, Fold::Closing(_)))
     }
 
     /// Once (in the world): the folded map to the runtime, in its slot.
