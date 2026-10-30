@@ -37,9 +37,9 @@
 //!
 //! | Piece | From | Where |
 //! |---|---|---|
-//! | the health, magicka and fatigue bars, the weapon and the spell | `hud_main_menu.xml` | the back of the off-hand wrist (Alyx's glove) |
-//! | the compass | `hud_main_menu.xml` | up the forearm from the bars |
-//! | the spells and potions working on the player | `hud_main_menu.xml` | up the forearm from the compass |
+//! | the health, magicka and fatigue bars, the weapon and the spell | `hud_main_menu.xml` | over the inside of the off-hand wrist while its palm is turned up |
+//! | the compass | `hud_main_menu.xml` | over the bars |
+//! | the spells and potions working on the player | `hud_main_menu.xml` | over the compass |
 //! | what the reticle can activate (its crosshair is hidden, [`crate::reticle`]; nothing for a thing that can be taken until a hand has it), the sneak eye | `hud_reticle.xml` | where the head looks |
 //! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing, for a person, a door, a container (not a thing that can be taken); over the thing while a hand has one |
 //! | a foe's health | `hud_reticle.xml` | over the foe |
@@ -554,7 +554,7 @@ mod win {
             l.push(HudElement::new(role, tiles::uv_of(b, screen, MARGIN)?));
             Some(b)
         };
-        // On the off-hand wrist, stacked up the forearm: the bars with the weapon and the spell, the
+        // Over the off-hand wrist, stacked upwards: the bars with the weapon and the spell, the
         // compass, and the effects working on the player (which come and go, so they're last).
         let status = l.count as usize;
         piece(l, trees, HUD_STATUS, MENU_HUD, &[From::Drawn("hudmain_statusbars"), From::Drawn("hudmain_Weapon_Icon"), From::Drawn("hudmain_Magic_Icon")]);
