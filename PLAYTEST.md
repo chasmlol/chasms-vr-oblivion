@@ -8,12 +8,12 @@ The Nord in iron (and the thief's boots) from `rustvr-base`. Start it with:
 powershell -File tools\play.ps1 armour
 ```
 
-To bring the other vanilla sets along, add `-Give` (each set's four pieces; equip them from the
-inventory), and strength enough to carry four heavy sets on top of the iron without being stuck in
-place (the playtest's `playtest.bat` boots it this way):
+To wear another vanilla set, give its four pieces and put them on, dropping the iron they replace
+(the set below is steel). One set at a time: four heavy sets carried at once (341 lb on top of the
+Nord's own things) leave the Nord too laden to walk, even with strength 100.
 
 ```
-powershell -File tools\play.ps1 armour -Give "000229A2 1,0001C6D8 1,000229A3 1,000229A5 1,00036343 1,00036340 1,00036342 1,00036341 1,0003635B 1,00036358 1,0003635A 1,00036359 1,0002AD85 1,00036352 1,00036354 1,00036353 1" -Commands "player.setav strength 100"
+powershell -File tools\play.ps1 armour -Give "000229A2 1,0001C6D8 1,000229A3 1,000229A5 1" -Commands "player.equipitem 000229A2|player.equipitem 0001C6D8|player.equipitem 000229A3|player.equipitem 000229A5|player.removeitem 0001C6D1 1|player.removeitem 0001C6D2 1|player.removeitem 0001C6D0 1"
 ```
 
 | Set | Cuirass | Gauntlets | Greaves | Boots |
@@ -185,12 +185,17 @@ otherwise).
    joints, not the marks). Unmarked still: the steel sleeve's plates under the rerebrace, glass's
    lames under the pauldron (rigid, they'd poke through it raising the arm), knuckle plates.
 
-3. **The game started "tabbed out" on the PC, couldn't be tabbed into, and the player couldn't
-   walk.** Not the armour: `Oblivion.ini` had `iLocation X`/`Y` at -32000 (a game quit while
-   minimised saves that), so every boot since about 14:30, any feature's, made the window off every
-   monitor, where Windows never makes it the active window, and Oblivion reads no input while it
-   isn't (the stick reached the adapter, the game read nothing). The ini's values were put back to
-   0, and the adapter now opens a window the game makes off every monitor at the screen's corner.
+3. **The player couldn't walk, and the game started "tabbed out" on the PC.** Two things.
+   * **Too laden to walk**, in every armour boot: the playtest's .bat gave all four heavy sets at
+     once (341 lb) on top of what the Nord carries, and strength 100 wasn't enough: the game's own
+     movement speed was 0 (the adapter's `movement: ... at 0 units/s`), as Oblivion has it for an
+     over-encumbered player. The .bats now wear one set at a time (`playtest.bat` the save's iron;
+     `playtest-steel`, `-glass`, `-ebony`, `-daedric` give their set, put it on and drop the iron).
+   * **The window off-screen**, in every feature's boot since about 14:30: `Oblivion.ini` had
+     `iLocation X`/`Y` at -32000 (a game quit while minimised saves that), so the window was made
+     off every monitor, out of reach on the desktop (the game still plays in the headset: it's
+     always the active window to the game). The ini's values were put back to 0, and the adapter
+     opens a window the game makes off every monitor at the screen's corner.
 
 ## Not done
 
