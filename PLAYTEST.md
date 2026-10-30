@@ -24,7 +24,8 @@ The research and the design are in `docs/research/facesculpt.md`.
    - Pull it out towards you: the nose gets longer. Push it in: shorter. Up and down tilts it.
    - The face changes live, on the copy and on you in the mirror.
    - You feel a fine buzz as it moves, and a harder one as you pull past what the face can do. Your
-     hand stays on the nose where it got to, with a see-through ghost hand where your controller is.
+     hand stays on the nose where it got to (with ghost hands on in the RustVR menu, a see-through
+     one shows where your controller is).
    - Let go of the grip: it stays as you left it.
    - Try more:
      - the chin forward or down;
