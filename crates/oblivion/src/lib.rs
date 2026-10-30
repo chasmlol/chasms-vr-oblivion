@@ -75,6 +75,7 @@ pub mod shapes;
 pub mod tiles;
 pub mod timing;
 pub mod torch;
+pub mod voice;
 pub mod weapons;
 pub mod window;
 pub mod world;
