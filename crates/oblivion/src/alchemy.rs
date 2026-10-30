@@ -314,13 +314,16 @@ pub mod menu {
             tracing::warn!("alchemy: the game's alchemy menu didn't open");
             return None;
         }
-        // Its ingredients, then the game works the potion out.
+        // Its ingredients, then the game works the potion out. (None: only made and gone, the
+        // game's reading of its menu's file done once, before it's wanted.)
         for (k, &form) in ingredients.iter().take(4).enumerate() {
             unsafe { ((menu + INGREDIENTS + 4 * k) as *mut usize).write(alloc_record(form)) };
         }
-        unsafe {
-            (SLOT as *mut u32).write(0);
-            std::mem::transmute::<usize, Set>(SET_INGREDIENTS)(menu, 1);
+        if !ingredients.is_empty() {
+            unsafe {
+                (SLOT as *mut u32).write(0);
+                std::mem::transmute::<usize, Set>(SET_INGREDIENTS)(menu, 1);
+            }
         }
         let potion = mem::deref(menu + POTION);
         let rows = list(mem::deref(menu + EFFECT_LIST) + CHILDREN);
@@ -384,6 +387,14 @@ mod game {
     const SOUND_NOTHING: u32 = 30;
     /// `sPotionFailed`'s text.
     const POTION_FAILED: usize = 0x00B3_88E0;
+    /// Whether the player is in combat (thiscall: player, 0), the setting that allows alchemy
+    /// then (`iAllowAlchemyDuringCombat`) and the game's words when it doesn't, as using an
+    /// apparatus checks them.
+    const IN_COMBAT: usize = 0x0066_05A0;
+    const ALCHEMY_IN_COMBAT: usize = 0x00B3_8A98;
+    const NO_ALCHEMY_IN_COMBAT: usize = 0x00B3_8A60;
+    /// Seconds before a bench refused in combat tries again.
+    const RETRY: f64 = 3.0;
     /// The game's sounds (`SOUN` form ids): an ingredient put down; organic matter knocked about
     /// (a crunch).
     const SND_INGREDIENT_DOWN: u32 = 0x0008_9772;
@@ -429,6 +440,8 @@ mod game {
         strokes: u32,
         /// It's been made (or failed): until the bowl is empty again.
         done: bool,
+        /// Refused (in combat): not again until then.
+        retry_at: f64,
         /// Its game model's flags before it was hidden.
         flags: Option<u16>,
     }
@@ -443,6 +456,9 @@ mod game {
 
     /// Work for the game's frame (where its scripts run): what to do there.
     enum Job {
+        /// The game's alchemy menu made and gone once, so the first ingredient in doesn't wait on
+        /// its reading of the menu's file.
+        Warm { mortar: u32 },
         /// Work out what the bowl would make, for its card.
         Preview { mortar: u32 },
         /// Everything's ground: make it.
@@ -545,6 +561,11 @@ mod game {
         let jobs = with_state(|s| std::mem::take(&mut s.jobs));
         for job in jobs {
             match job {
+                Job::Warm { mortar } => {
+                    let Some(refr) = with_state(|s| s.benches.get(&mortar).map(|b| b.refr)) else { continue };
+                    let (apparatus, _) = bench_forms(refr, &[], &items::offered());
+                    crate::hooks::guard("alchemy menu", None, || menu::brew(apparatus, &[], false));
+                }
                 Job::Preview { mortar } => preview(mortar),
                 Job::Make { mortar } => make(mortar),
                 Job::Sound { mortar, sound } => {
@@ -624,6 +645,22 @@ mod game {
         if forms.is_empty() {
             return;
         }
+        let player = engine::player();
+        type Message = unsafe extern "C" fn(usize, u32, u32, f32);
+        type InCombat = unsafe extern "thiscall" fn(usize, u8) -> u8;
+        // No alchemy in combat, unless the game's setting allows it (its own words): ground, it
+        // waits.
+        if unsafe { std::mem::transmute::<usize, InCombat>(IN_COMBAT)(player, 0) } != 0 && mem::at::<u32>(ALCHEMY_IN_COMBAT) == Some(0) {
+            unsafe { std::mem::transmute::<usize, Message>(MESSAGE)(mem::deref(NO_ALCHEMY_IN_COMBAT), 0, 1, -1.0) };
+            with_state(|s| {
+                if let Some(b) = s.benches.get_mut(&mortar) {
+                    b.done = false;
+                    b.retry_at = crate::link::now() + RETRY;
+                }
+            });
+            tracing::info!("alchemy: no potions in combat (the game's rule): it waits");
+            return;
+        }
         // The ingredients come out of the bowl into the player's things (the game's own pick-up,
         // stealing and all): the game's Create uses them up from there. (No card of anything held
         // meanwhile: the game's card would read what's being taken.)
@@ -632,7 +669,6 @@ mod game {
         for &r in &taken {
             items::pick_up(r);
         }
-        let player = engine::player();
         let brewed = crate::hooks::guard("alchemy create", None, || menu::brew(apparatus, &forms, true));
         match brewed {
             Some(b) if b.potion != 0 => {
@@ -658,7 +694,6 @@ mod game {
                 for &f in &forms {
                     unsafe { std::mem::transmute::<usize, Remove>(remove)(player, f, 0, 1, 0, 0, 0, 0, 0, 1, 1) };
                 }
-                type Message = unsafe extern "C" fn(usize, u32, u32, f32);
                 type Sound = unsafe extern "C" fn(u32);
                 unsafe {
                     std::mem::transmute::<usize, Message>(MESSAGE)(mem::deref(POTION_FAILED), 0, 1, -1.0);
@@ -688,11 +723,12 @@ mod game {
                     let seq = s.next_seq;
                     s.next_seq += 1;
                     let node = mem::deref(o.refr + REFR_NODE);
-                    let mut b = Station { refr: o.refr, node, bench, seq, contents: Vec::new(), shown: None, revision: 1, strokes: 0, done: false, flags: None };
+                    let mut b = Station { refr: o.refr, node, bench, seq, contents: Vec::new(), shown: None, revision: 1, strokes: 0, done: false, retry_at: 0.0, flags: None };
                     hide(&mut b, true);
                     let f = items::facts(o.refr);
                     tracing::info!("alchemy: {} ({:#x}{}) is a bench: its pestle out of it, its bowl the hands'", f.name, o.id, if f.stolen { ", someone else's" } else { "" });
                     s.benches.insert(o.id, b);
+                    s.jobs.push(Job::Warm { mortar: o.id });
                 }
                 // Its 3D made again (the cell reloaded): the new one hidden.
                 let node = mem::deref(o.refr + REFR_NODE);
@@ -732,7 +768,7 @@ mod game {
                         s.jobs.push(Job::Sound { mortar: *id, sound: SND_CRUNCH });
                     }
                     b.strokes = st.shots;
-                    if st.slide >= 0.999 && !b.contents.is_empty() && !b.done {
+                    if st.slide >= 0.999 && !b.contents.is_empty() && !b.done && now >= b.retry_at {
                         b.done = true;
                         tracing::info!("alchemy: everything in the bowl is ground");
                         s.jobs.push(Job::Make { mortar: *id });
