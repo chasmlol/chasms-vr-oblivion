@@ -9,11 +9,9 @@ shore. `playtest-before.bat` is the same with this round's changes switched off,
 (double-click). Each one closes a game another .bat left running, and closes the game and puts your
 settings back when you press a key.
 
-Each run saves both eyes' pictures (the world, without the HUD, scaled down to 2048 pixels wide)
-every 10 seconds for its first ten minutes, into
-`<builds>\visuals\playtest\<date-time>-<name>\eyes`, with the runtime's log beside them. Each
-picture costs a short hitch. The game's log (`rustvr-oblivion.log` in the game's folder) now also
-says how long the game waits for its loading.
+The eye pictures are off now: each pair cost a 140 ms frame, every 10 seconds, and that was most of
+the stutter in your last run. The game's log (`rustvr-oblivion.log` in the game's folder) says how
+long the game waits for its loading, and every 10 seconds what the trees' leaves were given (below).
 
 What was wrong, why, and the audit of the rest: `docs/research/visuals.md`. The research on the
 game's own image quality and stutter: `docs/research/oblivion-image-quality.md`.
@@ -42,8 +40,10 @@ Set up in the game's folder at your request, for the stutter and the distance:
 - **The 4GB patch.** `Oblivion.exe` may use 4 GB of memory instead of 2. The original is kept beside
   it as `Oblivion.exe.rustvr-original`. Once the patch is in effect, the timing line in the game's
   log (`rustvr-oblivion.log`) ends "address space N of 4095 MB free"; before, it said "of 2047".
-- **xOBSE 22.14**, the script extender that Oblivion Stutter Remover needs. After a run, an
-  `obse.log` in the game's folder means it loaded.
+- **xOBSE 22.14**, the script extender that Oblivion Stutter Remover needs. Steam loads it only into a
+  game Steam starts, and the playtest starts the game itself, so in your last run neither it nor
+  Stutter Remover ran. The adapter now loads it at the same point. After a run, an `obse.log` in the
+  game's folder means it loaded.
 - **Oblivion Stutter Remover 4.1.37** (`Data\OBSE\Plugins`), set for VR. Kept from it: its locks,
   which stop the game's threads queueing behind each other; its bigger lookup tables; and its
   replacement for the game's memory heap (512 MB). Off: its frame limiter and timer, because the
@@ -74,6 +74,9 @@ Set up in the game's folder at your request, for the stutter and the distance:
 12. **The far hills.** From the shore at Weye, look out over the hills past the lake: their shape
     should hold further out. Tell me if you see a seam, a step or a crack in the far land, and roughly
     where (towards which town).
+13. **The streaks in the trees.** If you see them, note where and roughly when: the game's log now has
+    what the leaves were given every 10 seconds, and any leaf corner that wasn't a number is
+    collapsed instead of streaking.
 
 ## `playtest-rain.bat`
 
@@ -89,6 +92,13 @@ drawn for the left eye, and no anisotropic filtering, as before this branch. (Th
 below is in both.)
 
 ## What changed
+
+- **Round 6, stutter.** The eye pictures every 10 seconds were the 140 ms hitches: they're off.
+  xOBSE, and with it Stutter Remover, now loads when the playtest starts the game, as it does when
+  Steam starts it.
+- **Round 6, the streaks.** They're the trees' leaf cards, with corners thrown across the view. The
+  adapter now checks what the game gives the leaves: a corner that isn't a number collapses the leaf
+  instead of streaking, and the log says what they were given.
 
 - **Round 5, stutter.** The game's background loading thread can only change the world while no
   render holds its lock. Two eyes and their copies held it for most of each frame, so it fell behind
