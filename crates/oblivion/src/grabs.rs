@@ -165,10 +165,13 @@ mod game {
     /// Let go, a living actor's limb blends back to its animation over this long (seconds).
     const BACK_TIME: f64 = 0.4;
     /// A standing actor is knocked down when the hand lifts its head, neck or torso this far above
-    /// where the body has it (metres) for this long, or pulls any part this far from it.
+    /// where the body has it (metres) for this long, or pulls an arm, the head or the torso this
+    /// far from it (a yank).
     const LIFT: f32 = 0.12;
     const LIFT_TIME: f64 = 0.12;
-    const YANK: f32 = 0.45;
+    const YANK: f32 = 0.6;
+    /// A leg is tripped sooner: pulled this far from where the standing body has it.
+    const TRIP: f32 = 0.35;
     /// Let go of faster than this (m/s), a standing actor is thrown down.
     const THROW_DOWN: f32 = 2.5;
     /// How long the hand's pull acts on a throw (seconds): the most it adds to the whole body is
@@ -188,8 +191,8 @@ mod game {
     /// knockback without a ragdoll): this many m/s for each metre further, at most this fast, a push
     /// this long at a time (seconds).
     const STEP_START: f32 = 0.12;
-    const STEP_GAIN: f32 = 5.0;
-    const STEP_MAX: f32 = 2.0;
+    const STEP_GAIN: f32 = 6.0;
+    const STEP_MAX: f32 = 2.5;
     const STEP_TIME: f32 = 0.1;
     /// Held up by the throat and still conscious, it struggles: a kick or a grab at the hand every
     /// so often (seconds, and up to this much more), its legs this fast (m/s), its hands at the hand
@@ -202,6 +205,13 @@ mod game {
     /// move in game units, over this long).
     const CONTROLLER: usize = 0x0065_A2C0;
     const CONTROLLER_PUSH: usize = 0x0089_07A0;
+    /// An open hand (or what it holds) pushing a standing actor this hard (m/s into it) shoves it,
+    /// as fast as it's pushed up to the most; slower, it leans on it. A body that's all physics is
+    /// pushed however gently.
+    const SHOVE: f32 = 1.5;
+    const SHOVE_MAX: f32 = 3.0;
+    /// A shove carries the actor on this long (seconds): a firm push moves a person about 40 cm.
+    const SHOVE_TIME: f32 = 0.25;
     /// The bones a struggle moves: the hands, the calves and the feet.
     const HANDS: [u32; 2] = [7, 13];
     const LEGS: [u32; 4] = [9, 10, 15, 16];
@@ -317,15 +327,15 @@ mod game {
 
     /// Pushes a standing actor along the ground (the runtime's world, m/s), as the game's own
     /// knockback pushes one without a ragdoll.
-    fn push(actor: usize, v: Vec3) {
+    fn push(actor: usize, v: Vec3, time: f32) {
         type Get = unsafe extern "thiscall" fn(usize) -> usize;
         type Push = unsafe extern "thiscall" fn(usize, *const [f32; 3], f32);
         let controller = unsafe { std::mem::transmute::<usize, Get>(CONTROLLER)(actor) };
         if controller == 0 || !v.is_finite() {
             return;
         }
-        let g = camera::basis().dir_to_game(v) * camera::UNITS_PER_METER * STEP_TIME;
-        unsafe { std::mem::transmute::<usize, Push>(CONTROLLER_PUSH)(controller, &g.to_array(), STEP_TIME) };
+        let g = camera::basis().dir_to_game(v) * camera::UNITS_PER_METER * time;
+        unsafe { std::mem::transmute::<usize, Push>(CONTROLLER_PUSH)(controller, &g.to_array(), time) };
     }
 
     /// Sets a body moving (the runtime's world, m/s) and wakes it.
@@ -550,6 +560,7 @@ mod game {
         part_nodes: HashMap<(u32, usize), usize>,
         bodies: Box<ActorBodies>,
         grabs: Box<CreatureGrabs>,
+        pushes: Box<GamePushes>,
         last: f64,
         /// The game's masses per kilogram (see [`PERSON_KG`]), once known.
         scale: Option<f32>,
@@ -582,6 +593,7 @@ mod game {
             part_nodes: HashMap::new(),
             bodies: bytemuck::zeroed_box(),
             grabs: bytemuck::zeroed_box(),
+            pushes: bytemuck::zeroed_box(),
             last: 0.0,
             scale: None,
             seed: 0x9E37_79B9,
@@ -715,6 +727,14 @@ mod game {
             }
             s.grabs = grabs;
             s.blend_back(now);
+            let mut pushes = std::mem::replace(&mut s.pushes, bytemuck::zeroed_box());
+            if crate::link::with_adapter(|a| a.read_game_pushes(&mut pushes)).unwrap_or(false) {
+                let n = (pushes.count as usize).min(MAX_GAME_PUSHES);
+                for p in pushes.pushes[..n].iter().filter(|p| p.part != 0) {
+                    s.pushed(p, now);
+                }
+            }
+            s.pushes = pushes;
         });
     }
 
@@ -805,6 +825,41 @@ mod game {
             self.holds[hand] = Some(Hold { serial: g.serial, actor_id: g.actor, actor, bone, action, local, since: now, lifting: None, choking: false, attacked: false, next_kick: now + KICK_EVERY });
         }
 
+        /// A hand (or what it holds) pressed into a part of an actor: a body that's all physics gets
+        /// what its bone lacks of the push there; a standing one is shoved by a hard push.
+        fn pushed(&mut self, p: &GamePush, now: f64) {
+            let Some(&actor) = self.actors.get(&p.id).filter(|&&a| combat::is_actor(a)) else { return };
+            let (point, dir, speed) = (Vec3::new(p.point[0], p.point[1], p.point[2]), Vec3::new(p.normal[0], p.normal[1], p.normal[2]), p.normal[3]);
+            if !dir.is_finite() || dir.length_squared() < 0.5 || !(speed > 0.0) {
+                return;
+            }
+            let dead = is_dead(actor);
+            if dead || knock_state(actor) != 0 {
+                let Some(sk) = self.skeletons.get(&p.id).filter(|k| k.root == mem::deref(actor + NI_NODE)) else { return };
+                let near = sk.bones.iter().filter_map(|b| Some((b.body, centre(b.body)?.distance(point)))).min_by(|a, b| a.1.total_cmp(&b.1));
+                if let Some((body, _)) = near
+                    && mem::deref(body + BODY_WORLD) != 0
+                {
+                    let v = velocity(body);
+                    let lack = speed - v.dot(dir);
+                    if lack > 0.0 {
+                        set_velocity(body, v + dir * lack);
+                    }
+                }
+                return;
+            }
+            if p.moving >= SHOVE {
+                let along = Vec3::new(dir.x, 0.0, dir.z).normalize_or_zero();
+                push(actor, along * p.moving.min(SHOVE_MAX), SHOVE_TIME);
+                static SAID: Mutex<f64> = Mutex::new(0.0);
+                let mut said = SAID.lock().unwrap();
+                if now - *said > 0.5 {
+                    *said = now;
+                    tracing::info!("grabs: {:#x} shoved at {:.1} m/s", p.id, p.moving);
+                }
+            }
+        }
+
         /// A hand holding on: its spring pulled to where the hand would have the point, the actor
         /// knocked down when it's lifted or yanked, kept down while it's held, choked.
         fn hold(&mut self, hand: usize, g: &CreatureGrab, now: f64, dt: f32) {
@@ -834,7 +889,7 @@ mod game {
                     virt(m, 8).map_or(99, |f| unsafe { std::mem::transmute::<usize, F>(f)(m) })
                 };
                 tracing::info!(
-                    "grabs: holding {:#x}: its point at {held:.2?} for {:.2?} ({:.2} m off), moving {:.2} m/s; body type {kind}, {:.1} kg, in world {}; spring entity {:#x} world {:#x} target {:?} force {:?}; knock state {state}; flags {:#x}, squeeze {:.2}, fatigue {}; in combat {}, the player's bounty {}",
+                    "grabs: holding {:#x}: its point at {held:.2?} for {:.2?} ({:.2} m off), moving {:.2} m/s; body type {kind}, {:.1} kg, in world {}; spring entity {:#x} world {:#x} target {:?} force {:?}; knock state {state}; flags {:#x}, squeeze {:.2}, fatigue {}; in combat {}, the player's bounty {}; the actor at {:.2?}",
                     h.actor_id,
                     Vec3::from_array(g.target),
                     held.map_or(0.0, |p| p.distance(Vec3::from_array(g.target))),
@@ -850,6 +905,7 @@ mod game {
                     combat::actor_value(h.actor, AV_FATIGUE),
                     in_combat(h.actor),
                     crime_gold(),
+                    mem::at::<[f32; 3]>(h.actor + refr::POS).map(|p| camera::basis().point_from_game(Vec3::from(p))),
                 );
             }
             let to = Vec3::from_array(g.target);
@@ -858,10 +914,11 @@ mod game {
                 let up = to.y - p.y;
                 h.lifting = (lifts_by(h.bone.code) && up > LIFT).then(|| h.lifting.unwrap_or(now));
                 let lifted = h.lifting.is_some_and(|t| now - t > LIFT_TIME);
-                if lifted || to.distance(p) > YANK {
+                let leg = matches!(h.bone.code, 8..=10 | 14..=16);
+                if lifted || to.distance(p) > if leg { TRIP } else { YANK } {
                     let actor = h.actor;
                     if knock_down(actor) {
-                        tracing::info!("grabs: {:#x} {} by the hand: knocked down", h.actor_id, if lifted { "lifted off its feet" } else { "yanked over" });
+                        tracing::info!("grabs: {:#x} {} by the hand: knocked down", h.actor_id, if lifted { "lifted off its feet" } else if leg { "tripped" } else { "yanked over" });
                         self.limp.entry(h.actor_id).and_modify(|l| l.bones.clear());
                         // (One assault a hold, whatever it comes to.)
                         if !h.attacked {
@@ -877,7 +934,7 @@ mod game {
                 let pull = Vec3::new(to.x - p.x, 0.0, to.z - p.z);
                 let over = pull.length() - STEP_START;
                 if over > 0.0 {
-                    push(h.actor, pull.normalize_or_zero() * (over * STEP_GAIN).min(STEP_MAX));
+                    push(h.actor, pull.normalize_or_zero() * (over * STEP_GAIN).min(STEP_MAX), STEP_TIME);
                 }
             }
             // Down and held: it can't get up while a hand has it.
