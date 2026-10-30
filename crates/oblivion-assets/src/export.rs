@@ -157,6 +157,9 @@ pub fn convert_attached(nif: &Nif, source: &str, skeleton: &Skeleton, bone: &str
     convert_on(nif, source, Some(skeleton), Part::All, exists, skeleton.find(bone))
 }
 
+/// The hair shader's highlight table, by (N·L, N·H).
+const HAIR_ANISO: &str = "textures\\effects\\aniso.dds";
+
 /// A texture the skin shader draws: the races' skins and heads (not the eyes, nor the hair).
 fn skin_texture(path: &str) -> bool {
     path.starts_with("textures\\characters\\") && !path.contains("\\hair\\") && !path.contains("\\eyes\\")
@@ -329,6 +332,10 @@ fn convert_on(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part, 
                         }
                         if let Some(l) = layer.filter(|l| exists(l)) {
                             material.detail = add(l, &mut textures);
+                        }
+                        // The hair's highlight, from the game's table (its hair shader's AnisoMap).
+                        if hair && exists(HAIR_ANISO) {
+                            material.env = add(HAIR_ANISO.to_owned(), &mut textures);
                         }
                     }
                     if let Some(Block::SourceTexture { file }) = nif.get(t.glow) {

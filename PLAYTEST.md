@@ -60,7 +60,7 @@ The research and the design are in `docs/research/mirror.md`.
    - Width and Height;
    - the gesture on or off;
    - "The game's world in the mirror". Off, you see yourself alone on dark glass, and the game
-     skips its extra render.
+     skips its extra render. (It's skipped anyway while you look away from the mirror.)
 
 ## What was checked in the game (emulated headset, captures)
 
@@ -123,8 +123,10 @@ The research and the design are in `docs/research/mirror.md`.
 
 ## Not done
 
-- **The hair's anisotropic highlight** (`textures\effects\aniso.dds`) and its height-map parallax:
-  the hair is the game's texture, layer map and colour, lit with its rim, without the sheen.
+- **The hair's height-map parallax** (its `_hh` map). The hair is otherwise the game's own:
+  - its texture, layer map and colour;
+  - its rim;
+  - its anisotropic highlight from the game's table (`textures\effects\aniso.dds`).
 - **The hair is alpha-tested, not blended,** so its edges are a little harder than in the game.
 - **The hair's length** (the race menu's hair length morph) isn't applied.
 - **Expressions and lip-sync** (the `.tri` files): the face is always neutral.
