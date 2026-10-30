@@ -585,6 +585,27 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(filters * 4)?;
             Block::ListShape { shapes }
         }
+        "bhkNiTriStripsShape" => {
+            // A static thing's triangles for Havok (furniture, architecture): its material, radius,
+            // five unused words, grow-by, scale, its strips' data and each one's collision filter.
+            havok_material(r)?;
+            r.skip(4 + 20 + 4 + 16)?;
+            let data = r.refs()?;
+            let filters = r.u32()? as usize;
+            r.skip(filters * 4)?;
+            let _ = data;
+            Block::Other(kind.into())
+        }
+        "bhkMoppBvTreeShape" => {
+            // Its shape, material, eight unused bytes, its shape's scale; its MOPP code (origin,
+            // scale and bytes).
+            r.skip(4)?;
+            havok_material(r)?;
+            r.skip(8 + 4)?;
+            let size = r.u32()? as usize;
+            r.skip(12 + 4 + size)?;
+            Block::Other(kind.into())
+        }
         "bhkConvexTransformShape" | "bhkTransformShape" => {
             let shape = r.i32()?;
             havok_material(r)?;

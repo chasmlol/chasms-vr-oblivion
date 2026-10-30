@@ -7,7 +7,8 @@
 //!
 //! Each is the game's: its collision is its own Havok body's shape ([`SHAPE_HULL`]), its weight its
 //! Havok mass, and the game draws it, with its own lighting and effects (a candle in the hand still
-//! burns). While a hand has it, the adapter puts the game's object where the runtime has it, as the
+//! burns). One lying in a bowl ([`OS_IN_RECEPTACLE`], [`crate::alchemy`]) is the hands' as one in a
+//! hand is, drawn at the size the runtime has it (shrunk to fit, and as it's ground). While a hand has it, the adapter puts the game's object where the runtime has it, as the
 //! game's own `SetPos` does (the node moved, its collision told to follow); let go, it's Havok's
 //! again at once, its body given the throw's velocity and woken (`hkEntity::activate`). What it is
 //! goes to a card beside it ([`ItemInfos`]): its name, its numbers as the game's inventory shows
@@ -202,8 +203,9 @@ mod game {
     const LIGHT_CAN_CARRY: u32 = 2;
     const ARMOR_RATING: usize = 0xE4;
 
-    /// `NiAVObject`: parent, collision object; `NiNode`: children.
+    /// `NiAVObject`: parent, its own scale, collision object; `NiNode`: children.
     const NODE_PARENT: usize = 0x1C;
+    const NODE_SCALE: usize = 0x60;
     const NODE_COLLISION: usize = 0xA8;
     const NODE_CHILDREN: usize = 0xB0;
     const NODE_COUNT: usize = 0xB6;
@@ -478,6 +480,7 @@ mod game {
         refr: usize,
         node: usize,
         body: usize,
+        kind: u8,
         desc: ObjectDesc,
         info: ItemInfo,
         hull: Vec<Vec3>,
@@ -490,6 +493,11 @@ mod game {
         flying: Option<(f64, Option<f64>)>,
         /// Put in a slot and taken (when).
         taken_at: Option<f64>,
+        /// Its own scale while it's drawn at another (in a bowl).
+        scale: Option<f32>,
+        /// Held still where something of the adapter's puts it (a bottle rising out of a mortar):
+        /// its body's own collision filter meanwhile.
+        kept: Option<u32>,
     }
 
     struct State {
@@ -544,8 +552,10 @@ mod game {
         let mass_inv = mem::at::<f32>(mem::deref(body + BODY_MOTION) + MOTION_MASS_INV).filter(|m| *m > 1e-4 && m.is_finite());
         // (The game's weight is about pounds: a kilogram is two.)
         let mass = mass_inv.map(|m| 1.0 / m).or(f.weight.map(|w| w * 0.45)).unwrap_or(1.0).clamp(0.05, 60.0);
-        let desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
-        Some(Item { refr, node, body, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, filter: None, flying: None, taken_at: None })
+        let mut desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
+        // A mortar and pestle: the runtime's pieces of it ([`crate::alchemy`]).
+        crate::alchemy::dress(refr, &mut desc);
+        Some(Item { refr, node, body, kind: f.kind, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, filter: None, flying: None, taken_at: None, scale: None, kept: None })
     }
 
     /// Once a game frame, where its scripts run: things put in a slot taken into the inventory;
@@ -648,6 +658,105 @@ mod game {
         }
     }
 
+    /// What's offered now: each thing's id, its reference and its kind.
+    #[derive(Clone, Copy, Debug)]
+    pub struct Offered {
+        pub id: u32,
+        pub refr: usize,
+        pub kind: u8,
+    }
+
+    pub fn offered() -> Vec<Offered> {
+        with_state(|s| s.items.iter().filter(|(_, i)| i.taken_at.is_none()).map(|(id, i)| Offered { id: *id, refr: i.refr, kind: i.kind }).collect())
+    }
+
+    /// A hand has this reference.
+    pub fn in_hand(refr: usize) -> bool {
+        with_state(|s| s.items.values().any(|i| i.refr == refr && i.owned))
+    }
+
+    /// The player takes this reference, as activating it does.
+    pub fn pick_up(refr: usize) -> bool {
+        let Some(id) = mem::at::<u32>(refr + FORM_ID) else { return false };
+        takeable_ref(refr).is_some() && take(refr, id)
+    }
+
+    /// Its Havok body's mass (kilograms), if it has one.
+    pub fn mass_of(refr: usize) -> Option<f32> {
+        let body = body_of(mem::deref(refr + REFR_NODE));
+        mem::at::<f32>(mem::deref(body + BODY_MOTION) + MOTION_MASS_INV).filter(|m| *m > 1e-4 && m.is_finite()).map(|m| 1.0 / m)
+    }
+
+    /// The newest reference (the last made) of a base form in the loaded cells.
+    pub fn newest_of(base: usize) -> Option<usize> {
+        let mut best: Option<(u32, usize)> = None;
+        for cell in cells() {
+            let mut entry = cell + CELL_OBJECTS;
+            let mut guard = 0;
+            while entry != 0 && guard < 8192 {
+                guard += 1;
+                let r = mem::deref(entry);
+                entry = mem::deref(entry + 4);
+                if r != 0 && mem::deref(r + REFR_BASE) == base {
+                    let id = mem::at::<u32>(r + FORM_ID).unwrap_or(0);
+                    if best.is_none_or(|b| id > b.0) {
+                        best = Some((id, r));
+                    }
+                }
+            }
+        }
+        best.map(|b| b.1)
+    }
+
+    /// Holds a reference still at a pose (the runtime's world), out of everything's way: its body
+    /// doesn't fall or knock into anything meanwhile ([`release`] gives it back).
+    pub fn hold_at(refr: usize, pos: Vec3, rot: Quat) {
+        let node = mem::deref(refr + REFR_NODE);
+        let body = body_of(node);
+        with_state(|s| {
+            if let Some(it) = s.items.values_mut().find(|i| i.refr == refr)
+                && it.kept.is_none()
+                && body != 0
+            {
+                it.kept = mem::at::<u32>(body + ENTITY_FILTER);
+                if let Some(f) = it.kept {
+                    set_filter(body, (f & !LAYER_MASK) | LAYER_NONCOLLIDABLE);
+                }
+            }
+        });
+        if put(node, pos, rot) {
+            let g = camera::basis().point_to_game(pos);
+            type SetPos = unsafe extern "thiscall" fn(usize, f32, f32, f32);
+            unsafe { std::mem::transmute::<usize, SetPos>(SET_POS)(refr, g.x, g.y, g.z) };
+            if body != 0 {
+                launch(body, Vec3::ZERO, Vec3::ZERO);
+            }
+        }
+    }
+
+    /// Wakes a reference's body (put somewhere new, it settles from there).
+    pub fn wake(refr: usize) {
+        let body = body_of(mem::deref(refr + REFR_NODE));
+        if body != 0 {
+            launch(body, Vec3::ZERO, Vec3::ZERO);
+        }
+    }
+
+    /// A reference [`hold_at`] held is Havok's again.
+    pub fn release(refr: usize) {
+        let body = body_of(mem::deref(refr + REFR_NODE));
+        with_state(|s| {
+            if let Some(it) = s.items.values_mut().find(|i| i.refr == refr)
+                && let Some(f) = it.kept.take()
+            {
+                set_filter(body, f);
+            }
+        });
+        if body != 0 {
+            launch(body, Vec3::ZERO, Vec3::ZERO);
+        }
+    }
+
     /// Before the eyes are drawn: the things a hand has, where the runtime has them; let go, the
     /// game's again with the throw; where the rest are, for the runtime.
     pub fn place(view: &rustvr_adapter::View, now: f64) {
@@ -678,8 +787,24 @@ mod game {
                 if !pos.is_finite() || !rot.is_finite() || rot.length_squared() < 1e-6 {
                     continue;
                 }
-                let in_hand = st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT | OS_PULLED) != 0;
+                let in_hand = st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT | OS_PULLED | OS_IN_RECEPTACLE) != 0;
+                // In a bowl it's drawn at the size the runtime has it; out of it, its own again.
+                let size = (st.flags & OS_IN_RECEPTACLE != 0 && st.slide > 0.01 && st.slide.is_finite()).then_some(st.slide);
+                if size.is_some() || it.scale.is_some() {
+                    let own = *it.scale.get_or_insert_with(|| mem::at::<f32>(it.node + NODE_SCALE).unwrap_or(1.0));
+                    if mem::is_readable((it.node + NODE_SCALE) as *const u8, 4) {
+                        unsafe { ((it.node + NODE_SCALE) as *mut f32).write(own * size.unwrap_or(1.0)) };
+                    }
+                    if size.is_none() {
+                        it.scale = None;
+                    }
+                }
                 if in_hand {
+                    // Out of the adapter's keeping (a bottle over a mortar) into a hand: its own
+                    // collision back first, which the hand then puts out of the way as ever.
+                    if let Some(f) = it.kept.take() {
+                        set_filter(it.body, f);
+                    }
                     if !it.owned {
                         tracing::info!("items: {} taken in hand ({:#x})", it.info.name(), st.flags);
                     }

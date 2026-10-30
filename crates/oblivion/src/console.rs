@@ -64,14 +64,23 @@ pub fn select_spell(_id: u32) -> bool {
 
 /// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <hex id>` selects a spell,
 /// `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in front of the
-/// player (and that far over their feet), facing them (tests), anything else is compiled and run as
-/// a line of script. True if it ran.
+/// player (and that far over their feet), facing them (tests), `PlaceAt <base hex id> <ahead>
+/// <right> <up> [<turn>]` makes a new one of a base form there (metres from the player's feet,
+/// turned that many degrees from facing them: a bench set out for a test save), anything else is
+/// compiled and run as a line of script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
     }
     if let Some(id) = line.strip_prefix("SelectSpell ") {
         return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(select_spell);
+    }
+    if let Some(rest) = line.strip_prefix("PlaceAt ") {
+        let mut it = rest.split_whitespace();
+        let Some(base) = it.next() else { return false };
+        let n: Vec<f32> = it.filter_map(|v| v.parse::<f32>().ok()).collect();
+        let at = |k: usize| n.get(k).copied().unwrap_or(0.0);
+        return place_at(base, at(0), at(1), at(2), at(3));
     }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();
@@ -94,6 +103,55 @@ fn place_in_front(r: &str, metres: f32, up: f32) -> bool {
     let (x, y) = (pos[0] + d * h.sin(), pos[1] + d * h.cos());
     let facing = (h + std::f32::consts::PI).to_degrees().rem_euclid(360.0);
     [format!("{r}.setpos x {x:.1}"), format!("{r}.setpos y {y:.1}"), format!("{r}.setpos z {:.1}", pos[2] + up * crate::camera::UNITS_PER_METER), format!("{r}.setangle z {facing:.1}")].iter().all(|l| run_script(l))
+}
+
+/// A new reference of the base form `base` (its hex id: the game's own `placeatme`), put `ahead`
+/// metres in front of the player, `right` to their right and `up` over their feet, turned `turn`
+/// degrees from facing them, the player's own, its body woken to settle where it falls. Its id,
+/// where it went and how its model sits about it are logged.
+#[cfg(target_arch = "x86")]
+fn place_at(base: &str, ahead: f32, right: f32, up: f32, turn: f32) -> bool {
+    use crate::engine::{self, refr};
+    type Lookup = unsafe extern "C" fn(u32) -> usize;
+    let Ok(id) = u32::from_str_radix(base.trim_start_matches("0x"), 16) else { return false };
+    let form = unsafe { std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(id) };
+    if form == 0 || !run_script(&format!("player.placeatme {id:08X} 1")) {
+        return false;
+    }
+    let Some(r) = crate::items::newest_of(form) else { return false };
+    let rid = crate::mem::at::<u32>(r + 0xC).unwrap_or(0);
+    let p = engine::player();
+    let (Some(pos), Some(rot)) = (crate::mem::at::<[f32; 3]>(p + refr::POS), crate::mem::at::<[f32; 3]>(p + refr::ROT)) else { return false };
+    // Heading: 0 north (+y), turning east (+x); the player's right is (cos, -sin).
+    let (h, u) = (rot[2], crate::camera::UNITS_PER_METER);
+    let (x, y) = (pos[0] + u * (ahead * h.sin() + right * h.cos()), pos[1] + u * (ahead * h.cos() - right * h.sin()));
+    let z = pos[2] + up * u;
+    let facing = (h + std::f32::consts::PI).to_degrees() + turn;
+    // (Off and on again: its 3D and collision made afresh where it is now; a static's collision
+    // doesn't follow `setpos`.)
+    let ok = [
+        format!("{rid:08X}.setpos x {x:.1}"),
+        format!("{rid:08X}.setpos y {y:.1}"),
+        format!("{rid:08X}.setpos z {z:.1}"),
+        format!("{rid:08X}.setangle z {:.1}", facing.rem_euclid(360.0)),
+        // (The player's own, wherever it is: taking it is never stealing.)
+        format!("{rid:08X}.setownership"),
+        format!("{rid:08X}.disable"),
+        format!("{rid:08X}.enable"),
+    ]
+    .iter()
+    .all(|l| run_script(l));
+    crate::items::wake(r);
+    // (The model's bound: its centre's height over the reference's, and its radius, in game units.)
+    let node = crate::mem::deref(r + 0x3C);
+    let bound = crate::mem::at::<[f32; 4]>(node + 0x98);
+    tracing::info!("console: placed {base} as {rid:08X} at ({x:.1}, {y:.1}, {z:.1}); its bound {:?} over it", bound.map(|b| (b[2] - z, b[3])));
+    ok
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn place_at(_base: &str, _ahead: f32, _right: f32, _up: f32, _turn: f32) -> bool {
+    false
 }
 
 /// Compile errors so far (a line ran if it compiled: what the game's run returns is the script's

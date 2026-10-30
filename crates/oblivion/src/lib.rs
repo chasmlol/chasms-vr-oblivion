@@ -23,6 +23,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(linker_messages)]
 
+pub mod alchemy;
 pub mod body;
 pub mod camera;
 pub mod clock;

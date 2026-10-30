@@ -22,6 +22,29 @@ pub fn ini_path() -> Option<PathBuf> {
     None
 }
 
+/// `section`'s `key` in the game's `Oblivion.ini`, as it is now.
+pub fn ini_value(section: &str, key: &str) -> Option<String> {
+    let text = std::fs::read_to_string(ini_path()?).ok()?;
+    get_key(&text, section, key)
+}
+
+/// `section`'s `key` in INI text.
+pub fn get_key(text: &str, section: &str, key: &str) -> Option<String> {
+    let mut in_section = false;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            in_section = t.eq_ignore_ascii_case(&format!("[{section}]"));
+        } else if in_section
+            && let Some((k, v)) = t.split_once('=')
+            && k.trim().eq_ignore_ascii_case(key)
+        {
+            return Some(v.trim().to_owned());
+        }
+    }
+    None
+}
+
 /// Sets `section`'s `key` in INI text (adding it if missing); returns the old value.
 pub fn set_key(text: &mut String, section: &str, key: &str, value: &str) -> Option<String> {
     let mut out = Vec::new();
