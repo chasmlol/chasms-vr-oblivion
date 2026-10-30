@@ -90,6 +90,21 @@ fn extra(list: usize, kind: u8) -> usize {
     0
 }
 
+/// What the player carries: each form in the inventory's changes and how many (their count, as the
+/// changes keep it; the player's base form starts with nothing an alchemist needs).
+pub fn carried() -> Vec<(usize, i32)> {
+    let player = engine::player();
+    if player == 0 {
+        return Vec::new();
+    }
+    let changes = extra(player + 0x44, EXTRA_CONTAINER_CHANGES);
+    let data = mem::deref(changes + 0x0C);
+    if changes == 0 || data == 0 {
+        return Vec::new();
+    }
+    list(mem::deref(data), 1024).into_iter().map(|entry| (mem::deref(entry + 8), mem::at::<i32>(entry + 4).unwrap_or(0))).filter(|(form, _)| *form != 0).collect()
+}
+
 /// The player's body, if there's a player.
 pub fn body() -> Option<Body> {
     let player = engine::player();

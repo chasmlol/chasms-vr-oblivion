@@ -38,11 +38,11 @@ cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/w
 ```
 
 For alchemy, the mortars and pestles split and measured, and the game's fonts and menu art for its
-cards:
+cards and its note (the book menu's scroll):
 
 ```
 cargo run --release -p oblivion-assets --bin oblivion-extract -- bench meshes/clutter/magesguild/mortarpestle
-cargo run --release -p oblivion-assets --bin oblivion-extract -- export-ui fonts textures/menus/alchemy textures/menus/icons/magic textures/menus/icons/clutter
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export-ui fonts textures/menus/alchemy textures/menus/book textures/menus/icons/magic textures/menus/icons/clutter
 ```
 
 Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
