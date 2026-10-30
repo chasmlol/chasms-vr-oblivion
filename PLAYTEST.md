@@ -99,11 +99,21 @@ the animated place). Now:
 * **The head is loose** when it's touched (as the arms): leant on, it gives most of the way.
 * Which bone a touch is on is logged (`grabs: ... touched on its bone N`: 1 is the head).
 
+## Playtest 3 (real headset)
+
+The head still didn't move at all. The log shows the touches reaching it (its bone, 1, pushed at up
+to 2 m/s), so the game was undoing them: its head tracking. Each frame it measures where the head
+bone points now (its world turn, the push in it) and turns it on to what the actor looks at (you,
+a metre away), rate-limited, so a push is gone within a few frames. Now, while a hand has his head
+(touching it, the chest's touch that swings it, or a hold on it while he stands), his head tracking
+is off, by the game's own switch (`BSFaceGenAnimationData`'s, the one it uses itself): he stops
+looking at you, his face eases to rest, and his head is the push's. Let be, it's back on and he
+looks at you again. The log says when (`grabs: ...'s head tracking off` / `back on`).
+
 Found while looking (not changed): Oblivion turns the upper spine itself (its look-at twist, a
 `bhkBlendCollisionObject` of its own kind on Spine, Spine1, Spine2) and draws those bones from the
 animation, so a push on the chest doesn't bend the chest itself; the head and arms swinging with it
-are what show. The game's head tracking only adds its look on top of the head's own turn, so it
-doesn't undo a push.
+are what show.
 
 ## What was checked in the game (emulated headset, captures and logs)
 
