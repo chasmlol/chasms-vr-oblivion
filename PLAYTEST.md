@@ -197,6 +197,19 @@ otherwise).
      always the active window to the game). The ini's values were put back to 0, and the adapter
      opens a window the game makes off every monitor at the screen's corner.
 
+4. **"LOOKS AMAZING"; the pointing finger slightly through the steel; a gap at the glass wrists
+   bending a certain way (and likely on many sets).** The gap: a rigid cuff stays straight on the
+   forearm as the hand bends out of it, so its open end showed the armour's hollow inside (the
+   game never did: its armour bends with the body, closed). Fixed for every set at once: the
+   adapter sends the race's skin under what's worn as well (`<key>:under`), and the runtime draws
+   it 1 cm away from the eye, so it never shows through armour, only where nothing worn is in front
+   of it: the wrist in a cuff's open end, the arm where plates part over a joint (the armpit under
+   a pauldron, the inside of a bent elbow). Tried first and dropped: the armour's own soft surface
+   under the plates (it showed as dark insides, and the breastplate's neck swung out over the
+   chest). The finger: not seen in the preview (`--fingers point`, the `hand` view); what shows
+   is the leather glove under steel's plates at the thumb's root, through the seam with the wrist
+   bent in.
+
 ## Not done
 
 * Helmets and shields (the helmet isn't drawn in first person; the shield is held), and the other
