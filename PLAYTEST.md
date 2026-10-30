@@ -19,6 +19,9 @@ note. The inn's own patrons walk about further in. The research and the design a
    slowly inside: every 4 cm you're on the next thing, with another tick. Each kind of thing feels
    different: coins jingle (bright), a key clicks (sharp), glass rings (very short, high), paper
    rasps, cloth or food is a dull push, something hard knocks. An empty pocket is one dull brush.
+   **You see what you're on:** the game's card of the thing under your fingers floats over your
+   hand (its name, value and weight), changing as you move on to the next thing. Over the name, in
+   the game's stealing red, is the reticle's red hand and the word **Pickpocket**.
    His pockets:
    - the right belt pouch: the potion and the apples;
    - the left belt pouch: the key and the lockpicks;
@@ -26,13 +29,14 @@ note. The inn's own patrons walk about further in. The research and the design a
    - the inner pocket, at the left of his chest: the note;
    - a bag on his back, only when someone carries something big (weapons, armour, clothes).
 3. **Take one.** Squeeze the grip: the thing (the game's own model) is in your hand, with the game's
-   own card over it (its name, value and weight). It's still his while your hand is in the pocket:
-   let go there and it's back, nothing tried.
+   own card over it (its name, value and weight), still with the red hand and **Pickpocket**. It's
+   still his while your hand is in the pocket: let go there and it's back, nothing tried.
 4. **Pull it out.** The game decides as it leaves the pocket, with its own chance: 40 + 0.6 x (your
    Sneak - his), both with Luck, minus a tenth per gold of value taken, between 5 and 85%. This
    character's Sneak makes it about 40% against Bruce: expect to be caught (the console's
    `player.setav sneak 100` makes it 85%, the most the game allows).
-   - **Success:** it's yours (marked stolen). Put it at a hip or a shoulder to keep it.
+   - **Success:** it's yours (marked stolen): the red **Pickpocket** goes from its card. Put it at
+     a hip or a shoulder to keep it.
    - **Caught:** a hard jolt and the thing is gone from your hand. Then the game's own reaction:
      the pickpocketing crime (bounty 25), his disposition, his alarm or attack, and he can never be
      robbed again (his pockets feel shut, and the game says so).
@@ -56,6 +60,9 @@ note. The inn's own patrons walk about further in. The research and the design a
     in that hand (a strong beat as they first notice you). Being seen doesn't change the per-item
     chance (the game's doesn't), but when you're done with someone, everyone who sees you then
     witnesses the theft (the game's own check): the crime and the guards.
+11. **Steal something lying about.** Pick up something of the inn's from a table or a shelf (a
+    plate, a bottle): its card over your hand has the red hand and the word **Steal** over its name.
+    Something that's nobody's (or yours) has no such line.
 
 The game's flat pickpocket menu is still there: the trigger on someone while sneaking opens it. A
 hand in a pocket doesn't activate anything with its trigger.
@@ -97,6 +104,8 @@ Not checked:
   detection list).
 - The game's success message and sound (the call is the menu's own, with its message flag).
 - The "Items Pickpocketed" statistic going up (it's written as the menu does).
+- The card's red action line (round 2): how the icon and the word sit over the name, and that the
+  game loads the reticle's icon sheet in place of the Xbox buttons'. None of it has been run.
 - Sleeping, sitting and walking NPCs, and crowds (performance with many people near).
 
 ## Decisions
@@ -119,6 +128,23 @@ Not checked:
 - **Templates and a card reference.** Each kind of thing is a template object drawn from the game's
   model; its card is the game's own, given a reference of the game's own making that's never placed
   (as xOBSE's inventory references).
+- **The card of the thing under the fingers** (asked for in round 1, before playing). The runtime
+  tells the game which thing each hand's fingers are on (`PE_FEEL`), and the game's card is that
+  thing's while no hand holds one, over the hand in the pocket. A thing in a hand comes first.
+- **"Pickpocket" and "Steal" in red, from the game's own UI** (asked for in round 1). Oblivion on
+  the PC marks a theft one way only: the reticle's activate icon (a hand, mostly) in its stealing red
+  (`hud_reticle.xml`'s `_red_stealing`: 208, 0, 0). It does that both for someone's thing and for a
+  sneaking player looking at a living person, which is pickpocketing. It has no word for it on
+  screen, but its card has an action line for the Xbox: a button and a word over the name
+  (`hudinfo_action_icon`, `hudinfo_action_text`). That line is used here:
+  - the icon is the reticle's own, from its activate icon sheet, the one the game would show for
+    the thing, in the stealing red;
+  - the word is the game's own setting, `sPickpocket` ("Pickpocket") or `sSteal` ("Steal"), in the
+    same red;
+  - it shows only when the game's own test (the reticle's) says taking it is a crime.
+
+  A thing out of a pocket says "Pickpocket" until the game has made it yours. A thing of the
+  world's in your hand says "Steal" while it's someone's.
 
 ## Not done, known issues
 
@@ -151,7 +177,9 @@ Not checked:
 
 - The adapter's log: `pockets: N people near with pockets: <who>: <thing> xN in <pocket>`, every
   attempt with the game's chance and roll, the bounty as it changes, and every two seconds where each
-  pocket is from the eye (right, up, forward).
+  pocket is from the eye (right, up, forward). `pockets: the right hand's fingers on <thing> in
+  <pocket>: its card` as they move on; `hud: the card says "Pickpocket" in the reticle's stealing
+  red` as the action line first shows.
 - The runtime's log: hands into pockets, things closed on, pulled out and the game's answer, and
   every two seconds how far each hand is from the nearest pocket.
 - Throwaway emulated-headset scripts were under `<builds>\pickpocket\scripts` (not committed).
