@@ -129,6 +129,7 @@ mod game {
     /// (+0x3A8: attacker, 0), `DamageActorValue` (+0x2A4: value, amount (negative hurts), attacker).
     const PROCESS: usize = 0x58;
     const NI_NODE: usize = 0x3C;
+    const FORM_ID: usize = 0x0C;
     const VT_IS_DEAD: usize = 0x198;
     const VT_ON_ATTACKED: usize = 0x3A8;
     const VT_DAMAGE_AV: usize = 0x2A4;
@@ -275,6 +276,12 @@ mod game {
             }
         }
         out
+    }
+
+    /// Whether `actor` is still actor `id` with its 3D (a save loaded or a cell let go of can leave
+    /// another actor, or none, where it was).
+    fn still(actor: usize, id: u32) -> bool {
+        combat::is_actor(actor) && mem::at::<u32>(actor + FORM_ID) == Some(id) && mem::deref(actor + NI_NODE) != 0
     }
 
     fn motion(body: usize) -> usize {
@@ -865,7 +872,7 @@ mod game {
         /// knocked down when it's lifted or yanked, kept down while it's held, choked.
         fn hold(&mut self, hand: usize, g: &CreatureGrab, now: f64, dt: f32) {
             let Some(h) = self.holds[hand].as_mut() else { return };
-            if !combat::is_actor(h.actor) || mem::deref(h.actor + NI_NODE) == 0 {
+            if !still(h.actor, h.actor_id) {
                 tracing::info!("grabs: {:#x} went from the hand", h.actor_id);
                 let h = self.holds[hand].take().unwrap();
                 self.done[hand] = h.serial;
@@ -1010,7 +1017,7 @@ mod game {
             let Some(h) = self.holds[hand].take() else { return };
             self.done[hand] = h.serial;
             unspring(h.action, h.bone.body);
-            let alive = combat::is_actor(h.actor) && mem::deref(h.actor + NI_NODE) != 0;
+            let alive = still(h.actor, h.actor_id);
             let speed = throw.map_or(0.0, |v| v.length());
             tracing::info!("grabs: the {} hand lets go of {:#x}{}", if hand == 0 { "left" } else { "right" }, h.actor_id, if throw.is_some() { format!(" at {speed:.2} m/s") } else { ": its grip slipped".into() });
             if alive && let Some(v) = throw.filter(|_| speed > 0.3) {
@@ -1047,7 +1054,7 @@ mod game {
         fn blend_back(&mut self, now: f64) {
             let held: Vec<u32> = self.holds.iter().flatten().map(|h| h.actor_id).collect();
             self.limp.retain(|id, l| {
-                let gone = !combat::is_actor(l.actor) || mem::deref(l.actor + NI_NODE) != l.root;
+                let gone = !still(l.actor, *id) || mem::deref(l.actor + NI_NODE) != l.root;
                 if gone {
                     return false;
                 }
