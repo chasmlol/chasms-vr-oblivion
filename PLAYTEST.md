@@ -117,6 +117,11 @@ Each of these was checked with scripted hands, in captures and logs:
   your pack doesn't count at a bench; that's the menu's way, when you use a mortar from the pack.
 - **Grinding work** is 0.45 m of pestle travel per ingredient, shared out over what's in the bowl.
   A ground ingredient is drawn at 45% of its size.
+  - What counts is how far your hand takes the pestle's tip while the tip is low in the bowl.
+    Pressed into the floor, the tip itself shivers there, and that would grind on its own.
+  - The pestle meets the bowl's floor and walls: anything a hand holds now meets a game bowl,
+    though it still passes through the game's other props as before. Your empty hand still passes
+    through the mortar, as it does through any of the game's props.
 - **No shared effect.** The game has no failure of its own: its Create button is just off. So
   grinding anyway gets the game's own unused `sPotionFailed` words and its `ITMIngredientNothing`
   sound, and the ingredients are lost, as those words say.
