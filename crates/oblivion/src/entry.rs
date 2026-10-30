@@ -48,6 +48,7 @@ fn startup() {
     crate::combat::install();
     crate::console::install();
     crate::slot_menu::install();
+    crate::soul::install();
     tracing::info!("startup: hooks installed");
 }
 

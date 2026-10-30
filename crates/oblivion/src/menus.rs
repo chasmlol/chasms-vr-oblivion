@@ -139,6 +139,74 @@ pub fn point(uv: [f32; 2]) {
     hover_tick();
 }
 
+/// One of the game's menus made for a moment, to work its own logic without its menu mode (as
+/// alchemy's bench works the alchemy menu, a hammer's strike the repair menu): `open` makes it (the
+/// game's own maker, which returns its tile); the interface is put back at once as it was (making a
+/// menu pushes it on the stack of open menus, so the world would stop, and takes the cursor's
+/// tiles), and the menu is unregistered (its id cleared: its own close then takes nothing off the
+/// stack). `work` has the menu and its tile; then the menu is gone again (its fade off the
+/// interface's list, its end). None: it didn't open as menu `kind`.
+#[cfg(target_arch = "x86")]
+pub fn for_a_moment<R>(kind: u32, open: impl FnOnce() -> usize, work: impl FnOnce(usize, usize) -> R) -> Option<R> {
+    type This = unsafe extern "thiscall" fn(usize) -> usize;
+    type Unfade = unsafe extern "C" fn(usize);
+    type Destroy = unsafe extern "thiscall" fn(usize, u8) -> usize;
+    let im = mem::deref(INTERFACE_MANAGER);
+    if im == 0 {
+        return None;
+    }
+    let stack: [u32; 10] = mem::at(im + STACK)?;
+    let mode: u8 = mem::at(im + MODE)?;
+    let under: Vec<usize> = UNDER.iter().map(|o| mem::deref(im + o)).collect();
+    let background: u8 = mem::at(MENU_BACKGROUND)?;
+    let tile = open();
+    unsafe {
+        ((im + STACK) as *mut [u32; 10]).write(stack);
+        ((im + MODE) as *mut u8).write(mode);
+        for (o, v) in UNDER.iter().zip(&under) {
+            ((im + o) as *mut usize).write(*v);
+        }
+        (MENU_BACKGROUND as *mut u8).write(background);
+    }
+    let menu = if tile != 0 { unsafe { std::mem::transmute::<usize, This>(MENU_OF)(tile) } } else { 0 };
+    // (Its id: the menu's `GetID`, vtable +0x34.)
+    let id = if menu != 0 { unsafe { std::mem::transmute::<usize, This>(mem::deref(mem::deref(menu) + 0x34))(menu) } } else { 0 };
+    if menu == 0 || id != kind as usize {
+        tracing::warn!("menus: the game's menu {kind:#x} didn't open for a moment");
+        return None;
+    }
+    unsafe { ((menu + MENU_ID) as *mut u32).write(0) };
+    let r = work(menu, tile);
+    unsafe {
+        ((menu + MENU_ID) as *mut u32).write(0);
+        std::mem::transmute::<usize, Unfade>(UNFADE)(menu);
+        let destroy = mem::deref(mem::deref(menu));
+        std::mem::transmute::<usize, Destroy>(destroy)(menu, 1);
+    }
+    Some(r)
+}
+
+/// The open menu of a type (`Menu*`), or 0 (cdecl: the game's own, as a menu's maker checks for one
+/// already open).
+#[cfg(target_arch = "x86")]
+pub fn open_menu(kind: u32) -> usize {
+    type ByType = unsafe extern "C" fn(u32) -> usize;
+    unsafe { std::mem::transmute::<usize, ByType>(MENU_BY_TYPE)(kind) }
+}
+
+/// `InterfaceManager` (`INTERFACE_MANAGER`): its mode (+8: 1 the game, 3 a menu), the tiles and menu
+/// under the cursor (+0x88, +0x98, +0x9C), its stack of open menus (+0xE0, ten ids); the menu
+/// background's flag (a menu opening sets it); a tile's menu (thiscall) and the open menu of a type
+/// (cdecl); a menu's id once registered (+0x14) and its fade off the interface's list (cdecl).
+const MODE: usize = 0x8;
+const UNDER: [usize; 3] = [0x88, 0x98, 0x9C];
+const STACK: usize = 0xE0;
+const MENU_BACKGROUND: usize = 0x00B4_2D54;
+const MENU_OF: usize = 0x0058_98F0;
+const MENU_BY_TYPE: usize = 0x0058_9B70;
+const MENU_ID: usize = 0x14;
+const UNFADE: usize = 0x0058_3CF0;
+
 /// The tile the game's cursor is over (`InterfaceManager` +0x98), as the game worked it out.
 const ACTIVE_TILE: usize = 0x98;
 

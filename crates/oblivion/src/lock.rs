@@ -332,7 +332,7 @@ mod game {
     }
 
     /// A reference's collision as triangles in the protocol's world.
-    fn triangles_of(refr: usize) -> Vec<[Vec3; 3]> {
+    pub(crate) fn triangles_of(refr: usize) -> Vec<[Vec3; 3]> {
         let mut found = Vec::new();
         bodies(mem::deref(refr + REFR_NODE), 0, &mut found);
         let b = camera::basis();
@@ -340,7 +340,7 @@ mod game {
     }
 
     /// Where on `tris` is nearest `p`: the point, the surface's way out (towards `p`), how far.
-    fn nearest(tris: &[[Vec3; 3]], p: Vec3) -> Option<(Vec3, Vec3, f32)> {
+    pub(crate) fn nearest(tris: &[[Vec3; 3]], p: Vec3) -> Option<(Vec3, Vec3, f32)> {
         let mut best: Option<(Vec3, Vec3, f32)> = None;
         for t in tris {
             let q = closest_on_triangle(p, t);

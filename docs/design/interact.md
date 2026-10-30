@@ -194,3 +194,79 @@ Calls made:
   (its model is the ground model, which the slots don't draw yet). Put it on to repair it, or use the
   hammer from the inventory as ever (the game's own menu stays).
 * The world doesn't stop for a strike (the game's menu would stop it: it's made and gone at once).
+
+## 3. Soul gems and enchanting
+
+### How VR games do it
+
+* **Magic you can see travel.** *Skyrim VR*'s soul trap shows a stream of light from the body to the
+  caster; VR spellcasting games (*Waltz of the Wizard*) make every magical
+  transfer a visible thing moving through space to the hand, and the hand feels it land.
+* **Crafting by placing.** VR crafting stations (*Saints & Sinners*' benches, *Waltz of the
+  Wizard*'s cauldron) start the craft from what the player sets down on them; the choices that are
+  really choices (which effect, how strong) stay a panel at the station.
+* **Charging by contact**: holding a power source to the thing it charges (*Half-Life: Alyx*'s
+  resin and batteries, *Into the Radius*'s batteries) is the gesture players reach for.
+
+### Oblivion's soul gems, soul trap and recharge
+
+* **Soul gems** (`TESSoulGem`): the soul it holds (none, petty .. grand),
+  how big a soul it takes. A gem filled in play has its soul as `ExtraSoul` (the soul
+  in it) on its extra data. The game draws a filled gem the same as an empty one (every lesser to
+  grand gem is `Clutter\SoulGemLesser01.NIF`, filled or not). Azura's Star is 0x193.
+* **Soul trap** (`SoulTrapEffect`, the effect `MGEF` STRP 0x189F, its model
+  `MagicEffects\soulTrap.NIF`): when its target dies under it, the active
+  effect fills the player's gem by the game's rules (the smallest
+  that fits; "There is no Soul Gem large enough to capture the soul."), says "You have captured a
+  soul!", plays its UI sound and counts it (the player's "Souls Trapped"), then puts the
+  effect's model at the body playing `SpecialIdle_Soultrap` (a temporary effect). The model
+  also has `SpecialIdle_Projectile`, `SpecialIdle_Cast`, `SpecialIdle_HitEffect` and
+  `SpecialIdle_AreaEffect`; its enchant shader (the `EffectSetting`'s) is the purple shimmer of a
+  thing enchanted with soul trap.
+* **Recharging with a gem** (a soul gem used from the inventory): refused in combat unless
+  `iAllowRechargeDuringCombat` (1 by default; its own words), refused for an empty
+  gem ("This soul gem is empty..."), else the `RechargeMenu` (made for the gem's entry)
+  lists the enchanted things that aren't full. A row clicked (its `HandleClick`;
+  rows from id 51, their place in the inventory as a value): the soul's charge
+  added up to the enchantment's maximum (its `TESEnchantableForm`'s), the gem used up (Azura's
+  Star emptied instead), `UIRechargeItem`'s sound, and the menu shut when nothing's left to
+  recharge. A thing's charge is `ExtraCharge` on its extra data.
+
+### Oblivion's enchanting
+
+* **The altar**: the Arcane University's Altar of Enchanting (`ICEnchantingStation`, four in
+  the Chironasium, `ICArcaneUniversityEnchantingCenter`; one in the Arch-Mage's quarters), its
+  script `EnchantingStationScript`: on the player's activation, `ShowEnchantment`.
+* **The `EnchantmentMenu`**: its soul gem and item are inventory
+  entries chosen through the `RepairMenu` in modes 5 and 4 (rows of the player's gems and of things
+  that can be enchanted); choosing either sets it and works the menu out again;
+  choosing an item of the other kind (a weapon after apparel) clears the effects chosen.
+  The effects (from the player's known spells' effects), magnitudes, area, duration, the name, then
+  Create: the game makes the enchanted thing, uses the gem, takes the item.
+
+### Design
+
+* **The soul flies to the gem.** The game's soul trap runs as ever (its gem, its message, its art at
+  the body); as it traps a soul the effect's own model, playing its `SpecialIdle_Projectile` art,
+  flies from the body to the soul gem in the player's hand, else into the pack (the Soul Gems slot at
+  the small of the back), in an arc over 1.2 s, and the hand feels it land.
+* **Filled gems look filled**: a gem with a soul in the hand wears the Soul Trap effect's own enchant
+  shimmer (its effect shader, over the gem: the overlays `crate::magic` draws a weapon's enchantment
+  with), fading in brighter as a soul has just arrived.
+* **Recharging by touch**: a filled gem held to the enchanted weapon in the other hand for 0.6 s
+  (felt building) is the game's own recharge with that gem: its recharge menu for the gem made for
+  a moment, the weapon's row clicked.
+* **The slot**: Soul Gems (the small of the back) gives the strongest soul first (to recharge with),
+  then the biggest empty gem.
+* **Enchanting at the altar**: laying a filled soul gem and something enchantable on the Altar of
+  Enchanting (let go on its top, they stay there, still the player's) is the player's activation of
+  the altar (its own script, `ShowEnchantment`), with those two chosen in its menu as its own lists
+  choose them; the menu floats beside the altar for the effects, the name and Create, worked with the
+  laser. Taken off the altar again, they're no longer chosen.
+
+Calls made:
+
+* The soul goes to a gem in the hand when there is one, whichever gem the game filled (the game picks
+  the smallest that fits; the flight doesn't change which).
+* The choices that are menus in the game (which effects, how strong, the name) stay its menu, at the
+  altar: only the gem and the item are laid on it.

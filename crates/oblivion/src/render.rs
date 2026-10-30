@@ -194,6 +194,8 @@ mod win {
             crate::books::frame();
             crate::inventory::frame(link::now());
             crate::repair::frame();
+            crate::soul::frame();
+            crate::enchant::frame(link::now());
             crate::slot_menu::frame();
             crate::pockets::frame(link::now());
             crate::alchemy::frame(link::now());
@@ -386,6 +388,8 @@ mod win {
             time(Part::Items, || hooks::guard_void("alchemy", || crate::alchemy::place(view, now)));
             time(Part::Items, || hooks::guard_void("lock", || crate::lock::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("repair", || crate::repair::place(view, &snap.frame, now)));
+            time(Part::Items, || hooks::guard_void("soul", || crate::soul::place(view, &snap.frame, now)));
+            time(Part::Items, || hooks::guard_void("enchant", || crate::enchant::place(view, now)));
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))

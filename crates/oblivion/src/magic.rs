@@ -288,6 +288,8 @@ pub fn enchant_overlay(enchantment: u32, object: u32) -> Option<Overlay> {
 /// shaders on the player, every frame), as last written.
 struct OverlayState {
     weapon: Option<Overlay>,
+    /// Over things in the hands besides the weapon (a filled soul gem's shimmer, [`crate::soul`]).
+    held: Vec<Overlay>,
     sent: Option<Vec<u8>>,
     table: Box<Overlays>,
 }
@@ -297,16 +299,23 @@ static OVERLAYS: std::sync::Mutex<Option<OverlayState>> = std::sync::Mutex::new(
 /// The equipped weapon's shimmer from now on (None: none).
 pub fn set_weapon_overlay(o: Option<Overlay>) {
     let mut s = OVERLAYS.lock().unwrap();
-    s.get_or_insert_with(|| OverlayState { weapon: None, sent: None, table: bytemuck::zeroed_box() }).weapon = o;
+    s.get_or_insert_with(|| OverlayState { weapon: None, held: Vec::new(), sent: None, table: bytemuck::zeroed_box() }).weapon = o;
 }
 
-/// Once a frame: the weapon's shimmer and the spells' shaders on the player's body (each where its
-/// curve has it now), written when they change.
+/// The overlays over other things in the hands from now on (each frame's: a filled soul gem's
+/// shimmer).
+pub fn set_held_overlays(o: Vec<Overlay>) {
+    let mut s = OVERLAYS.lock().unwrap();
+    s.get_or_insert_with(|| OverlayState { weapon: None, held: Vec::new(), sent: None, table: bytemuck::zeroed_box() }).held = o;
+}
+
+/// Once a frame: the weapon's shimmer, what other things in the hands wear, and the spells' shaders
+/// on the player's body (each where its curve has it now), written when they change.
 #[cfg(target_arch = "x86")]
 fn publish_overlays() {
     let mut s = OVERLAYS.lock().unwrap();
-    let s = s.get_or_insert_with(|| OverlayState { weapon: None, sent: None, table: bytemuck::zeroed_box() });
-    let mut all: Vec<Overlay> = s.weapon.into_iter().collect();
+    let s = s.get_or_insert_with(|| OverlayState { weapon: None, held: Vec::new(), sent: None, table: bytemuck::zeroed_box() });
+    let mut all: Vec<Overlay> = s.weapon.into_iter().chain(s.held.iter().copied()).collect();
     for (_, shader, age) in player_hit_shaders() {
         if let Some(o) = shader_overlay(shader, OVERLAY_BODY, Some(age)) {
             all.push(o);

@@ -74,3 +74,40 @@ boxes and limbs). The repair itself is the game's own menu click on the struck t
 What I couldn't: anything in the game. Not tried: an enchanted thing below Journeyman (the game's
 message), an Expert's repair past 100%, armour carried but not worn (not struck in the hand: put it
 on, or use the hammer from the inventory as ever).
+
+## 3. Soul gems and enchanting — `playtest-soul.bat`, then `playtest-altar.bat`
+
+`playtest-soul.bat`: rustvr-base (Odiil Farm) with three empty petty soul gems, two filled common
+ones, the Longsword of Soul Embers equipped with its charge down to 20%, the Soul Trap spell readied
+and a sewer rat a few metres ahead; saves as `rustvr-soul`.
+
+1. **Soul Gems slot** (new, the pouch at the small of the back): reach behind with either hand. The
+   strongest soul comes out first: a filled common gem. **Held in the hand, a filled gem shimmers**
+   with Soul Trap's own purple effect (the game draws filled and empty gems alike).
+2. **Recharge by touch**: draw the sword (left hip) into one hand, the filled gem into the other, and
+   hold the gem against the blade. You feel it build for about half a second, then the game's own
+   recharge: the gem's soul into the sword, the gem used up (one fewer), its sound.
+3. **Soul trap**: cast Soul Trap (the off hand's trigger, as any spell) at the rat, then kill it
+   within the spell's time. The game says "You have captured a soul!" and plays its own art at the
+   body; then the soul (Soul Trap's own projectile art) flies in an arc to a soul gem in your hand,
+   or, with no gem in hand, round to the pouch at your back. Holding an empty gem up as it comes in
+   is the nicest way: the hand feels it land, and a filled gem shimmers brighter for a moment.
+
+`playtest-altar.bat`: the Arcane University's Chironasium (its Altars of Enchanting) with two filled
+common soul gems and an iron longsword equipped; saves as `rustvr-altar`.
+
+4. **Lay a gem on the altar**: draw a filled gem and hold it to the altar's book rest (the slanted top)
+   for half a second: it builds, then the game's enchanting opens beside the altar with that gem
+   chosen. Pick the thing to enchant in its own list, then the effects, name it, Create (laser).
+5. **Gem and sword together**: the gem in one hand, the sword in the other, both held to the altar:
+   the enchanting opens with both chosen.
+
+Tell me especially: where the soul arrives (the hand, the pack), and whether the gem's shimmer reads
+as "full".
+
+What I checked: builds; unit tests (the soul's arc). The trap, the recharge and the enchanting are the
+game's own code (its soul trap; its recharge and enchanting menus' own clicks).
+
+What I couldn't: anything in the game; the soul trap hook and the flying art are untested. Not done:
+armour, clothes and jewellery carried but not worn can't be held (the holsters don't hand out
+apparel), so they're enchanted (and repaired) through the game's own lists.

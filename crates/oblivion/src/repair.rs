@@ -130,21 +130,8 @@ mod game {
     const ENTRY_AT: usize = 0x004D_88F0;
     const HEALTH: usize = 0x0048_4850;
     const ENTRY_END: usize = 0x0048_4470;
-    /// A tile's menu (thiscall), the open menu of a type (cdecl), the game's free (cdecl), a menu's
-    /// fade off the interface's list (cdecl).
-    const MENU_OF: usize = 0x0058_98F0;
-    const MENU_BY_TYPE: usize = 0x0058_9B70;
+    /// The game's free (cdecl).
     const FREE: usize = 0x0040_1F20;
-    const UNFADE: usize = 0x0058_3CF0;
-    /// `InterfaceManager*`: its mode (+8), the tiles and menu under the cursor (+0x88, +0x98,
-    /// +0x9C), its stack of open menus (+0xE0, ten ids); the menu background's flag.
-    const INTERFACE: usize = 0x00B3_A6E0;
-    const MODE: usize = 0x8;
-    const STACK: usize = 0xE0;
-    const UNDER: [usize; 3] = [0x88, 0x98, 0x9C];
-    const MENU_BACKGROUND: usize = 0x00B4_2D54;
-    /// A menu's id once registered (+0x14).
-    const MENU_ID: usize = 0x14;
     /// In combat (thiscall: the player, 0); `iAllowRepairDuringCombat`'s value; "You cannot repair
     /// items during combat!" (`sCanNotEquipRepairHammer`); a notice (cdecl: text, 0, 1, seconds).
     const IN_COMBAT: usize = 0x0066_05A0;
@@ -215,9 +202,14 @@ mod game {
         out
     }
 
+    /// An inventory entry's extra data lists.
+    pub fn lists_of(entry: usize) -> Vec<usize> {
+        list(mem::deref(entry), 64)
+    }
+
     /// An entry's extra data list that's worn, else its first.
-    fn worn_list(entry: usize) -> usize {
-        let lists = list(mem::deref(entry), 64);
+    pub fn worn_list_of(entry: usize) -> usize {
+        let lists = lists_of(entry);
         lists.iter().copied().find(|&l| extra(l, EXTRA_WORN) != 0 || extra(l, EXTRA_WORN_LEFT) != 0).or(lists.first().copied()).unwrap_or(0)
     }
 
@@ -243,7 +235,7 @@ mod game {
     fn equipped(at: usize) -> Option<Thing> {
         let entry = mem::deref(mem::deref(engine::player() + PROCESS) + at);
         let form = mem::deref(entry + 8);
-        (entry != 0 && form != 0).then(|| Thing { form, list: worn_list(entry), hand: None })
+        (entry != 0 && form != 0).then(|| Thing { form, list: worn_list_of(entry), hand: None })
     }
 
     /// A model's box (its middle and half extents, the protocol's axes), as the runtime draws it.
@@ -401,35 +393,42 @@ mod game {
         }
     }
 
-    /// The rows of an open repair list: each one's tile and its place in the player's inventory.
-    fn rows(tile: usize, out: &mut Vec<(usize, i32)>, depth: u32) {
+    /// The rows of an open list of the player's things (the repair, recharge, enchanting lists): each
+    /// one's tile and its place in the player's inventory (its value `index`).
+    fn rows(tile: usize, index: u16, out: &mut Vec<(usize, i32)>, depth: u32) {
         if depth > 12 || out.len() > 400 {
             return;
         }
         for c in tiles::children(tile) {
-            if let Some(i) = tiles::value(c, ROW_INDEX) {
+            if let Some(i) = tiles::value(c, index) {
                 out.push((c, i as i32));
             }
-            rows(c, out, depth + 1);
+            rows(c, index, out, depth + 1);
         }
     }
 
-    /// The row of a thing (its tile), and its health now (percent).
     fn row_of(tile: usize, thing: Thing) -> Option<(usize, f32)> {
+        row_for(tile, ROW_INDEX, thing.form, thing.list)
+    }
+
+    /// The row (its tile) of a list of the player's things under `tile` that's the thing of `form`
+    /// with the extra data `list` (rows carry their place in the inventory as their value `index`),
+    /// and its health now (percent; -1 for what has none).
+    pub fn row_for(tile: usize, index: u16, form: usize, list: usize) -> Option<(usize, f32)> {
         type At = unsafe extern "thiscall" fn(usize, i32, u8) -> usize;
         type Health = unsafe extern "thiscall" fn(usize, u8) -> f64;
         type End = unsafe extern "thiscall" fn(usize);
         let player = engine::player();
         let mut found = Vec::new();
-        rows(tile, &mut found, 0);
+        rows(tile, index, &mut found, 0);
         let mut by_form = Vec::new();
-        for (row, index) in found {
-            let entry = unsafe { std::mem::transmute::<usize, At>(ENTRY_AT)(player, index, 0) };
+        for (row, at) in found {
+            let entry = unsafe { std::mem::transmute::<usize, At>(ENTRY_AT)(player, at, 0) };
             if entry == 0 {
                 continue;
             }
-            let same_form = mem::deref(entry + 8) == thing.form;
-            let same = same_form && list(mem::deref(entry), 64).contains(&thing.list);
+            let same_form = mem::deref(entry + 8) == form;
+            let same = same_form && lists_of(entry).contains(&list);
             let health = unsafe { std::mem::transmute::<usize, Health>(HEALTH)(entry, 1) } as f32;
             unsafe { std::mem::transmute::<usize, End>(ENTRY_END)(entry) };
             free(entry);
@@ -450,14 +449,9 @@ mod game {
         type InCombat = unsafe extern "thiscall" fn(usize, u8) -> u8;
         type Message = unsafe extern "C" fn(usize, u32, u32, f32);
         type Open = unsafe extern "C" fn(u32, u32, u32, u32) -> usize;
-        type This = unsafe extern "thiscall" fn(usize) -> usize;
-        type ByType = unsafe extern "C" fn(u32) -> usize;
         type Click = unsafe extern "thiscall" fn(usize, u32, usize);
-        type Unfade = unsafe extern "C" fn(usize);
-        type Destroy = unsafe extern "thiscall" fn(usize, u8) -> usize;
         let player = engine::player();
-        let im = mem::deref(INTERFACE);
-        if player == 0 || im == 0 {
+        if player == 0 {
             return false;
         }
         // No repairing in combat, unless the game's setting allows it: its own words.
@@ -467,29 +461,11 @@ mod game {
             return false;
         }
         // (The player's own repair menu open: it's theirs, and making another would end it.)
-        if unsafe { std::mem::transmute::<usize, ByType>(MENU_BY_TYPE)(REPAIR) } != 0 {
+        if crate::menus::open_menu(REPAIR) != 0 {
             return false;
         }
-        // The interface as it is: making the menu pushes it on the stack of open menus (menu mode,
-        // the world stopped) and takes the cursor's tiles; it's all put back at once.
-        let (Some(stack), Some(mode), Some(background)) = (mem::at::<[u32; 10]>(im + STACK), mem::at::<u8>(im + MODE), mem::at::<u8>(MENU_BACKGROUND)) else { return false };
-        let under: Vec<usize> = UNDER.iter().map(|o| mem::deref(im + o)).collect();
-        let tile = unsafe { std::mem::transmute::<usize, Open>(OPEN)(HAMMER_MODE, 0, 0, 0) };
-        unsafe {
-            ((im + STACK) as *mut [u32; 10]).write(stack);
-            ((im + MODE) as *mut u8).write(mode);
-            for (o, v) in UNDER.iter().zip(&under) {
-                ((im + o) as *mut usize).write(*v);
-            }
-            (MENU_BACKGROUND as *mut u8).write(background);
-        }
-        let menu = if tile != 0 { unsafe { std::mem::transmute::<usize, This>(MENU_OF)(tile) } } else { 0 };
-        let id = if menu != 0 { unsafe { std::mem::transmute::<usize, This>(mem::deref(mem::deref(menu) + 0x34))(menu) } } else { 0 };
-        if menu == 0 || id != REPAIR as usize {
-            tracing::warn!("repair: the game's repair menu didn't open");
-            return false;
-        }
-        let done = match row_of(tile, thing) {
+        let open = || unsafe { std::mem::transmute::<usize, Open>(OPEN)(HAMMER_MODE, 0, 0, 0) };
+        crate::menus::for_a_moment(REPAIR, open, |menu, tile| match row_of(tile, thing) {
             Some((row, before)) => {
                 unsafe { std::mem::transmute::<usize, Click>(HANDLE_CLICK)(menu, FIRST_ROW, row) };
                 let after = row_of(tile, thing).map(|r| r.1);
@@ -500,15 +476,8 @@ mod game {
                 tracing::info!("repair: {:08X} has nothing to repair (not in the game's list)", mem::at::<u32>(thing.form + FORM_ID).unwrap_or(0));
                 false
             }
-        };
-        // Gone: not on the stack, so its end takes nothing off it; its fade off the list.
-        unsafe {
-            ((menu + MENU_ID) as *mut u32).write(0);
-            std::mem::transmute::<usize, Unfade>(UNFADE)(menu);
-            let destroy = mem::deref(mem::deref(menu));
-            std::mem::transmute::<usize, Destroy>(destroy)(menu, 1);
-        }
-        done
+        })
+        .unwrap_or(false)
     }
 }
 

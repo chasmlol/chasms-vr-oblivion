@@ -145,6 +145,9 @@ pub fn defaults() -> Vec<SlotDesc> {
         slot("Lockpicks", [-0.13, -0.28, 0.12], 0.06, 0.03, &[LOCKPICKS], RULE_VALUE, 0),
         // The repair hammer at the front of the belt on the right, for the hammer hand.
         slot("Hammers", [0.08, -0.5, 0.16], 0.065, 0.03, &[HAMMERS], RULE_MOST, 0),
+        // Soul gems in the pack at the small of the back, where a trapped soul flies to: the
+        // strongest soul first (to recharge with), then the biggest empty gem.
+        slot("Soul Gems", [0.0, -0.42, -0.16], 0.08, 0.04, &[SOUL_GEMS], RULE_STRONGEST, 0),
     ]
 }
 
@@ -195,7 +198,8 @@ mod game {
     /// Books: flags (bit 0 a scroll) and the enchantment a scroll casts.
     const BOOK_FLAGS: usize = 0x88;
     const BOOK_ENCHANTMENT: usize = 0x64;
-    /// An arrow's and a weapon's damage, a soul gem's capacity, a weapon's type (4 a staff, 5 a bow).
+    /// An arrow's and a weapon's damage, a soul gem's capacity (the soul in it: [`crate::soul`]), a
+    /// weapon's type (4 a staff, 5 a bow).
     const AMMO_DAMAGE: usize = 0x78;
     const WEAP_DAMAGE: usize = 0x8C;
     const SOUL_CAPACITY: usize = 0x71;
@@ -475,7 +479,9 @@ mod game {
         it.power = match kind {
             AMMO => mem::at::<u16>(form + AMMO_DAMAGE).unwrap_or(0) as f32,
             WEAPON => mem::at::<u16>(form + WEAP_DAMAGE).unwrap_or(0) as f32,
-            SOUL_GEM => mem::at::<u8>(form + SOUL_CAPACITY).unwrap_or(0) as f32,
+            // (Its soul first: a filled gem before an empty one, the strongest soul first; then how
+            // big a soul it holds.)
+            SOUL_GEM => crate::soul::soul_of(form, r.list) as f32 * 10.0 + mem::at::<u8>(form + SOUL_CAPACITY).unwrap_or(0) as f32,
             _ => 0.0,
         };
         // (The game's weights are about pounds: a kilogram is two.)
@@ -618,13 +624,15 @@ mod game {
         after < before
     }
 
-    /// A copy drawn from a slot that a hand has now: its object, its thing's form, the hand, its
-    /// pose as the runtime last said (in tracking space with `OS_TRACKING`), and its model's box
-    /// (its middle and half extents in its model's space, metres).
+    /// A copy drawn from a slot that a hand has now: its object, its thing's form and its stack's
+    /// own extra data list (0: none), the hand, its pose as the runtime last said (in tracking space
+    /// with `OS_TRACKING`), and its model's box (its middle and half extents in its model's space,
+    /// metres).
     #[derive(Clone, Copy, Debug)]
     pub struct HeldCopy {
         pub id: u32,
         pub form: usize,
+        pub list: usize,
         pub hand: usize,
         pub flags: u32,
         pub pose: Pose,
@@ -642,8 +650,9 @@ mod game {
                 .filter_map(|st| {
                     let d = s.drawn.get(&st.id).filter(|d| !d.taken)?;
                     let item = s.inv.item(st.parent)?;
+                    let list = stack(s, st.parent).map_or(0, |(_, l)| l);
                     let hand = if st.flags & OS_HELD_LEFT != 0 { 0 } else { 1 };
-                    Some(HeldCopy { id: st.id, form: d.form, hand, flags: st.flags, pose: st.pose, center: Vec3::from_array(item.center), half: Vec3::from_array(item.half_extents) })
+                    Some(HeldCopy { id: st.id, form: d.form, list, hand, flags: st.flags, pose: st.pose, center: Vec3::from_array(item.center), half: Vec3::from_array(item.half_extents) })
                 })
                 .collect()
         })

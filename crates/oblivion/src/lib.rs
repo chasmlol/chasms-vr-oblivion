@@ -41,6 +41,7 @@ pub mod combat;
 pub mod console;
 pub mod d3d9;
 pub mod depth;
+pub mod enchant;
 pub mod engine;
 #[cfg(all(windows, target_arch = "x86"))]
 pub mod entry;
@@ -81,6 +82,7 @@ pub mod scene;
 pub mod settings;
 pub mod shapes;
 pub mod slot_menu;
+pub mod soul;
 pub mod sounds;
 pub mod tiles;
 pub mod swim;

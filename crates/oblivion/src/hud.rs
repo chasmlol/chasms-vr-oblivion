@@ -696,7 +696,9 @@ mod win {
                 // persuasion) beside the one who offers it; a thing's own beside the thing; any
                 // other ahead of the player.
                 let speaker = mem::deref(tiles::menu(MENU_DIALOG) + DIALOG_SPEAKER);
-                let thing = LOOKED_AT.load(std::sync::atomic::Ordering::Relaxed);
+                // (The altar a gem was laid on: its enchanting floats beside it, wherever the eyes are.)
+                let altar = if kind == MENU_ENCHANTMENT { crate::enchant::altar() } else { 0 };
+                let thing = if altar != 0 { altar } else { LOOKED_AT.load(std::sync::atomic::Ordering::Relaxed) };
                 let group = if speaker != 0 && tiles::menu_tile(MENU_DIALOG) != 0 {
                     beside(speaker, kind, SIDE_RIGHT, false)
                 } else if THINGS_OWN.contains(&kind) && thing != 0 && !is_actor(thing) {
