@@ -72,6 +72,9 @@ note. The inn's own patrons walk about further in. The research and the design a
 11. **Steal something lying about.** Pick up something of the inn's from a table or a shelf (a
     plate, a bottle): its card over your hand has the red hand and the word **Steal** over its name.
     Something that's nobody's (or yours) has no such line.
+12. **Walk right up to someone** (round 9). Step up to Bruce in the room (not with the stick): your
+    body stops where it would touch his, without shoving him, and your head goes on, leaning into
+    his space. With the stick you still bump him along, as in the game.
 
 The game's flat pickpocket menu is still there: the trigger on someone while sneaking opens it. A
 hand in a pocket doesn't activate anything with its trigger.
@@ -108,7 +111,8 @@ Not checked:
 
 - Anything in the real headset: how the ticks, the brush and the heartbeat feel; whether 4 cm per
   thing is right for a real hand; the four trouser pockets (round 6) by hand; the card's steady
-  size and its red line coming and going with it (round 6); a card on each hand (round 8).
+  size and its red line coming and going with it (round 6); a card on each hand (round 8); coming
+  close to people (round 9).
 - The heartbeat itself (only the awareness values: 0, 0.5 noticed, 1 seen, read from the NPC's own
   detection list).
 - The game's success message and sound (the call is the menu's own, with its message flag).
@@ -200,6 +204,14 @@ Not checked:
   adapter has the card of each in turn till both have their picture (0.15 s for the game to lay it
   out, 0.1 s more to cut it), a thing new to a hand first, then leaves it. A hand's card shows once
   its thing's picture is cut: a quarter of a second, a little more when the other hand's new too.
+- **Close to people without shoving them** (round 9: the body couldn't get close, it pushed people
+  away; the hands could). Room-scale walks the game's body after the head (the runtime's
+  `TRK_FOLLOW`), and the game's character controllers push each other: walked into someone, the body
+  shoved them. Now, while the body is walked after the head, its step stops where its controller
+  would touch theirs (each controller's own radius, as the game's `SetSize` sets it), and
+  the head goes on alone, as far as room-scale lets it from the body (60 cm): right up to them. The
+  stick still walks into people as the game does. The adapter's log says where the body stopped
+  (`movement: walked after the head, the body stops at ...`).
 
 ## Not done, known issues
 

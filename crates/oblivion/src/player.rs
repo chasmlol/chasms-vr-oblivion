@@ -67,7 +67,7 @@ pub fn before_update() {
     }
     // The player's step on the ground is the stick's (crate::movement).
     #[cfg(target_arch = "x86")]
-    crate::movement::set_stick(snap.filter(|_| vr).map(|s| s.frame.intents.move_xy));
+    crate::movement::set_stick(snap.filter(|_| vr).map(|s| (s.frame.intents.move_xy, s.frame.tracking.flags & rustvr_protocol::TRK_FOLLOW != 0)));
     let mut v = input::Virtual::default();
     if let Some(s) = snap {
         if let Some(b) = bridge().as_mut() {
