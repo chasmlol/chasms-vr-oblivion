@@ -42,8 +42,8 @@ note. The inn's own patrons walk about further in. The research and the design a
 7. **Rummage and come away empty.** A hand in and out with nothing taken is the game's own "looked
    and took nothing": a use of Sneak, and the game's chance (with nothing taken) that he noticed. It
    happens once the hands have been away from his pockets for 3/4 s.
-8. **Drop a taken thing** in the air: it's the game's own thing in the world where you let go, falling
-   with Havok, to pick up again.
+8. **Drop or throw a taken thing** away from your body and anyone's pockets: it's the game's own
+   thing in the world where you let go, flying on as it left your hand (Havok), to pick up again.
 9. **The patrons.** Walk in (sneaking) and try the people moving about. Their pockets hold what
    they carry but don't wear (often nothing: an empty pocket feels empty at once). Follow a walking
    one: the pockets move with them.
@@ -119,7 +119,6 @@ Not checked:
 ## Not done, known issues
 
 - Gold is one coin (the game's only gold model): it hides in the fist.
-- A dropped thing falls from where it was let go; it doesn't carry the throw's speed.
 - Older models in 10.0.1.x and 10.1.0.106 (about 30 of the clutter, candles and rugs mostly) still
   aren't read; a thing without a model is invisible in the hand (its card still shows).
 - Creatures have no pockets (they're NPCs only, as the game's pickpocketing is in practice).
