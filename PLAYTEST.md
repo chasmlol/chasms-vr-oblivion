@@ -43,10 +43,11 @@ activate shows where you look.
    seconds is an assault, the game's own: you get the game's bounty (40 gold) and his reaction (a
    Legion soldier comes to arrest you, or fights). One assault a hold.
 5. **Touch and shove.** Without grabbing, push the soldier's face, an arm, his chest: the part gives
-   under your hand and springs back with a little wobble once you let it be. His face turns on his
-   neck; an arm swings from the shoulder, loosely; pushed in the chest he leans back a little and
-   his head and arms swing with it; a leg hardly gives (he's standing on it). Slap an arm and it
-   swings away and back. Push him fast with an open hand (1.5 m/s or more) and he's shoved back
+   under your hand and springs back with a little wobble once you let it be. His head turns on his
+   neck, loosely: push his cheek and he turns his face away, push his forehead and his head tips
+   back; an arm swings from the shoulder, loosely; pushed in the chest, his head and arms swing
+   with it; a leg hardly gives (he's standing on it). Slap an arm or his face and it swings away
+   and back. Push him fast with an open hand (1.5 m/s or more) and he's shoved back
    as well.
 6. **Heavy and strong.** Holding a body that holds your hand back, you feel a low rumble in the
    controller, harder the further back it's held. Past an arm's reach (60 cm between your hand and
@@ -83,6 +84,27 @@ Look out for: a hand stopping short of someone or sinking into them (and where),
 flops too much or too little when pushed, the face and arms coming back too slowly or too fast,
 anything twitching while you hold someone.
 
+## Playtest 2 (real headset)
+
+The touches and the hitboxes worked, except the head: it couldn't be moved. The log shows each
+person fitted (the soldier's head 0.15 m thick with his helmet, reaching 0.10 m past the head bone)
+and touches arriving. The head was firm (half its body's turn drawn, and that a third of a lean),
+and a push moved its body without turning it, while the game draws only the head bone's turn (at
+the animated place). Now:
+
+* **A push is an impulse at the point pushed** (Havok's own `applyPointImpulse`, as the game's grab
+  pulls), as much as the point lacks of the push by the body's own mass and inertia. Off its middle
+  it turns the body as well as moving it: a cheek pushed turns the head away, a forehead tips it
+  back. Dead bodies are pushed the same way.
+* **The head is loose** when it's touched (as the arms): leant on, it gives most of the way.
+* Which bone a touch is on is logged (`grabs: ... touched on its bone N`: 1 is the head).
+
+Found while looking (not changed): Oblivion turns the upper spine itself (its look-at twist, a
+`bhkBlendCollisionObject` of its own kind on Spine, Spine1, Spine2) and draws those bones from the
+animation, so a push on the chest doesn't bend the chest itself; the head and arms swinging with it
+are what show. The game's head tracking only adds its look on top of the head's own turn, so it
+doesn't undo a push.
+
 ## What was checked in the game (emulated headset, captures and logs)
 
 * A dead soldier taken by the foot: the foot follows the hand within 2 to 6 cm as it's lifted
@@ -118,8 +140,9 @@ range wasn't to be started tonight).
 
 * **A touch is the game's blend, not a spring of ours.** The bones about a touch get a heir and a
   velocity gain below 1 (loose 0.2 and 0.1, firm 0.5 and 0.3, stiff 0.7 and 0.5); Oblivion has no
-  value for how much a body gives, so these are ours. The pelvis stays the animation's: it holds
-  him up. A held person isn't touched (the grab moves him).
+  value for how much a body gives, so these are ours. The head touched is loose, the spine above
+  it stiff. The pelvis stays the animation's: it holds him up. A held person isn't touched (the
+  grab moves him).
 * **The torso's thickness is its depth.** A capsule as wide as the shoulders would stop a hand
   in front of the chest; as deep as the chest, a hand on the waist's side sinks in a little (the
   arms hang there).
