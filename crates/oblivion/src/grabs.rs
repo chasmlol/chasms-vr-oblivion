@@ -183,6 +183,28 @@ mod game {
     const CHOKED_OUT: f32 = 0.25;
     /// Held this long, a living actor takes it as an attack (seconds).
     const HELD_ATTACK: f64 = 4.0;
+    /// A standing actor pulled further than this (metres, along the ground) from where its body has
+    /// the point held is pushed after the pull (its character controller's push, the game's own
+    /// knockback without a ragdoll): this many m/s for each metre further, at most this fast, a push
+    /// this long at a time (seconds).
+    const STEP_START: f32 = 0.12;
+    const STEP_GAIN: f32 = 5.0;
+    const STEP_MAX: f32 = 2.0;
+    const STEP_TIME: f32 = 0.1;
+    /// Held up by the throat and still conscious, it struggles: a kick or a grab at the hand every
+    /// so often (seconds, and up to this much more), its legs this fast (m/s), its hands at the hand
+    /// at this speed; weaker as its fatigue goes.
+    const KICK_EVERY: f64 = 0.25;
+    const KICK_SPREAD: f64 = 0.35;
+    const KICK_SPEED: f32 = 2.5;
+    const CLAW_SPEED: f32 = 2.0;
+    /// `Actor`'s character controller (thiscall: the actor), and its push (thiscall: controller, a
+    /// move in game units, over this long).
+    const CONTROLLER: usize = 0x0065_A2C0;
+    const CONTROLLER_PUSH: usize = 0x0089_07A0;
+    /// The bones a struggle moves: the hands, the calves and the feet.
+    const HANDS: [u32; 2] = [7, 13];
+    const LEGS: [u32; 4] = [9, 10, 15, 16];
 
     #[repr(C, align(16))]
     #[derive(Clone, Copy, Default)]
@@ -291,6 +313,19 @@ mod game {
     fn velocity(body: usize) -> Vec3 {
         let v: [f32; 4] = mem::at(motion(body) + MOTION_LIN_VEL).unwrap_or_default();
         camera::basis().dir_from_game(Vec3::new(v[0], v[1], v[2])) * HK_METRES
+    }
+
+    /// Pushes a standing actor along the ground (the runtime's world, m/s), as the game's own
+    /// knockback pushes one without a ragdoll.
+    fn push(actor: usize, v: Vec3) {
+        type Get = unsafe extern "thiscall" fn(usize) -> usize;
+        type Push = unsafe extern "thiscall" fn(usize, *const [f32; 3], f32);
+        let controller = unsafe { std::mem::transmute::<usize, Get>(CONTROLLER)(actor) };
+        if controller == 0 || !v.is_finite() {
+            return;
+        }
+        let g = camera::basis().dir_to_game(v) * camera::UNITS_PER_METER * STEP_TIME;
+        unsafe { std::mem::transmute::<usize, Push>(CONTROLLER_PUSH)(controller, &g.to_array(), STEP_TIME) };
     }
 
     /// Sets a body moving (the runtime's world, m/s) and wakes it.
@@ -475,6 +510,8 @@ mod game {
         lifting: Option<f64>,
         choking: bool,
         attacked: bool,
+        /// When it next struggles (held up by the throat).
+        next_kick: f64,
     }
 
     /// A living actor whose bodies the hands put in Havok's world, and the bones they made
@@ -503,6 +540,10 @@ mod game {
         last: f64,
         /// The game's masses per kilogram (see [`PERSON_KG`]), once known.
         scale: Option<f32>,
+        /// For the struggles' variety.
+        seed: u32,
+        /// Each actor's knock state as last seen (logged as it changes: down, getting up).
+        knocks: HashMap<u32, u8>,
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -519,6 +560,8 @@ mod game {
             grabs: bytemuck::zeroed_box(),
             last: 0.0,
             scale: None,
+            seed: 0x9E37_79B9,
+            knocks: HashMap::new(),
         }))
     }
 
@@ -562,6 +605,9 @@ mod game {
                     body.mass = bones.iter().map(|x| mass(x.body)).sum::<f32>() / k;
                     let dead = is_dead(ptr);
                     let knocked = knock_state(ptr);
+                    if s.knocks.insert(actor.id, knocked).is_some_and(|k| k != knocked) {
+                        tracing::info!("grabs: {:#x}'s knock state {knocked}{}", actor.id, if dead { " (dead)" } else { "" });
+                    }
                     body.flags = if bones.is_empty() { 0 } else { BODY_GRABBABLE }
                         | if dead || !matches!(knocked, 0 | 6) { BODY_RAGDOLL } else { 0 }
                         | if !dead && !matches!(knocked, 3 | 4) && combat::actor_value(ptr, AV_FATIGUE) >= 0 { BODY_CONSCIOUS } else { 0 };
@@ -635,6 +681,14 @@ mod game {
     }
 
     impl State {
+        /// A number from 0 to 1 (xorshift).
+        fn random(&mut self) -> f32 {
+            self.seed ^= self.seed << 13;
+            self.seed ^= self.seed >> 17;
+            self.seed ^= self.seed << 5;
+            (self.seed >> 8) as f32 / (1u32 << 24) as f32
+        }
+
         /// Hand `hand` takes hold of an actor (`g`: its first word). A standing actor's bodies go into
         /// Havok's world first, and the hold is taken the frame after, with them in their bones'
         /// places.
@@ -710,7 +764,7 @@ mod game {
             if action == 0 {
                 return;
             }
-            self.holds[hand] = Some(Hold { serial: g.serial, actor_id: g.actor, actor, bone, action, local, since: now, lifting: None, choking: false, attacked: false });
+            self.holds[hand] = Some(Hold { serial: g.serial, actor_id: g.actor, actor, bone, action, local, since: now, lifting: None, choking: false, attacked: false, next_kick: now + KICK_EVERY });
         }
 
         /// A hand holding on: its spring pulled to where the hand would have the point, the actor
@@ -774,6 +828,15 @@ mod game {
                     }
                 }
             }
+            // Standing and pulled along the ground: it's pushed after the pull, stumbling along
+            // rather than standing there stretched.
+            if !dead && knock_state(h.actor) == 0 && let Some(p) = held {
+                let pull = Vec3::new(to.x - p.x, 0.0, to.z - p.z);
+                let over = pull.length() - STEP_START;
+                if over > 0.0 {
+                    push(h.actor, pull.normalize_or_zero() * (over * STEP_GAIN).min(STEP_MAX));
+                }
+            }
             // Down and held: it can't get up while a hand has it.
             if !dead && state == 1
                 && let (Some(p), Some(hour)) = (high_process(h.actor), game_hour())
@@ -797,6 +860,39 @@ mod game {
             } else {
                 h.choking = false;
             }
+            // Held up by the throat (or the head) and conscious: it fights for air, its hands at the
+            // hand at its throat and its legs kicking, weaker as its fatigue goes.
+            let throat = g.flags & GRAB_THROAT != 0 || h.bone.code == HEAD;
+            if !dead && state != 0 && throat && now >= h.next_kick && let Some(p) = held {
+                let fatigue = combat::actor_value(h.actor, AV_FATIGUE) as f32;
+                let most = combat::base_actor_value(h.actor, AV_FATIGUE).max(1) as f32;
+                let (actor, root) = (h.actor, mem::deref(h.actor + NI_NODE));
+                if fatigue > 0.0 && root != 0 {
+                    let k = (fatigue / most).clamp(0.3, 1.0);
+                    let wait = KICK_EVERY + KICK_SPREAD * self.random() as f64;
+                    let bones = skeleton(root);
+                    for b in &bones {
+                        let Some(at) = centre(b.body) else { continue };
+                        let v = if HANDS.contains(&b.code) {
+                            (p - at).normalize_or_zero() * CLAW_SPEED * k
+                        } else if LEGS.contains(&b.code) {
+                            let a = self.random() * std::f32::consts::TAU;
+                            Vec3::new(a.cos(), 0.3 + 0.4 * self.random(), a.sin()) * KICK_SPEED * k * (0.5 + 0.5 * self.random())
+                        } else {
+                            continue;
+                        };
+                        set_velocity(b.body, velocity(b.body) * 0.3 + v);
+                    }
+                    if let Some(h) = self.holds[hand].as_mut() {
+                        if h.next_kick <= h.since + KICK_EVERY + 1e-3 {
+                            tracing::info!("grabs: {:#x} struggles (fatigue {fatigue:.0} of {most:.0})", h.actor_id);
+                        }
+                        h.next_kick = now + wait;
+                    }
+                    let _ = actor;
+                }
+            }
+            let Some(h) = self.holds[hand].as_mut() else { return };
             // Held a while, a living actor takes it as an attack.
             if !dead && !h.attacked && now - h.since > HELD_ATTACK {
                 attacked(h.actor);
