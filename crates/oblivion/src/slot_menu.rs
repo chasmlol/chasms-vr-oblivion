@@ -143,7 +143,12 @@ pub fn xml(categories: usize) -> String {
     for k in 0..SLOT_ROWS {
         x.push_str(&row(&format!("hol_slot_{k}"), SLOT_ROW + k as i32, 0, 36 + 57 * k as i32, 300, 53, false));
     }
-    x.push_str(&text("hol_now", "", 3, 0, 494, "left", 300));
+    x.push_str(&text("hol_now", "", 3, 0, 496, "left", 300));
+    // (A rule under it, as the game's quest pop-up has: the strip ends there however many slots
+    // and whatever the hint, so the strips don't shift as they change.)
+    x.push_str(
+        "<image name=\"hol_slots_rule\"> <filename> Menus\\Stats\\stat_border_horizontal_1.dds </filename> <depth> 3 </depth> <width> 300 </width> <height> 3 </height> <x> 0 </x> <y> 544 </y> </image>\n",
+    );
     x.push_str("</rect>\n");
     x.push_str(&column("hol_categories", 340, 360));
     x.push_str(&text("hol_categories_head", "Draws from, in order", 1, 0, 0, "left", 360));
@@ -554,6 +559,9 @@ mod game {
             std::mem::transmute::<usize, Update>(UPDATE)(t, 0.0);
             std::mem::transmute::<usize, Enable>(ENABLE)(m, 0);
             update_float(t, VISIBLE, TRUE);
+            // (The runtime shows the picked slot's first thing at its place while it's open.)
+            s.edits.editing = s.editor.picked as u32 + 1;
+            crate::link::with_adapter(|a| a.write_slot_edits(&s.edits));
             tracing::info!("holsters: the editor is open on slot {slot} ({} tiles named)", s.named.len());
         }
         true
@@ -571,8 +579,11 @@ mod game {
             std::mem::transmute::<usize, Close>(CLOSE)(m);
             std::mem::transmute::<usize, Sound>(SOUND)(SOUND_CLOSE);
         }
+        s.edits.editing = 0;
         if s.placing {
             place(s, None);
+        } else {
+            crate::link::with_adapter(|a| a.write_slot_edits(&s.edits));
         }
         s.tile = 0;
         s.named.clear();
@@ -731,6 +742,11 @@ mod game {
             s.tile = 0;
             s.placing = false;
             CLICKS.lock().unwrap().clear();
+            // (Gone without being closed here: the game closed every menu, loading a game.)
+            if s.edits.editing != 0 {
+                s.edits.editing = 0;
+                crate::link::with_adapter(|a| a.write_slot_edits(&s.edits));
+            }
             return;
         }
         // A slot placed by hand: where the runtime has it now.
@@ -760,6 +776,12 @@ mod game {
                 }
                 Clicked::Nothing => {}
             }
+        }
+        // The slot picked shown at its place on the body.
+        let picked = if s.editor.slots.is_empty() { 0 } else { s.editor.picked as u32 + 1 };
+        if s.edits.editing != picked {
+            s.edits.editing = picked;
+            crate::link::with_adapter(|a| a.write_slot_edits(&s.edits));
         }
         fill(s);
     }
