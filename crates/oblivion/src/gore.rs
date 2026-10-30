@@ -875,6 +875,8 @@ mod game {
                 return;
             }
             let fx = std::mem::transmute::<usize, Make>(TEMP_PARTICLE)(mem, cell, 1.0, node, path.as_ptr(), d.x, d.y, d.z, at.x, at.y, at.z, 1.0, 1);
+            static SAID: std::sync::Once = std::sync::Once::new();
+            SAID.call_once(|| tracing::info!("gore: the game's blood effect {:?} from a stump (under node {node:#x})", path));
             // (The game's model cache keeps the path's model; the string is copied.)
             std::mem::transmute::<usize, Add>(ADD_TEMP_EFFECT)(PROCESS_MANAGER, fx);
         }
