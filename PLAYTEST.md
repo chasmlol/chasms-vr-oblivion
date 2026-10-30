@@ -67,6 +67,26 @@ Look out for:
   something else?
 - **The spheres.** Too bright, too faint, or in the way of the editor?
 
+## Round 4: a stuck leek, eating sounds, a softer swish
+
+- **The leek stuck in your hand:** you were pulling things with the gravity gloves while drawing
+  from the slots. Flour was flying to your right hand, which drew the leek from the food slot on
+  the way; when the flour arrived, the glove's catch put it in the same hand. The hand forgot the
+  leek without letting go of it, so it stayed held by a hand that no longer had it: never put back,
+  never dropped.
+  - A hand that has taken something else on the way doesn't catch now: the pulled thing falls by
+    the hand once its flight is over.
+  - And a hand that takes anything always lets go of what it held before (it falls), so nothing can
+    be left held by a hand that has something else.
+- **Eating and drinking sounds:** each bite you feel at your mouth is now the game's own chewing,
+  each gulp of a drink its swallowing (`NPCHumanChew`, `NPCHumanSwallow`, a different one each
+  time). As the thing is eaten, the game plays its own once more, as it did. Reading a scroll and
+  poisoning a blade are still felt only.
+- **The flick's swish** is half as loud again.
+
+Try: draw a potion and something to eat and hold each at your mouth. Pull things with the gloves
+while drawing from a slot with the same hand.
+
 ## Round 3: Oblivion's own sounds for everything
 
 You asked for every one of RustVR's own sounds to be replaced by a suitable Oblivion one. Every
@@ -78,9 +98,10 @@ their sets of variations, and whether they play in your head (the menus') or whe
 | You take a thing, put it away on the body, or let go of it | the inventory's sound for a thing of its kind (a potion's clink, a blade's ring, heavy armour, a book, gold...); letting go is the put-away sound, softer | the game's own choice for that thing (the function its inventory uses) |
 | A thing you hold or throw knocks into the world | the game's collision sound for what it's made of and how heavy it is (glass, metal, wood, cloth, stone...) | the game's own choice from the thing's Havok material and mass |
 | You draw or sheathe the weapon at your hip or back | the game's draw and sheathe for its type (one-handed blade, two-handed blunt, staff, bow); an enchanted weapon's draw also rings with the game's enchanted sound | its type, as the game plays them |
-| The gravity gloves | the flick: a big weapon's swish, quiet (your pick, round 3); while it flies, Telekinesis's travel sound (a Mysticism spell in Oblivion); landing in your hand, the thing's own pick-up sound, as when you take anything | Telekinesis's own record for the travel |
+| The gravity gloves | the flick: a big weapon's swish, quiet (your pick, round 3; half that since round 4); while it flies, Telekinesis's travel sound (a Mysticism spell in Oblivion); landing in your hand, the thing's own pick-up sound, as when you take anything | Telekinesis's own record for the travel |
 | The gloves lock onto a thing | nothing: only the pulse in your hand (your pick, round 3) | |
 | A hand finds a slot, the gloves point at a thing | the menus' focus tick (very quiet, as quiet as the game plays it) | |
+| A bite or a gulp at your mouth (round 4) | the game's own chewing or swallowing | the game's sounds of eating food and drinking a potion |
 | A slot is empty, or the game refuses a use | the game's "nothing happens" sound (from eating an ingredient that does nothing) | |
 | RustVR's own settings menu | the menus' OK click | |
 | Drawing from a slot, putting back, stowing a thing lying about | only the game's own inventory sounds, as before (RustVR adds nothing) | |
