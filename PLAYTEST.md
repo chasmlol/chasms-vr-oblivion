@@ -110,6 +110,15 @@ is off, by the game's own switch (`BSFaceGenAnimationData`'s, the one it uses it
 looking at you, his face eases to rest, and his head is the push's. Let be, it's back on and he
 looks at you again. The log says when (`grabs: ...'s head tracking off` / `back on`).
 
+## Playtest 4 (real headset)
+
+The head moves now, but he should keep looking at you. So his head tracking stays on, and while a
+hand has his head the game measures his head from where his animation has it, not from where your
+push left it (a hook on its measure: for that one bone, the turn its animation gives it
+while it measures, then the pushed one back). It turns his head to look at you as far as it would
+anyway, and your push sits on top of that. His face keeps its expression. The log says which heads
+(`grabs: the heads the hands have` and `the head tracking measures the head ... from its animation`).
+
 Found while looking (not changed): Oblivion turns the upper spine itself (its look-at twist, a
 `bhkBlendCollisionObject` of its own kind on Spine, Spine1, Spine2) and draws those bones from the
 animation, so a push on the chest doesn't bend the chest itself; the head and arms swinging with it
