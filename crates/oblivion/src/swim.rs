@@ -27,6 +27,9 @@ pub struct Water {
     pub breath: f32,
     /// The game's swim speed (units a second).
     pub speed: f32,
+    /// The water's colour (shallow, as its shaders take it) and how far its fog reaches (units).
+    pub color: [f32; 3],
+    pub fog_far: f32,
 }
 
 impl Water {
@@ -41,6 +44,8 @@ impl Water {
         w.surface = h / crate::camera::UNITS_PER_METER;
         w.swim_speed = self.speed / crate::camera::UNITS_PER_METER;
         w.breath = self.breath.clamp(0.0, 1.0);
+        w.color = self.color;
+        w.visibility = self.fog_far.max(0.0) / crate::camera::UNITS_PER_METER;
         w
     }
 }
@@ -69,6 +74,9 @@ mod win {
 
     const PARENT_CELL: usize = 0x40;
     const CELL_WATER_HEIGHT: usize = 0x004C_ACE0;
+    /// `TESWaterForm`: its fog's far distance and its shallow colour.
+    const WATER_FOG_FAR: usize = 0x64;
+    const WATER_SHALLOW: usize = 0x68;
     /// The reference's height: its bounds times its scale (thiscall).
     const HEIGHT: usize = 0x005E_0660;
     const PROCESS: usize = 0x58;
@@ -320,6 +328,13 @@ mod win {
         let max = unsafe { std::mem::transmute::<usize, unsafe extern "C" fn(i32) -> f32>(MAX_BREATH)(actor_value(p, ENDURANCE)) };
         let breathes = actor_value(p, WATER_BREATHING) > 0 || mem::at::<u8>(GOD_MODE).unwrap_or(0) != 0;
         w.breath = if breathes || !(max > 0.0) || get == 0 { 1.0 } else { (call_f32(get, process) / max).clamp(0.0, 1.0) };
+        // The cell's water: its shallow colour (+0x68, bytes) and fog's reach (+0x64).
+        let form = unsafe { std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> usize>(CELL_WATER)(cell) };
+        if form != 0 {
+            let c = mem::at::<[u8; 4]>(form + WATER_SHALLOW).unwrap_or([0; 4]);
+            w.color = [c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0];
+            w.fog_far = mem::at::<f32>(form + WATER_FOG_FAR).filter(|f| f.is_finite()).unwrap_or(0.0);
+        }
         Some(w)
     }
 
@@ -351,8 +366,10 @@ mod win {
         if changed {
             let p = engine::player();
             tracing::info!(
-                "swim: water {:?} (the player at {:?}, turned {:?}), swimming {}, head under {}, water walking {}, breath {:.2}, swim speed {:.0} units/s",
+                "swim: water {:?} (its colour {:.2?}, fog to {:.0}; the player at {:?}, turned {:?}), swimming {}, head under {}, water walking {}, breath {:.2}, swim speed {:.0} units/s",
                 w.height,
+                w.color,
+                w.fog_far,
                 mem::at::<[f32; 3]>(p + refr::POS),
                 mem::at::<[f32; 3]>(p + refr::ROT),
                 w.swimming,
