@@ -6,8 +6,8 @@ Save: rustvr-melee
 powershell -File tools\play.ps1 melee
 ```
 
-The save is Weye (the house) with an iron longsword drawn at the left hip and an iron shield over the
-left shoulder, an iron claymore, war axe and warhammer in the inventory, health raised to 400, and
+The save is Weye (the house) with an iron longsword at the left hip and an iron shield over the left
+shoulder, an iron claymore, war axe and warhammer in the inventory, health raised to 400, and
 two goblins (a skirmisher with a weapon, and a plain one) a few metres off. They come for you at
 once; load the save again for another go. Design and research: `docs/research/melee.md`.
 
@@ -15,7 +15,7 @@ once; load the save again for another go. Design and research: `docs/research/me
 
 1. **Draw the longsword** (grip at the left hip) and look at it: the game's longsword, 1.24 kg (its
    own Havok mass). Waggle it with the wrist, the hand still: the tip lags and can't be flicked
-   about, and a goblin hit that way is a weak hit (about half the game's damage) or nothing.
+   about, and a goblin touched that way isn't hit at all (a hit needs the arm moving).
 2. **Hit a goblin** with a committed swing, edge first: the game's hit (its sound, blood, the
    goblin's reaction), as strong as the swing. A firm cut is most of the game's damage, a hard full
    swing all of it, a tap with the arm moving about half (the game's own weakest hit, an exhausted
