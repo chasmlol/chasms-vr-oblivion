@@ -67,6 +67,34 @@ Look out for:
   something else?
 - **The spheres.** Too bright, too faint, or in the way of the editor?
 
+## Round 5: things drawn from slots are rigged
+
+You said things drawn from a slot sat awkwardly in the hand, like something grabbed off a table
+any old way. They were: a drawn thing went in the hand wherever the controller happened to be, its
+middle in the fist, the fingers closing round its bounding box.
+
+Now each thing has a hold of its own, the way a weapon has its hilt, worked out from its own model
+when the slots' first things are loaded:
+
+| Kind | How it's held |
+|---|---|
+| A bottle (potions, drinks, poisons) | upright round its body, a third of the way up, its mouth past your thumb |
+| A long thing (a leek, a carrot, an arrow, a scroll, a loaf, a soul gem crystal) | along the fist, at its narrowest place near its middle (an arrow a third of the way up from its feathers), the palm on its flat side |
+| A flat thing (a book, a cheese wheel, a ham) | by an edge along its long side, the palm on the edge and the rest out past your fingers |
+| Anything else (an apple, an onion, a cheese wedge) | upright in your fist |
+
+- **Big things:** a thing thicker than your fist closes round (Oblivion's food is big) lies
+  against your palm with your fingers round it as far as they go.
+- **Fingers:** they close round the part you hold (its handle), not the whole thing's box.
+- **Left hand:** it holds things the same way round as the right, its palm on the same side.
+- **Picking it up again:** a thing you let go of and take again near its handle goes back into that
+  hold.
+- **How it was checked:** each kind was rendered in both hands, with the physics hand placed
+  exactly as in the game. It hasn't been seen in the headset.
+
+Try: draw a potion, food of each shape (leek, apple, cheese, bread), a scroll and an arrow with
+each hand, and eat or drink them.
+
 ## Round 4: a stuck leek, eating sounds, a softer swish
 
 - **The leek stuck in your hand:** you were pulling things with the gravity gloves while drawing
