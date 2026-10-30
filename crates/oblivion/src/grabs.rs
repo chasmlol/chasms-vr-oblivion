@@ -393,6 +393,19 @@ mod game {
         }
     }
 
+    /// Whether an actor is fighting (vtable +0x334), and the player's bounty (the crime gold the
+    /// guards want, vtable +0x250): the game's reaction, for the log.
+    fn in_combat(actor: usize) -> bool {
+        type F = unsafe extern "thiscall" fn(usize, u8) -> u8;
+        virt(actor, 0x334).is_some_and(|f| unsafe { std::mem::transmute::<usize, F>(f)(actor, 1) } != 0)
+    }
+
+    fn crime_gold() -> f32 {
+        type F = unsafe extern "thiscall" fn(usize) -> f32;
+        let p = engine::player();
+        virt(p, 0x250).map_or(0.0, |f| unsafe { std::mem::transmute::<usize, F>(f)(p) })
+    }
+
     fn damage(actor: usize, av: u32, amount: f32) {
         type F = unsafe extern "thiscall" fn(usize, u32, f32, usize);
         if let Some(f) = virt(actor, VT_DAMAGE_AV) {
@@ -544,6 +557,17 @@ mod game {
         seed: u32,
         /// Each actor's knock state as last seen (logged as it changes: down, getting up).
         knocks: HashMap<u32, u8>,
+        /// Each actor's skeleton, found once for its 3D (walking it reads thousands of values).
+        skeletons: HashMap<u32, Skeleton>,
+    }
+
+    /// An actor's bones with bodies, and each of its parts' bone (the node its capsule starts at),
+    /// for its 3D `root` and that many parts.
+    struct Skeleton {
+        root: usize,
+        parts: u32,
+        bones: Vec<Bone>,
+        part_nodes: Vec<Option<usize>>,
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -562,6 +586,7 @@ mod game {
             scale: None,
             seed: 0x9E37_79B9,
             knocks: HashMap::new(),
+            skeletons: HashMap::new(),
         }))
     }
 
@@ -590,6 +615,7 @@ mod game {
             let k = mass_scale(s);
             s.actors = by_id.clone();
             s.part_nodes.clear();
+            s.skeletons.retain(|id, _| by_id.contains_key(id));
             let out = &mut s.bodies;
             out.count = 0;
             out.frame += 1;
@@ -600,8 +626,23 @@ mod game {
                 body.id = actor.id;
                 if let Some(&ptr) = by_id.get(&actor.id).filter(|&&p| combat::is_actor(p)) {
                     let root = mem::deref(ptr + NI_NODE);
-                    let bones = if root != 0 { skeleton(root) } else { Vec::new() };
-                    let named = combat::bones(root);
+                    let fresh = s.skeletons.get(&actor.id).is_some_and(|k| k.root == root && k.parts == actor.count);
+                    if !fresh {
+                        // Each part's bone: the one at its capsule's start (where the creatures'
+                        // capsules begin).
+                        let named = if root != 0 { combat::bones(root) } else { HashMap::new() };
+                        let part_nodes = actor.parts[..(actor.count as usize).min(MAX_ACTOR_PARTS)]
+                            .iter()
+                            .map(|part| {
+                                let a = Vec3::from_array(part.a);
+                                named.values().copied().find(|&n| combat::node_pos(n).is_some_and(|p| p.distance(a) < 0.002))
+                            })
+                            .collect();
+                        let bones = if root != 0 { skeleton(root) } else { Vec::new() };
+                        s.skeletons.insert(actor.id, Skeleton { root, parts: actor.count, bones, part_nodes });
+                    }
+                    let sk = &s.skeletons[&actor.id];
+                    let bones = &sk.bones;
                     body.mass = bones.iter().map(|x| mass(x.body)).sum::<f32>() / k;
                     let dead = is_dead(ptr);
                     let knocked = knock_state(ptr);
@@ -611,12 +652,9 @@ mod game {
                     body.flags = if bones.is_empty() { 0 } else { BODY_GRABBABLE }
                         | if dead || !matches!(knocked, 0 | 6) { BODY_RAGDOLL } else { 0 }
                         | if !dead && !matches!(knocked, 3 | 4) && combat::actor_value(ptr, AV_FATIGUE) >= 0 { BODY_CONSCIOUS } else { 0 };
-                    // Each part's bone: the one at its capsule's start (where the creatures' capsules
-                    // begin), turned as it is; its body's mass and speed.
-                    for (i, part) in actor.parts[..(actor.count as usize).min(MAX_ACTOR_PARTS)].iter().enumerate() {
-                        let a = Vec3::from_array(part.a);
-                        let node = named.values().copied().find(|&n| combat::node_pos(n).is_some_and(|p| p.distance(a) < 0.002));
-                        let Some(node) = node else { continue };
+                    // Each part turned as its bone is; its body's mass and speed.
+                    for i in 0..(actor.count as usize).min(MAX_ACTOR_PARTS) {
+                        let Some(node) = sk.part_nodes.get(i).copied().flatten() else { continue };
                         s.part_nodes.insert((actor.id, i), node);
                         let Some(rot) = mem::at::<[f32; 9]>(node + av::WORLD_ROTATE) else { continue };
                         let q = b.rot_from_game(crate::items::ni_matrix(rot)).normalize();
@@ -796,7 +834,7 @@ mod game {
                     virt(m, 8).map_or(99, |f| unsafe { std::mem::transmute::<usize, F>(f)(m) })
                 };
                 tracing::info!(
-                    "grabs: holding {:#x}: its point at {held:.2?} for {:.2?} ({:.2} m off), moving {:.2} m/s; body type {kind}, {:.1} kg, in world {}; spring entity {:#x} world {:#x} target {:?} force {:?}; knock state {state}; flags {:#x}, squeeze {:.2}, fatigue {}",
+                    "grabs: holding {:#x}: its point at {held:.2?} for {:.2?} ({:.2} m off), moving {:.2} m/s; body type {kind}, {:.1} kg, in world {}; spring entity {:#x} world {:#x} target {:?} force {:?}; knock state {state}; flags {:#x}, squeeze {:.2}, fatigue {}; in combat {}, the player's bounty {}",
                     h.actor_id,
                     Vec3::from_array(g.target),
                     held.map_or(0.0, |p| p.distance(Vec3::from_array(g.target))),
@@ -810,6 +848,8 @@ mod game {
                     g.flags,
                     g.squeeze,
                     combat::actor_value(h.actor, AV_FATIGUE),
+                    in_combat(h.actor),
+                    crime_gold(),
                 );
             }
             let to = Vec3::from_array(g.target);
@@ -823,8 +863,11 @@ mod game {
                     if knock_down(actor) {
                         tracing::info!("grabs: {:#x} {} by the hand: knocked down", h.actor_id, if lifted { "lifted off its feet" } else { "yanked over" });
                         self.limp.entry(h.actor_id).and_modify(|l| l.bones.clear());
-                        attacked(actor);
-                        h.attacked = true;
+                        // (One assault a hold, whatever it comes to.)
+                        if !h.attacked {
+                            attacked(actor);
+                            h.attacked = true;
+                        }
                     }
                 }
             }
