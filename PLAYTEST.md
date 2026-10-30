@@ -72,10 +72,13 @@ They're saved with the other settings (`[spectator]` in `settings.toml`: `aim_zo
 
 ## What was checked, and what wasn't
 
-Checked in the test range on the emulated headset. The range ran on its own link and settings
-(`rustvr.exe --launch-range --mapping Local\RustVR_aimzoom`), so it couldn't share the melee chat's
-link, and only while no other runtime, range or emulator was up. Scripts and captures are in
-`<builds>\aimzoom\scripts` and `runs`.
+Checked in the test range on the emulated headset. The range ran on its own link and settings, so
+it never shared another chat's:
+- at first through `rustvr.exe --launch-range --mapping Local\RustVR_aimzoom`;
+- after merging framework `main`'s `3bc70de`, through `rustvr-play` with `RUSTVR_LINK` and
+  `RUSTVR_DIR` (`gun6`, the same results).
+
+Scripts and captures are in `<builds>\aimzoom\scripts` and `runs`.
 
 - **Gun** (`gun1`, `gun2`; the range rifle taken with `RUSTVR_TEST_TAKE`):
   - at the hip: wide;
