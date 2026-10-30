@@ -387,6 +387,11 @@ mod win {
         let log_shadows = frame % 90 == 45 && frame < 90 * 200;
         let mut mirror_done = None;
         let per_eye = per_eye_visuals();
+        // (Testing: the eye pictures' frame, and the kind of draw it leaves out.)
+        let pictures = hooks::guard("eye pictures", None, || pictures_due(link::now()));
+        if let Some((_, kind)) = pictures {
+            crate::families::leave_out(kind);
+        }
         let eyes = [0, 1].map(|eye| camera::eye_camera(&view, &snap.frame.eyes[eye], &snap.frame.fov[eye], &game));
         if per_eye {
             WEATHER_CENTRE.centre(&WEATHER_FROM, (glam::Vec3::from(eyes[0].pos) + glam::Vec3::from(eyes[1].pos)) * 0.5);
@@ -471,8 +476,11 @@ mod win {
         if let Some(f) = outside_flags {
             unsafe { ((outside + engine::av::FLAGS) as *mut u16).write(f) };
         }
-        if captured == [true, true] {
-            hooks::guard_void("eye pictures", || eye_pictures(link::now()));
+        crate::families::leave_out(0);
+        if let Some((n, kind)) = pictures
+            && captured == [true, true]
+        {
+            hooks::guard_void("eye pictures", || eye_pictures(n, kind));
         }
         hooks::guard_void("Render end", || {
             // The menus are drawn next: alone on black, they're the HUD layer.
@@ -484,27 +492,40 @@ mod win {
 
     /// Testing, `RUSTVR_OBLIVION_EYE_PNG=<folder>`: both eyes' pictures (the world, before the HUD,
     /// at most 2048 pixels wide) are saved there every 10 seconds from 5 seconds in, up to 60 pairs
-    /// (`<n>-left.png`, `<n>-right.png`), to hold the eyes up to each other.
-    fn eye_pictures(now: f64) {
+    /// (`<n>-left.png`, `<n>-right.png`), to hold the eyes up to each other. With
+    /// `RUSTVR_OBLIVION_LEAVE_OUT=1`, every 5 seconds, up to 240, each frame leaving a kind of draw out
+    /// (`<n>-without-<kind>-left.png`: [`crate::families`]).
+    fn pictures_dir() -> Option<&'static std::path::PathBuf> {
         static DIR: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
-        let Some(dir) = DIR.get_or_init(|| std::env::var_os("RUSTVR_OBLIVION_EYE_PNG").filter(|v| !v.is_empty()).map(std::path::PathBuf::from)) else { return };
+        DIR.get_or_init(|| std::env::var_os("RUSTVR_OBLIVION_EYE_PNG").filter(|v| !v.is_empty()).map(std::path::PathBuf::from)).as_ref()
+    }
+
+    /// This frame's eye pictures' number, if they're due, and the kind of draw its renders leave out
+    /// (testing, [`crate::families`]: every 5 s, the kinds in turn; else every 10 s, none).
+    fn pictures_due(now: f64) -> Option<(u32, u8)> {
+        pictures_dir()?;
+        let leave_out = crate::families::enabled();
         static NEXT: Mutex<(f64, u32)> = Mutex::new((0.0, 0));
-        let n = {
-            let mut next = NEXT.lock().unwrap();
-            if next.0 == 0.0 {
-                next.0 = now + 5.0;
-            }
-            if now < next.0 || next.1 >= 60 {
-                return;
-            }
-            next.0 = now + 10.0;
-            next.1 += 1;
-            next.1
-        };
+        let mut next = NEXT.lock().unwrap();
+        if next.0 == 0.0 {
+            next.0 = now + 5.0;
+        }
+        if now < next.0 || next.1 >= if leave_out { 240 } else { 60 } {
+            return None;
+        }
+        next.0 = now + if leave_out { 5.0 } else { 10.0 };
+        next.1 += 1;
+        let kind = if leave_out { ((next.1 - 1) as usize % crate::families::KINDS.len()) as u8 } else { 0 };
+        Some((next.1, kind))
+    }
+
+    fn eye_pictures(n: u32, kind: u8) {
+        let Some(dir) = pictures_dir() else { return };
+        let label = if crate::families::enabled() { format!("-without-{}", crate::families::KINDS[kind as usize]) } else { String::new() };
         let mut pictures = Vec::new();
         for (eye, name) in [(0, "left"), (1, "right")] {
             match link::with_adapter(|a| d3d9::read_bgra(a.gpu(), eye, 2048)) {
-                Some(Ok(p)) => pictures.push((dir.join(format!("{n:02}-{name}.png")), p)),
+                Some(Ok(p)) => pictures.push((dir.join(format!("{n:03}{label}-{name}.png")), p)),
                 Some(Err(e)) => tracing::warn!("render: the {name} eye's picture: {e:#}"),
                 None => {}
             }

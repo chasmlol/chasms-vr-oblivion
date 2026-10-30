@@ -63,6 +63,9 @@ mod win {
     static REAL_CREATE_VB: AtomicUsize = AtomicUsize::new(0);
     static REAL_DRAW_INDEXED: AtomicUsize = AtomicUsize::new(0);
     static REAL_SET_STREAM: AtomicUsize = AtomicUsize::new(0);
+    static REAL_DRAW: AtomicUsize = AtomicUsize::new(0);
+    static REAL_DRAW_UP: AtomicUsize = AtomicUsize::new(0);
+    static REAL_DRAW_INDEXED_UP: AtomicUsize = AtomicUsize::new(0);
 
     thread_local! {
         static MAKING: Cell<bool> = const { Cell::new(false) };
@@ -227,16 +230,19 @@ mod win {
                 tracing::info!("d3d9: the game's textures are filtered anisotropically ({}x)", anisotropy());
             }
             // IDirect3DDevice9::CreateVertexShader (slot 91): the distant trees' shader, and which
-            // shaders are the leaves'.
-            if crate::distant_trees::enabled() || crate::leaves::enabled() {
+            // shaders are the leaves' (and, testing, which kind each draws: [`crate::families`]).
+            let families = crate::families::enabled();
+            if crate::distant_trees::enabled() || crate::leaves::enabled() || families {
                 let create_vs = unsafe { *(*(dev as *const *const usize)).add(91) };
                 hooks::install_into(create_vs as *const (), create_vertex_shader as *const (), "IDirect3DDevice9::CreateVertexShader", &REAL_CREATE_VS);
             }
             // IDirect3DDevice9::SetVertexShader (slot 92) and SetVertexShaderConstantF (94): the
             // leaves' constants checked ([`crate::leaves`]).
-            if crate::leaves::enabled() {
+            if crate::leaves::enabled() || families {
                 let set_vs = unsafe { *(*(dev as *const *const usize)).add(92) };
                 hooks::install_into(set_vs as *const (), set_vertex_shader as *const (), "IDirect3DDevice9::SetVertexShader", &REAL_SET_VS);
+            }
+            if crate::leaves::enabled() {
                 let set_vs_f = unsafe { *(*(dev as *const *const usize)).add(94) };
                 hooks::install_into(set_vs_f as *const (), set_vertex_shader_constant_f as *const (), "IDirect3DDevice9::SetVertexShaderConstantF", &REAL_SET_VS_F);
             } else {
@@ -245,9 +251,20 @@ mod win {
             // IDirect3DDevice9::CreateVertexBuffer (slot 26), DrawIndexedPrimitive (82) and
             // SetStreamSource (100): system memory vertex buffers drawn whole ([`crate::sysmem`]).
             // (The draw also turns the leaves' cards to the eye: [`crate::leaves::facing_now`].)
-            if crate::sysmem::enabled() || crate::leaves::enabled() {
+            if crate::sysmem::enabled() || crate::leaves::enabled() || families {
                 let draw = unsafe { *(*(dev as *const *const usize)).add(82) };
                 hooks::install_into(draw as *const (), draw_indexed_primitive as *const (), "IDirect3DDevice9::DrawIndexedPrimitive", &REAL_DRAW_INDEXED);
+            }
+            // Testing: DrawPrimitive (81) and the two drawn from the game's memory (83, 84), to
+            // leave a kind out ([`crate::families`]).
+            if families {
+                let draw = unsafe { *(*(dev as *const *const usize)).add(81) };
+                hooks::install_into(draw as *const (), draw_primitive as *const (), "IDirect3DDevice9::DrawPrimitive", &REAL_DRAW);
+                let draw_up = unsafe { *(*(dev as *const *const usize)).add(83) };
+                hooks::install_into(draw_up as *const (), draw_primitive_up as *const (), "IDirect3DDevice9::DrawPrimitiveUP", &REAL_DRAW_UP);
+                let draw_indexed_up = unsafe { *(*(dev as *const *const usize)).add(84) };
+                hooks::install_into(draw_indexed_up as *const (), draw_indexed_primitive_up as *const (), "IDirect3DDevice9::DrawIndexedPrimitiveUP", &REAL_DRAW_INDEXED_UP);
+                tracing::info!("d3d9: testing: a kind of draw left out of the eye pictures' frames, in turn (RUSTVR_OBLIVION_LEAVE_OUT)");
             }
             if crate::sysmem::enabled() {
                 let create_vb = unsafe { *(*(dev as *const *const usize)).add(26) };
@@ -337,10 +354,15 @@ mod win {
             Some(code.as_ptr())
         });
         let hr = unsafe { real(dev, ours.unwrap_or(function), out) };
-        if hr.is_ok() && !out.is_null() && crate::leaves::enabled() {
+        if hr.is_ok() && !out.is_null() {
             hooks::guard_void("CreateVertexShader", || {
                 if let Some(tokens) = tokens {
-                    crate::leaves::created(unsafe { *out } as usize, tokens);
+                    if crate::leaves::enabled() {
+                        crate::leaves::created(unsafe { *out } as usize, tokens);
+                    }
+                    if crate::families::enabled() {
+                        crate::families::created(unsafe { *out } as usize, tokens);
+                    }
                 }
             });
         }
@@ -368,6 +390,9 @@ mod win {
 
     unsafe extern "system" fn draw_indexed_primitive(dev: *mut c_void, kind: u32, base: i32, min: u32, count: u32, start: u32, prims: u32) -> windows::core::HRESULT {
         let real: DrawIndexedFn = unsafe { std::mem::transmute(REAL_DRAW_INDEXED.load(Ordering::Acquire)) };
+        if crate::families::skip() {
+            return windows::core::HRESULT(0);
+        }
         let (min, count) = if crate::sysmem::bound() { hooks::guard("DrawIndexedPrimitive", None, || crate::sysmem::draw(base, min, count)).unwrap_or((min, count)) } else { (min, count) };
         let facing = if crate::leaves::bound() { hooks::guard("DrawIndexedPrimitive", None, crate::leaves::facing_now) } else { None };
         let Some((reg, ours, game)) = facing else {
@@ -381,12 +406,45 @@ mod win {
         hr
     }
 
+    type DrawFn = unsafe extern "system" fn(*mut c_void, u32, u32, u32) -> windows::core::HRESULT;
+    type DrawUpFn = unsafe extern "system" fn(*mut c_void, u32, u32, *const c_void, u32) -> windows::core::HRESULT;
+    type DrawIndexedUpFn = unsafe extern "system" fn(*mut c_void, u32, u32, u32, u32, *const c_void, u32, *const c_void, u32) -> windows::core::HRESULT;
+
+    unsafe extern "system" fn draw_primitive(dev: *mut c_void, kind: u32, start: u32, prims: u32) -> windows::core::HRESULT {
+        let real: DrawFn = unsafe { std::mem::transmute(REAL_DRAW.load(Ordering::Acquire)) };
+        if crate::families::skip() {
+            return windows::core::HRESULT(0);
+        }
+        unsafe { real(dev, kind, start, prims) }
+    }
+
+    unsafe extern "system" fn draw_primitive_up(dev: *mut c_void, kind: u32, prims: u32, data: *const c_void, stride: u32) -> windows::core::HRESULT {
+        let real: DrawUpFn = unsafe { std::mem::transmute(REAL_DRAW_UP.load(Ordering::Acquire)) };
+        if crate::families::skip() {
+            return windows::core::HRESULT(0);
+        }
+        unsafe { real(dev, kind, prims, data, stride) }
+    }
+
+    unsafe extern "system" fn draw_indexed_primitive_up(dev: *mut c_void, kind: u32, min: u32, count: u32, prims: u32, indices: *const c_void, format: u32, data: *const c_void, stride: u32) -> windows::core::HRESULT {
+        let real: DrawIndexedUpFn = unsafe { std::mem::transmute(REAL_DRAW_INDEXED_UP.load(Ordering::Acquire)) };
+        if crate::families::skip() {
+            return windows::core::HRESULT(0);
+        }
+        unsafe { real(dev, kind, min, count, prims, indices, format, data, stride) }
+    }
+
     type SetVertexShaderFn = unsafe extern "system" fn(*mut c_void, *mut c_void) -> windows::core::HRESULT;
     type SetVertexShaderConstantFFn = unsafe extern "system" fn(*mut c_void, u32, *const f32, u32) -> windows::core::HRESULT;
 
     unsafe extern "system" fn set_vertex_shader(dev: *mut c_void, shader: *mut c_void) -> windows::core::HRESULT {
         let real: SetVertexShaderFn = unsafe { std::mem::transmute(REAL_SET_VS.load(Ordering::Acquire)) };
-        hooks::guard_void("SetVertexShader", || crate::leaves::bind(shader as usize));
+        hooks::guard_void("SetVertexShader", || {
+            crate::leaves::bind(shader as usize);
+            if crate::families::enabled() {
+                crate::families::bind(shader as usize);
+            }
+        });
         unsafe { real(dev, shader) }
     }
 
