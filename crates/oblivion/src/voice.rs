@@ -131,7 +131,7 @@ fn time_of_day(hour: f32) -> &'static str {
 }
 
 /// Who someone is, a paragraph from `data/bios.toml` (written from UESP), by the name the game
-/// gives them; none for most people yet.
+/// gives them; none for a guard or a bandit, nobody in particular.
 pub fn bio(name: &str) -> Option<&'static str> {
     use std::collections::HashMap;
     use std::sync::OnceLock;
@@ -1013,6 +1013,9 @@ mod tests {
         let gin = bio("Gin-Wulm").expect("Gin-Wulm's bio");
         assert!(gin.starts_with("Gin-Wulm is the Argonian master smith") && !gin.contains('\n'));
         assert_eq!(bio("sevarius atius"), bio("Severius Atius"), "by any of their names, any case");
+        // (and the tool's, everyone else with a page: the Isles' people too)
+        assert!(bio("Hannibal Traven").is_some_and(|b| b.starts_with("Hannibal Traven is")));
+        assert!(bio("Haskill").is_some());
         assert!(bio("Imperial Watch").is_none());
     }
 

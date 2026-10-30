@@ -49,7 +49,10 @@ voice plugin (what people were told since your last save goes with it).
 2. **Ask them about themselves and the city.** "What do you sell?", "Heard any news?", "What do you
    think of the Emperor?" They should know their own name, work and guild, be as friendly as their
    disposition towards you says, and talk about the rumours the game gives them, in their world's
-   words.
+   words. Anyone with a name of their own (about 1,100 people, the Isles' too) also knows who they
+   are from their UESP page: their days, the people round them, their quirks, how they talk. Ask
+   about their life, their neighbours, what they want. The Adoring Fan (the .bat puts him in
+   front of you) should gush; a guard or a bandit has only what the game says.
 3. **Someone of another race.** A Khajiit, an Argonian, a Nord, a woman after a man: each should
    sound like that kind of person sounds in the flat game.
 4. **Change who you talk to.** Look at someone else nearby and talk: they turn to you and the first
@@ -83,8 +86,8 @@ Not checked (needs you and the game):
 
 - Anything in the game: the hooks into its dialogue (speaking, the lip file, the subtitle, turning
   and looking), the personas built from its data, the clips copied out of its archives.
-- The LLM (no key yet), so no answer has been written; Breeze cloning a game voice, if it wasn't up
-  in time (see the end of this file).
+- Every one of the 1,100 bios: I read about thirty against their pages and searched them all for
+  game terms (levels, quests, "the player"); the rest are as the LLM wrote them from their page.
 - The Virtual Desktop mic and how the open mic copes with the headset's own speakers.
 
 Known for now:
