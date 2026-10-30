@@ -12,6 +12,26 @@ Apprentice Retort, and three each of Apple, Carrot, Boar Meat, Venison and Aloe 
 
 ## What to try, in order
 
+0. **The recipe note.** On the table, about 20 cm in front of the mortar, lies a note: the game's
+   own scroll paper (the one its book menu opens a note on, ribbon and all), written in the game's
+   handwriting.
+   - It reads "Potions you can make", and under it a line for each potion: its effect's icon, the
+     game's name for it, and what it's made of ("Restore Health: Boar Meat, Venison"). The most
+     valuable first. They're worked out by the game's own alchemy, out of what's on the table and
+     in your pack, so only effects your skill knows are there. Expect two lines: Restore Health
+     (Boar Meat, Venison) and Restore Fatigue (the best two of Apple, Carrot, Wheat Grain and Aloe
+     Vera Leaves: of potions with the same effects, the list keeps the most valuable).
+   - Tap a line with your index fingertip (an empty hand: down on it, felt as a tap in the hand,
+     and lift it off) to choose it: a page-turn sound, and the note shows that potion, the game's words for its effects, and the steps:
+     "Put in the Boar Meat", "Put in the Venison", "Grind them with the pestle", "Take your
+     potion". Each step fades as you do it. An ingredient that's only in your pack says ", from
+     your pack". Something in the bowl that isn't in the recipe gets a "Take the ... out of the
+     mortar" step first.
+   - When you take the bottle, the note goes back to its list, worked out again for what you have
+     left. "Other potions" at its foot (or the potion's name at its top) goes back too, and with
+     more potions than fit, "Turn over (1 of 2)" at the foot turns the list's page.
+   - Take it up in your hand to read it nearer (the game's scroll sound as it's taken up and put
+     down), and touch it with the other hand's finger while you hold it.
 1. **The bench.** The mortar and pestle is two pieces now: the bowl, and the pestle leaning in it,
    its handle sticking up. (The runtime draws both from the game's own model; the game's own copy is
    hidden while you're near it.)
@@ -56,6 +76,28 @@ Apprentice Retort, and three each of Apple, Carrot, Boar Meat, Venison and Aloe 
 11. **The game's own menu still works.** Use a mortar from your pack in the inventory and you get the
    game's alchemy menu as before.
 
+## What was checked of the recipe note
+
+Nothing in the game, emulated or real: it was built after the first playtest and only compiled,
+with the unit tests of every crate touched passing. Look out for:
+
+- **Where it lies.** It's put 20 cm in front of the mortar, towards where you stood when the bench
+  appeared, and falls a centimetre onto the table. If the table's edge is nearer than that, it may
+  fall to the floor (pick it up from there).
+- **Which way round it reads.** Its writing should face you the right way up. If it's mirrored or
+  upside down, say which.
+- **Touching it.** Lying on the table, your fingertip goes through the paper onto the table, and the
+  touch is read there. A tap counts when the finger lifts off (2.5 cm), so taking the note up never
+  chooses the line your finger landed on. Whether it takes every tap, or misses some, I can't know
+  without hands.
+- **How it looks.** Lit by the room as the mortar is; whether the handwriting is big enough, and
+  whether it shimmers seen at a slant.
+- **Sounds:** the scroll's pick-up and put-down sounds and the page turn, all the game's own.
+- **The list's working out** runs the game's alchemy menu once for each pair of ingredients that
+  could share an effect, a couple of milliseconds each, about one a frame. With the save's ten kinds
+  of ingredient that's under a second. If you hear menu sounds repeating while it does, or the game
+  stutters, say so.
+
 ## What was checked in the game (the emulated headset)
 
 Each of these was checked with scripted hands, in captures and logs:
@@ -98,6 +140,26 @@ Each of these was checked with scripted hands, in captures and logs:
   - saving and loading with things in the bowl.
 
 ## Decisions
+
+- **The recipe note** is the bench's own, put down beside the mortar whenever a bench appears, so
+  there's nothing to bring up. It's a page of the runtime's (a thin box the hands take up and put
+  down, the hands going through it while it lies loose, so a fingertip can press it on the table),
+  with the game's art as its face: the book menu's scroll (`menus\book\scroll_background.dds`, all
+  of it that's paper), the game's handwriting (font 5, `Handwritten.fnt`) for what's written on it,
+  and the scroll's own print (font 1) for the game's words for each effect, in the book menu's ink
+  (117, 59, 33). Its back is the scroll's paper alone. It's lit as the game lights the things you
+  hold.
+  - **What it lists:** every mix of two of the ingredients you have (in your pack, and lying within
+    reach of the bench) that share an effect you know (the game's own count of known effects for
+    your skill), and each one alone for a master; each goes through the game's alchemy menu, with
+    the bench's apparatus, as the card does. Of mixes making the same effects, the most valuable;
+    the most valuable first. Two ingredients a line: three or four only add to a potion.
+  - **Choosing** is a touch of the index fingertip of an empty hand (a hand holding anything has its
+    fingers on that). Turning the page is the game's `ITMBookPageTurn`; taking it up and putting it
+    down, `ITMScrollUp` and `ITMScrollDown`.
+  - **The words** "Potions you can make", "Put in the ...", "Grind them with the pestle", "Take your
+    potion" and the rest are ours: the game has no recipes. Every name on it is the game's.
+  - It goes when its bench does (out of reach, the mortar taken), even out of a hand.
 
 - **The game's own alchemy menu, made for a moment.** Whenever what's in the bowl changes, the
   game's `AlchemyMenu` is made (with the bench's apparatus), its ingredient slots filled, its effects
@@ -153,3 +215,5 @@ Each of these was checked with scripted hands, in captures and logs:
 - **Variety:** the potion is always the game's `Potion01` bottle, or `PotionPoison` for a poison (the
   game's own choice). There's no visual paste in the bowl, only the ingredients shrinking.
 - **The Mixing Bowl** (a type-0 apparatus with no pestle) isn't a bench.
+- **The note's protocol** also needs renumbering at the merge: `OBJF_SHEET` is bit 13, and
+  `MAX_CARDS` went from 4 to 8 (a bench's card and its note).
