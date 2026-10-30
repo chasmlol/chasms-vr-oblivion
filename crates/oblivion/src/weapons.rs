@@ -286,6 +286,15 @@ struct Registered {
 
 static REGISTERED: Mutex<Option<Registered>> = Mutex::new(None);
 static MISSING: Mutex<Option<String>> = Mutex::new(None);
+/// A weapon drawn from one of the body's slots and equipped by the game (`crate::inventory`): its
+/// form, and the runtime's copy of it in a hand, whose place it takes as it's registered.
+static REPLACING: Mutex<Option<(usize, u32)>> = Mutex::new(None);
+
+/// The weapon of `form`, equipped from the runtime's copy `copy` in a hand: it takes that copy's
+/// place in the hand when it's registered.
+pub fn replacing(form: usize, copy: u32) {
+    *REPLACING.lock().unwrap() = Some((form, copy));
+}
 
 /// Once a game frame (in the world): the equipped weapon registered with the runtime when it
 /// changes, or taken away when there's none.
@@ -308,6 +317,10 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             Ok(model) => {
                 let mut d = object_desc(&model, e, &key, WEAPON_ID);
                 d.spawn_seq = seq;
+                if let Some((_, copy)) = REPLACING.lock().unwrap().take_if(|(form, _)| *form == e.form) {
+                    d.replaces = copy;
+                    tracing::info!("weapons: {} takes the place of its copy {copy:#x} in the hand", e.name);
+                }
                 objects.descs[0] = d;
                 objects.count = 1;
                 melee.weapons[0] = melee_from_model(&model, e.kind, WEAPON_ID, e.damage as f32);

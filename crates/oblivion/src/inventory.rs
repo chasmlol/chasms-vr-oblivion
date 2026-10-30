@@ -200,6 +200,9 @@ mod game {
     const NOT_STAFFS: usize = 0x00B3_88D0;
     /// The player's scroll use (its virtual +0x2D0, `(book, 0)`): one removed, its enchantment cast.
     const VT_USE_SCROLL: usize = 0x2D0;
+    /// `Actor::PlayItemSound(actor, form, up, use)` (thiscall): a thing of its kind taken out, put
+    /// away or used, as the inventory sounds it.
+    const ITEM_SOUND: usize = 0x005E_99C0;
     /// The inventory's icon of a thing (cdecl: its form; under `Icons\`).
     const ICON: usize = 0x005C_0C50;
     const FORM_TYPE: usize = 0x4;
@@ -328,6 +331,23 @@ mod game {
         bounds.map(|(c, h)| (format!("oblivion/{key}"), c, h))
     }
 
+    /// A copy drawn from a slot: its thing's form, its uses done, since when it has been let go (and
+    /// still), and whether the game has taken it back (used, or dropped).
+    #[derive(Clone, Copy)]
+    struct Out {
+        form: usize,
+        uses: u32,
+        let_go: Option<(f64, Option<f64>)>,
+        taken: bool,
+    }
+
+    /// The game's own sound of taking a thing of its kind out (`up`) or putting it away
+    /// (`Actor::PlayItemSound`, the inventory's own).
+    fn item_sound(player: usize, form: usize, up: bool) {
+        type Sound = unsafe extern "thiscall" fn(usize, usize, u8, u8);
+        unsafe { std::mem::transmute::<usize, Sound>(ITEM_SOUND)(player, form, up as u8, 0) };
+    }
+
     struct State {
         inv: Box<Inventory>,
         /// Each stack's number: (form, its own extra list).
@@ -339,8 +359,8 @@ mod game {
         models: HashMap<String, Option<([f32; 3], [f32; 3])>>,
         next_scan: f64,
         published: f64,
-        /// Each copy drawn from a slot: its uses done, and since when it has been let go (and still).
-        drawn: HashMap<u32, (u32, Option<(f64, Option<f64>)>)>,
+        /// Each copy drawn from a slot, by its object.
+        drawn: HashMap<u32, Out>,
         states: Box<ObjectStates>,
         logged: usize,
     }
@@ -392,6 +412,10 @@ mod game {
         });
         let status = unsafe { std::mem::transmute::<usize, Status>(STATUS)(r.entry) };
         let equipped = unsafe { std::mem::transmute::<usize, Flag>(IS_EQUIPPED)(r.entry, 0) } != 0;
+        // (The weapon on is the hands' own already, at the hip: not one of the slots' things.)
+        if equipped && kind == WEAPON {
+            return None;
+        }
         let quest = mem::at::<u32>(form + FORM_FLAGS).is_some_and(|f| f & QUEST_ITEM != 0);
         let mut it: InvItem = bytemuck::Zeroable::zeroed();
         it.id = id;
@@ -526,6 +550,19 @@ mod game {
         }
     }
 
+    /// A weapon drawn from a slot equipped, as the inventory's click equips it (its own sound); its
+    /// copy `copy` in the hand is to be its place. True once the game has it on.
+    fn equip_weapon(player: usize, form: usize, list: usize, copy: u32) -> bool {
+        type Equip = unsafe extern "thiscall" fn(usize, usize, i32, usize, u8, u8);
+        unsafe { std::mem::transmute::<usize, Equip>(EQUIP)(player, form, 1, list, 0, 0) };
+        let on = crate::weapons::equipped().is_some_and(|e| e.form == form);
+        if on {
+            crate::weapons::replacing(form, copy);
+        }
+        tracing::info!("inventory: {} drawn from a slot and equipped: {on}", name_of(form));
+        on
+    }
+
     /// One of a stack dropped by the game where its copy came to rest (`at`: the runtime's world).
     fn drop_one(player: usize, form: usize, list: usize, at: Vec3) -> bool {
         type Remove = unsafe extern "thiscall" fn(usize, usize, usize, u32, u32, u32, usize, *const f32, usize, u32, u32) -> usize;
@@ -571,14 +608,37 @@ mod game {
             if crate::link::with_adapter(|a| a.read_object_states(&mut s.states)).unwrap_or(false) {
                 let n = (s.states.count as usize).min(MAX_OBJECTS);
                 let mine: Vec<ObjectState> = s.states.states[..n].iter().filter(|st| st.flags & OS_INVENTORY != 0).copied().collect();
-                s.drawn.retain(|id, _| mine.iter().any(|st| st.id == *id));
+                // Gone without the game taking it: put back in a slot (the game's own sound of
+                // putting a thing of its kind away).
+                let gone: Vec<(u32, Out)> = s.drawn.iter().filter(|(id, _)| !mine.iter().any(|st| st.id == **id)).map(|(id, d)| (*id, *d)).collect();
+                for (id, d) in gone {
+                    s.drawn.remove(&id);
+                    if !d.taken {
+                        item_sound(player, d.form, false);
+                    }
+                }
                 for st in mine {
-                    let (uses, let_go) = *s.drawn.entry(st.id).or_insert((0, None));
                     let Some((form, list)) = stack(s, st.parent) else { continue };
+                    // Just drawn: the game's own sound of taking a thing of its kind out.
+                    let d = *s.drawn.entry(st.id).or_insert_with(|| {
+                        item_sound(player, form, true);
+                        Out { form, uses: 0, let_go: None, taken: false }
+                    });
+                    if d.taken {
+                        continue;
+                    }
+                    let (uses, let_go) = (d.uses, d.let_go);
                     let flags = s.inv.item(st.parent).map_or(0, |i| i.flags);
                     let mut take = false;
                     if st.shots > uses {
                         take = use_one(player, form, list, flags);
+                    }
+                    // A weapon in a hand: the game equips it, and its own weapon takes the copy's
+                    // place in that hand (`crate::weapons`; the runtime lets the copy go then).
+                    let mut equipped = false;
+                    if !take && st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0 && mem::at::<u8>(form + FORM_TYPE) == Some(WEAPON) {
+                        equipped = equip_weapon(player, form, list, st.id);
+                        take = equipped;
                     }
                     let free = st.flags & (OS_HELD_LEFT | OS_HELD_RIGHT | OS_PULLED | OS_TRACKING) == 0;
                     let mut let_go = if free { Some(let_go.unwrap_or((now, None))) } else { None };
@@ -594,9 +654,11 @@ mod game {
                             }
                         }
                     }
-                    s.drawn.insert(st.id, (st.shots, let_go));
+                    s.drawn.insert(st.id, Out { form, uses: st.shots, let_go, taken: take });
                     if take {
-                        s.inv.push_taken(st.id);
+                        if !equipped {
+                            s.inv.push_taken(st.id);
+                        }
                         changed = true;
                     }
                 }
