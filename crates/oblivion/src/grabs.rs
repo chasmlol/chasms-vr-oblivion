@@ -138,6 +138,8 @@ mod game {
     const VT_IS_DEAD: usize = 0x198;
     const VT_ON_ATTACKED: usize = 0x3A8;
     const VT_DAMAGE_AV: usize = 0x2A4;
+    /// `Character`: the horse it rides (its vtable +0x380 returns it).
+    const MOUNT: usize = 0xD4;
     const AV_STRENGTH: u32 = 0;
     const AV_FATIGUE: u32 = 10;
     /// The process: whether it's below the high process (vtable +8: 0 for a high one), its knock
@@ -652,6 +654,8 @@ mod game {
             out.frame += 1;
             out.strength = if player != 0 { (combat::actor_value(player, AV_STRENGTH) as f32 / 50.0).clamp(0.2, 3.0) } else { 1.0 };
             let b = camera::basis();
+            // (The horse the player rides isn't the hands' to take: its neck is where the reins are.)
+            let mount = if player != 0 { mem::deref(player + MOUNT) } else { 0 };
             for actor in &table.actors[..(table.count as usize).min(MAX_ACTORS)] {
                 let mut body: ActorBody = bytemuck::Zeroable::zeroed();
                 body.id = actor.id;
@@ -680,7 +684,7 @@ mod game {
                     if s.knocks.insert(actor.id, knocked).is_some_and(|k| k != knocked) {
                         tracing::info!("grabs: {:#x}'s knock state {knocked}{}", actor.id, if dead { " (dead)" } else { "" });
                     }
-                    body.flags = if bones.is_empty() { 0 } else { BODY_GRABBABLE }
+                    body.flags = if bones.is_empty() || ptr == mount { 0 } else { BODY_GRABBABLE }
                         | if dead || !matches!(knocked, 0 | 6) { BODY_RAGDOLL } else { 0 }
                         | if !dead && !matches!(knocked, 3 | 4) && combat::actor_value(ptr, AV_FATIGUE) >= 0 { BODY_CONSCIOUS } else { 0 };
                     // Each part turned as its bone is; its body's mass and speed.
