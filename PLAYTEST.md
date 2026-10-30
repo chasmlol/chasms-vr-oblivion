@@ -15,7 +15,7 @@ a key in its window when you're done and it closes the game and puts your settin
 ## Round 7: hands centred on the horse go straight
 
 Built and unit-tested; not in the game yet. Your sixth ride's logs are in
-`C:ustvr-wtiding\playtest-6`.
+`<builds>\riding\playtest-6`.
 
 - **"It just kept turning one direction whilst I had both my hands centred on the horse."** The
   reins measured steering from where each hand was when it took its rein (or when a spur last
