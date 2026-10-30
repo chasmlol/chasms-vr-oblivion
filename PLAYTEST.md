@@ -2,25 +2,40 @@
 
 Save: rustvr-alchemy
 
-`powershell -File tools\play.ps1 alchemy` boots straight into it: a house in the Imperial City's
-Market District, standing at a table set out as an alchemy bench. On the table: a Journeyman Mortar
-& Pestle in the middle, a Journeyman Alembic (back left), an Apprentice Calcinator (back middle), a
-Novice Retort (back right), and ingredients (Apple, Carrot, Wheat Grain at the left; Boar Meat,
-Venison at the front right; Ginseng and Garlic behind the mortar). Everything there is yours. In
-your pack: a Novice and an Apprentice Mortar & Pestle, a Novice Alembic and Calcinator, an
-Apprentice Retort, and three each of Apple, Carrot, Boar Meat, Venison and Aloe Vera Leaves.
+`playtest.bat` boots straight into it (`tools\play.ps1 alchemy -Commands "RunFile
+<worktrees>\alchemy\tools\alchemy-row.txt"`): Odiil Farm's farmhouse, standing in its entrance. Two
+seconds in, four tables stand in a row along the wall on your right, going away from you into the
+main room; two seconds later, what's on them. Everything there is yours. Each table has a different
+mortar and apparatus at the back, and the ingredients of two potions at the front, one potion's pair
+on the left and the other's on the right:
+
+| Table | Mortar and apparatus | Left | Right |
+|---|---|---|---|
+| 1, nearest | Novice Mortar & Pestle alone | Restore Fatigue: Apple, Carrot | Restore Health: Boar Meat, Venison |
+| 2 | Apprentice Mortar & Pestle, Alembic, Calcinator | Restore Magicka: Flax Seeds, Steel-Blue Entoloma Cap | Resist Disease: Bergamot Seeds, Garlic |
+| 3 | Journeyman Mortar & Pestle, Alembic, Calcinator, Retort | Cure Disease: Mandrake Root, Root Pulp | Resist Poison: Foxglove Nectar, Motherwort Sprig |
+| 4, by the beds | Master Mortar & Pestle, Alembic, Calcinator | Damage Health: Nightshade, Harrada | Damage Fatigue: Rat Meat, Dreugh Wax |
+
+Table 4 makes poisons, so it has no retort: a retort only strengthens what does good. In your pack: a
+Novice and an Apprentice Mortar & Pestle, a Novice Alembic and Calcinator, an Apprentice Retort, and
+the ingredients the save's character already carried (among them Wisp Stalk Caps and Stinkhorn Cap,
+which make Damage Health). The save's own table in the entrance is gone, and so are the pack's Apple,
+Carrot, Boar Meat, Venison and Aloe Vera Leaves: the game says so as it takes them, a message each.
 
 ## What to try, in order
 
-0. **The recipe note.** On the table, about 20 cm in front of the mortar, lies a note: the game's
-   own scroll paper (the one its book menu opens a note on, ribbon and all), written in the game's
-   handwriting.
+0. **The recipe note.** Turn to the first table and step up to it. Once you're within 2 m of the
+   mortar and facing it, a note is put down on the table about 20 cm in front of the mortar, facing
+   you: the game's own scroll paper (the one its book menu opens a note on, ribbon and all), written
+   in the game's handwriting. Each table's note waits for you like this, so it faces you where you
+   stand at that table.
    - It reads "Potions you can make", and under it a line for each potion: its effect's icon, the
      game's name for it, and what it's made of ("Restore Health: Boar Meat, Venison"). The most
-     valuable first. They're worked out by the game's own alchemy, out of what's on the table and
-     in your pack, so only effects your skill knows are there. Expect two lines: Restore Health
-     (Boar Meat, Venison) and Restore Fatigue (the best two of Apple, Carrot, Wheat Grain and Aloe
-     Vera Leaves: of potions with the same effects, the list keeps the most valuable).
+     valuable first. They're worked out by the game's own alchemy, out of what's on that table and
+     in your pack, so only effects your skill knows are there (your skill knows each ingredient's
+     first effect). Expect the table's two potions, and Damage Health from your pack (Wisp Stalk
+     Caps, Stinkhorn Cap) on every table. On table 4 that's one Damage Health line: of potions with
+     the same effects, the list keeps the most valuable.
    - Tap a line with your index fingertip (an empty hand: down on it, felt as a tap in the hand,
      and lift it off) to choose it: a page-turn sound, and the note shows that potion, the game's words for its effects, and the steps:
      "Put in the Boar Meat", "Put in the Venison", "Grind them with the pestle", "Take your
@@ -35,16 +50,17 @@ Apprentice Retort, and three each of Apple, Carrot, Boar Meat, Venison and Aloe 
 1. **The bench.** The mortar and pestle is two pieces now: the bowl, and the pestle leaning in it,
    its handle sticking up. (The runtime draws both from the game's own model; the game's own copy is
    hidden while you're near it.)
-2. **Boar Meat into the mortar.** Take it from the table and let it go anywhere over the bowl's
+2. **Boar Meat into the mortar** at table 1. Take it from the table and let it go anywhere over the bowl's
    mouth, up to about 30 cm over the rim, or just past the rim. It drops into the bowl and lies on
    its floor, shrunk to fit. You hear the game's ingredient-down sound from the mortar. A card comes
    up over the mortar, cut from the game's own alchemy menu: its parchment, with the boar meat's icon
    along its foot and, at the right, the icons of the apparatus that count. One ingredient makes
    nothing at a novice's skill, so there's no name or effect yet.
 3. **Venison in as well.** The card now shows what the game would make: "Restore Health" in the
-   game's title font, the restoration icon and "Restore Health 3 pts for 9 secs on Self" in the
+   game's title font, the restoration icon and "Restore Health ... pts for ... secs on Self" in the
    menu's own words. That's the game's alchemy working it out: its skill rule for which effects you
-   know, your mortar's, alembic's, calcinator's and retort's qualities, and its naming.
+   know, your mortar's, alembic's, calcinator's and retort's qualities, and its naming. The same
+   potion is stronger at a better table.
 4. **Grind.** Take the pestle by its handle and work it round the bottom of the bowl, pressing in.
    Rough circles or back and forth both count; about three turns per ingredient. You feel a low
    buzz while it grinds and a pulse each stroke, and the game's organic crunch plays from the
@@ -55,7 +71,7 @@ Apprentice Retort, and three each of Apple, Carrot, Boar Meat, Venison and Aloe 
    potion model) rises out of the mortar and waits over it. Take it. Its card in your hand is the
    game's (name, value, weight). Let it go at a hip or shoulder and it goes into your pack. Let go
    of the pestle with its tip over the bowl and it settles back into the mortar.
-6. **A mix that doesn't work.** Apple and Garlic, say: they share no effect you know, so the card
+6. **A mix that doesn't work.** Apple and Boar Meat, say: they share no effect you know, so the card
    shows the two icons and no effect. Grind them anyway and you get the game's own words for it,
    "Your potion failed and your ingredients were lost", with its "ingredient had no effect" sound.
    The ingredients are gone.
@@ -68,11 +84,12 @@ Apprentice Retort, and three each of Apple, Carrot, Boar Meat, Venison and Aloe 
    - Each kind of ingredient goes in once, as in the game's menu; a second apple won't go in.
    - At most four ingredients go in; the game's menu has four slots at any skill.
    - The alembic, calcinator and retort count only within 75 cm of the mortar, the best of each
-     kind. Move the Novice Alembic from your pack onto the table beside the Journeyman one: the
+     kind. Move the Novice Alembic from your pack onto table 3 beside its Journeyman one: the
      Journeyman still counts. Take the alembic away and the effects change.
-10. **Other mortars.** Drop the Novice or Apprentice Mortar & Pestle from your pack (the game's own
-   drop) and pick it up off the floor onto the table. Every mortar and pestle near you is a bench,
-   and each has its own card.
+10. **Down the row.** Each table is a bench of its own, with its own card and note. A bench counts
+   the ingredients within 1.5 m of its mortar, and the tables are far enough apart that one table's
+   don't count at the next. Carry an ingredient from one table to another and it counts there.
+   Table 4's potions are poisons, in the game's poison bottle.
 11. **The game's own menu still works.** Use a mortar from your pack in the inventory and you get the
    game's alchemy menu as before.
 
@@ -81,9 +98,10 @@ Apprentice Retort, and three each of Apple, Carrot, Boar Meat, Venison and Aloe 
 Nothing in the game, emulated or real: it was built after the first playtest and only compiled,
 with the unit tests of every crate touched passing. Look out for:
 
-- **Where it lies.** It's put 20 cm in front of the mortar, towards where you stood when the bench
-  appeared, and falls a centimetre onto the table. If the table's edge is nearer than that, it may
-  fall to the floor (pick it up from there).
+- **Where it lies.** It's put 20 cm in front of the mortar, towards your head as you come to the
+  bench (within 2 m of the mortar, the mortar within about 35° of the way you look), and falls a
+  centimetre onto the table. If the table's edge is nearer than that, it may fall to the floor (pick
+  it up from there). If a note never comes, or comes at a slant, say at which table.
 - **Which way round it reads.** Its writing should face you the right way up. If it's mirrored or
   upside down, say which.
 - **Touching it.** Lying on the table, your fingertip goes through the paper onto the table, and the
@@ -97,6 +115,29 @@ with the unit tests of every crate touched passing. Look out for:
   could share an effect, a couple of milliseconds each, about one a frame. With the save's ten kinds
   of ingredient that's under a second. If you hear menu sounds repeating while it does, or the game
   stutters, say so.
+
+## What was checked of the row of tables
+
+Nothing in the game, emulated or real: it was set out after the second playtest and only compiled,
+with the adapter's unit tests passing. Every place in `tools/alchemy-row.txt` comes from the game's
+own data:
+- the farmhouse's model and the cell's references in `Oblivion.esm`, sliced at knee, waist and
+  table height for a plan of its walls and furniture;
+- the floor's height along the wall (its model's floor there, 7092.8);
+- each table's, apparatus's and ingredient's model, for how far below its middle it reaches.
+
+Look out for:
+
+- **The tables** standing level on the floor, square to the wall, none in a wall, the wall's post or
+  a bed. Table 2 passes the post where the entrance's wall meets the room's with 1 cm to spare;
+  table 4's end is a few centimetres from the foot of the bed beside it (the beds' size isn't
+  known: their models aren't read).
+- **What's on them** landing on the tables, a few centimetres over each top: nothing should fall
+  through or roll off. If something does, say what and at which table.
+- **The set-out's moment.** Each lot of placing is a frame's work: about 60 lines of the game's
+  script at two seconds and 270 at four (ten for each thing placed). A short hitch then is
+  expected; tell me if it's long.
+- **The old table in the entrance** gone with everything on it, and nothing left floating.
 
 ## What was checked in the game (the emulated headset)
 
@@ -141,8 +182,10 @@ Each of these was checked with scripted hands, in captures and logs:
 
 ## Decisions
 
-- **The recipe note** is the bench's own, put down beside the mortar whenever a bench appears, so
-  there's nothing to bring up. It's a page of the runtime's (a thin box the hands take up and put
+- **The recipe note** is the bench's own, put down beside the mortar when you come to the bench, so
+  there's nothing to bring up. It used to be put down as soon as the bench appeared, facing where
+  you were then. With a row of tables, that turned the far tables' notes sideways to anyone standing
+  at them, so a note now waits until you're within 2 m and facing its mortar. It's a page of the runtime's (a thin box the hands take up and put
   down, the hands going through it while it lies loose, so a fingertip can press it on the table),
   with the game's art as its face: the book menu's scroll (`menus\book\scroll_background.dds`, all
   of it that's paper), the game's handwriting (font 5, `Handwritten.fnt`) for what's written on it,
@@ -195,8 +238,31 @@ Each of these was checked with scripted hands, in captures and logs:
 - **Grinding sound:** Oblivion has no grinding sound. Each stroke plays the game's organic collision
   sound (`COrganicSmall`, a crunch) from the mortar; an empty mortar is silent.
 - **The save** was meant to be outdoors, but `rustvr-weye` and `rustvr-city` both load indoors and
-  `rustvr-chorrol` loaded dark. It's the city house, with the bench made the player's own so nothing
-  there is stealing.
+  `rustvr-chorrol` loaded dark. It's where `rustvr-city` loads: Odiil Farm's farmhouse (this file
+  called it a city house before; the save says Odiil Farm). Everything set out is made the player's
+  own, so nothing there is stealing.
+- **The row of tables** replaced the save's one table after the second playtest. That table stood
+  in the farmhouse's narrow entrance, a metre from the front door, between a cupboard and the stone
+  wall, sunk 5 cm into the floor.
+  - The row is four of the game's `LowerClasstable03` (the farmhouse's own kind, 1.21 by 0.85 m,
+    0.83 m high), standing on the floor along the east wall from the entrance into the main room.
+    It's the longest clear stretch in the house: the rest of the main room has the dining table, the
+    reading table, crates, the beds' nook and the fireplace.
+  - They're 1.38 m apart, middle to middle. A bench counts the ingredients within 1.5 m of its
+    mortar, so each table's stay its own.
+  - One mortar of each kind from novice to master (no expert: four fit), with apparatus to match.
+    Each table has two potions' ingredients that share their first effect, the only one this
+    character's skill knows. Every form and potion is the game's.
+  - The pack's food was taken out so each note lists its own table's potions. The character's own
+    ingredients stay, so "from your pack" can still be seen (Damage Health).
+- **Set out at every boot, not saved.** I can't run the game to make a new save, so the set-out is
+  console lines run as the save loads (`tools/alchemy-row.txt`). Two console test commands are new
+  for it:
+  - `Place <base> <x> <y> <z> [<angle>]` puts a new thing at a place in the cell, in game units,
+    whichever way the player stands or looks meanwhile. Things placed with it, or with `PlaceAt`,
+    are set level whatever angles the game's `placeatme` gave them.
+  - `RunFile <path>` queues a file of timed console lines in one go: `play.ps1 -Commands` gives each
+    line its own half second.
 
 ## What's not done
 
@@ -217,3 +283,7 @@ Each of these was checked with scripted hands, in captures and logs:
 - **The Mixing Bowl** (a type-0 apparatus with no pestle) isn't a bench.
 - **The note's protocol** also needs renumbering at the merge: `OBJF_SHEET` is bit 13, and
   `MAX_CARDS` went from 4 to 8 (a bench's card and its note).
+- **More than four benches at once.** The runtime has room for eight cards, a bench's card and its
+  note each. Drop a fifth mortar near the row and fill bowls, and some card or note may not show.
+- **A save of the row.** It's set out at each boot; a `rustvr-alchemy` with the row in it would
+  boot straight into it.
