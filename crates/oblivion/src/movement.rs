@@ -70,7 +70,8 @@ mod win {
             let stick = *STICK.lock().unwrap();
             crate::hooks::guard_void("player step", || {
                 let Some(stick) = stick else { return };
-                if !on_ground_walking(this) {
+                // (On a horse the horse moves, and the game moves its rider with it.)
+                if !on_ground_walking(this) || crate::riding::mounted() {
                     return;
                 }
                 type Speed = unsafe extern "thiscall" fn(usize) -> f32;

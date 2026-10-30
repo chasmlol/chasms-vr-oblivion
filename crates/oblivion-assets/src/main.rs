@@ -181,6 +181,20 @@ fn export(archives: &Archives, args: &[String]) -> Result<()> {
             }
         }
     }
+    // A horse's saddle, measured for the hands to find (`oblivion_assets::horse`).
+    if prefixes.iter().any(|p| oblivion_assets::horse::SADDLE.starts_with(p.as_str())) {
+        let read = |p: &str| archives.read(p).and_then(|d| Nif::parse(&d));
+        match (read(oblivion_assets::horse::SADDLE), read(oblivion_assets::horse::SKELETON), read(oblivion_assets::horse::BODY)) {
+            (Ok(saddle), Ok(skeleton), Ok(body)) => match oblivion_assets::horse::measure(&saddle, &skeleton, &body) {
+                Some(s) => {
+                    oblivion_assets::horse::save(&out, &s)?;
+                    println!("the horse's saddle on {}: pommel {:?}, seat {:?}, cantle {:?}, a rider's knee {:?} and ankle {:?}", s.bone, s.pommel, s.seat, s.cantle, s.knee, s.ankle);
+                }
+                None => eprintln!("the horse's saddle: not measured"),
+            },
+            (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => eprintln!("the horse's saddle: {e:#}"),
+        }
+    }
     index.items = items.into_values().collect();
     std::fs::write(&index_path, toml::to_string(&index)?)?;
     println!("{models} models ({failed} unreadable), {wrote} new textures ({missing} missing) in {}", out.display());

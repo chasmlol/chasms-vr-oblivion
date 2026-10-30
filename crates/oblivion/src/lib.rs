@@ -15,6 +15,8 @@
 //! * **Combat** ([`combat`], [`weapons`]): the game's creatures and spells to the runtime, the
 //!   equipped weapon as the object in the hand (the game's own model), and what the hands did
 //!   (hits, casts) done by the game.
+//! * **Riding** ([`riding`]): the game's horses, got on by the saddle, ridden by the reins, the
+//!   player's body in the game's own seat on them.
 //!
 //! The rest is plumbing: the DLL proxy ([`proxy`]), the game's addresses ([`engine`]), hooking
 //! ([`hooks`], [`iat`]), the game window ([`window`]), the game's settings ([`game_settings`]) and
@@ -53,6 +55,7 @@ pub mod player;
 pub mod proxy;
 pub mod render;
 pub mod resolution;
+pub mod riding;
 pub mod settings;
 pub mod timing;
 pub mod weapons;

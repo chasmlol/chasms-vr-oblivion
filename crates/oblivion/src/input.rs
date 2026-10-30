@@ -117,7 +117,7 @@ impl Bridge {
         Bridge { controls: c, presses: Presses::default(), pulses: Vec::new(), last_held: 0 }
     }
 
-    fn binding(&self, name: &str) -> Binding {
+    pub fn binding(&self, name: &str) -> Binding {
         self.controls.get(name).copied().unwrap_or_default()
     }
 

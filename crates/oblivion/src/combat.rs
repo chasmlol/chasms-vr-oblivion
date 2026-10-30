@@ -237,6 +237,23 @@ const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
     ("Bip01 R Calf", "Bip01 R Foot", 0.06, PART_LEG, MAT_FLESH),
 ];
 
+/// Every actor the game is fully processing near the player (not the player).
+pub(crate) fn high_actors() -> Vec<usize> {
+    let player = engine::player();
+    let mut out = Vec::new();
+    let mut node = PROCESS_MANAGER + ACTORS_LIST;
+    let mut guard = 0;
+    while node != 0 && guard < 256 {
+        guard += 1;
+        let actor = mem::deref(node);
+        node = mem::deref(node + 4);
+        if actor != player && is_actor(actor) {
+            out.push(actor);
+        }
+    }
+    out
+}
+
 /// The actors near the player and, by id, where each is in the game's memory.
 pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
     let mut table: Box<Actors> = bytemuck::zeroed_box();
@@ -249,7 +266,8 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
         guard += 1;
         let actor = mem::deref(node);
         node = mem::deref(node + 4);
-        if actor == player || !is_actor(actor) {
+        // (The horse the player rides is under them, not in the hands' way.)
+        if actor == player || !is_actor(actor) || actor == crate::riding::horse().0 {
             continue;
         }
         let Some(id) = mem::at::<u32>(actor + FORM_ID) else { continue };
