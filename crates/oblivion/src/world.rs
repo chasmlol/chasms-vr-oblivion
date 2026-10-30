@@ -61,6 +61,9 @@ pub const REARM: f32 = 0.35;
 /// How hard a lever's two positions hold it (newtons at the end of its handle): more than a hand
 /// resting on it, less than a deliberate push.
 pub const DETENT_FORCE: f32 = 25.0;
+/// How hard (newtons, at its end) a button or a switch stone that springs back pushes back pushed
+/// all the way in: a firm press, however heavy the stone.
+pub const PUSH: f32 = 60.0;
 /// How much more than its own weight's turn a lid's stay holds at the end of its swing.
 pub const STAY: f32 = 1.3;
 /// How long (seconds) a door's swing takes to die away once let go (its damping's time).
@@ -99,6 +102,9 @@ pub struct Joint {
     /// its drawn shapes in its own frame (half extents, game units).
     pub mass: f32,
     pub drawn: Option<(Vec3, f32)>,
+    /// Its drawn shapes' points in its own frame (game units): its shape for a hand when the model
+    /// gives it no Havok body of its own (a turning switch's handle, which the game only draws).
+    pub points: Vec<Vec3>,
 }
 
 /// A model's animation, sampled.
@@ -153,7 +159,7 @@ impl Animation {
         for (k, tr) in tracks.iter().enumerate() {
             if let Some(mut j) = joint(k, tr) {
                 if let Some(node) = nif.find(&tr.node) {
-                    (j.mass, j.drawn) = (body_mass(nif, node), drawn_box(nif, node, &parents));
+                    (j.mass, j.drawn) = (body_mass(nif, node), drawn_box(nif, node, &parents, &mut j.points));
                 }
                 joints.push(j);
             }
@@ -203,8 +209,9 @@ fn body_mass(nif: &Nif, node: i32) -> f32 {
 }
 
 /// What's drawn under node `node`, in its own frame: the box round it (half extents) and its volume
-/// (its triangles' closed surface, by the divergence theorem; never more than the box).
-fn drawn_box(nif: &Nif, node: i32, parents: &[i32]) -> Option<(Vec3, f32)> {
+/// (its triangles' closed surface, by the divergence theorem; never more than the box). Its points
+/// go in `points`.
+fn drawn_box(nif: &Nif, node: i32, parents: &[i32], points: &mut Vec<Vec3>) -> Option<(Vec3, f32)> {
     use oblivion_assets::nif::Block;
     let to_node = nif.world(node, parents).inverse();
     let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
@@ -224,6 +231,7 @@ fn drawn_box(nif: &Nif, node: i32, parents: &[i32]) -> Option<(Vec3, f32)> {
         }
         let shape: f32 = d.triangles.iter().filter_map(|t| Some(v.get(t[0] as usize)?.dot(v.get(t[1] as usize)?.cross(*v.get(t[2] as usize)?)) / 6.0)).sum();
         volume += shape.abs();
+        points.extend(v);
     }
     (lo.x <= hi.x).then(|| {
         let half = (hi - lo) * 0.5;
@@ -245,13 +253,13 @@ fn joint(k: usize, tr: &Track) -> Option<Joint> {
         let pivot = pivot_of(r, axis, tr.poses[far_at].1 - r * t0);
         let travel: Vec<f32> = tr.poses.iter().map(|(q, _)| angle_about((*q * r0.inverse()).normalize(), axis)).collect();
         let far = travel[far_at];
-        return Some(Joint { track: k, motion: Motion::Turn { axis, pivot }, travel, far, far_at, mass: 0.0, drawn: None });
+        return Some(Joint { track: k, motion: Motion::Turn { axis, pivot }, travel, far, far_at, mass: 0.0, drawn: None, points: Vec::new() });
     }
     let (far_at, slide) = slid.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1))?;
     if slide > STILL_SLIDE {
         let dir = (tr.poses[far_at].1 - t0).normalize();
         let travel: Vec<f32> = tr.poses.iter().map(|(_, t)| (*t - t0).dot(dir)).collect();
-        return Some(Joint { track: k, motion: Motion::Slide { dir }, travel, far: slide, far_at, mass: 0.0, drawn: None });
+        return Some(Joint { track: k, motion: Motion::Slide { dir }, travel, far: slide, far_at, mass: 0.0, drawn: None, points: Vec::new() });
     }
     None
 }
@@ -419,6 +427,13 @@ mod game {
     /// Seconds between the game's Activates of one thing (a refused tug waits this long, and for the
     /// hand to ease off, before it tries again).
     const RETRY: f64 = 1.0;
+    /// Seconds after the hand's Activate of an activator that an animation the game starts on it is
+    /// its script's answer to that Activate (a fort's turning switch's script plays its turn a couple
+    /// of seconds later): the hand has already moved it, so it's stopped.
+    const SCRIPT_ANSWER: f64 = 3.0;
+    /// How far (game units) the middle of a part's Havok shape may lie outside what's drawn of it
+    /// before the hand meets its drawing instead.
+    const OFF_DRAWING: f32 = 5.0;
     /// The first id of the world's parts in the object table.
     const ID_BASE: u32 = 0x7F00_0000;
 
@@ -745,6 +760,7 @@ mod game {
         id: u32,
         joint: usize,
         node: usize,
+        /// The node its Havok body is on (0: the game only draws it).
         body_node: usize,
         /// The hinge or slide in the runtime's world: its centre, its frame (+Z the axis, at the
         /// start of its travel), slide or turn, and the game units in one of its runtime units.
@@ -820,9 +836,12 @@ mod game {
             _ => return None,
         }
         let path = crate::combat::read_str(deref(base + MODEL_PATH));
-        // (Traps fire by themselves, by the game's own triggers: not a hand's.)
+        // (Traps fire by themselves, by the game's own triggers: not a hand's. Their triggers, the
+        // pressure plates a foot sets off, are the game's too.)
         let file = path.rsplit(['\\', '/']).next().unwrap_or("").to_ascii_lowercase();
-        if path.is_empty() || (kind == ACTIVATOR && (file.contains("trap") || path.to_ascii_lowercase().contains("\\traps\\"))) {
+        let folder = path.to_ascii_lowercase();
+        let trap = ["trap", "trig", "pressureplate"].iter().any(|w| file.contains(w)) || folder.contains("\\traps\\") || folder.contains("\\triggers\\");
+        if path.is_empty() || (kind == ACTIVATOR && trap) {
             return None;
         }
         Some((kind, path))
@@ -881,10 +900,15 @@ mod game {
                 continue;
             };
             let others: Vec<usize> = joint_nodes.iter().copied().filter(|&n| n != node).collect();
-            let Some((body_node, body)) = body_under(node, &others) else {
-                why.push(format!("'{}' has no Havok body", tr.node));
+            // Its Havok body, or (a part the game only draws, which its Activate finds by the whole
+            // thing's body) its drawn shape, of the material of the body it's on.
+            let body = body_under(node, &others);
+            if body.is_none() && j.points.len() < 4 {
+                why.push(format!("'{}' has no Havok body and nothing drawn", tr.node));
                 continue;
-            };
+            }
+            let body_node = body.map_or(0, |b| b.0);
+            let on = body.or_else(|| body_under(root, &joint_nodes)).map_or(0, |b| b.1);
             let parent = deref(node + NODE_PARENT);
             let Some((pr, pt, ps)) = (parent != 0).then(|| world_of(parent)).flatten() else { continue };
             let Some((now_r, now_t)) = local_of(node) else { continue };
@@ -907,12 +931,23 @@ mod game {
                 }
             };
             let base = frame_of(axis);
-            // Its Havok shape, in its frame at the start of its travel.
+            // Its shape, in its frame at the start of its travel.
             let undo = if slide { (Quat::IDENTITY, -axis * now) } else { (Quat::from_axis_angle(axis, -now), Vec3::ZERO) };
-            let tris = crate::collision::body_triangles(body);
-            let mut points: Vec<Vec3> = tris
+            // The game's shape of it where that's on what's drawn of it. Some bodies lie off their
+            // drawing (an Ayleid wall switch's box sits half a metre out from the wall, in front of
+            // the stone it moves): the hand meets what the player sees, its drawn shape.
+            let drawn: Vec<Vec3> = world_of(node).map(|(nr, nt, ns)| j.points.iter().map(|p| nt + nr * (*p * ns)).collect()).unwrap_or_default();
+            let havok: Vec<Vec3> = body.map(|(_, hk)| crate::collision::body_triangles(hk).into_iter().flatten().collect()).unwrap_or_default();
+            let off = match (crate::items::bounds(&havok), crate::items::bounds(&drawn)) {
+                (Some((c, _)), Some((dc, dh))) => ((c - dc).abs() - dh).max_element() > OFF_DRAWING,
+                _ => false,
+            };
+            if off {
+                tracing::info!("world: {form_id:08X} '{}': its Havok body lies off its drawing, the hand meets what's drawn", tr.node);
+            }
+            let shape = if havok.len() >= 4 && !off { havok } else { drawn };
+            let mut points: Vec<Vec3> = shape
                 .iter()
-                .flatten()
                 .map(|w| {
                     let p = b.point_from_game(*w);
                     let p = if slide { p + undo.1 } else { centre + undo.0 * (p - centre) };
@@ -922,11 +957,11 @@ mod game {
                 .collect();
             points = crate::items::hull_points(&points, MAX_HULL_POINTS);
             if points.len() < 4 {
-                why.push(format!("'{}' has no shape ({} triangles)", tr.node, tris.len()));
+                why.push(format!("'{}' has no shape ({} points)", tr.node, shape.len()));
                 continue;
             }
             let (_, half) = crate::items::bounds(&points).unwrap_or((Vec3::ZERO, Vec3::splat(0.05)));
-            let mass = if j.mass > 0.0 { j.mass } else { part_mass(half, j.drawn, material(body)) };
+            let mass = if j.mass > 0.0 { j.mass } else { part_mass(half, j.drawn, material(on)) };
             let far = j.far / units;
             let size = half.max_element() * 2.0;
             // A door that slides is too heavy for a hand (a ruin's stone, a portcullis); an
@@ -976,7 +1011,7 @@ mod game {
                 .iter()
                 .map(|p| {
                     let (c, h) = crate::items::bounds(&p.hull).unwrap_or_default();
-                    format!("{:.0} kg {} at {:.2?} axis {:.2?}, {:.2} far, its middle at {:.2?} (half {:.2?})", p.desc.mass, if p.slide { "slides" } else { "turns" }, p.centre, p.base * Vec3::Z, p.far, p.centre + p.base * c, h)
+                    format!("{:.0} kg {} at {:.2?} axis {:.2?}, {:.2} far (now {:.2}), its middle at {:.2?} (half {:.2?}){}", p.desc.mass, if p.slide { "slides" } else { "turns" }, p.centre, p.base * Vec3::Z, p.far, p.at, p.centre + p.base * c, h, if p.body_node == 0 { ", drawn only" } else { "" })
                 })
                 .collect::<Vec<_>>()
                 .join("; "),
@@ -1023,12 +1058,14 @@ mod game {
             };
             // (What it is to a hand: a leaf turned about its edge, or its mass along a slide.)
             let inertia = if p.slide { p.desc.mass } else { p.desc.mass * (p.desc.radius * p.desc.radius / 3.0).max(1e-4) };
-            // Springing back as fast as its animation comes back (critically damped, settled in
-            // the time it takes the game's).
+            // A button (a switch stone) pushes in against a spring a hand works easily ([`PUSH`]
+            // at the end of its travel), and springs back no faster than its animation comes back:
+            // a heavy stone at the spring's own pace, a light one slowed to the game's.
             let spring = if t.kind == Kind::Activator && anim.returns {
                 let back = (back_time - anim.times[j.far_at]).max(0.2);
-                let w = 4.0 / back;
-                (inertia * w * w, 2.0 * inertia * w)
+                let k = PUSH * if p.slide { 1.0 } else { p.desc.radius.max(0.1) } / p.far.max(1e-3);
+                let quarter = std::f32::consts::FRAC_PI_2 * (inertia / k).sqrt();
+                (k, if quarter < back { k * back / 3.0 } else { 0.0 })
             } else {
                 // A door (or a lever) let go mid-swing slows to a stop over a couple of seconds, as a
                 // real one on its hinges does, rather than drifting on.
@@ -1207,7 +1244,8 @@ mod game {
         }
         let ok = crate::link::with_adapter(|a| crate::objects::publish_hulls(crate::objects::Owner::World, &hulls, a) && crate::objects::publish(crate::objects::Owner::World, &descs, a)).unwrap_or(false);
         if ok {
-            tracing::info!("world: {} part(s) of {} thing(s) offered", descs.len(), things.len());
+            let me = mem::at::<[f32; 3]>(engine::player() + engine::refr::POS).map(|p| camera::basis().point_from_game(Vec3::from(p)));
+            tracing::info!("world: {} part(s) of {} thing(s) offered (the player at {me:.2?})", descs.len(), things.len());
             s.sent = descs;
         }
     }
@@ -1258,9 +1296,10 @@ mod game {
                 let game_moving = seqs.iter().any(|&q| animating(q));
                 if game_moving != t.game_moving {
                     t.game_moving = game_moving;
-                    tracing::info!("world: {:08X}: the game {} it{}", t.form_id, if game_moving { "moves" } else { "has stopped moving" }, if held { " (a hand has it)" } else { "" });
+                    tracing::info!("world: {:08X}: the game {} it{}", t.form_id, if game_moving { "moves" } else { "has stopped moving" }, if held { " (a hand has it)" } else if t.kind == Kind::Activator && now - t.tried < SCRIPT_ANSWER { " (its script's answer to the hand)" } else { "" });
                 }
-                if game_moving && held && t.kind != Kind::HeavyDoor {
+                let answer = t.kind == Kind::Activator && now - t.tried < SCRIPT_ANSWER;
+                if game_moving && (held || answer) && t.kind != Kind::HeavyDoor {
                     seqs.iter().for_each(|&q| stop(q));
                     t.owned = true;
                     if t.kind == Kind::Door {
@@ -1316,7 +1355,7 @@ mod game {
                         }
                     }
                     update(t.root);
-                    for p in &t.parts {
+                    for p in t.parts.iter().filter(|p| p.body_node != 0) {
                         reset_collision(p.body_node);
                     }
                 }
@@ -1337,7 +1376,7 @@ mod game {
                         }
                     }
                     Kind::Door if t.owned && t.parts.iter().all(|p| p.at <= SHUT && p.vel <= 0.05) && ready => t.pending = true,
-                    Kind::Activator if t.owned || t.synced => {
+                    Kind::Activator if t.owned => {
                         let back = t.anims.0.returns || !t.open;
                         // (Out to its far end, or a two-way lever that's on, back to its start.)
                         let fire = if back { most >= FIRE_AT } else { most <= 1.0 - FIRE_AT };
@@ -1347,6 +1386,18 @@ mod game {
                         }
                         if if back { most <= REARM } else { most >= 1.0 - REARM } {
                             t.armed = true;
+                        }
+                    }
+                    // Where the game has put it itself (the player's Activate at gaze, a script):
+                    // the game's doing, nothing to fire; a two-way lever it left at its far end is
+                    // on.
+                    Kind::Activator if t.synced && !t.anims.0.returns => {
+                        let on = most > 0.5;
+                        if on != t.open {
+                            t.open = on;
+                            t.armed = true;
+                            shape_descs(t);
+                            s.republish = true;
                         }
                     }
                     _ => {}
