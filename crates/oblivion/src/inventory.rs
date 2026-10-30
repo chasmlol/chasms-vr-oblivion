@@ -459,6 +459,8 @@ mod game {
         it.half_extents = half;
         set_name(&mut it.name, &name_of(form));
         set_name(&mut it.model, &model);
+        // What the one drawn from a slot sounds like: the inventory's sound of a thing of its kind.
+        set_name(&mut it.sound, &crate::sounds::kind(form).unwrap_or_default());
         Some(it)
     }
 

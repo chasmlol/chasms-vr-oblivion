@@ -57,6 +57,7 @@ pub mod resolution;
 pub mod reticle;
 pub mod settings;
 pub mod slot_menu;
+pub mod sounds;
 pub mod tiles;
 pub mod timing;
 pub mod weapons;

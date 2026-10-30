@@ -1,6 +1,7 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
 //! ([`crate::weapons`]) and the game's things lying about near the player ([`crate::items`]), each
-//! owner's entries kept apart and written together.
+//! owner's entries kept apart and written together; with them, the sound set each sounds like (the
+//! game's sound pack, [`crate::sounds`]).
 
 use rustvr_protocol::*;
 
@@ -17,6 +18,9 @@ pub struct Parts {
     weapons: Vec<ObjectDesc>,
     items: Vec<ObjectDesc>,
     seq: u32,
+    /// Each owner's objects' sound sets (object id, set).
+    weapon_sounds: Vec<(u32, String)>,
+    item_sounds: Vec<(u32, String)>,
 }
 
 impl Parts {
@@ -38,6 +42,20 @@ impl Parts {
         self.seq = self.seq.wrapping_add(1).max(1);
         table.seq = self.seq;
     }
+
+    /// Replaces `owner`'s objects' sound sets.
+    pub fn set_sounds(&mut self, owner: Owner, sounds: &[(u32, String)]) {
+        let mine = match owner {
+            Owner::Weapons => &mut self.weapon_sounds,
+            Owner::Items => &mut self.item_sounds,
+        };
+        mine.clear();
+        mine.extend(sounds.iter().cloned());
+    }
+
+    pub fn sounds(&self) -> impl Iterator<Item = &(u32, String)> {
+        self.weapon_sounds.iter().chain(&self.item_sounds)
+    }
 }
 
 struct Table {
@@ -46,12 +64,15 @@ struct Table {
 }
 static TABLE: std::sync::Mutex<Option<Table>> = std::sync::Mutex::new(None);
 
-/// Replaces `owner`'s objects and writes the whole table to the runtime.
-pub fn publish(owner: Owner, descs: &[ObjectDesc], adapter: &rustvr_adapter::Adapter) -> bool {
+/// Replaces `owner`'s objects (and the sound sets they sound like, `sounds`) and writes the whole
+/// table to the runtime, and the sound pack with every object's set.
+pub fn publish(owner: Owner, descs: &[ObjectDesc], sounds: &[(u32, String)], adapter: &rustvr_adapter::Adapter) -> bool {
     let mut t = TABLE.lock().unwrap();
     let t = t.get_or_insert_with(|| Table { parts: Parts::default(), table: bytemuck::zeroed_box() });
     t.parts.set(owner, descs, &mut t.table);
-    adapter.write_objects(&t.table)
+    t.parts.set_sounds(owner, sounds);
+    // (The sounds first: when the runtime sees an object, its set is there.)
+    adapter.set_sound_pack(&crate::sounds::pack(t.parts.sounds())) && adapter.write_objects(&t.table)
 }
 
 #[cfg(test)]

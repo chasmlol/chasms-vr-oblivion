@@ -491,6 +491,8 @@ mod game {
         flying: Option<(f64, Option<f64>)>,
         /// Put in a slot and taken (when).
         taken_at: Option<f64>,
+        /// The game's sound pack's set it sounds like ([`crate::sounds::of_thing`]).
+        sound: Option<String>,
     }
 
     struct State {
@@ -546,7 +548,9 @@ mod game {
         // (The game's weight is about pounds: a kilogram is two.)
         let mass = mass_inv.map(|m| 1.0 / m).or(f.weight.map(|w| w * 0.45)).unwrap_or(1.0).clamp(0.05, 60.0);
         let desc = object_desc(id, seq, at, centre, half, mass, hull.len() >= 4);
-        Some(Item { refr, node, body, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, filter: None, flying: None, taken_at: None })
+        // (The game's collision sounds go by its Havok mass, 5 without a body.)
+        let sound = crate::sounds::of_thing(mem::deref(refr + REFR_BASE), body, mass_inv.map_or(5.0, |m| 1.0 / m));
+        Some(Item { refr, node, body, desc, info: card(id, &f), hull: if hull.len() >= 4 { hull } else { Vec::new() }, owned: false, filter: None, flying: None, taken_at: None, sound })
     }
 
     /// Once a game frame, where its scripts run: things put in a slot taken into the inventory;
@@ -638,7 +642,8 @@ mod game {
             s.infos.count += 1;
         }
         let descs: Vec<ObjectDesc> = items.iter().map(|i| i.desc).collect();
-        let ok = crate::link::with_adapter(|a| a.write_game_hulls(&s.hulls) && a.write_item_infos(&s.infos) && crate::objects::publish(crate::objects::Owner::Items, &descs, a)).unwrap_or(false);
+        let sounds: Vec<(u32, String)> = items.iter().filter_map(|i| Some((i.desc.id, i.sound.clone()?))).collect();
+        let ok = crate::link::with_adapter(|a| a.write_game_hulls(&s.hulls) && a.write_item_infos(&s.infos) && crate::objects::publish(crate::objects::Owner::Items, &descs, &sounds, a)).unwrap_or(false);
         if ok {
             s.logged = now;
             tracing::info!(

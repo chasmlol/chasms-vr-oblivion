@@ -363,8 +363,17 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             Err(err) => tracing::warn!("weapons: the shield {path} has no extracted model ({key}: {err:#})"),
         }
     }
+    // What they sound like: the weapon its type's draw and sheathe, the shield as the inventory
+    // sounds it.
+    let mut sounds = Vec::new();
+    if let Some(set) = now.as_ref().and_then(|e| crate::sounds::of_weapon(e.form, e.kind)) {
+        sounds.push((WEAPON_ID, set));
+    }
+    if let Some(set) = shield_now.as_ref().and_then(|(form, _)| crate::sounds::kind(*form)) {
+        sounds.push((SHIELD_ID, set));
+    }
     // The melee table first: when the runtime sees the weapon, its damagers are there.
-    if a.write_melee(&melee) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], a) {
+    if a.write_melee(&melee) && crate::objects::publish(crate::objects::Owner::Weapons, &objects.descs[..objects.count as usize], &sounds, a) {
         *reg = Some(Registered { forms, seq });
     }
 }
