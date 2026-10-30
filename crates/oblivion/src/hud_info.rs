@@ -8,6 +8,11 @@
 //! put that piece of the HUD over the held thing ([`rustvr_protocol::HUD_HELD`]). A thing a hand's
 //! fingers are on in someone's pocket has its card too ([`crate::pockets`]).
 //!
+//! **Both hands:** the card is of one thing at a time, so the runtime draws each hand's card from a
+//! picture of it, cut from the HUD while it was of that hand's thing (`HudLayout::held` says which,
+//! once the game has laid it out). With a thing in each hand, the card is of each in turn till both
+//! have their picture, then stays: of a thing new to a hand first.
+//!
 //! **Taking it is a crime:** the game's own sign is the reticle's activate icon in its stealing red
 //! (`hud_reticle.xml`: its `user1`, set by 0x578D50 when 0x4DEBF0 says activating what the
 //! crosshair's on is a crime: someone's thing, or a living person while sneaking, which is their
@@ -50,7 +55,7 @@ pub use win::*;
 mod win {
     use crate::mem;
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     const SET_TARGET: usize = 0x005A_4980;
     const HUD_INFO_MENU: usize = 0x00B3_B33C;
@@ -109,30 +114,47 @@ mod win {
     const FALSE: f32 = 1.0;
 
     static REAL: AtomicUsize = AtomicUsize::new(0);
-    /// The thing of the world's a hand has (a reference), or 0; a thing out of a pocket a hand has,
-    /// or its fingers are on (a reference made for its card, [`crate::pockets`]), or 0, and whose
-    /// pocket it's in (the person, until it's the player's), or 0; and the one the card is now.
-    static HELD: AtomicUsize = AtomicUsize::new(0);
-    static POCKET_HELD: AtomicUsize = AtomicUsize::new(0);
-    static POCKET_FROM: AtomicUsize = AtomicUsize::new(0);
-    static SHOWN: AtomicUsize = AtomicUsize::new(0);
-    /// The card's action line as it's to be: the icon and the word, or none ([`card_now`]).
-    static ACTION: Mutex<Option<(u32, usize)>> = Mutex::new(None);
+    /// A thing on a hand the card can be of: the id the runtime knows its card by (an object's own,
+    /// or a pocket thing's template), the reference the game's card is given, and whose taking it is
+    /// a crime against: the thing itself (`world`: the world's, someone's or not), the person whose
+    /// pocket it's in (`from`), or nobody (0: the player's).
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct Thing {
+        pub key: u32,
+        pub refr: usize,
+        pub from: usize,
+        pub world: bool,
+    }
+
     /// How long the game takes to show a new thing on its card (seconds): it lays out the card's
     /// lines over a few frames (a red line's box settled 0.1 s after it was set), and meanwhile the
-    /// card is of what it was: at first what the crosshair's on, a person's name. And how long the
-    /// card stays over a hand after the hand has nothing (it fades out there).
+    /// card is of what it was (at first, what the crosshair's on: a person's name). And how long the
+    /// runtime has it after that to cut its picture (it does every frame the layout says).
     const SETTLE: f64 = 0.15;
-    const LINGER: f64 = 0.3;
-    /// When the card last became a hand's thing's, and when a hand last had one (the link's clock);
-    /// whether it was over the hand when the layout was last told.
-    static TIMES: Mutex<(f64, f64)> = Mutex::new((f64::MIN, f64::MIN));
-    static OVER_HAND: AtomicBool = AtomicBool::new(false);
+    const PICTURE: f64 = 0.1;
 
-    /// The card's thing: the world's thing in a hand, else a pocket's.
+    struct Card {
+        /// The things of the world's in hands ([`crate::items`]), and the pockets' in hands or under
+        /// fingers ([`crate::pockets`]).
+        world: Vec<Thing>,
+        pockets: Vec<Thing>,
+        /// The thing the card is of, and since when (the link's clock).
+        shown: Option<Thing>,
+        since: f64,
+        /// When each thing on a hand came to it, and those the runtime has a picture of by now.
+        came: Vec<(u32, f64)>,
+        pictured: Vec<u32>,
+        /// The thing the layout last said the card is of (0: none).
+        told: u32,
+    }
+
+    static CARD: Mutex<Card> = Mutex::new(Card { world: Vec::new(), pockets: Vec::new(), shown: None, since: 0.0, came: Vec::new(), pictured: Vec::new(), told: 0 });
+    /// The card's action line as it's to be: the icon and the word, or none ([`card_now`]).
+    static ACTION: Mutex<Option<(u32, usize)>> = Mutex::new(None);
+
+    /// The reference the card's given for a thing on a hand, or 0.
     fn held() -> usize {
-        let h = HELD.load(Ordering::Acquire);
-        if h != 0 { h } else { POCKET_HELD.load(Ordering::Acquire) }
+        CARD.lock().unwrap().shown.map_or(0, |t| t.refr)
     }
     /// Where the card was last found on the HUD.
     static LAST: Mutex<Option<[f32; 4]>> = Mutex::new(None);
@@ -238,30 +260,37 @@ mod win {
         shown
     }
 
-    /// The thing of the world's a hand has now (0: none): the card is its.
-    pub fn set_held(refr: usize) {
-        HELD.store(refr, Ordering::Release);
-        show();
+    /// The things of the world's in hands now.
+    pub fn set_world(things: Vec<Thing>) {
+        let changed = {
+            let mut c = CARD.lock().unwrap();
+            let changed = c.world != things;
+            c.world = things;
+            changed
+        };
+        show(changed);
     }
 
-    /// The thing out of a pocket a hand has now, or its fingers are on (a reference made for it; 0:
-    /// none), and the person whose pocket it's in (0: it's the player's): the card is its, while no
-    /// hand has a thing of the world's.
-    pub fn set_pocket_held(refr: usize, from: usize) {
-        POCKET_FROM.store(from, Ordering::Release);
-        POCKET_HELD.store(refr, Ordering::Release);
-        show();
+    /// The things out of pockets in hands now, or under their fingers in one.
+    pub fn set_pockets(things: Vec<Thing>) {
+        let changed = {
+            let mut c = CARD.lock().unwrap();
+            let changed = c.pockets != things;
+            c.pockets = things;
+            changed
+        };
+        show(changed);
     }
 
-    /// The card's action line now: the reticle's icon for the thing and the game's word for taking
+    /// The card's action line for a thing: the reticle's icon for it and the game's word for taking
     /// it, when that's a crime (the reticle's own test: someone's thing, someone's pocket).
-    fn action() -> Option<(u32, usize)> {
+    fn action(t: Thing) -> Option<(u32, usize)> {
         type Of = unsafe extern "thiscall" fn(usize) -> u32;
         type Crime = unsafe extern "thiscall" fn(usize) -> u8;
-        let (refr, word) = match (HELD.load(Ordering::Acquire), POCKET_HELD.load(Ordering::Acquire), POCKET_FROM.load(Ordering::Acquire)) {
-            (0, 0, _) | (0, _, 0) => return None,
-            (0, _, from) => (from, S_PICKPOCKET),
-            (held, _, _) => (held, S_STEAL),
+        let (refr, word) = match t {
+            Thing { world: true, refr, .. } => (refr, S_STEAL),
+            Thing { from, .. } if from != 0 => (from, S_PICKPOCKET),
+            _ => return None,
         };
         let icon = unsafe { std::mem::transmute::<usize, Of>(ICON_OF)(refr) } & 0xFF;
         let crime = icon != 0 && icon != ICON_TALK && unsafe { std::mem::transmute::<usize, Crime>(IS_CRIME)(refr) } != 0;
@@ -273,8 +302,9 @@ mod win {
     /// [`action`] says; a thing the crosshair's on, none (the reticle's red is the game's own sign
     /// there); nothing, the line as it was, fading out with the card it's on.
     fn card_now(target: usize) {
-        if held() != 0 {
-            *ACTION.lock().unwrap() = action();
+        let shown = CARD.lock().unwrap().shown;
+        if let Some(t) = shown {
+            *ACTION.lock().unwrap() = action(t);
         } else if target != 0 {
             *ACTION.lock().unwrap() = None;
         }
@@ -315,39 +345,79 @@ mod win {
         }
     }
 
-    fn show() {
-        let refr = held();
-        let was = SHOWN.swap(refr, Ordering::AcqRel);
-        if was == 0 && refr != 0 {
-            TIMES.lock().unwrap().0 = crate::link::now();
+    /// Which thing on a hand the card's to be of: one without its picture yet (the one it's of, else
+    /// the newest to a hand), else the one it's of while a hand has it, else the newest.
+    fn choose(c: &mut Card, now: f64) -> Option<Thing> {
+        let mut things = c.world.clone();
+        things.extend(c.pockets.iter().filter(|t| !c.world.iter().any(|w| w.key == t.key)));
+        c.came.retain(|(k, _)| things.iter().any(|t| t.key == *k));
+        for t in &things {
+            if !c.came.iter().any(|(k, _)| *k == t.key) {
+                c.came.push((t.key, now));
+            }
         }
-        if was != refr && REAL.load(Ordering::Acquire) != 0 {
+        // The one it's of has its picture by now (and keeps it while it's on a hand).
+        c.pictured.retain(|k| things.iter().any(|t| t.key == *k));
+        if let Some(s) = c.shown
+            && now - c.since >= SETTLE + PICTURE
+            && !c.pictured.contains(&s.key)
+        {
+            c.pictured.push(s.key);
+        }
+        let came = |t: &Thing| c.came.iter().find(|(k, _)| *k == t.key).map_or(now, |(_, at)| *at);
+        let newest = |without: bool| things.iter().filter(|t| !without || !c.pictured.contains(&t.key)).max_by(|a, b| came(a).total_cmp(&came(b))).copied();
+        let current = c.shown.and_then(|s| things.iter().find(|t| t.key == s.key).copied());
+        match current {
+            Some(t) if !c.pictured.contains(&t.key) => Some(t),
+            _ => newest(true).or(current).or_else(|| newest(false)),
+        }
+    }
+
+    /// The things on the hands changed (`changed`), or a frame went by: the card of the one it's to
+    /// be of ([`choose`]), set through the game, its action line with it.
+    fn show(changed: bool) {
+        let now = crate::link::now();
+        let (next, was) = {
+            let mut c = CARD.lock().unwrap();
+            let next = choose(&mut c, now);
+            let was = c.shown;
+            if next.map(|t| (t.key, t.refr)) != was.map(|t| (t.key, t.refr)) {
+                c.since = now;
+            }
+            c.shown = next;
+            (next, was)
+        };
+        let refr = next.map_or(0, |t| t.refr);
+        if refr != was.map_or(0, |t| t.refr) && REAL.load(Ordering::Acquire) != 0 {
             let real: unsafe extern "C" fn(usize, u8, u8) -> u8 = unsafe { std::mem::transmute(REAL.load(Ordering::Acquire)) };
             crate::hooks::guard_void("hud info", || unsafe {
                 real(refr, 0, 0);
             });
             crate::hooks::guard_void("hud info action", || card_now(refr));
+        } else if changed && next != was {
+            // The same thing, now taken (or not): its action line again.
+            crate::hooks::guard_void("hud info action", || card_now(refr));
         }
     }
 
-    /// Whether the card is of a hand's thing now (the game has had a moment to show it), or was a
-    /// moment ago (it's fading out over the hand).
-    fn over_hand(now: f64) -> bool {
-        let mut t = TIMES.lock().unwrap();
-        if held() != 0 {
-            t.1 = now;
-            return now - t.0 >= SETTLE;
-        }
-        now - t.1 < LINGER
+    /// What the layout says the card's of: the thing on a hand it's of, once the game has had a
+    /// moment to lay it out (0: none).
+    fn held_now(now: f64) -> u32 {
+        let c = CARD.lock().unwrap();
+        c.shown.filter(|_| now - c.since >= SETTLE).map_or(0, |t| t.key)
     }
 
-    /// Once a frame: whether the layout's to be told again, as the card has moved on the HUD or come
-    /// over a hand or gone from it. Its place only changes while it's a hand's thing's (and the first
-    /// time it shows anything): what else it shows (the crosshair's thing, or nothing as it fades)
-    /// isn't over a hand, and the card over the hand, fading, keeps the place it had.
+    /// Once a frame: whether the layout's to be told again, as the card has moved on the HUD or what
+    /// it's of has changed. Its place only changes while it's of a thing on a hand (and the first
+    /// time it shows anything): what else it shows (the crosshair's thing) isn't over a hand.
     pub fn moved() -> bool {
-        let over = over_hand(crate::link::now());
-        let mut changed = OVER_HAND.swap(over, Ordering::AcqRel) != over;
+        let now = crate::link::now();
+        show(false);
+        let told = held_now(now);
+        let mut changed = {
+            let mut c = CARD.lock().unwrap();
+            std::mem::replace(&mut c.told, told) != told
+        };
         let mut last = LAST.lock().unwrap();
         if (held() != 0 || last.is_none())
             && let Some(now) = card_uv()
@@ -360,9 +430,9 @@ mod win {
         changed
     }
 
-    /// The card isn't of the thing in a hand yet (or there's none).
-    pub fn pending() -> bool {
-        !OVER_HAND.load(Ordering::Acquire)
+    /// The thing on a hand the card's of, for the layout (0: none yet).
+    pub fn told() -> u32 {
+        CARD.lock().unwrap().told
     }
 
     pub fn last() -> Option<[f32; 4]> {

@@ -793,8 +793,9 @@ mod game {
                 }
                 true
             });
-            // The game's card of a thing is the held thing's.
-            crate::hud_info::set_held(s.items.values().find(|i| i.owned && i.taken_at.is_none()).map_or(0, |i| i.refr));
+            // The game's card of a thing is the held things'.
+            let held = s.items.iter().filter(|(_, i)| i.owned && i.taken_at.is_none()).map(|(&id, i)| crate::hud_info::Thing { key: id, refr: i.refr, from: 0, world: true });
+            crate::hud_info::set_world(held.collect());
             s.poses.count = 0;
             for it in s.items.values().filter(|i| !i.owned && i.flying.is_none() && i.taken_at.is_none()) {
                 let i = s.poses.count as usize;

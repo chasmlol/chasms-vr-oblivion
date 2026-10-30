@@ -108,7 +108,7 @@ Not checked:
 
 - Anything in the real headset: how the ticks, the brush and the heartbeat feel; whether 4 cm per
   thing is right for a real hand; the four trouser pockets (round 6) by hand; the card's steady
-  size and its red line coming and going with it (round 6).
+  size and its red line coming and going with it (round 6); a card on each hand (round 8).
 - The heartbeat itself (only the awareness values: 0, 0.5 noticed, 1 seen, read from the NPC's own
   detection list).
 - The game's success message and sound (the call is the menu's own, with its message flag).
@@ -188,10 +188,18 @@ Not checked:
 - **The card over a hand only once it's the thing's** (round 7: as a hand first went into a pocket
   the card showed the person's name with the red "Pickpocket"). The game's card was still of what
   the crosshair was on (the person) while the game laid out the thing's name, about 0.1 s (the
-  log's boxes); the red line was already set. The layout now says when the card isn't of the hand's
-  thing yet (`HUDL_HELD_PENDING`: from when nothing's in a hand till 0.15 s after the card's set to
-  a hand's thing), and the runtime doesn't draw it over the hand meanwhile. Moving from one thing
-  to the next keeps it, and it stays 0.3 s after the hand has nothing, to fade out.
+  log's boxes); the red line was already set. Since round 8 the layout says what the card's of
+  once the game has laid it out (`HudLayout::held`, 0.15 s after it's set to a thing), and only that
+  is ever over a hand (below).
+- **A card for each hand** (round 8: both hands could take at once, as the log showed, gold and a
+  note within 6 ms, but only the latest hand had a card). The game has one card, of one thing at a
+  time, so each hand's card is a picture of it: the runtime cuts the card's part of the HUD while
+  the layout says it's of a thing on a hand (`HudLayout::held`: its id as the runtime knows its
+  card, an object's own or a pocket thing's template) and draws each hand's card from its thing's
+  picture, over the hand, at the card's scale, fading with it. With a thing on each hand, the
+  adapter has the card of each in turn till both have their picture (0.15 s for the game to lay it
+  out, 0.1 s more to cut it), a thing new to a hand first, then leaves it. A hand's card shows once
+  its thing's picture is cut: a quarter of a second, a little more when the other hand's new too.
 
 ## Not done, known issues
 
@@ -218,7 +226,11 @@ Not checked:
   things lying about).
 - **The protocol:** this branch is version 12 (`Local\RustVR_v12`), as the others are: on merging,
   bump once past all of them. `OFF_POCKETS` is 0x51_8000, clear of npcs' 0x51_0000 region and the HUD
-  layout at the end.
+  layout at the end. `HudLayout` has a new `held` word (from its padding: the same size), and
+  `PocketEvent` a new kind (`PE_FEEL`).
+- **Floating menus (`overnight/menus`), the HUD:** the game's card over a hand (`HUD_HELD`) is now
+  drawn from pictures of it (`held_cards.rs`), one per hand; the HUD's own `HUD_HELD` piece is drawn
+  only when no hand has a card (at its place on the flat screen).
 
 ## Tools for checking
 

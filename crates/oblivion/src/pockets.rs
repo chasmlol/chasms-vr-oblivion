@@ -468,7 +468,7 @@ mod game {
         /// Things just dropped, to set flying as they left the hand once the game has their bodies.
         throws: Vec<Throw>,
         /// What each hand is on in the pockets, as the runtime last said ([`PE_FEEL`]): whose
-        /// pockets (0: none), the template of the thing under its fingers (0: none), since when.
+        /// pockets (0: none), the template of the thing under its fingers (0: none).
         felt: [Felt; 2],
     }
 
@@ -477,7 +477,6 @@ mod game {
     struct Felt {
         actor: u32,
         template: u32,
-        since: f64,
         /// Whose pockets it was last in (kept as it comes out: whom a thing in it is being taken
         /// from until the game has decided).
         from: u32,
@@ -697,25 +696,30 @@ mod game {
             r
         }
 
-        /// The game's card of what a hand has out of a pocket, else of the thing a hand's fingers are
-        /// on in one (the latest hand to come on one); and whom taking it is from, until the game has
-        /// made it the player's.
+        /// The game's card of what each hand has out of a pocket, else of the thing its fingers are
+        /// on in one; and whom taking it is from, until the game has made it the player's.
         fn card(&mut self) {
             if !crate::link::with_adapter(|a| a.read_object_states(&mut self.states)).unwrap_or(false) {
                 return;
             }
             let n = (self.states.count as usize).min(MAX_OBJECTS);
-            let held = self.states.states[..n].iter().find(|s| s.flags & (OS_HELD_LEFT | OS_HELD_RIGHT) != 0 && self.descs.contains_key(&s.desc));
-            let shown = match held {
-                Some(s) => {
-                    let hand = if s.flags & OS_HELD_LEFT != 0 { 0 } else { 1 };
-                    Some((s.desc, if self.taken.contains_key(&s.id) { 0 } else { self.felt[hand].from }))
+            let mut things = Vec::new();
+            for hand in 0..2 {
+                let flag = if hand == 0 { OS_HELD_LEFT } else { OS_HELD_RIGHT };
+                let held = self.states.states[..n].iter().find(|s| s.flags & flag != 0 && self.descs.contains_key(&s.desc));
+                let felt = self.felt[hand];
+                let (template, from) = match held {
+                    Some(s) => (s.desc, if self.taken.contains_key(&s.id) { 0 } else { felt.from }),
+                    None if felt.template != 0 => (felt.template, felt.actor),
+                    None => continue,
+                };
+                let refr = self.card_ref(template);
+                if refr != 0 && !things.iter().any(|t: &crate::hud_info::Thing| t.key == template) {
+                    let from = self.people.get(&from).map_or(0, |p| p.actor);
+                    things.push(crate::hud_info::Thing { key: template, refr, from, world: false });
                 }
-                None => self.felt.iter().filter(|f| f.template != 0).max_by(|a, b| a.since.total_cmp(&b.since)).map(|f| (f.template, f.actor)),
-            };
-            let refr = shown.map_or(0, |(t, _)| self.card_ref(t));
-            let from = shown.and_then(|(_, id)| self.people.get(&id)).map_or(0, |p| p.actor);
-            crate::hud_info::set_pocket_held(refr, from);
+            }
+            crate::hud_info::set_pockets(things);
         }
 
         fn answer(&mut self, n: u64, object: u32, outcome: u32) {
@@ -768,7 +772,7 @@ mod game {
                 PE_FEEL => {
                     let hand = (ev.hand as usize).min(1);
                     let f = &mut self.felt[hand];
-                    *f = Felt { actor: ev.actor, template: ev.object, since: crate::link::now(), from: if ev.actor != 0 { ev.actor } else { f.from } };
+                    *f = Felt { actor: ev.actor, template: ev.object, from: if ev.actor != 0 { ev.actor } else { f.from } };
                     if let Some(t) = self.people.get(&ev.actor).and_then(|p| p.things.iter().find(|t| t.template == ev.object && ev.object != 0)) {
                         tracing::info!("pockets: the {} hand's fingers on {} in {}: its card", if hand == 0 { "left" } else { "right" }, t.facts.name, NAMES[t.pocket]);
                     }
