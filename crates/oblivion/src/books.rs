@@ -106,6 +106,12 @@ pub fn lying_book() -> Option<u32> {
 /// The reference of the book being read, once a hand has had it open (until its menu shuts).
 static HELD_OPEN: AtomicUsize = AtomicUsize::new(0);
 
+/// The book being read was in a hand and isn't now: let go of (or taken away), its menu is shutting
+/// (it fades out), and there's nothing of it to hold.
+pub fn let_go() -> bool {
+    open().is_some_and(|(_, refr)| refr != 0 && HELD_OPEN.load(Ordering::Relaxed) == refr && held_book().is_none())
+}
+
 /// Shuts the book with the game's own Exit.
 fn shut(menu: usize) {
     click(menu, EXIT);

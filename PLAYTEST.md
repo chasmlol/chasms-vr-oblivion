@@ -13,7 +13,7 @@ Everything you read is the game's own book menu: its parchment, its fonts, its o
 the book's text and pictures, its page-turn sound, its Take and Exit. It floats on the book in your
 hand instead of the flat screen.
 
-## How it is now (after nine headset plays, 2026-10-30)
+## How it is now (after ten headset plays, 2026-10-30)
 
 - **A book is held like anything else.** Take one in your hand and the game plays on as ever: you
   walk, turn, fight, the HUD's there, time passes. The only difference is the book's pages float
@@ -54,7 +54,7 @@ look shows only the icon of what you can activate, red when taking it is stealin
    - **Exit**: it shuts, back to the closed book in your hand. It stays shut until you let go of it
      and take it again;
    - your other hand's grip on the book takes it as anything else (from hand to hand);
-   - let go of the book while it's open: it shuts and falls.
+   - let go of the book while it's open: its pages go at once, and it falls.
 4. **A skill book.** Take one in your hand (drop *Proper Lock Design* out of your pack and pick it
    up, or find one): opening it raises the skill exactly as the flat game does.
 5. **From your pack.** Open your inventory (B on the left hand) and click the guide or the note:
@@ -93,6 +93,8 @@ look shows only the icon of what you can activate, red when taking it is stealin
    game, running under the book, also took for its camera zoom). Now: no menu, fingertip swipes.
 9. The book as a held thing works; the swipe still often missed. Now: the other hand's grip near the
    book, dragged across, turns the pages.
+10. The grip works; letting go of a book flashed its pages somewhere else for a moment as it faded
+   (in the off hand, as a book from the pack is held). Now a book let go of is gone at once.
 
 ## What wasn't checked
 

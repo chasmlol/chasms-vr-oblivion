@@ -369,6 +369,11 @@ mod win {
     /// rollers and all. Its pages turn by a flick of the free hand.
     fn book(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees) {
         let Some((menu, refr)) = crate::books::open() else { return };
+        // (Let go of, it's gone at once: as it fades out no hand has it, and it would be held as a
+        // sheet in the off hand as one from the pack is.)
+        if crate::books::let_go() {
+            return;
+        }
         let scroll = crate::books::is_scroll(menu);
         // (Over the book in the hand; a book read where it lies comes to the off hand and opens
         // there; one from the pack is held in the off hand as a sheet.)
