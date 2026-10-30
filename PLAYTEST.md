@@ -5,7 +5,9 @@ Save: rustvr-base
 `powershell -File tools\play.ps1 mirror` boots Oblivion into `rustvr-base`. That's Danwood, a Nord in
 iron armour, in his house in Danwood. `powershell -File tools\play.ps1 -Close` puts the game away.
 `play.ps1 mirror -Commands "showracemenu"` boots it with the race menu open (the real keyboard doesn't
-reach the game in VR, so its console can't be typed into).
+reach the game in VR, so its console can't be typed into). `-Commands "SelectSpell Mirror"` boots it
+with the Mirror power selected (the test console's `SelectSpell` takes a spell's name as well as its
+id, since the game gives the spell its id).
 
 The heads, hair, helmets and their FaceGen morphs are already extracted into the shared
 `local_assets`. On another machine, run `cargo run --release -p oblivion-assets --bin
@@ -17,7 +19,8 @@ The research and the design are in `docs/research/mirror.md`.
 
 1. **Cast Mirror.**
    - Every character has a lesser power called "Mirror" (a Conjuration spell, free, castable any
-     time). Open the game's magic menu, find it with your powers and select it.
+     time). It's in the game's magic menu with your powers. The playtest .bats boot with it already
+     selected, since the magic menu can't select spells in VR yet.
    - Cast it with the spell hand as any spell on yourself: hold the trigger with that hand empty,
      then let go.
    - The game's summoning effect, the swirl a summoned Daedra arrives in, rises 1.2 m in front of
