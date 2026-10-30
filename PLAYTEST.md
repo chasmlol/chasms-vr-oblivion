@@ -17,6 +17,8 @@ mirror in front of you. `range.bat` starts the test range instead.
    your hips have twisted 50° from them. Before, they shuffled under you whenever you leaned,
    reached or looked round (35 steps a minute while just standing), and slid along the floor at the
    end of every step. Now they never slide, and steps lift, travel and come straight down.
+   **Walking about your room now walks** (the gait the stick used, a stride at a time) instead of
+   shuffling twice as fast as you do; when you stop, the other foot closes up.
 2. **Real proportions** (from ANSUR II, 6,068 adults): shoulders 0.38 m apart for a 1.82 m person
    (were 0.31), the neck's base and the hip joints where a real body has them, and the head pivoting
    on the neck where the skull does (4.6 cm below and 8.7 cm behind the eyes).
@@ -31,11 +33,14 @@ mirror in front of you. `range.bat` starts the test range instead.
    sternum).
 7. **The chest turns and bends after your head like a mass on a spring**, with no jolt as it
    starts.
-8. **A learned prior for the chest and elbows.** A small network trained on CMU's motion capture
+8. **The forearm rolls as a real one does**: none of the wrist's roll at the elbow, all of it at the
+   wrist. On Oblivion's body (which has forearm twist bones) the skin at the elbow used to turn
+   with the wrist.
+9. **A learned prior for the chest and elbows.** A small network trained on CMU's motion capture
    (free for any use; 1,850 recordings) guesses which way your chest and hips face and which way
    each elbow points; the solver blends that into its own estimates. The hands still land exactly
    on the controllers.
-9. **Quest body tracking for the chest.** When Virtual Desktop forwards the Quest's body tracking,
+10. **Quest body tracking for the chest.** When Virtual Desktop forwards the Quest's body tracking,
    the chest now faces as your tracked shoulders do (as well as the elbows following it). The
    Body tab's checkbox is now "Elbows and chest from the headset's body tracking".
 
@@ -59,13 +64,17 @@ up, aiming, swinging, crouching, turning, walking, close handwork, chores). LaFA
 | Chest orientation (°) | 15.8 | **14.4** | 30.7 | **20.3** |
 | Chest yaw (°) | 12.2 | **9.3** | 23.3 | **16.2** |
 | Chest forward lean (°) | 10.5 | 10.7 | 12.2 | 12.6 |
-| Pelvis yaw (°) | 14.2 | **12.6** | 28.1 | **21.4** |
-| Ankles (cm) | 19.6 | **18.2** | 42.7 | **38.3** |
+| Pelvis yaw (°) | 14.2 | **12.6** | 28.1 | **21.2** |
+| Ankles (cm) | 19.6 | **18.5** | 42.7 | 43.1 |
+| Knees (cm) | 15.1 | 15.0 | 30.3 | 33.1 |
 | Planted feet sliding (cm/s) | 4.7 | **0.0** | 20.2 | **0.0** |
-| Steps a minute (real people: 46 and 88) | 79 | 74 | 181 | 170 |
-| Elbow acceleration, against the real one's | 2.3× | **1.9×** | 15.9× | **3.9×** |
-| Knee acceleration, against the real one's | 6.0× | **3.9×** | 36× | **25×** |
+| Steps a minute (real people: 46 and 88) | 79 | **66** | 181 | **114** |
+| Elbow acceleration, against the real one's | 2.3× | **1.9×** | 15.9× | **4.0×** |
+| Knee acceleration, against the real one's | 6.0× | **3.4×** | 36× | **25×** |
 | Elbow jerk, against the real one's | 2.9× | **2.3×** | 53× | **13×** |
+
+(LaFAN1's knees and ankles are further off than before only in its fights and obstacle runs, at
+running speeds: the walking gait sets the feet a stride ahead there. In its walking they're nearer.)
 
 With the Quest's tracked shoulders and elbows fed in (the real ones with 1.5 cm of noise, an
 estimate; how close a real Quest comes isn't known): CMU elbows 7.3 cm, swivel 13°, chest yaw
@@ -99,15 +108,17 @@ over it with a blue outline.
    barely follow and your feet shouldn't step. Turn your whole body further and the feet should
    step round after it.
 4. **Lean on a table, sway, shift your weight.** No steps.
-5. **Walk a few steps in your room and stop.** The feet should step, land and stay, never sliding.
-   (They still step more often than you do: see below.)
+5. **Walk a few steps in your room and stop.** The feet should walk a stride at a time, land and
+   stay, never sliding, and close up when you stop.
 6. **Hold a bow or a two-handed weapon, then aim, look along it, look down at your arms.** The
    elbows should hang naturally and never fold across your chest. With a two-handed hold the chest
    turns slightly towards the forward hand, as a real stance does.
 7. **Pick something off the floor.** The body should bend and come back up without the shoulders
    jumping.
-8. **Stand still in the mirror.** Your knees should be still (they used to flick).
-9. If you have a Quest 3 with Virtual Desktop's body tracking on: the chest should turn with your
+8. **Roll your wrist with the arm bent.** The forearm should twist from the wrist, the elbow's skin
+   staying still.
+9. **Stand still in the mirror.** Your knees should be still (they used to flick).
+10. If you have a Quest 3 with Virtual Desktop's body tracking on: the chest should turn with your
    real shoulders. Turn the Body tab's "Elbows and chest from the headset's body tracking" off and
    on to compare.
 
@@ -120,9 +131,9 @@ over it with a blue outline.
 - **How close a real Quest's body tracking is** to the truth fed into the measurements.
 - **Absolute chest placement from the eyes**: motion capture can't settle it (its markers sit on top
   of the shoulders), so it follows ANSUR; look at it first.
-- **Steps are still too frequent when walking and turning** (about twice real people's cadence in
-  the walking clips), and the legs as a whole are no better than before (knees 15 cm off). Bending
-  far over still squats rather than folding at the hips.
+- **Steps are still a little too frequent** (66 a minute against real people's 46 across the clips;
+  turning in place most), and the legs as a whole are no nearer real people's than before (knees
+  15 cm off). Bending far over still squats rather than folding at the hips.
 - **The prior's weak spot**: holding a shouldered gun still and looking 60° to one side turns the
   chest about a third of the way, where your arms holding the gun would keep it more still.
 
