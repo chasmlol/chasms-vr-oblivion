@@ -87,6 +87,10 @@ Checked, each once, with the emulated headset (the logs and captures are the evi
   bar stayed where the hand left it); seen turned.
 - An Ayleid wall switch (`WarehouseAyleidRooms03`): pushed in with a palm (0.20 of its 0.22 m, at
   0.15 m/s), the game's Activate and its sound, sprung back out over about 2.5 s; seen pushed in.
+- A display case's lid (`WarehouseUpperClass`, its unlocked cases): taken by its front edge and
+  lifted, the game's Activate (open state 3 -> 2, its sound), lifted to 0.96 of its 1.34 rad, let go:
+  it fell shut under its own weight and the game closed it at the frame (1 -> 4, its close sound).
+  Not seen (that cell is too dark for the captures); its stay holding it fully open not tried.
 - Cell changes (Chorrol's guilds, back and forth, then `TestTraps`): the world's parts dropped
   before the cell went and offered again in the new one, no crash; the double cave door's two leaves
   each on their own hinge.
@@ -96,8 +100,7 @@ Checked, each once, with the emulated headset (the logs and captures are the evi
 Not checked in the game:
 
 - Following an NPC walking through a door (the same following as the trigger's).
-- A door whose hinge is level (a trap door, a display case's lid): it should fall shut under its own
-  weight.
+- A trap door (a level hinge the same as the display case's lid).
 - A ruin's stone door (it slides down into the floor, the same as the portcullis but the other way).
 - The door sounds: they're the game's own (the animation's text keys, else the door form's sounds),
   played through the game's sound system; not listened to (the emulated headset has no ears).
@@ -116,7 +119,8 @@ Not checked in the game:
 - **Mass:** the game gives most doors no mass (their bodies are keyframed). A leaf weighs its drawn
   area as a 4.5 cm plank of its Havok material (a house door about 65 kg, the big cave door 130),
   or, of metal, as heavy for its size as the game's own cell gates, whose 100 kg is the model's;
-  levers and stones weigh their drawn shape's volume of their material. Hinge friction is its pins' (a friction of 0.3 on 1 cm pins under its weight). A
+  levers and stones weigh their drawn shape's volume of their material; a lid (a level hinge) never
+  more than half an arm lifts by its edge (a display case's about 19 kg). Hinge friction is its pins' (a friction of 0.3 on 1 cm pins under its weight). A
   swing dies away over about 2 s once let go, and a lever's two positions hold against 25 N at its end:
   those two are design values, not the game's.
 - **Sliding doors are the game's to move:** a hand can't lift a stone slab, so a tug opens it with
