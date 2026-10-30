@@ -65,6 +65,17 @@ hand instead of the flat screen.
   - a flick that arcs (half sideways is enough), and a hand through the pages or out past their
     edges, count.
 
+## Since the sixth headset play (2026-10-30)
+
+- **The game goes on while you read a book in your hand**: time passes, people walk about and talk,
+  the weather and the physics and the sounds go on, as with no menu open. You don't walk while it's
+  open, and the hand on the pages doesn't activate anything (your controls are the book's until you
+  shut it). The map, and a book read from your pack (the inventory's open under it), still pause.
+- **Flicking back works**: the hand coming straight back after a flick is still ignored, but now
+  only for a moment after it slows. Pause a beat after a forward flick, then flick back.
+- When you're done, press a key in the playtest window (don't just close it): that's what saves the
+  runtime's log for me. The last run's was lost when another feature's game started.
+
 The flat game's crosshair is gone (taken from the menus branch, which has it from riding): where you
 look shows only the icon of what you can activate, red when taking it is stealing.
 
@@ -145,6 +156,9 @@ look shows only the icon of what you can activate, red when taking it is stealin
 - **The real headset**: the size of the pages (a line of the game's text 1.5 degrees at 45 cm), the
   feel of the sweep, how near the free hand has to be to open a book, comfort.
 - **Fast travel** from the held map (a fingertip's tap on a place, the game's question).
+- **The world going on under a book** was only worked out, never run: the game's
+  world never updates with a menu open in the flat game, so something may not expect it (an NPC
+  talking to you, combat starting, a script). If anything odd happens while reading, say what.
 - **A book taken off a shelf by hand** (the gloves' pull and the grip are the existing ones; the tests
   put books in the hand from the console or brought them by activating them).
 - **The local map's picture**: indoors the local map's window showed the parchment and your arrow
@@ -174,8 +188,10 @@ look shows only the icon of what you can activate, red when taking it is stealin
   the spine within a few centimetres (in the first play the buttons turned the pages instead); the
   second's flick was the hand's speed against the pages, near them, and turned pages at random as
   the pages turned with the head and moved with the book. A trigger pinch pulled across still turns
-  one. The hand has to slow before it flicks again, and the way back after a turn is shut for 1.2 s,
-  so the hand coming back doesn't turn it back.
+  one. The hand has to slow before it flicks again, and the way back is shut for 0.45 s from when the
+  stroke that turned the page (or the hand's return after it) slows: the hand coming straight back
+  doesn't turn it back, a flick back after a beat's pause does (the sixth play's 1.2 s from the turn
+  dropped nearly every flick back).
 - **The game's own page turn**: a notch of its mouse wheel over the book (its wheel turns a book's
   pages, with its sound).
 - **Drawn with the body.** Pages and the map are drawn in the body's depth: a hand in front of a page
@@ -212,8 +228,15 @@ look shows only the icon of what you can activate, red when taking it is stealin
 - **A book read where it lies comes to the off hand held without the grip** (the shelf's look and
   trigger): grip and let go to drop it. A book a hand had open is never brought back (let go of, it
   shuts and falls).
-- **The game is paused while a book or the map is open** (as in the flat game), but your hands aren't:
-  you can move the book, hand it over, let it go, spread the map.
+- **The game goes on under a book read in the hand** (the player asked: it mustn't pause). Oblivion
+  stops its world while any menu is open: its frame asks `IsMenuMode` before
+  each part of the world's update, and the world's seconds for a frame are 0 while one
+  is. Those 15 calls ask the adapter instead, which says no while the book being read is in a hand
+  and its menu is on top; everything else still sees the menu (the cursor and clicks are the
+  book's, the player's Activate is off, scripts run their menu-mode blocks, the runtime's controls
+  are the menu's, so the player doesn't walk while reading). The map, and a book read from the pack,
+  pause as the flat game does. Your hands are never paused: you can move the book, hand it over,
+  let it go, spread the map.
 
 ## Not done
 

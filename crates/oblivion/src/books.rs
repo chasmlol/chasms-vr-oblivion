@@ -12,13 +12,16 @@
 //! taken from the hand) while it's open, it's shut too. A magic scroll isn't read: the game takes
 //! one that's activated rather than reading it, so it would go straight to the pack.
 //!
+//! The game goes on while a book is read in the hands ([`install`]): Oblivion stops its world while
+//! any menu is open, and a book held open is a menu.
+//!
 //! The book menu (xOBSE's `GameMenus.h`, `BookMenu`, menu type 0x402): the reference read at +0x30
 //! (0 from the inventory), the book at +0x34 (`TESObjectBOOK`: its flags +0x88, 1 a scroll).
 //! `Menu::HandleClick(id, tile)` is the menu's vtable slot 3.
 
 use crate::{mem, tiles};
 use rustvr_protocol::Action;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 pub const MENU_BOOK: u32 = 0x402;
 const BOOK_REF: usize = 0x30;
@@ -103,8 +106,13 @@ struct State {
 static STATE: std::sync::Mutex<Option<State>> = std::sync::Mutex::new(None);
 
 /// Once a game frame, where the game's scripts run: a book just taken in a hand read, one let go of
-/// while it's open shut, or one shut with B.
+/// while it's open shut, or one shut with B; then whether the world goes on under it this frame.
 pub fn frame() {
+    step();
+    READING_IN_HAND.store(reading() && held_book().is_some(), Ordering::Relaxed);
+}
+
+fn step() {
     let mut s = STATE.lock().unwrap();
     let s = s.get_or_insert_with(State::default);
     let held = crate::items::held();
@@ -171,3 +179,58 @@ pub fn frame() {
         }
     }
 }
+
+/// The book being read is in a hand and its menu is on top (as [`frame`] last found, before the
+/// game's frame runs: the checks below are asked in the middle of it).
+static READING_IN_HAND: AtomicBool = AtomicBool::new(false);
+
+/// `IsMenuMode` (cdecl: the interface's cursor is out, `InterfaceManager` +0x1C, and its mode, +8,
+/// isn't 1).
+const IS_MENU_MODE: usize = 0x0057_8F60;
+/// Where the world's update asks it, each a 5-byte call: the game's frame (0x40D800) before each
+/// part of the world's update (the sound's pause, the actors' AI and processing, the player's own
+/// update and the cell grid round them, the sky and the time of day, Havok's step), and the world's
+/// seconds for the frame (0x405290, 0 while a menu is open), which all of it goes by.
+const WORLD_MENU_CHECKS: [usize; 15] = [
+    0x0040_D809,
+    0x0040_D817,
+    0x0040_D9C6,
+    0x0040_D9D4,
+    0x0040_DA78,
+    0x0040_DB5B,
+    0x0040_DBAB,
+    0x0040_DBFB,
+    0x0040_DC61,
+    0x0040_DD5F,
+    0x0040_DD6E,
+    0x0040_DE3F,
+    0x0040_DE76,
+    0x0040_DEA6,
+    0x0040_5297,
+];
+
+/// The world's own question, "is a menu open?": not while a book is read in the hands, so the game
+/// goes on as it does with no menu (time, the actors, the weather, the physics, the sounds). Every
+/// other asker still sees the menu: its cursor and clicks are the book's, the player's Activate stays
+/// off (the hand on the pages isn't activating), scripts run their menu-mode blocks.
+#[cfg(target_arch = "x86")]
+extern "C" fn world_menu_mode() -> u8 {
+    let menu = unsafe { std::mem::transmute::<usize, unsafe extern "C" fn() -> u8>(IS_MENU_MODE)() };
+    if menu != 0 && READING_IN_HAND.load(Ordering::Relaxed) { 0 } else { menu }
+}
+
+/// Once: the world's checks ask [`world_menu_mode`] (each only if it's the call the build had).
+#[cfg(target_arch = "x86")]
+pub fn install() {
+    let ours = world_menu_mode as *const () as usize;
+    let mut done = 0;
+    for at in WORLD_MENU_CHECKS {
+        let real = (IS_MENU_MODE as i32).wrapping_sub(at as i32 + 5).to_le_bytes();
+        let rel = (ours as i32).wrapping_sub(at as i32 + 5).to_le_bytes();
+        done += mem::patch_code(at, &[0xE8, real[0], real[1], real[2], real[3]], &[0xE8, rel[0], rel[1], rel[2], rel[3]]) as u32;
+    }
+    tracing::info!("books: the world goes on while a book is read in the hands ({done} of {} of its menu checks)", WORLD_MENU_CHECKS.len());
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn install() {}
