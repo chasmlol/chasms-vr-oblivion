@@ -12,6 +12,9 @@ Everything you read is the game's own book menu: its parchment, its fonts, its o
 the book's text and pictures, its page-turn sound, its Take and Exit. It's laid on the book in your
 hand instead of the flat screen.
 
+The flat game's crosshair is gone (taken from the menus branch, which has it from riding): where you
+look shows only the icon of what you can activate, red when taking it is stealing.
+
 ## What to try, in order
 
 1. **Read a book off a shelf, two ways.**
