@@ -346,3 +346,87 @@ pub fn facing_now() -> Option<(u32, [f32; 8], [f32; 8])> {
         }
     })
 }
+
+/// Testing, `RUSTVR_OBLIVION_GAME_LEAF_INDEX=1`: the vs_1_1 shaders' indices as the game wrote them.
+pub fn floors_indices() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| !std::env::var("RUSTVR_OBLIVION_GAME_LEAF_INDEX").is_ok_and(|v| v == "1"))
+}
+
+/// A vs_1_1 shader's code with each `mov a0.x, v#.c` (an index into the constants, straight from a
+/// vertex's data) made to load the whole part of it, or `None` if it has none. The leaves' shaders
+/// index their corners by `v3.z`, the cluster's number with a shade in its fraction (`expp r6.y,
+/// v3.z` reads it back), and their wind matrices by `v3.y`: written for the drivers of their day,
+/// which loaded `a0` rounding down. Direct3D 9's own reference rounds to the nearest, and D3D9On12
+/// does: half the leaves took the next cluster's corner, and the last cluster's read past the
+/// corners into what another draw had left there, a corner thrown across the view, differently for
+/// each eye (the streaks, `docs/research/visuals.md`). So the index is made whole first: `expp
+/// r11.y, v#.c` (its fraction), `add r11.x, v#.c, -r11.y`, `mov a0.x, r11.x`. The tokens are the
+/// version's, then instructions (the shader's first unused temporary must be r11 or below).
+pub fn floor_indices(tokens: &[u32]) -> Option<Vec<u32>> {
+    const VS_1_1: u32 = 0xFFFE_0101;
+    const END: u32 = 0x0000_FFFF;
+    const COMMENT: u32 = 0xFFFE;
+    const DEF: u32 = 0x51;
+    const MOV: u32 = 0x01;
+    const ADD: u32 = 0x02;
+    const EXPP: u32 = 0x4E;
+    const ADDR: u32 = 3;
+    const INPUT: u32 = 1;
+    const TEMP: u32 = 0;
+    let kind = |p: u32| ((p >> 28) & 7) | (((p >> 11) & 3) << 3);
+    if tokens.first() != Some(&VS_1_1) {
+        return None;
+    }
+    // The instructions: (start, end) of each, and the temporaries they use.
+    let mut instructions = Vec::new();
+    let mut highest_temp = 0;
+    let mut i = 1;
+    loop {
+        let t = *tokens.get(i)?;
+        if t == END {
+            break;
+        }
+        let op = t & 0xFFFF;
+        let end = if op == COMMENT {
+            i + 1 + ((t >> 16) & 0x7FFF) as usize
+        } else if op == DEF {
+            i + 6
+        } else {
+            let mut j = i + 1;
+            while tokens.get(j).is_some_and(|p| p & 0x8000_0000 != 0) {
+                j += 1;
+            }
+            for &p in &tokens[i + 1..j] {
+                if kind(p) == TEMP {
+                    highest_temp = highest_temp.max(p & 0x7FF);
+                }
+            }
+            j
+        };
+        instructions.push((i, end, op));
+        i = end;
+    }
+    let temp = 11;
+    if highest_temp >= temp {
+        return None;
+    }
+    let mut out = vec![tokens[0]];
+    let mut changed = false;
+    for &(start, end, op) in &instructions {
+        let params = &tokens[start + 1..end];
+        if op == MOV && params.len() == 2 && kind(params[0]) == ADDR && kind(params[1]) == INPUT {
+            let src = params[1];
+            let reg = |mask: u32| 0x8000_0000 | (mask << 16) | temp;
+            out.extend([EXPP, reg(0b0010), src]);
+            // (-r11.yyyy: the negate modifier, the swizzle y in each of the four.)
+            out.extend([ADD, reg(0b0001), src, 0x8000_0000 | (1 << 24) | (0x55 << 16) | temp]);
+            out.extend([MOV, params[0], 0x8000_0000 | temp]);
+            changed = true;
+        } else {
+            out.extend_from_slice(&tokens[start..end]);
+        }
+    }
+    out.push(END);
+    changed.then_some(out)
+}

@@ -353,7 +353,22 @@ mod win {
             tracing::info!("d3d9: the distant trees' cards face the eye, not the way it looks");
             Some(code.as_ptr())
         });
-        let hr = unsafe { real(dev, ours.unwrap_or(function), out) };
+        // A vs_1_1 shader indexing its constants straight by a vertex's data: the whole part, as the
+        // game's drivers took it ([`crate::leaves::floor_indices`]).
+        let floored = if ours.is_none() && crate::leaves::floors_indices() {
+            hooks::guard("CreateVertexShader", None, || {
+                // (The whole code: up to its end token, within vs_1_1's size.)
+                let n = (0..0x4000).find(|&i| unsafe { function.add(i).read() } == 0x0000_FFFF)?;
+                let code = crate::leaves::floor_indices(unsafe { std::slice::from_raw_parts(function, n + 1) })?;
+                let names: Vec<String> = tokens.map(crate::leaves::constants).unwrap_or_default().into_iter().map(|(n, _, _)| n).collect();
+                tracing::info!("d3d9: a vs_1_1 shader's constants indexed by the whole part of its vertex data, as the drivers of its day did ({})", names.join(", "));
+                Some(code)
+            })
+        } else {
+            None
+        };
+        let code = ours.or(floored.as_ref().map(|c| c.as_ptr())).unwrap_or(function);
+        let hr = unsafe { real(dev, code, out) };
         if hr.is_ok() && !out.is_null() {
             hooks::guard_void("CreateVertexShader", || {
                 if let Some(tokens) = tokens {
