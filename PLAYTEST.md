@@ -117,6 +117,14 @@ and puts your settings back like `playtest.bat`.
 
 ## What changed
 
+- **Round 11, the streak, found and fixed.** Your leave-one-out run showed it: in the frame without
+  the trees' leaves it was gone from both eyes, and in every other frame it was there. The leaves'
+  shader picks each leaf's corner by a number with a shade hidden in its fraction, written for the
+  graphics drivers of 2006, which rounded it down. The layer the game runs on now (D3D9On12) rounds
+  it to the nearest, as Microsoft's own reference says. So half the leaves took the next cluster's
+  corner, and the last cluster's read past the corners into whatever another draw had left there:
+  a corner flung across the view, different in each eye. The shader is now given the whole number
+  itself, so rounding can't move it.
 - **Round 9, the leaves.** They no longer turn or lean with your head: each tree's leaf cards face
   your eye and stay upright, so they only turn as you walk round the tree.
 - **Round 9, stutter.** Your last run's real hitches (40..120 ms, every 10..30 s while moving) were
