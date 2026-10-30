@@ -537,7 +537,16 @@ pub fn controls(rt: &RtRide) -> Controls {
         _ => 0,
     };
     let x = (rt.steer.clamp(-1.0, 1.0) * TURN_AXIS).round() as i32;
-    Controls { stick: [x, y], run: rt.gait >= GAITS as i32 }
+    let c = Controls { stick: [x, y], run: rt.gait >= GAITS as i32 };
+    // What the game is given, when it changes (the turn by a fifth of the game's at least): with
+    // the runtime's log of the hands, what the rider did and what the horse was told.
+    static LAST: Mutex<Option<([i32; 2], bool)>> = Mutex::new(None);
+    let mut last = LAST.lock().unwrap();
+    if last.is_none_or(|(s, r)| s[1] != c.stick[1] || r != c.run || (s[0] - c.stick[0]).abs() >= (TURN_AXIS / 5.0) as i32 || (s[0] == 0) != (c.stick[0] == 0)) {
+        tracing::info!("riding: the game's controls: forward axis {}, turn axis {}{} (the rider's gait {}, pace {:.2}, steer {:+.2})", -c.stick[1], c.stick[0], if c.run { ", Run" } else { "" }, rt.gait, rt.pace, rt.steer);
+        *last = Some((c.stick, c.run));
+    }
+    c
 }
 
 /// Tests (`PlayerHorse <base> [metres]`): a horse of the player's own beside them. The game places
