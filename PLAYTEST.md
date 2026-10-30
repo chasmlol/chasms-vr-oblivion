@@ -226,6 +226,15 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't catc
   ` in the game's code, creating the save's picture). It happens the same way with `player.kill` on
   `rustvr-weye` with no water, so it isn't swimming's. But drowning kills, so don't hold your
   breath to the end.
+- **Two crashes on launch** (playtest 6, before swimming ran), neither swimming's: both happen with
+  other features' builds too.
+  - Direct3D lost its device when the runtime connected, 30 s into the game (the headset wasn't
+    streaming yet), and the game crashed resetting it (an access violation in the game's own code). The
+    riding build crashed the same way at 11:23. Put the headset on, with Virtual Desktop
+    connected, before running the .bat.
+  - Loading `rustvr-swim` straight from the main menu crashed (in the game's own load code), as
+    loading `rustvr-weye` and `rustvr-books` did this morning
+    (in the same code). It's intermittent: run the .bat again.
 - **Held things under the water** (a drawn weapon in the hand), seen from above, weren't checked.
   The things the game draws in the hand are under its own water. What the runtime draws gets the
   body's look through the surface only if it's drawn with the body's shading.
