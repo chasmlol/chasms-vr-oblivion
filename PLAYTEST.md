@@ -5,7 +5,8 @@ Save: rustvr-city
 `playtest.bat` in this worktree (not committed: double-click it in Explorer) puts away any game left
 running, starts the voice servers if they aren't up (speech to text and Breeze, waiting for both:
 Breeze's first start takes about 4 minutes), turns RustVR's Voice setting on, then boots this build
-into **rustvr-city**: the Imperial City Market District at noon, full of people. A key in the .bat's
+into **rustvr-city** (which is at Odiil Farm, outside the city) and moves you with the game's own
+`coc` into the Imperial City's **Market District** at noon, full of people. A key in the .bat's
 window closes the game and keeps the runtime's and the voice plugin's logs in
 `<builds>\voice\playtest-<n>`.
 
