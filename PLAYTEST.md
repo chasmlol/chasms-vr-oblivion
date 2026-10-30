@@ -61,7 +61,11 @@ why it works the way it does: `docs/research/riding.md`.
   left from the saddle doesn't steer.
 - Someone else's horse (made the stable's for the test): got on, and a Chorrol guard arrested the
   player for it.
-- The runtime's log: the vignette closes in at a gallop and in a turn, and opens again.
+- The runtime's log: the vignette closes in at a gallop and in a turn, and opens again; the fade
+  comes on as the game gets the rider on, and off.
+- The view turning with the horse in steps (a build with steps as the default, not committed): 30°
+  steps every 0.45 s while the horse turns at the game's rate, the neck swinging off centre and the
+  view catching up.
 
 ## Not checked
 
@@ -69,8 +73,8 @@ why it works the way it does: `docs/research/riding.md`.
   distances are (12 cm for a full turn, 7 cm to slow, 15 cm to take a rein, the flick's 1.1 m/s).
 - Haptics (the rein tick, the spur, the stride beat): the emulator doesn't record them.
 - The vignette and the fade as pictures: the emulator's captures don't show the comfort overlay
-  (on foot either); the log shows the vignette's changes.
-- The view turning in steps (the setting), and head bob on horseback.
+  (on foot either); the log shows when they come and go.
+- The steps setting through the menu (it's checked by the default only), and head bob on horseback.
 - A real horse jump, riding into water or a swimming horse, fast travel with the horse, getting off
   beside walls, left-handed play, the horse's own steal prompt (the game arrested instead).
 
