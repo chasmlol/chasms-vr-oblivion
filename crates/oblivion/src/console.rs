@@ -66,8 +66,11 @@ pub fn select_spell(_id: u32) -> bool {
 /// `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in front of the
 /// player (and that far over their feet), facing them (tests), `PlaceAt <base hex id> <ahead>
 /// <right> <up> [<turn>]` makes a new one of a base form there (metres from the player's feet,
-/// turned that many degrees from facing them: a bench set out for a test save), anything else is
-/// compiled and run as a line of script. True if it ran.
+/// turned that many degrees from facing them: a bench set out for a test save), `Place <base hex
+/// id> <x> <y> <z> [<angle>]` makes one at a place in the player's cell (game units, the game's
+/// heading in degrees: a set-out that stays put however the player stands), `RunFile <path>` adds
+/// a file's lines to the test's (this file's own format: a set-out too long for a line each),
+/// anything else is compiled and run as a line of script. True if it ran.
 pub fn run(line: &str) -> bool {
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
@@ -81,6 +84,15 @@ pub fn run(line: &str) -> bool {
         let n: Vec<f32> = it.filter_map(|v| v.parse::<f32>().ok()).collect();
         let at = |k: usize| n.get(k).copied().unwrap_or(0.0);
         return place_at(base, at(0), at(1), at(2), at(3));
+    }
+    if let Some(rest) = line.strip_prefix("Place ") {
+        let mut it = rest.split_whitespace();
+        let Some(base) = it.next() else { return false };
+        let n: Vec<f32> = it.filter_map(|v| v.parse::<f32>().ok()).collect();
+        return n.len() >= 3 && place(base, n[0], n[1], n[2], n.get(3).copied().unwrap_or(0.0));
+    }
+    if let Some(path) = line.strip_prefix("RunFile ") {
+        return run_file(path.trim().trim_matches('"'));
     }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();
@@ -105,13 +117,24 @@ fn place_in_front(r: &str, metres: f32, up: f32) -> bool {
     [format!("{r}.setpos x {x:.1}"), format!("{r}.setpos y {y:.1}"), format!("{r}.setpos z {:.1}", pos[2] + up * crate::camera::UNITS_PER_METER), format!("{r}.setangle z {facing:.1}")].iter().all(|l| run_script(l))
 }
 
-/// A new reference of the base form `base` (its hex id: the game's own `placeatme`), put `ahead`
-/// metres in front of the player, `right` to their right and `up` over their feet, turned `turn`
-/// degrees from facing them, the player's own, its body woken to settle where it falls. Its id,
-/// where it went and how its model sits about it are logged.
-#[cfg(target_arch = "x86")]
+/// A new reference of the base form `base`, put `ahead` metres in front of the player, `right` to
+/// their right and `up` over their feet, turned `turn` degrees from facing them (as [`place`]).
 fn place_at(base: &str, ahead: f32, right: f32, up: f32, turn: f32) -> bool {
     use crate::engine::{self, refr};
+    let p = engine::player();
+    let (Some(pos), Some(rot)) = (crate::mem::at::<[f32; 3]>(p + refr::POS), crate::mem::at::<[f32; 3]>(p + refr::ROT)) else { return false };
+    // Heading: 0 north (+y), turning east (+x); the player's right is (cos, -sin).
+    let (h, u) = (rot[2], crate::camera::UNITS_PER_METER);
+    let (x, y) = (pos[0] + u * (ahead * h.sin() + right * h.cos()), pos[1] + u * (ahead * h.cos() - right * h.sin()));
+    place(base, x, y, pos[2] + up * u, (h + std::f32::consts::PI).to_degrees() + turn)
+}
+
+/// A new reference of the base form `base` (its hex id: the game's own `placeatme`) at `x`, `y`,
+/// `z` in the player's cell (game units), level and turned to the heading `angle` (degrees: 0
+/// north, turning east), the player's own, its body woken to settle where it falls. Its id, where
+/// it went and how its model sits about it are logged.
+#[cfg(target_arch = "x86")]
+fn place(base: &str, x: f32, y: f32, z: f32, angle: f32) -> bool {
     type Lookup = unsafe extern "C" fn(u32) -> usize;
     let Ok(id) = u32::from_str_radix(base.trim_start_matches("0x"), 16) else { return false };
     let form = unsafe { std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(id) };
@@ -120,20 +143,16 @@ fn place_at(base: &str, ahead: f32, right: f32, up: f32, turn: f32) -> bool {
     }
     let Some(r) = crate::items::newest_of(form) else { return false };
     let rid = crate::mem::at::<u32>(r + 0xC).unwrap_or(0);
-    let p = engine::player();
-    let (Some(pos), Some(rot)) = (crate::mem::at::<[f32; 3]>(p + refr::POS), crate::mem::at::<[f32; 3]>(p + refr::ROT)) else { return false };
-    // Heading: 0 north (+y), turning east (+x); the player's right is (cos, -sin).
-    let (h, u) = (rot[2], crate::camera::UNITS_PER_METER);
-    let (x, y) = (pos[0] + u * (ahead * h.sin() + right * h.cos()), pos[1] + u * (ahead * h.cos() - right * h.sin()));
-    let z = pos[2] + up * u;
-    let facing = (h + std::f32::consts::PI).to_degrees() + turn;
     // (Off and on again: its 3D and collision made afresh where it is now; a static's collision
     // doesn't follow `setpos`.)
     let ok = [
         format!("{rid:08X}.setpos x {x:.1}"),
         format!("{rid:08X}.setpos y {y:.1}"),
         format!("{rid:08X}.setpos z {z:.1}"),
-        format!("{rid:08X}.setangle z {:.1}", facing.rem_euclid(360.0)),
+        // (Level, whatever angles `placeatme` gave it.)
+        format!("{rid:08X}.setangle x 0"),
+        format!("{rid:08X}.setangle y 0"),
+        format!("{rid:08X}.setangle z {:.1}", angle.rem_euclid(360.0)),
         // (The player's own, wherever it is: taking it is never stealing.)
         format!("{rid:08X}.setownership"),
         format!("{rid:08X}.disable"),
@@ -150,7 +169,7 @@ fn place_at(base: &str, ahead: f32, right: f32, up: f32, turn: f32) -> bool {
 }
 
 #[cfg(not(target_arch = "x86"))]
-fn place_at(_base: &str, _ahead: f32, _right: f32, _up: f32, _turn: f32) -> bool {
+fn place(_base: &str, _x: f32, _y: f32, _z: f32, _angle: f32) -> bool {
     false
 }
 
@@ -292,6 +311,20 @@ pub fn load_test(dir: &std::path::Path) {
     let lines = parse(&text);
     tracing::info!("console: {} test commands", lines.len());
     *TEST.lock().unwrap() = Some(Test { start: std::time::Instant::now(), menu: None, game: None, lines });
+}
+
+/// Adds the lines of the file at `path` (the test file's own format, its times from the same
+/// starts) to the test's: a set-out of many lines in one, where `tools/oblivion.ps1 -Commands`
+/// would give each its own half second.
+fn run_file(path: &str) -> bool {
+    let Ok(text) = std::fs::read_to_string(path) else { return false };
+    let mut t = TEST.lock().unwrap();
+    let Some(test) = t.as_mut() else { return false };
+    let lines = parse(&text);
+    tracing::info!("console: {} commands from {path}", lines.len());
+    test.lines.extend(lines);
+    test.lines.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    true
 }
 
 /// Once a frame, on the game's thread: the test commands that are due.
