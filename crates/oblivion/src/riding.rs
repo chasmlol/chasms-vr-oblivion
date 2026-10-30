@@ -71,7 +71,6 @@ const NODE_NAME: usize = 0x08;
 const NECK: &str = "Bip02 Neck1";
 const REINS_ALONG: f32 = 0.5;
 const REINS_APART: f32 = 0.09;
-const REINS_OVER_APART: f32 = 0.06;
 const FOOT: f32 = 0.15;
 /// Without the saddle's measure, the seat is this far over the horse's feet (metres).
 const SEAT_FALLBACK: f32 = 1.6;
@@ -169,7 +168,13 @@ fn activate(_target: usize) -> bool {
 
 /// The nodes named `names` under `root` (0 where there's none): the skeleton's bones (`Bip0...`).
 fn nodes<const N: usize>(root: usize, names: [&str; N]) -> [usize; N] {
-    let mut out = [0usize; N];
+    let found = nodes_named(root, &names);
+    std::array::from_fn(|i| found[i])
+}
+
+/// As [`nodes`], for names known only as the game runs (the neck's bones from `horse.toml`).
+fn nodes_named(root: usize, names: &[&str]) -> Vec<usize> {
+    let mut out = vec![0usize; names.len()];
     let mut stack = vec![(root, 0u32)];
     let mut seen = 0;
     while let Some((node, depth)) = stack.pop() {
@@ -422,19 +427,36 @@ pub fn publish(view: &rustvr_adapter::View, now: f64) {
                     r.flags |= RIDE_REINS;
                 }
                 // The bit's rings, on the head as it moves (Oblivion's horses have no reins of their
-                // own: the runtime draws them from here, in the tack's own colour).
+                // own: the runtime draws them from here, in the tack's own leather).
                 let [head] = nodes(horse_root, [s.head_bone.as_str()]);
-                if let (Some(a), Some(b), Some(poll)) = (
-                    (head != 0).then(|| node_point(head, s.bit)).flatten(),
-                    (head != 0).then(|| node_point(head, mirror(s.bit))).flatten(),
-                    (head != 0).then(|| node_pos(head)).flatten(),
-                ) {
+                if let (Some(a), Some(b)) = ((head != 0).then(|| node_point(head, s.bit)).flatten(), (head != 0).then(|| node_point(head, mirror(s.bit))).flatten()) {
                     let (left, right) = if a.dot(side) < b.dot(side) { (a, b) } else { (b, a) };
                     r.bits = [four(t(left)), four(t(right))];
-                    // (Back from the bit they pass over the neck behind the ears: the head's bone.)
-                    r.reins_over = [four(t(poll - side * REINS_OVER_APART)), four(t(poll + side * REINS_OVER_APART))];
                     r.reins_color = [s.tack[0], s.tack[1], s.tack[2], 1.0];
                     r.flags |= RIDE_BITS;
+                    if !s.tack_model.is_empty() {
+                        r.set_reins_leather(&format!("oblivion/{}", s.tack_model));
+                        r.reins_uv = s.strap_uv;
+                    }
+                }
+                // The neck and head, which the reins lie on: each cross-section on its bone as the
+                // horse's animation has it.
+                let mut bones: Vec<&str> = s.neck.iter().map(|n| n.bone.as_str()).collect();
+                bones.dedup();
+                let found: HashMap<&str, usize> = bones.iter().copied().zip(nodes_named(horse_root, &bones)).collect();
+                let mut count = 0;
+                for n in s.neck.iter().take(NECK_SECTIONS) {
+                    let node = found.get(n.bone.as_str()).copied().unwrap_or(0);
+                    let add = |a: [f32; 3], b: [f32; 3]| [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+                    if let (true, Some(c), Some(sd), Some(up)) = (node != 0, node_point(node, n.centre), node_point(node, add(n.centre, n.side)), node_point(node, add(n.centre, n.up))) {
+                        let (c, sd, up) = (t(c), t(sd), t(up));
+                        r.neck[count] = NeckSection { centre: four(c), side: four(sd - c), up: four(up - c) };
+                        count += 1;
+                    }
+                }
+                if count >= 2 {
+                    r.neck_count = count as u32;
+                    r.flags |= RIDE_NECK;
                 }
             }
         }
@@ -468,7 +490,7 @@ fn log_ride(r: &Riding) {
     let now = crate::link::now();
     if (r.flags, r.gait) != (last.0, last.1) || now - last.2 > 5.0 {
         tracing::info!(
-            "riding: horse {:#x} flags {:#x} gait {} at {:.2} m/s; seat {:.2?}, knees {:.2?}, ankles {:.2?}, reins {:.2?}, pommel {:.2?}, bits {:.2?}",
+            "riding: horse {:#x} flags {:#x} gait {} at {:.2} m/s; seat {:.2?}, knees {:.2?}, ankles {:.2?}, reins {:.2?}, pommel {:.2?}, bits {:.2?}; the neck in {} sections, the reins of {}",
             r.id,
             r.flags,
             r.gait,
@@ -478,7 +500,9 @@ fn log_ride(r: &Riding) {
             r.ankles.map(|k| [k[0], k[1], k[2]]),
             r.reins.map(|k| [k[0], k[1], k[2]]),
             [r.pommel[0], r.pommel[1], r.pommel[2]],
-            r.bits.map(|k| [k[0], k[1], k[2]])
+            r.bits.map(|k| [k[0], k[1], k[2]]),
+            r.neck().len(),
+            r.reins_leather().unwrap_or("no leather (ribbons)")
         );
         *last = (r.flags, r.gait, now);
     }

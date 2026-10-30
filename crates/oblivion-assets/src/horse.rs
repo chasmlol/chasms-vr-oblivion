@@ -5,6 +5,12 @@
 //! skeleton; measured there and put in its spine bone's frame, they go wherever the live horse's
 //! spine is. `oblivion-extract export meshes/creatures/horse` writes them into
 //! `local_assets/oblivion/horse.toml` ([`FILE`]); the adapter reads them from there.
+//!
+//! Oblivion's horses have a bridle and bit but no reins, so the runtime draws them, and these say
+//! how: the bit's rings on the head, the neck and head as cross-sections (each an ellipse round the
+//! top of the neck, on its bone, for the reins to lie on rather than pass through), and the leather
+//! (the saddle's material: `Tack.dds`, which the bridle wears too, and the stretch of it that is
+//! the bridle's plain strap).
 
 use crate::nif::{Block, Nif};
 use glam::Vec3;
@@ -20,6 +26,19 @@ pub const SKELETON: &str = "meshes\\creatures\\horse\\skeleton.nif";
 pub const BONE: &str = "Bip02 Spine2";
 /// The bone the head (and its bridle) rides on.
 pub const HEAD_BONE: &str = "Bip02 Head";
+/// The neck's bones from the withers up (the head's bone comes after the last).
+pub const NECK_BONES: [&str; 5] = ["Bip02 Neck", "Bip02 Neck1", "Bip02 Neck2", "Bip02 Neck3", "Bip02 Neck4"];
+/// The head's cross-sections: this far along it from its bone towards the muzzle (game units).
+const HEAD_ALONG: [f32; 4] = [1.0, 10.0, 19.0, 28.0];
+/// A cross-section is the model's vertices this near its plane (either side, game units), its
+/// ellipse fitted to the top of it this deep (the neck's, the head's: as deep as reins go on them).
+const SLAB: f32 = 2.5;
+const NECK_DEPTH: f32 = 16.0;
+const HEAD_DEPTH: f32 = 24.0;
+/// The bridle's plain strap in `Tack.dds`: its cheek piece, a straight stretch of the leather
+/// between its keeper and its buckle (texels 79 to 103 across, 236 to 466 along, of 512; read off
+/// the texture). The reins are cut from it.
+const STRAP_UV: [f32; 4] = [79.0 / 512.0, 236.0 / 512.0, 103.0 / 512.0, 466.0 / 512.0];
 pub const FILE: &str = "horse.toml";
 
 /// Vertices this near the saddle's middle (game units either side) are its middle line.
@@ -64,6 +83,27 @@ pub struct Saddle {
     pub bit: [f32; 3],
     /// The tack's leather (its texture's own average, linear RGB): the reins' colour.
     pub tack: [f32; 3],
+    /// The model whose (first mesh's) material is the tack's leather (the saddle's: its texture,
+    /// normal map, glossiness), and the stretch of its texture the reins are cut from (u0, v0, u1,
+    /// v1).
+    #[serde(default)]
+    pub tack_model: String,
+    #[serde(default)]
+    pub strap_uv: [f32; 4],
+    /// The neck and head from the withers to the muzzle, as cross-sections the reins lie on.
+    #[serde(default)]
+    pub neck: Vec<Section>,
+}
+
+/// A cross-section of the neck or head on one of its bones (in that bone's frame, game units): an
+/// ellipse round its top, at `centre`, as wide either way as `side` is long and as high either way
+/// as `up` (its top on the crest).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Section {
+    pub bone: String,
+    pub centre: [f32; 3],
+    pub side: [f32; 3],
+    pub up: [f32; 3],
 }
 
 /// Measures the saddle model (`saddle`) as it sits on the horse's skeleton (`skeleton`). Along its
@@ -97,6 +137,29 @@ pub fn measure(saddle: &Nif, skeleton: &Nif, body: &Nif, head: &Nif, tack: Optio
     let bone = skeleton.find(BONE)?;
     let to_bone = skeleton.world(bone, &skeleton.parents()).inverse();
     let local = |p: Vec3| to_bone.apply(p).to_array();
+    // The neck: a cross-section across each of its bones (its axis from the bone before to the
+    // one after), the body's vertices there in it (+X the horse's right, up the model's up off the
+    // axis); and the head's along its bone (+X to the muzzle, +Y down, Z across).
+    let parents = skeleton.parents();
+    let chain: Vec<i32> = NECK_BONES.iter().chain([&HEAD_BONE]).map(|n| skeleton.find(n)).collect::<Option<_>>()?;
+    let at: Vec<Vec3> = chain.iter().map(|&b| skeleton.world(b, &parents).translation).collect();
+    let mut neck = Vec::new();
+    let body_vertices = vertices(body);
+    for (i, name) in NECK_BONES.iter().enumerate() {
+        let axis = (at[i + 1] - at[i.saturating_sub(1)]).normalize();
+        let up = (Vec3::Z - axis * axis.dot(Vec3::Z)).normalize();
+        let slab: Vec<(f32, f32)> = body_vertices.iter().filter(|v| (**v - at[i]).dot(axis).abs() < SLAB).map(|v| ((*v - at[i]).x, (*v - at[i]).dot(up))).collect();
+        let Some((crest, half_w, half_h)) = fit_top(&slab, NECK_DEPTH) else { continue };
+        let to_bone = skeleton.world(chain[i], &parents).inverse();
+        let centre = at[i] + up * (crest - half_h);
+        let vector = |v: Vec3| (to_bone.apply(centre + v) - to_bone.apply(centre)).to_array();
+        neck.push(Section { bone: (*name).into(), centre: to_bone.apply(centre).to_array(), side: vector(Vec3::X * half_w), up: vector(up * half_h) });
+    }
+    for x in HEAD_ALONG {
+        let slab: Vec<(f32, f32)> = face.iter().filter(|v| (v.x - x).abs() < SLAB).map(|v| (v.z, -v.y)).collect();
+        let Some((crest, half_w, half_h)) = fit_top(&slab, HEAD_DEPTH) else { continue };
+        neck.push(Section { bone: HEAD_BONE.into(), centre: [x, -(crest - half_h), 0.0], side: [0.0, 0.0, half_w], up: [0.0, -half_h, 0.0] });
+    }
     Some(Saddle {
         bone: BONE.into(),
         pommel: local(pommel),
@@ -107,7 +170,39 @@ pub fn measure(saddle: &Nif, skeleton: &Nif, body: &Nif, head: &Nif, tack: Optio
         head_bone: HEAD_BONE.into(),
         bit,
         tack: tack.and_then(average).unwrap_or([0.1, 0.06, 0.03]),
+        tack_model: crate::export::model_key(SADDLE),
+        strap_uv: STRAP_UV,
+        neck,
     })
+}
+
+/// The ellipse round the top of a cross-section (its points: across, up), fitted to its outline
+/// down to `depth` below its crest: the crest, and the ellipse's half width and half height (its
+/// middle that far below the crest). Least squares over a grid, each point's distance across from
+/// the ellipse at its height (none below the ellipse).
+fn fit_top(points: &[(f32, f32)], depth: f32) -> Option<(f32, f32, f32)> {
+    let crest = points.iter().map(|p| p.1).max_by(f32::total_cmp)?;
+    let near: Vec<(f32, f32)> = points.iter().filter(|p| p.1 >= crest - depth).map(|p| (p.0.abs(), crest - p.1)).collect();
+    if near.len() < 4 {
+        return None;
+    }
+    let mut best = (f32::MAX, 0.0, 0.0);
+    for hh in (6..=48).map(|k| k as f32 * 0.5) {
+        for hw in (4..=100).map(|k| k as f32 * 0.25) {
+            let err: f32 = near
+                .iter()
+                .map(|&(across, down)| {
+                    let y = (down - hh) / hh;
+                    let w = hw * (1.0 - y * y).max(0.0).sqrt();
+                    (w - across).powi(2)
+                })
+                .sum();
+            if err < best.0 {
+                best = (err, hw, hh);
+            }
+        }
+    }
+    Some((crest, best.1, best.2))
 }
 
 /// A texture's own average colour (linear RGB): its smallest mip, one block-compressed colour block.
@@ -158,7 +253,9 @@ pub fn save(root: &Path, s: &Saddle) -> anyhow::Result<()> {
         "# A horse's saddle, measured on {SADDLE} where it sits on {SKELETON}: the top of its pommel, the\n\
          # lowest point of its seat along its middle and the top of its cantle, and where a rider's left knee\n\
          # and ankle go round the horse's body ({BODY}), in the frame of the bone it rides on (game units);\n\
-         # the bit's left ring on its head ({HEAD}) in its head bone's frame, and its tack's colour ({TACK}).\n\
+         # the bit's left ring on its head ({HEAD}) in its head bone's frame, and its tack's colour ({TACK});\n\
+         # the tack's leather (the saddle's material) and the bridle's strap in its texture, which the reins are cut\n\
+         # from; and the neck and head as cross-sections round their top, on their bones, for the reins to lie on.\n\
          # Written by `oblivion-extract export meshes/creatures/horse`.\n{}",
         toml::to_string(s)?
     );
