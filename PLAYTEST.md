@@ -13,6 +13,27 @@ Fort Ash (`-At FortAsh02`, its turning switches), Chorrol's Mages Guild (`-At Ch
 locked display cases: a lid on a hinge), and Bethesda's test halls `WarehouseFortRuinsHALLrooms` (a
 portcullis, a turning switch) and `WarehouseAyleidRooms03` (Ayleid wall switches).
 
+## Round 1 (the first headset run, 30 October): what changed
+
+Your notes, and what was done (logs in `C:ustvr-wt\world\playtest-1`):
+
+- **"Everything is insanely way too heavy."** The arm pulling a door or a lever was damped on the
+  part's own speed, so a 126 kg door trailed a moving hand by about a quarter of a metre (and a
+  218 kg switch stone more). Now the arm's damping is on how fast it stretches: a part keeps up with
+  a hand moving steadily, and lags only while the hand speeds up, never more than the arm's 5 cm
+  stretch. The weights are as they were (the doors' planks, the gates' iron): they show as that
+  little give and as how a shoved door swings on.
+- **The hanging things and chains went through the hands.** The runtime only had the game's fixed
+  collision. Now every body the game's physics swings near you (not an item, not a creature) is
+  one of the game's props to the runtime: the hand pushes it and the game's Havok swings it.
+- **The lever should fire when pushed all the way.** It fired at 88% of its travel. Worse, each
+  time you took it, the trigger (squeezed with the grip) also pressed the game's Activate at gaze on
+  it, so its script ran at the grab too. Now a lever or a switch fires at its stop, and a hand on a
+  door or a lever is busy: its trigger does nothing to the game.
+- **Walking away with a door should pull it, not stretch the arm.** Past the arm's 5 cm stretch the
+  body pulls: the part comes along the way it moves, as fast as the controller goes. The way it
+  can't go (off its hinge), the hand lets go after 30 cm (was 50).
+
 ## What to try, in order
 
 1. **Push the cave door open.** Walk up to the planked door ahead (it's big and heavy, about
@@ -21,10 +42,12 @@ portcullis, a turning switch) and `WarehouseAyleidRooms03` (Ayleid wall switches
    script if it has one). From there your hand swings it. Shove it and let go: it swings on and slows
    to a stop over a couple of seconds.
 2. **Take it by any part of it.** Grip anywhere on the leaf (no handle to hunt for): the fingers
-   close where they are and nothing jumps. Pull and push it about; near the hinge it barely moves,
-   at its edge it swings (the leverage is your arm's, capped at about 180 N). Walk into its swing: it
-   stops on your body rather than pushing through you. Pull your hand more than half a metre from
-   where you hold it and the hand lets go and glides back to the controller.
+   close where they are and nothing jumps. Pull and push it about: it keeps up with the hand, your
+   drawn hand never more than 5 cm behind the controller (the arm's stretch); past that your body
+   brings it. **Hold it and walk backwards: it comes with you**, and the arm doesn't stretch after
+   it. Walk into its swing: it stops on your body rather than pushing through you. Pull it the way it
+   can't go (off its hinge, past its stop) 30 cm and the hand lets go and glides back to the
+   controller.
 3. **Shut it.** Swing it back into its frame: at the frame the game closes it (its Activate
    again, its close sound) and it latches. Pull on it again to open it.
 4. **The prison gate and the dungeon door** to your right behave the same way (the gate's two leaves
@@ -33,9 +56,15 @@ portcullis, a turning switch) and `WarehouseAyleidRooms03` (Ayleid wall switches
    Activate at gaze): the game plays its own opening and your hand meets the door where it's drawn as
    it swings.
 6. **The lever.** Walk about 16 m ahead from where you started, past the trap doors: the fort ruin's
-   floor lever stands by a rock. Grip its handle and push it over. It holds at each end (its two positions); at the end of its travel the game's
-   Activate fires (its script; in this cell it works the secret stone door nearby).
-7. **The lock.** `play.ps1 world -At WarehouseLock -Give "0000000A 20"`. Push or pull one of the
+   floor lever stands by a rock. Grip its handle and push it over. It holds at each end (its two
+   positions); **pushed all the way over** (to its stop) the game's Activate fires (its script; in
+   this cell it works the secret stone door nearby). Squeezing the trigger with the grip doesn't
+   work it as well (that was the game's Activate at gaze). Pull it all the way back to work it again.
+7. **The hanging things.** In the same cell: the roots hanging from the ceiling, the two chain dolls,
+   the rope with the bucket, the rope of skulls (and a trap's chain once it's sprung). Push them with
+   a hand, or swat them: they swing off it and back, the game's own physics (they can't be taken in
+   a hand yet).
+8. **The lock.** `play.ps1 world -At WarehouseLock -Give "0000000A 20"`. Push or pull one of the
    locked gates: the game's own lock opens (the same menu as on a flat screen, as a panel). Your right
    hand is the pick:
    - move it left or right: the game's pick slides under the next tumbler (2.5 cm a tumbler);
@@ -44,21 +73,21 @@ portcullis, a turning switch) and `WarehouseAyleidRooms03` (Ayleid wall switches
      and the game breaks a pick (a jolt);
    - A is Auto Attempt, B closes the lock.
    Pick all five and the gate opens: the game swings it, and your hand meets it.
-8. **Ayleid switch stones.** `play.ps1 world -Save rustvr-ruin -At Vilverin03`: in its halls, the
+9. **Ayleid switch stones.** `play.ps1 world -Save rustvr-ruin -At Vilverin03`: in its halls, the
    switch stones stacked on pillars (glowing gems) push into the pillar with a palm, 25 cm; at the
    bottom of the push the game's Activate (its script, its stone's grinding), and they come back out
    as slowly as the game's own animation brings them. The Ayleid wall switches (the framed stone with
    a blue gem, in almost every Ayleid ruin) push into the wall the same way.
-9. **A fort's turning switch.** `play.ps1 world -Save rustvr-ruin -At FortAsh02` (or the test hall
+10. **A fort's turning switch.** `play.ps1 world -Save rustvr-ruin -At FortAsh02` (or the test hall
    `WarehouseFortRuinsHALLrooms`): the iron T-bar on a stone base. Take one end of the bar and walk it
    round a quarter turn (it's about 55 kg of iron); at the end the game's Activate (after its two
    seconds the switch's script works what it's wired to). It holds at either end; turn it back to
    work it again.
-10. **A portcullis or a ruin's stone door**: take it in a hand and the game raises it (or drops it
+11. **A portcullis or a ruin's stone door**: take it in a hand and the game raises it (or drops it
    into the floor) with its own animation; the hand lets go as it goes.
-11. **Chorrol's houses** (`-At ChorrolNorthernGoodsAndTrade`, `-At ChorrolFireAndSteel`) and the
+12. **Chorrol's houses** (`-At ChorrolNorthernGoodsAndTrade`, `-At ChorrolFireAndSteel`) and the
    Gottshaw Inn (`-At GottshawInnTavern`): ordinary house doors, wood on iron hinges.
-12. **A door the game's scripts keep shut, or a locked door without picks**, rattles in its frame and
+13. **A door the game's scripts keep shut, or a locked door without picks**, rattles in its frame and
    the game says why ("locked", the rattle sound), and opens nothing.
 
 ## What was checked in the game, and what wasn't
@@ -105,7 +134,8 @@ Not checked in the game:
 - The door sounds: they're the game's own (the animation's text keys, else the door form's sounds),
   played through the game's sound system; not listened to (the emulated headset has no ears).
 - Haptics: sent, not felt.
-- Any of it on the real headset.
+- Round 1's changes in the game (built and unit-tested only): the body pulling a door along, the
+  lever firing at its stop, the trigger quiet on a lever, the hanging things pushed.
 
 ## Decisions made
 
@@ -142,7 +172,25 @@ Not checked in the game:
 - **Buttons and switch stones** push in against a firm spring, 60 N all the way in, however heavy the
   stone (a wall switch's is about 460 kg of drawn stone), and come back no faster than the game's
   animation brings them: a design value, the game has none.
-- The break distance for a hand on a hinge or slide is 50 cm (the rig's empty-hand leash is 70).
+- **An arm pulls up to 180 N over a 5 cm stretch, and past that the body pulls without limit**
+  (round 1: a VR controller has no weight to feel, so a part that lags the hand reads as "too
+  heavy" and a stretched arm): along the way a part moves it stays within 5 cm of the controller,
+  its weight left to show in that give and in how it swings on when let go. A wheel geared to a gate
+  still turns no faster than the gate. A stiff wheel one arm can't turn, the body can.
+- The break distance for a hand on a hinge or slide is 30 cm, as the rig's foregrip's (was 50; the
+  empty-hand leash is 70): along the way it moves the body brings the part, so nothing's leaned on
+  with a stretched arm any more.
+- **A lever or a switch fires at its stop** (0.97 of its travel); a button or a switch stone that
+  springs back still fires at 0.88, where the checks had a palm bottoming out on its surround.
+- **A hand on a door or a lever is busy**: its trigger doesn't use what the eyes are on (the
+  game's Activate at gaze ran the lever's script at every grab).
+- **The world's loose bodies** (`crates/oblivion/src/props.rs`): every Havok body near you (3 m from
+  the chest, 48 at most) in a Havok world, neither fixed nor keyframed (Havok's own
+  `isFixedOrKeyframed`), that isn't an item's or a creature's, is a game prop to the runtime: the
+  hands go into it and push it, and each push is given to its body as the impulse its point lacks
+  (`applyPointImpulse`, the facts the npcs branch found), so it swings on its own constraints. Not
+  taken in a hand yet: holding a chain link would want the game's own grab (a mouse spring on the
+  body), as the npcs branch holds a ragdoll.
 
 ## Not done
 
