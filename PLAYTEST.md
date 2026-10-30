@@ -10,7 +10,8 @@ face when the game loads), and there are 20 lockpicks in the pack. `-At Warehous
 `-Give "0000000A 20"`) is Bethesda's lock test cell: rows of locked fence gates. Real places with
 doors and levers that work by hand: the Imperial Dungeon (`-At ImperialDungeon01`, the cell gates),
 Fort Ash (`-At FortAsh02`, its turning switches), Chorrol's Mages Guild (`-At ChorrolMagesGuild`, its
-locked display cases: a lid on a hinge).
+locked display cases: a lid on a hinge), and Bethesda's test halls `WarehouseFortRuinsHALLrooms` (a
+portcullis, a turning switch) and `WarehouseAyleidRooms03` (Ayleid wall switches).
 
 ## What to try, in order
 
@@ -46,10 +47,18 @@ locked display cases: a lid on a hinge).
 8. **Ayleid switch stones.** `play.ps1 world -Save rustvr-ruin -At Vilverin03`: in its halls, the
    switch stones stacked on pillars (glowing gems) push into the pillar with a palm, 25 cm; at the
    bottom of the push the game's Activate (its script, its stone's grinding), and they come back out
-   as slowly as the game's own animation brings them.
-9. **Chorrol's houses** (`-At ChorrolNorthernGoodsAndTrade`, `-At ChorrolFireAndSteel`) and the
+   as slowly as the game's own animation brings them. The Ayleid wall switches (the framed stone with
+   a blue gem, in almost every Ayleid ruin) push into the wall the same way.
+9. **A fort's turning switch.** `play.ps1 world -Save rustvr-ruin -At FortAsh02` (or the test hall
+   `WarehouseFortRuinsHALLrooms`): the iron T-bar on a stone base. Take one end of the bar and walk it
+   round a quarter turn (it's about 55 kg of iron); at the end the game's Activate (after its two
+   seconds the switch's script works what it's wired to). It holds at either end; turn it back to
+   work it again.
+10. **A portcullis or a ruin's stone door**: take it in a hand and the game raises it (or drops it
+   into the floor) with its own animation; the hand lets go as it goes.
+11. **Chorrol's houses** (`-At ChorrolNorthernGoodsAndTrade`, `-At ChorrolFireAndSteel`) and the
    Gottshaw Inn (`-At GottshawInnTavern`): ordinary house doors, wood on iron hinges.
-10. **A door the game's scripts keep shut, or a locked door without picks**, rattles in its frame and
+12. **A door the game's scripts keep shut, or a locked door without picks**, rattles in its frame and
    the game says why ("locked", the rattle sound), and opens nothing.
 
 ## What was checked in the game, and what wasn't
@@ -70,6 +79,14 @@ Checked, each once, with the emulated headset (the logs and captures are the evi
 - Vilverin's Ayleid switch stones: one pushed in with a palm (0 to 0.23 of its 0.25 m), the game's
   Activate at 88% (its script ran, its sound played), springing back out when let go; seen pushed in
   on its pillar.
+- A portcullis (`WarehouseFortRuinsHALLrooms`, the fort ruins' test hall): taken in a hand, the
+  game's Activate (open state 3 -> 2), the game raised it its 2.86 m with the runtime's leaf following
+  it, the hand letting go as it went up.
+- A fort's turning switch (the same hall): taken by its bar's end, walked round 1.43 of its 1.57 rad,
+  the game's Activate at 88%; the script's own turn, which it plays two seconds later, stopped (the
+  bar stayed where the hand left it); seen turned.
+- An Ayleid wall switch (`WarehouseAyleidRooms03`): pushed in with a palm (0.20 of its 0.22 m, at
+  0.15 m/s), the game's Activate and its sound, sprung back out over about 2.5 s; seen pushed in.
 - Cell changes (Chorrol's guilds, back and forth, then `TestTraps`): the world's parts dropped
   before the cell went and offered again in the new one, no crash; the double cave door's two leaves
   each on their own hinge.
@@ -81,8 +98,7 @@ Not checked in the game:
 - Following an NPC walking through a door (the same following as the trigger's).
 - A door whose hinge is level (a trap door, a display case's lid): it should fall shut under its own
   weight.
-- The sliding doors (a ruin's stone door, a portcullis): a tug should be the game's Activate and the
-  game's animation moves it.
+- A ruin's stone door (it slides down into the floor, the same as the portcullis but the other way).
 - The door sounds: they're the game's own (the animation's text keys, else the door form's sounds),
   played through the game's sound system; not listened to (the emulated headset has no ears).
 - Haptics: sent, not felt.
@@ -108,19 +124,29 @@ Not checked in the game:
 - **The lock is the game's lock menu, worked by the hand:** the floating-menus feature (another
   branch) owns how the menu's picture floats; here the hand drives the game's pick (its cursor and
   its mouse) instead of the laser, so every rule (tumbler speeds, Security windows, broken picks)
-  stays the game's. The pick isn't drawn in the hand at the keyhole yet.
-- **Activators** are levers, switches, buttons, chains and wheels whose model moves a part with its
-  own collision along its own "Forward" animation, with a script; traps (models named or filed as
-  traps) and big parts (more than 1.6 m, or slides past 0.9 m: gates and bridges levers work) are
-  left alone.
+  stays the game's. The pick isn't drawn in the hand: the game's lock draws its own pick, under
+  its tumblers, and a second pick in the hand, away from the lock it works, would touch nothing.
+  It belongs with the lock drawn at the door's keyhole (after the floating menus land).
+- **Activators** are levers, switches, buttons, chains and wheels whose model moves a part along its
+  own "Forward" animation, with a script; traps and their triggers (models named or filed as traps or
+  triggers, pressure plates) and big parts (more than 1.6 m, or slides past 0.9 m: gates and bridges
+  levers work) are left alone. A part's shape for the hand is its Havok body's, or what's drawn of it
+  where it has none (a turning switch's bar) or where its body lies off its drawing (an Ayleid wall
+  switch's box sits half a metre out from the wall).
+- **A script's own animation in answer to the hand's Activate is stopped** for 3 s after it (the
+  fort switches' scripts play their turn two seconds later): the hand already moved it.
+- **Buttons and switch stones** push in against a firm spring, 60 N all the way in, however heavy the
+  stone (a wall switch's is about 460 kg of drawn stone), and come back no faster than the game's
+  animation brings them: a design value, the game has none.
 - The break distance for a hand on a hinge or slide is 50 cm (the rig's empty-hand leash is 70).
 
 ## Not done
 
-- **The pick drawn in the hand at the keyhole** (the game's `lockpicking\*.nif` models posed by the
-  menu's state), and the lock placed at the door rather than as the menu's panel.
-- The Ayleid wall switches (`ARWallSwitch01`) and a few other older models whose animations go
-  through blocks the model reader doesn't read yet: they stay the game's Activate.
+- **The lock drawn at the door's keyhole, the pick in the hand in it** (the game's
+  `lockpicking\*.nif` models posed by the menu's state), rather than as the menu's panel. It needs a
+  way for the runtime to put a thing into a hand that didn't take it (the framework has none yet).
+- A few older models whose animations go through blocks the model reader doesn't read yet (particle
+  and material controllers ahead of the animation): they stay the game's Activate.
 - **Drawers, chests' lids, buttons and pull chains** in vanilla: Oblivion's containers have no lid
   animations (the 538 animated containers are hanging corpses), and its buttons and chains are mostly
   traps' or the Shivering Isles'; buttons that slide in (the Shivering Isles' ruins) should work as
