@@ -27,11 +27,13 @@ game's own image quality and stutter: `docs/research/oblivion-image-quality.md`.
    right. The far trees should stay put, not shimmer or swing as you turn.
 3. **The near trees.** They should sparkle less as your head moves (no sharpening bias), and switch
    detail less as you walk (full detail).
-4. **The water.** The waves should move smoothly, not step.
-5. **Shadows.** Characters' shadows should be sharper up close (1024 shadow maps, not 256).
-6. **The ground.** Roads and ground at a slant should be sharp a long way out (anisotropic
+4. **The grass.** It should stand all round you: no grass growing in or vanishing at the edges of
+   your view as you turn your head.
+5. **The water.** The waves should move smoothly, not step.
+6. **Shadows.** Characters' shadows should be sharper up close (1024 shadow maps, not 256).
+7. **The ground.** Roads and ground at a slant should be sharp a long way out (anisotropic
    filtering, 16x).
-7. **The frame rate.** Tell me if any of this costs too much (the runtime's log has the pictures a
+8. **The frame rate.** Tell me if any of this costs too much (the runtime's log has the pictures a
    second); each piece can be turned off.
 
 ## `playtest-rain.bat`
@@ -59,6 +61,9 @@ below is in both.)
 - **Round 5, the distant trees.** The game turned every far tree card to the way the camera looks,
   so every turn of your head turned the whole far forest. Its shader is now made to turn each card
   to face your eye instead, as the game's near billboards do.
+- **Round 5, the grass.** The game grew grass only in a cone in front of its camera, sized for a
+  flat screen (46 degrees either side) and rebuilt after a 19-degree turn. Now it grows it all round
+  you, to the game's own grass distance.
 - **Round 5, anisotropic filtering** back on, 16x: the streaks across the trees were there before it.
 - **Round 3, the far distance's flicker** (the runtime). At your render scale (1.66) the game draws
   each eye at 5099x5418, more pixels than the headset shows. The runtime took one sample of the
@@ -84,9 +89,10 @@ below is in both.)
 
 - None of round 5 has been seen in the headset yet. The stutter's cause is inferred from the
   timing log, not measured: this run's log measures it (the game's waits for its loading).
-- Grass grown only in front of the flat game's view (it comes and goes at the edge of a headset's
-  view) and the water's reflections resetting as the head moves (the research's other VR items) are
-  not done.
+- The water's reflections resetting as the head moves (the research's other VR item) is not done.
+- Your `Oblivion.ini` has the grass distance under `[Display]`, where the game doesn't read it: the
+  grass reaches 43 m (`[Grass]`'s 3000). Raising `[Grass] fGrassEndDistance` grows it further, at a
+  cost (it's now all round you).
 - Mods (Oblivion Stutter Remover, the 4GB patch, LOD regeneration) need files from outside and
   changes to your game's install: set out in the research, not done here.
 - The ghosting on moving people: not found in the game's picture (the saved pictures, taken before
