@@ -86,6 +86,9 @@ pub fn before_update() {
         if s.frame.intents.flags & rustvr_protocol::INT_CURSOR != 0 {
             crate::menus::point(s.frame.intents.cursor_uv);
         }
+        // The game's lock, open: the hand is its pick.
+        #[cfg(all(windows, target_arch = "x86"))]
+        crate::lock::frame(&s.frame, 1, &mut v, link::now());
         if let Some(view) = s.view {
             log_once(view.look_yaw);
             first_person();
