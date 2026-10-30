@@ -20,7 +20,9 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | Input | The game's DirectInput keyboard and mouse read the runtime's actions, through the player's own `Oblivion.ini` bindings. While in VR the real keyboard and mouse don't reach the game. | `input.rs` |
 | The window | It's always "active", so the game never pauses for focus. In the test mode it's off-screen and never activated. | `window.rs` |
 | Settings | `Oblivion.ini` is windowed and skips the intro films while in VR. The player's values are kept and put back. | `game_settings.rs` |
-| The body | The runtime draws the player's body from the game's own models: the race's skin where nothing is worn, the armour and clothes worn over it, on the game's skeleton. | `body.rs` |
+| The body | The runtime draws the player's body from the game's own models: the race's skin where nothing is worn, the armour and clothes worn over it, on the game's skeleton. The head: the race's head and the parts made to it (ears, mouth, teeth, tongue, eyes), the hair (unless a helmet or hood covers its slot) and what's worn on the head, each with the race's, the eyes' or the hair's own texture. The face: FaceGen's coordinates (the race's plus the NPC's), the age map FaceGen's age picks, the hair's colour; the runtime morphs the head's parts and makes its texture as the game does. In first person the head stays out of the player's eyes. | `body.rs`, `docs/research/mirror.md` |
+| The mirror | A standing mirror the player calls up (the runtime's Body tab, or pulling the gripped hands apart in front of the chest). The game's world in it is one more render a frame from the head reflected in the glass, its near plane on the glass, copied with its depth; the runtime draws each eye's reflection with the player in it. | `render.rs`, `d3d9.rs` |
+| The race menu | Opened by a new game or `showracemenu`: the world stays round the player, a mirror stands in front of them and the menu (the part of the picture its tiles take) beside it, worked by the laser. The game's own third-person player is hidden; every change in the menu (race, sex, face, hair, eyes) shows on the mirrored body as it's made. | `menus.rs`, `hud_info.rs`, `link.rs` |
 | Lighting | The body and what the hands hold are lit as Oblivion's own shaders light them: the scene's sun or moon, the point lights near the player (torches, candles, spells), the ambient (Night-Eye's too), normal maps, specular, the skin's rim, glow maps and the fog. | `lighting.rs`, `docs/research/oblivion-lighting.md` |
 | Weapons | The equipped weapon (the game's model) hangs at the left hip, or on the back if two-handed, and the hand draws it. The equipped shield is taken from over the left shoulder. Edges, points, heads and guards are measured on each model. | `weapons.rs` |
 | Combat | Hits are the game's own hit with the equipped weapon (damage, skill, enchantments). A blow met by the weapon or shield is the game's block. Spells charge in the palm and go off as the game's own cast: target spells from the palm along the aim, touch spells into what the hand touches, self spells on the player. | `combat.rs` |
@@ -33,8 +35,11 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 The game's models are converted once into `local_assets/oblivion` (never committed):
 
 ```
-cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters meshes/armor meshes/clothes textures/characters
 ```
+
+(`meshes/characters` brings the races' heads and the parts made to them, the hair and their FaceGen
+morphs, `morphs/*.rvf`, and FaceGen's age control, `facegen.toml`.)
 
 Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
 

@@ -193,15 +193,18 @@ pub fn body() -> Option<Body> {
     Some(b)
 }
 
-/// A cached model's meshes' base and normal textures (keys), for the swaps onto them.
-fn mesh_textures(key: &str) -> Vec<(String, String)> {
-    static CACHE: Mutex<Option<HashMap<String, Vec<(String, String)>>>> = Mutex::new(None);
+/// A cached model's meshes' base, normal and detail textures (keys; a hair's detail is its layer
+/// map), for the swaps onto them.
+fn mesh_textures(key: &str) -> Vec<(String, String, String)> {
+    static CACHE: Mutex<Option<HashMap<String, Vec<(String, String, String)>>>> = Mutex::new(None);
     let mut cache = CACHE.lock().unwrap();
     cache
         .get_or_insert_with(HashMap::new)
         .entry(key.to_owned())
         .or_insert_with(|| {
-            rustvr_asset::load_model(&dir(), key).map(|m| m.meshes.iter().map(|m| (m.texture.clone(), m.material.bump.clone())).collect()).unwrap_or_default()
+            rustvr_asset::load_model(&dir(), key)
+                .map(|m| m.meshes.iter().map(|m| (m.texture.clone(), m.material.bump.clone(), m.material.detail.clone())).collect())
+                .unwrap_or_default()
         })
         .clone()
 }
@@ -216,11 +219,12 @@ fn have_texture(key: &str) -> bool {
     dir().join("textures").join(format!("{key}.{}", rustvr_asset::TEXTURE_EXT)).is_file()
 }
 
-/// A game texture path (under `textures\`) and its normal map (`<path>_n.dds`).
-fn with_normal(path: &str) -> (String, String) {
+/// A game texture path (under `textures\`), its normal map (`<path>_n.dds`) and its hair's layer
+/// map (`<path>_hl.dds`), as keys.
+fn with_normal(path: &str) -> (String, String, String) {
     let full = format!("textures\\{}", oblivion_assets::export::normalise(path, "textures\\"));
-    let normal = full.strip_suffix(".dds").map(|s| format!("{s}_n.dds")).unwrap_or_default();
-    (texture_key(&full), texture_key(&normal))
+    let with = |suffix: &str| full.strip_suffix(".dds").map(|s| format!("{s}{suffix}.dds")).unwrap_or_default();
+    (texture_key(&full), texture_key(&with("_n")), texture_key(&with("_hl")))
 }
 
 /// The avatar for a body: the skeleton, a worn item's model over each slot it covers, the race's
@@ -267,13 +271,16 @@ pub fn avatar(b: &Body) -> AvatarDesc {
         if texture.is_empty() {
             return;
         }
-        let (to, to_normal) = with_normal(texture);
-        for (from, from_normal) in mesh_textures(&key) {
+        let (to, to_normal, to_layer) = with_normal(texture);
+        for (from, from_normal, from_layer) in mesh_textures(&key) {
             if !from.is_empty() && from != to {
                 d.push_swap(&from, &to);
             }
             if !from_normal.is_empty() && from_normal != to_normal && have_texture(&to_normal) {
                 d.push_swap(&from_normal, &to_normal);
+            }
+            if !from_layer.is_empty() && from_layer != to_layer && have_texture(&to_layer) {
+                d.push_swap(&from_layer, &to_layer);
             }
         }
     };
@@ -395,13 +402,19 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
         let bytes = bytemuck::bytes_of(&f).to_vec();
         let mut sent = SENT_FACE.lock().unwrap();
         if sent.as_ref() != Some(&bytes) {
-            let (_, detail, _) = f.detail();
-            tracing::info!(
-                "body: the face: geometry {:.2?}.., texture {:.2?}.., hair colour {:.2?}, age map {detail:?}",
-                &f.geometry_symmetric[..4],
-                &f.texture_symmetric[..4],
-                &f.hair_color[..3]
-            );
+            // (Said at most every second or so: a slider dragged changes it every frame.)
+            static SAID: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+            let mut said = SAID.lock().unwrap();
+            if said.is_none_or(|t| t.elapsed().as_secs_f32() > 1.0) {
+                *said = Some(std::time::Instant::now());
+                let (_, detail, _) = f.detail();
+                tracing::info!(
+                    "body: the face: geometry {:.2?}.., texture {:.2?}.., hair colour {:.2?}, age map {detail:?}",
+                    &f.geometry_symmetric[..4],
+                    &f.texture_symmetric[..4],
+                    &f.hair_color[..3]
+                );
+            }
             if a.write_face(&f) {
                 *sent = Some(bytes);
             }

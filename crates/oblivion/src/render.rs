@@ -283,7 +283,24 @@ mod win {
             }
             *said = race_menu;
         }
-        let snap = link::game_frame(&GameFrame { eye: Some(game.eye()), look_yaw: game.look_yaw(), menu, race_menu, now, dt })?;
+        // The race menu puts the game's camera in front of the player's face, looking back at them:
+        // the player stays where they stood (the eye and its look before it opened), so the world
+        // doesn't jump forward and back as it opens and closes.
+        let (eye, look_yaw) = {
+            static STOOD: Mutex<Option<(glam::Vec3, f32)>> = Mutex::new(None);
+            let mut stood = STOOD.lock().unwrap();
+            match (race_menu.is_some(), *stood) {
+                (true, Some(s)) => s,
+                _ => {
+                    let s = (game.eye(), game.look_yaw());
+                    if race_menu.is_none() {
+                        *stood = Some(s);
+                    }
+                    s
+                }
+            }
+        };
+        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, now, dt })?;
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);

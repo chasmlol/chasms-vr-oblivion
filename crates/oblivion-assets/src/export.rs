@@ -320,9 +320,15 @@ fn convert_on(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part, 
                             material.shader = Shader::GamebryoHair;
                         }
                         let normal = path.strip_suffix(".dds").map(|s| format!("{s}_n.dds"));
+                        // The hair's layer map (`<texture>_hl.dds`: its strands over the base, by
+                        // its alpha), where the others have a glow map.
+                        let layer = path.strip_suffix(".dds").map(|s| format!("{s}_hl.dds")).filter(|_| hair);
                         texture = add(path, &mut textures);
                         if let Some(n) = normal.filter(|n| exists(n)) {
                             material.bump = add(n, &mut textures);
+                        }
+                        if let Some(l) = layer.filter(|l| exists(l)) {
+                            material.detail = add(l, &mut textures);
                         }
                     }
                     if let Some(Block::SourceTexture { file }) = nif.get(t.glow) {
