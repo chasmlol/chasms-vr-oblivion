@@ -160,7 +160,9 @@ impl Bridge {
         let counts = self.presses.update(it);
         let started = |a: Action| it.held & a.bit() != 0 && self.last_held & a.bit() == 0;
         let long_menu = started(Action::FlashlightHold);
-        // (The runtime's player rig holds Jump while A is down, rather than counting a press.)
+        // (The runtime's player rig holds Jump while an empty hand's A is down, rather than
+        // counting presses: its start is the press, so A jumps, out of the water too, and on a
+        // mount.)
         let jump = started(Action::Jump);
         self.last_held = it.held;
         let mut v = Virtual::default();
@@ -188,15 +190,12 @@ impl Bridge {
             (Action::Inventory, "Menu Mode"),
             (Action::UseHold, "Rest"),
         ] {
-            if pressed(&counts, a) {
+            if pressed(&counts, a) || (a == Action::Jump && jump) {
                 self.pulses.push((self.binding(name), now + PULSE));
             }
         }
         if long_menu {
             self.pulses.push((self.binding("Quick Menu"), now + PULSE));
-        }
-        if jump && !pressed(&counts, Action::Jump) {
-            self.pulses.push((self.binding("Jump"), now + PULSE));
         }
         // The laser's trigger on the game's menus: the left mouse button. (Out of them a fingertip on
         // a book's pages is the book's, `crate::books`: the button would swing.)

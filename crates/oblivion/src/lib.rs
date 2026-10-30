@@ -82,6 +82,7 @@ pub mod shapes;
 pub mod slot_menu;
 pub mod sounds;
 pub mod tiles;
+pub mod swim;
 pub mod timing;
 pub mod torch;
 pub mod weapons;

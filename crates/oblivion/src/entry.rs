@@ -42,6 +42,8 @@ fn startup() {
     crate::movement::install();
     crate::books::install();
     #[cfg(target_arch = "x86")]
+    crate::swim::install();
+    #[cfg(target_arch = "x86")]
     crate::hud_info::install();
     crate::combat::install();
     crate::console::install();

@@ -28,6 +28,9 @@
 //! counter) until their front is at it, their head over it; otherwise (a wall, a door, someone)
 //! their head's breadth from it. The world's fixed things say which ([`crate::collision`]);
 //! anything else, the view stays inside the game's body. Walking on freely, it comes back onto it.
+//!
+//! Swimming, the arms' strokes are the step ([`crate::swim::stroke_step`]): the game's own swimming
+//! moves the player at the strokes' velocity, the stick's swimming added while it's pushed.
 
 use glam::Vec3;
 
@@ -115,7 +118,7 @@ pub fn step(stick: [f32; 2], speed: f32, dt: f32) -> [f32; 2] {
 }
 
 #[cfg(all(windows, target_arch = "x86"))]
-pub use win::{fit_people, install, lead, set_stick};
+pub use win::{fit_people, install, lead, set_stick, set_swim};
 
 #[cfg(all(windows, target_arch = "x86"))]
 mod win {
@@ -164,6 +167,9 @@ mod win {
     static REAL: AtomicUsize = AtomicUsize::new(0);
     /// The runtime's stick this frame, while in VR (None: the game walks as it would).
     static STICK: Mutex<Option<[f32; 2]>> = Mutex::new(None);
+    /// The arms' strokes this frame, while the runtime swims the player: their velocity in the
+    /// world (game units a second).
+    static SWIM: Mutex<Option<[f32; 3]>> = Mutex::new(None);
     static LOGGED: AtomicUsize = AtomicUsize::new(0);
     /// Who the body last stopped at, and who was last made a body's round, for the log; whether the
     /// player's capsule has been said.
@@ -184,6 +190,32 @@ mod win {
 
     pub fn set_stick(stick: Option<[f32; 2]>) {
         *STICK.lock().unwrap() = stick;
+    }
+
+    pub fn set_swim(v: Option<[f32; 3]>) {
+        *SWIM.lock().unwrap() = v;
+    }
+
+    /// Swimming by the arms: the frame's step is the strokes', the stick's swimming (the game's
+    /// own step) added while it's pushed, never further than the faster of the two takes the player.
+    fn swim_step(this: usize, dt: f32, d: &mut [f32; 3], v: [f32; 3], stick: [f32; 2]) {
+        let Some(rot) = mem::at::<[f32; 3]>(this + crate::engine::refr::ROT) else { return };
+        let s = crate::swim::stroke_step(v, rot[2], rot[0], dt);
+        let mut out = if stick[0].hypot(stick[1]) > 0.05 { [d[0] + s[0], d[1] + s[1], d[2] + s[2]] } else { s };
+        type Speed = unsafe extern "thiscall" fn(usize) -> f32;
+        let speed = unsafe { std::mem::transmute::<usize, Speed>(MOVEMENT_SPEED)(this) };
+        let cap = speed.max((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()) * dt;
+        let len = (out[0] * out[0] + out[1] * out[1] + out[2] * out[2]).sqrt();
+        if len > cap && len > 0.0 {
+            out = out.map(|c| c * cap / len);
+        }
+        let n = LOGGED.fetch_add(1, Ordering::Relaxed);
+        if n % 120 == 0 && out != [0.0; 3] {
+            let at = mem::at::<[f32; 3]>(this + crate::engine::refr::POS);
+            let eye = crate::camera::read(crate::engine::world_camera()).map(|c| c.pos[2]);
+            tracing::info!("swim: the game's step {:.2?}, the strokes' {:.2?} for {dt:.4} s (pitch {:.2}, heading {:.2}), the player at {at:.1?}, the game's camera at {eye:.1?}", [d[0], d[1], d[2]], out, rot[0], rot[2]);
+        }
+        *d = out;
     }
 
     /// Where the view stands ahead of the game's body this frame (the runtime's world, metres),
@@ -355,6 +387,12 @@ mod win {
             let stick = *STICK.lock().unwrap();
             crate::hooks::guard_void("player step", || {
                 let Some(stick) = stick else { return };
+                if crate::swim::swimming(this) {
+                    if let Some(v) = *SWIM.lock().unwrap() {
+                        swim_step(this, dt, unsafe { &mut *delta }, v, stick);
+                    }
+                    return;
+                }
                 // (On a horse the horse moves, and the game moves its rider with it.)
                 if !on_ground_walking(this) || crate::riding::mounted() {
                     return;

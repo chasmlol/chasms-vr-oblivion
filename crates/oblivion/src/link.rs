@@ -115,6 +115,11 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     gs.game_zoom = 1.0;
     if view.is_some() {
         gs.light = crate::lighting::hint();
+        // The game's water, for swimming by the arms.
+        #[cfg(target_arch = "x86")]
+        {
+            gs.water = crate::hooks::guard("water", Default::default(), || crate::swim::state(crate::player::running(&frame.intents)));
+        }
     }
     adapter.write_state(&mut gs);
     let snap = Snapshot { frame, view };

@@ -47,6 +47,7 @@
 //! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing, for a person, a door, a container (not a thing that can be taken); over each hand's thing while hands have them (a picture of the card for each, `HudLayout::card_of`; a thing under the fingers in a pocket too) |
 //! | a foe's health | `hud_reticle.xml` | over the foe |
 //! | spoken lines | `hud_subtitle_menu.xml` | the caption strip |
+//! | the breath meter, under water | `breath_menu.xml` ([`crate::swim`]) | where the game has it, at the top of the view |
 //! | notices ("Iron Arrow added"), a region's name | `hud_subtitle_menu.xml`, `hud_main_menu.xml` | over the captions |
 
 use rustvr_protocol::*;
@@ -194,6 +195,8 @@ mod win {
     const MENU_ENCHANTMENT: u32 = 0x412;
     const MENU_SIGIL_STONE: u32 = 0x418;
     const MENU_BOOK: u32 = crate::books::MENU_BOOK;
+    /// The breath meter (`BreathMenu`), shown while the player's head is under water.
+    const MENU_BREATH: u32 = 0x415;
     /// Menus a thing in the world opens as it's activated (a lock, an altar, a sigil stone): they
     /// float beside it.
     const THINGS_OWN: [u32; 4] = [MENU_LOCKPICK, MENU_SPELLMAKING, MENU_ENCHANTMENT, MENU_SIGIL_STONE];
@@ -724,6 +727,14 @@ mod win {
         piece(l, trees, HUD_SUBTITLES, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_text")]);
         piece(l, trees, HUD_HINTS, MENU_SUBTITLES, &[From::Drawn("hudsubtitle_icon"), From::Drawn("hudsubtitle_notice")]);
         piece(l, trees, HUD_HINTS, MENU_HUD, &[From::Drawn("hudmain_region")]);
+        // The breath meter, under water (`crate::swim`): where the game has it, at the top of the
+        // view. (What it draws: its menu is as big as the screen.)
+        let breath = trees.get(MENU_BREATH);
+        if let Some(b) = breath.0.first().and_then(|top| breath.drawn(&top.name)).filter(|b| !under(*b))
+            && let Some(uv) = tiles::uv_of(b, screen, MARGIN)
+        {
+            l.push(HudElement::new(HUD_CENTER, uv));
+        }
         // At gaze: the reticle where it is from the screen's middle (its activate icon on the point
         // looked at; its crosshair is hidden, as the hands aim), and the card of what it's on under it.
         let (w, h) = screen;
