@@ -58,6 +58,9 @@ pub const SHUT: f32 = 0.012;
 /// back within [`REARM`] of where it started (or, a two-way lever, of the other end).
 pub const FIRE_AT: f32 = 0.88;
 pub const REARM: f32 = 0.35;
+/// How hard a lever's two positions hold it (newtons at the end of its handle): more than a hand
+/// resting on it, less than a deliberate push.
+pub const DETENT_FORCE: f32 = 25.0;
 /// How long (seconds) a door's swing takes to die away once let go (its damping's time).
 pub const SETTLE: f32 = 0.8;
 /// Its pins: the friction of iron on iron, greased or not, and their radius (metres).
@@ -93,7 +96,7 @@ pub struct Joint {
     /// Its Havok body's mass in the model (kg; Oblivion leaves most doors' at 0), and the box round
     /// its drawn shapes in its own frame (half extents, game units).
     pub mass: f32,
-    pub drawn: Option<Vec3>,
+    pub drawn: Option<(Vec3, f32)>,
 }
 
 /// A model's animation, sampled.
@@ -195,11 +198,13 @@ fn body_mass(nif: &Nif, node: i32) -> f32 {
     }
 }
 
-/// The box round the shapes drawn under node `node`, in its own frame (half extents).
-fn drawn_box(nif: &Nif, node: i32, parents: &[i32]) -> Option<Vec3> {
+/// What's drawn under node `node`, in its own frame: the box round it (half extents) and its volume
+/// (its triangles' closed surface, by the divergence theorem; never more than the box).
+fn drawn_box(nif: &Nif, node: i32, parents: &[i32]) -> Option<(Vec3, f32)> {
     use oblivion_assets::nif::Block;
     let to_node = nif.world(node, parents).inverse();
     let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+    let mut volume = 0.0f32;
     for (i, b) in nif.blocks.iter().enumerate() {
         let Block::Shape { data, .. } = b else { continue };
         let mut p = parents.get(i).copied().unwrap_or(-1);
@@ -208,13 +213,18 @@ fn drawn_box(nif: &Nif, node: i32, parents: &[i32]) -> Option<Vec3> {
         }
         let Some(Block::ShapeData(d)) = (p == node).then(|| nif.get(*data)).flatten() else { continue };
         let x = nif.world(i as i32, parents).then(&to_node);
-        for v in &d.vertices {
-            let q = x.apply(*v);
-            lo = lo.min(q);
-            hi = hi.max(q);
+        let v: Vec<Vec3> = d.vertices.iter().map(|v| x.apply(*v)).collect();
+        for q in &v {
+            lo = lo.min(*q);
+            hi = hi.max(*q);
         }
+        let shape: f32 = d.triangles.iter().filter_map(|t| Some(v.get(t[0] as usize)?.dot(v.get(t[1] as usize)?.cross(*v.get(t[2] as usize)?)) / 6.0)).sum();
+        volume += shape.abs();
     }
-    (lo.x <= hi.x).then(|| (hi - lo) * 0.5)
+    (lo.x <= hi.x).then(|| {
+        let half = (hi - lo) * 0.5;
+        (half, volume.min(8.0 * half.x * half.y * half.z))
+    })
 }
 
 /// A track as a joint, if it moves enough: turned (by the rotation between its start and its
@@ -264,31 +274,25 @@ pub fn density(material: u32) -> f32 {
 pub const GATE_MASS_PER_AREA: f32 = 64.5;
 pub const PLANK: f32 = 0.045;
 
-/// What a part weighs that the game gives no mass (most of its doors): `half` its collision's half
-/// size, `drawn` its drawn shapes' (metres), `material` its Havok material. A leaf (thin in one
-/// way) is as heavy as its area of plank, or, of metal, as the game's own gates; anything else
-/// (a lever, a wheel) as its drawn size of its material.
-pub fn leaf_mass(half: Vec3, drawn: Option<Vec3>, material: u32) -> f32 {
-    // (Smallest to largest, each the less of the two: the two boxes are in frames of their own.)
-    let sorted = |v: Vec3| {
-        let mut e = [v.x, v.y, v.z];
-        e.sort_by(|a, b| a.total_cmp(b));
-        e
-    };
-    let mut e = sorted(half);
-    if let Some(d) = drawn {
-        let d = sorted(d);
-        for k in 0..3 {
-            e[k] = e[k].min(d[k]).max(0.005);
-        }
-    }
+/// What a part weighs that the game gives no mass (most of its doors and levers): its drawn
+/// shape's volume (game units cubed) made of what its Havok shape is made of; without a drawn shape,
+/// its collision's box (`half`, metres) as a leaf (a plank, or, of metal, as heavy as the game's own
+/// gates) or a block.
+pub fn part_mass(half: Vec3, drawn: Option<(Vec3, f32)>, material: u32) -> f32 {
     let rho = density(material);
-    let leaf = e[1] > 4.0 * e[0];
-    let mass = if leaf {
-        let area = 4.0 * e[1] * e[2];
-        if rho > 3000.0 { area * GATE_MASS_PER_AREA } else { area * PLANK * rho }
-    } else {
-        8.0 * e[0] * e[1] * e[2] * rho
+    let m3 = crate::camera::UNITS_PER_METER.powi(3);
+    let mass = match drawn {
+        Some((_, v)) if v > 0.0 => v / m3 * rho,
+        _ => {
+            let mut e = [half.x, half.y, half.z];
+            e.sort_by(|a, b| a.total_cmp(b));
+            if e[1] > 4.0 * e[0] {
+                let area = 4.0 * e[1] * e[2];
+                if rho > 3000.0 { area * GATE_MASS_PER_AREA } else { area * PLANK * rho }
+            } else {
+                8.0 * e[0] * e[1] * e[2] * rho
+            }
+        }
     };
     mass.clamp(0.2, 2000.0)
 }
@@ -340,7 +344,7 @@ mod game {
     const FORM_ID: usize = 0xC;
     const DELETED: u32 = 0x20;
     const DISABLED: u32 = 0x800;
-    const ACTIVATOR: u8 = 0x17;
+    const ACTIVATOR: u8 = 0x12;
     const DOOR: u8 = 0x18;
     const REFR_BASE: usize = 0x1C;
     const REFR_NODE: usize = 0x3C;
@@ -624,7 +628,8 @@ mod game {
         opening: bool,
         /// Model path -> its two animations (out and back), or None if it has none to work.
         done: HashMap<String, Option<Arc<(Animation, Option<Animation>)>>>,
-        wanted: Vec<String>,
+        /// Models to read, each with the animations to read from it (out, and back).
+        wanted: Vec<(String, &'static str, &'static str)>,
         busy: bool,
     }
     static MODELS: Mutex<Option<Models>> = Mutex::new(None);
@@ -640,8 +645,8 @@ mod game {
             if let Some(d) = m.done.get(&key) {
                 return Err(d.clone());
             }
-            if !m.wanted.contains(&key) {
-                m.wanted.push(key.clone());
+            if !m.wanted.iter().any(|w| w.0 == key) {
+                m.wanted.push((key.clone(), out, back));
             }
             let start = !m.busy;
             m.busy = true;
@@ -650,14 +655,14 @@ mod game {
         match start {
             Err(d) => Some(d),
             Ok(true) => {
-                std::thread::spawn(move || read_models(out, back));
+                std::thread::spawn(read_models);
                 None
             }
             Ok(false) => None,
         }
     }
 
-    fn read_models(out: &'static str, back: &'static str) {
+    fn read_models() {
         let archives = with_models(|m| m.archives.clone());
         let archives = match archives {
             Some(a) => a,
@@ -682,18 +687,29 @@ mod game {
             }
         };
         loop {
-            let Some(path) = with_models(|m| m.wanted.pop()) else { break };
+            let Some((path, out, back)) = with_models(|m| m.wanted.pop()) else { break };
             let read = archives.read(&format!("meshes\\{path}")).and_then(|d| Nif::parse(&d));
-            let anims = match read {
-                Ok(nif) => Animation::of(&nif, out).filter(|a| !a.joints.is_empty()).map(|a| Arc::new((a, Animation::of(&nif, back)))),
+            // (A model that trips the reader is one with nothing to work, not the end of reading.)
+            let anims = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match read {
+                Ok(nif) => {
+                    let a = Animation::of(&nif, out);
+                    if a.as_ref().is_some_and(|a| a.joints.is_empty()) {
+                        tracing::info!("world: {path}: its '{out}' moves nothing far enough");
+                    }
+                    a.filter(|a| !a.joints.is_empty()).map(|a| Arc::new((a, Animation::of(&nif, back))))
+                }
                 Err(e) => {
                     tracing::info!("world: {path}: {e:#}");
                     None
                 }
-            };
+            }))
+            .unwrap_or_else(|_| {
+                tracing::warn!("world: {path}: reading its animation failed");
+                None
+            });
             if let Some(a) = &anims {
                 let j = &a.0.joints[0];
-                tracing::info!("world: {path}: '{}' moves {} part(s) (the first '{}' {:?} {:.2} over {} samples; sounds {:?}; back again: {})", a.0.name, a.0.joints.len(), a.0.tracks[j.track].node, j.motion, j.far, a.0.times.len(), a.0.sounds, a.0.returns);
+                tracing::info!("world: {path}: '{}' moves {} part(s) (the first '{}' {:?} {:.2} over {} samples, mass {} drawn {:?}; sounds {:?}; back again: {})", a.0.name, a.0.joints.len(), a.0.tracks[j.track].node, j.motion, j.far, a.0.times.len(), j.mass, j.drawn, a.0.sounds, a.0.returns);
             }
             with_models(|m| m.done.insert(path, anims));
         }
@@ -892,7 +908,7 @@ mod game {
                 continue;
             }
             let (_, half) = crate::items::bounds(&points).unwrap_or((Vec3::ZERO, Vec3::splat(0.05)));
-            let mass = if j.mass > 0.0 { j.mass } else { leaf_mass(half, j.drawn.map(|d| d / camera::UNITS_PER_METER), material(body)) };
+            let mass = if j.mass > 0.0 { j.mass } else { part_mass(half, j.drawn, material(body)) };
             let far = j.far / units;
             let size = half.max_element() * 2.0;
             // A door that slides is too heavy for a hand (a ruin's stone, a portcullis); an
@@ -985,18 +1001,19 @@ mod game {
                 let back = (back_time - anim.times[j.far_at]).max(0.2);
                 let w = 4.0 / back;
                 (inertia * w * w, 2.0 * inertia * w)
-            } else if t.kind == Kind::Door {
-                // A door let go mid-swing slows to a stop over about a second, as a real one on
-                // its hinges does, rather than drifting on.
-                (0.0, inertia / SETTLE)
             } else {
-                (0.0, 0.0)
+                // A door (or a lever) let go mid-swing slows to a stop over about a second, as a
+                // real one on its hinges does, rather than drifting on.
+                (0.0, inertia / SETTLE)
             };
             let axis = p.base * Vec3::Z;
             let level = !p.slide && axis.y.abs() < std::f32::consts::FRAC_1_SQRT_2;
             let flags = JOINT_PANEL | if p.slide { JOINT_SLIDE } else { 0 } | if level && t.kind == Kind::Door { JOINT_GRAVITY } else { 0 };
             p.desc.turn_min = range.0;
             p.desc.turn_max = range.1;
+            // A lever that stays where it's put holds at its ends (its two positions) against a
+            // hand merely resting on it.
+            p.desc.detent = if t.kind == Kind::Activator && !anim.returns { DETENT_FORCE * p.desc.radius.max(0.1) * if p.slide { 1.0 / p.desc.radius.max(0.1) } else { 1.0 } } else { 0.0 };
             (p.desc.joint_spring, p.desc.joint_damping) = spring;
             p.desc.joint_flags = flags;
         }

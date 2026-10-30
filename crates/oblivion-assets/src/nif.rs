@@ -798,6 +798,41 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             }
             Block::TextKeys(keys)
         }
+        // Collision that's only read past here (the game's live Havok shapes are what the adapter
+        // uses): triangle strips, packed triangles, their MOPP trees, phantoms.
+        "bhkNiTriStripsShape" => {
+            havok_material(r)?;
+            r.skip(4 + 20 + 4 + 16)?; // radius, unused, grow by, scale
+            let _strips = r.refs()?;
+            let filters = r.u32()? as usize;
+            r.skip(filters * 4)?;
+            Block::Other(kind.into())
+        }
+        "hkPackedNiTriStripsData" => {
+            let tris = r.u32()? as usize;
+            r.skip(tris * 20)?; // indices, welding, normal
+            let verts = r.u32()? as usize;
+            r.skip(verts * 12)?;
+            Block::Other(kind.into())
+        }
+        "bhkPackedNiTriStripsShape" => {
+            let parts = r.u16()? as usize;
+            r.skip(parts * 12)?;
+            r.skip(4 + 4 + 4 + 4 + 16 + 4 + 16)?; // user data, unused, radius, unused, scale, copies
+            r.skip(4)?; // data
+            Block::Other(kind.into())
+        }
+        "bhkMoppBvTreeShape" => {
+            let _shape = r.i32()?;
+            r.skip(12 + 4)?; // unused, scale
+            let n = r.u32()? as usize;
+            r.skip(16 + n)?; // offset, the code
+            Block::Other(kind.into())
+        }
+        "bhkSimpleShapePhantom" => {
+            r.skip(4 + 4 + 20 + 8 + 64)?;
+            Block::Other(kind.into())
+        }
         "NiControllerManager" => {
             time_controller(r)?;
             r.skip(1)?; // cumulative
