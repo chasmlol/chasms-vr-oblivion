@@ -80,9 +80,106 @@ pub fn is_readable(_p: *const u8, _n: usize) -> bool {
     false
 }
 
+/// Copies `n` bytes from `src` to `dst` (cdecl): 0 once they're copied. Memory found readable can
+/// be freed by the game's other threads before it's read (its loading thread lets go of what a
+/// cell held as the player rides out of it): the copy then faults, and [`guard_reads`]'s handler
+/// sends the fault on to [`copy_failed`], which returns 1.
+#[cfg(all(windows, target_arch = "x86"))]
+#[unsafe(naked)]
+unsafe extern "C" fn guarded_copy(_dst: *mut u8, _src: *const u8, _n: usize) -> u32 {
+    core::arch::naked_asm!(
+        "push esi",
+        "push edi",
+        "mov edi, [esp + 12]",
+        "mov esi, [esp + 16]",
+        "mov ecx, [esp + 20]",
+        "cld",
+        "rep movsb",
+        "xor eax, eax",
+        "pop edi",
+        "pop esi",
+        "ret",
+    )
+}
+
+/// Where [`guarded_copy`] goes when its copy faults: its registers given back, 1 returned.
+#[cfg(all(windows, target_arch = "x86"))]
+#[unsafe(naked)]
+unsafe extern "C" fn copy_failed() -> u32 {
+    core::arch::naked_asm!("mov eax, 1", "pop edi", "pop esi", "ret")
+}
+
+/// The copy in [`guarded_copy`] (0 until [`guard_reads`] has found it).
+#[cfg(all(windows, target_arch = "x86"))]
+static COPY_AT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Reads that fault (in [`guarded_copy`]) come back unreadable instead of ending the game.
+#[cfg(all(windows, target_arch = "x86"))]
+pub fn guard_reads() {
+    use std::sync::atomic::Ordering;
+    use windows::Win32::Foundation::{EXCEPTION_ACCESS_VIOLATION, EXCEPTION_IN_PAGE_ERROR, STATUS_GUARD_PAGE_VIOLATION};
+    use windows::Win32::System::Diagnostics::Debug::{AddVectoredExceptionHandler, EXCEPTION_POINTERS};
+    unsafe extern "system" fn handler(info: *mut EXCEPTION_POINTERS) -> i32 {
+        const CONTINUE_EXECUTION: i32 = -1;
+        const CONTINUE_SEARCH: i32 = 0;
+        let (rec, ctx) = unsafe { (&*(*info).ExceptionRecord, &mut *(*info).ContextRecord) };
+        let fault = [EXCEPTION_ACCESS_VIOLATION, EXCEPTION_IN_PAGE_ERROR, STATUS_GUARD_PAGE_VIOLATION].contains(&rec.ExceptionCode);
+        if !fault || ctx.Eip as usize != COPY_AT.load(Ordering::Relaxed) {
+            return CONTINUE_SEARCH;
+        }
+        ctx.Eip = copy_failed as *const () as usize as u32;
+        CONTINUE_EXECUTION
+    }
+    // (A fault in a repeated copy is reported at the copy itself, its prefix.)
+    let start = guarded_copy as *const () as usize;
+    let code = unsafe { std::slice::from_raw_parts(start as *const u8, 32) };
+    let Some(i) = code.windows(2).position(|w| w == [0xF3, 0xA4]) else {
+        tracing::warn!("mem: the guarded copy's code isn't where it was built: reads of freed memory aren't caught");
+        return;
+    };
+    COPY_AT.store(start + i, Ordering::Relaxed);
+    // (First: before the handler that logs a fault as the end of the game.)
+    unsafe { AddVectoredExceptionHandler(1, Some(handler)) };
+    tracing::info!("mem: reads of memory freed under them are caught");
+}
+
+#[cfg(not(all(windows, target_arch = "x86")))]
+pub fn guard_reads() {}
+
+/// Copies `n` bytes at `src` into `dst`, if they're readable: false (forgetting the regions found
+/// readable, one of them gone) if the memory was freed under the copy.
+fn copy(dst: *mut u8, src: *const u8, n: usize) -> bool {
+    if !is_readable(src, n) {
+        return false;
+    }
+    #[cfg(all(windows, target_arch = "x86"))]
+    if unsafe { guarded_copy(dst, src, n) } != 0 {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static FAULTS: AtomicU32 = AtomicU32::new(0);
+        forget();
+        let n = FAULTS.fetch_add(1, Ordering::Relaxed);
+        if n < 10 || n % 1000 == 0 {
+            tracing::warn!("mem: a read at {src:p} faulted (freed since it was found readable): taken as unreadable ({} so far)", n + 1);
+        }
+        return false;
+    }
+    #[cfg(not(all(windows, target_arch = "x86")))]
+    unsafe {
+        std::ptr::copy_nonoverlapping(src, dst, n)
+    };
+    true
+}
+
 /// Reads a `T` at `p` if it's readable.
 pub fn read<T: Copy>(p: *const u8) -> Option<T> {
-    is_readable(p, std::mem::size_of::<T>()).then(|| unsafe { (p as *const T).read_unaligned() })
+    let mut out = std::mem::MaybeUninit::<T>::uninit();
+    copy(out.as_mut_ptr() as *mut u8, p, std::mem::size_of::<T>()).then(|| unsafe { out.assume_init() })
+}
+
+/// Reads `n` bytes at `p` if they're readable.
+pub fn bytes(p: *const u8, n: usize) -> Option<Vec<u8>> {
+    let mut out = vec![0u8; n];
+    copy(out.as_mut_ptr(), p, n).then_some(out)
 }
 
 /// Reads a `T` at an absolute address in the game.
