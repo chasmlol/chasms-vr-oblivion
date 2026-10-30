@@ -278,24 +278,25 @@ pub fn density(material: u32) -> f32 {
 pub const GATE_MASS_PER_AREA: f32 = 64.5;
 pub const PLANK: f32 = 0.045;
 
-/// What a part weighs that the game gives no mass (most of its doors and levers): its drawn
-/// shape's volume (game units cubed) made of what its Havok shape is made of; without a drawn shape,
-/// its collision's box (`half`, metres) as a leaf (a plank, or, of metal, as heavy as the game's own
-/// gates) or a block.
+/// What a part weighs that the game gives no mass (most of its doors and levers): `half` its
+/// collision's half size (metres), `drawn` its drawn shapes' box (half size, game units) and volume
+/// (game units cubed), `material` its Havok material. A leaf (thin one way: a door, a lid) is as
+/// heavy as its area of plank of its material, or, of metal, as the game's own gates (a drawn leaf's
+/// volume counts its hinges, handles and bands as solid); anything else (a lever, a stone) is its
+/// drawn shape's volume of its material.
 pub fn part_mass(half: Vec3, drawn: Option<(Vec3, f32)>, material: u32) -> f32 {
     let rho = density(material);
-    let m3 = crate::camera::UNITS_PER_METER.powi(3);
-    let mass = match drawn {
-        Some((_, v)) if v > 0.0 => v / m3 * rho,
-        _ => {
-            let mut e = [half.x, half.y, half.z];
-            e.sort_by(|a, b| a.total_cmp(b));
-            if e[1] > 4.0 * e[0] {
-                let area = 4.0 * e[1] * e[2];
-                if rho > 3000.0 { area * GATE_MASS_PER_AREA } else { area * PLANK * rho }
-            } else {
-                8.0 * e[0] * e[1] * e[2] * rho
-            }
+    let units = crate::camera::UNITS_PER_METER;
+    let size = drawn.map_or(half, |(h, _)| h / units);
+    let mut e = [size.x, size.y, size.z];
+    e.sort_by(|a, b| a.total_cmp(b));
+    let mass = if e[1] > 4.0 * e[0] {
+        let area = 4.0 * e[1] * e[2];
+        if rho > 3000.0 { area * GATE_MASS_PER_AREA } else { area * PLANK * rho }
+    } else {
+        match drawn {
+            Some((_, v)) if v > 0.0 => v / units.powi(3) * rho,
+            _ => 8.0 * e[0] * e[1] * e[2] * rho,
         }
     };
     mass.clamp(0.2, 2000.0)

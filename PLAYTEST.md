@@ -15,7 +15,7 @@ locked display cases: a lid on a hinge).
 ## What to try, in order
 
 1. **Push the cave door open.** Walk up to the planked door ahead (it's big and heavy, about
-   200 kg) and put your palm on it, then push. It gives a hair at first (its latch: it rattles in its
+   130 kg) and put your palm on it, then push. It gives a hair at first (its latch: it rattles in its
    frame), and pushed to the end of that, the game opens it (its own Activate: its open state, its
    script if it has one). From there your hand swings it. Shove it and let go: it swings on and slows
    to a stop within about a second.
@@ -97,9 +97,10 @@ Not checked in the game:
 - **The game's door animation is stopped** the moment the hand opens it (the hand is the animation),
   and the door's node, its handles (posed by the game's animation at the matching moment) and its
   keyframed Havok body are put where the runtime has the leaf every frame.
-- **Mass:** the game gives most doors no mass (their bodies are keyframed). A leaf weighs what its
-  drawn shape's volume weighs of its Havok material (wood, metal, stone); the cell gates' 100 kg is
-  the model's own. Hinge friction is its pins' (a friction of 0.3 on 1 cm pins under its weight). A
+- **Mass:** the game gives most doors no mass (their bodies are keyframed). A leaf weighs its drawn
+  area as a 4.5 cm plank of its Havok material (a house door about 65 kg, the big cave door 130),
+  or, of metal, as heavy for its size as the game's own cell gates, whose 100 kg is the model's;
+  levers and stones weigh their drawn shape's volume of their material. Hinge friction is its pins' (a friction of 0.3 on 1 cm pins under its weight). A
   swing dies away over 0.8 s once let go, and a lever's two positions hold against 25 N at its end:
   those two are design values, not the game's.
 - **Sliding doors are the game's to move:** a hand can't lift a stone slab, so a tug opens it with
