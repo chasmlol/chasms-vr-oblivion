@@ -23,12 +23,15 @@ The research and the design are in `docs/research/archery.md`.
    - Over your right shoulder: reach behind your head and grip. Oblivion wears its quiver there,
      with the arrows at the right shoulder.
    - Or at your right hip: grip there.
-   - Either way, you feel a tick as the hand enters the quiver and an arrow comes out along your
-     fist.
+   - Either way, you feel a tick as the hand enters the quiver and an arrow comes out held by its
+     back end between your thumb and index finger, pointing where the controller points. It
+     points down into the quiver as you take it and lies level, out ahead of your hand, as you
+     bring your forearm down.
    - With no arrows left, you feel a short buzz instead.
    - Let go of an arrow gently at the quiver and it goes back in.
-3. **Nock it.** Bring the arrow's back end to the middle of the string. Within about 9 cm it eases
-   onto the string, with a soft click in both hands. You don't need to line it up.
+3. **Nock it.** Bring the arrow's back end to the middle of the string. From about 15 cm it turns in
+   your fingers to lie along the bow, and within about 9 cm it slides onto the string, with a soft
+   click in both hands. You don't need to line it up.
 4. **Draw.**
    - Pull back towards your chin. The string comes with your hand and the bow bends with it: the
      game's own bend of its model.
@@ -136,6 +139,13 @@ at Weye.
   a set 20 m, so it never jumps onto what's near. Its size in view is the same at any distance, so
   the 20 m only sets where your eyes meet on it. The aim error that leaves (the eyes sit a little
   above the arrow) is a few centimetres at 10 m.
+- **The arrow is held by its nock, pointing where the controller points** (playtest 1). That's the
+  controller's own aim pose (OpenXR's pointing ray), so it lies level with the forearm level on
+  any controller. The Longbow holds its arrow the same way.
+- **The arrow lines itself up with the bow as it nears the string**, from 15 cm (the Longbow's)
+  to the 9 cm where it goes on. It only turns, about its nock: the nock stays in your fingers.
+  The Longbow also slides it out of the hand onto the rest over that stretch; here the last
+  centimetres slide on as it seats instead.
 - **The fatigue is the game's.** Holding drawn burns fatigue as the game's own hold does (15 a
   second), and a shot costs 5. The Marksman perk waives both, as in the game.
 - **No shield with a bow.** With a bow equipped the shield isn't offered: the game holds no shield
@@ -172,6 +182,10 @@ at Weye.
 - **The crosshair stuck to what the arrow would hit, and vanished when aimed far off.** Asked for:
   a guide like the flat game's crosshair, where the bow points, never on buildings or things
   nearby, half the size and half see-through. Done (see Decisions).
+- **The arrow out of the quiver was held awkwardly by its end, upright out of the fist like a
+  dagger.** Asked for: held so it lies level as the forearm comes down, and nocking that looks
+  nice, as other VR bows do. Done: held by its nock, along the controller's aim, and turned to
+  lie along the bow as it nears the string (see Decisions).
 
 ## Branches
 
