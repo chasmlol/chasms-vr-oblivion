@@ -22,6 +22,51 @@ comes out in your fist as the game's own model. Bring food or a drink to your mo
 it. Let go of something in any slot to put it back. Let go anywhere else and it drops into the
 world.
 
+## Round 2: after your first playtest
+
+You said the slots and holsters were awkward to grab: a hand pressed against the hip or chest
+didn't take, only one halfway out did, and the back ones were hard. And the editor didn't really
+show where a slot is.
+
+- **Why it was awkward:** every slot and holster hung off your eyes. Looking down at a hip swings
+  the eyes some 10 cm forward and down, and the slots went with them, out in front of your body.
+  - Now they hang from where your eyes would be looking level, over the neck your head turns on (the
+    same neck the drawn body has). Looking down or tilting your head no longer moves them.
+- **Deeper counts:** a hand counts in a slot at its middle, as before, or anywhere deeper, up to
+  12 cm in toward the middle of your body. So a hand pressed against your hip or chest at a slot is
+  in it.
+  - A hand at a slot's middle takes from that slot, holsters first (a hip with a weapon in it still
+    gives the weapon).
+  - A hand that's only deeper takes from the slot it's furthest into. Pressed against your belly
+    beside the potions, you get the potions, not the axe at your hip.
+  - This is the same for the weapon holsters (hips, back) and for putting things back.
+- **The back is easier:**
+  - the shoulders' weapon holsters are 24 cm round (were 20);
+  - the arrows slot reaches 20 cm (was 16).
+- **The editor shows every slot:** while it's open, each slot is a sphere of blue light the size of
+  its reach, drawn over your body.
+  - The slot picked in the editor is bright, the others faint.
+  - The picked slot's first thing still shows at its place too.
+  - Size and Reach change the sphere as you click them, and Move moves it.
+
+Try:
+
+1. Put a hand flat on your right hip and squeeze: food comes out. Do the same on the right of
+   your chest for a scroll, and on your belly in front of your left hip for a potion. Look down
+   at your hand while you do it, and also try it looking straight ahead.
+2. Reach over your right shoulder for an arrow, and over your left for the shield, a few times
+   each, with the head straight and turned.
+3. Open the editor (hold a grip still in a slot for 1.5 s) and look down. Pick each slot on the
+   left in turn: its sphere lights up.
+
+Look out for:
+
+- **Grabbing by accident.** Does anything come out when you don't mean it to, with your hands
+  resting at your sides or your belly?
+- **Over the shoulder.** Does the shield come out when you reach for the left shoulder for
+  something else?
+- **The spheres.** Too bright, too faint, or in the way of the editor?
+
 ## The slots you start with (right-handed; mirrored for a left hand)
 
 | Slot | Where | Gives out |
@@ -70,8 +115,9 @@ world.
    a second and a half. You feel a firm pulse. Whatever came out goes back, and the editor floats
    in front of you. It's made of Oblivion's own parchment, rows, icons and buttons, in three
    strips: the slots, the categories, the buttons. Point with the laser and pull the trigger:
-   - **A slot** on the left picks it. Under its name is what it gives out now, and that thing
-     shows, still, at the slot's place on your body: look down to see where it is.
+   - **A slot** on the left picks it. Under its name is what it gives out now. Look down: every
+     slot is a sphere of blue light the size of its reach, the picked one bright, and its first
+     thing shows, still, at its place.
    - **A category** in the middle puts it in the slot, last. Its place in the order shows on the
      right of the row, and the picked one shows as `< 2 >`. Pick it again to take it out of the
      slot.
@@ -227,10 +273,11 @@ turns it off).
 ## Not done
 
 - **No ghost of what's in a slot during play.** You find a slot by its tick and learn what it holds
-  by drawing, or in the editor: it lists each slot's first thing, and shows the picked slot's
-  first thing at its place on your body.
+  by drawing, or in the editor: it lists each slot's first thing, shows every slot as a sphere of
+  light at its place, and the picked slot's first thing there.
 - **Slots don't move with the body's crouch or lean:** they hang off the head-following anchor the
-  holsters always have, as the research recommends.
+  holsters always have, as the research recommends (since round 2 from the neck, so looking down
+  doesn't move them).
 - **Torches** aren't a category (section 5's). **Apparel** isn't either.
 - **No renaming slots:** there's no keyboard in VR. New slots are "Slot 5", "Slot 6"...
 - **No bite-by-bite eating:** Oblivion eats a thing whole, so one hold eats one.
