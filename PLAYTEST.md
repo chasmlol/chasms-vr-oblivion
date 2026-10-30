@@ -2,12 +2,16 @@
 
 Save: rustvr-torches
 
-Boot it with `powershell -File tools\play.ps1 torches` (this worktree's adapter and runtime, straight
-into the save). The save is Vilverin, at the top of the stairs down into the ruin. The player has 3
-torches, one equipped (at the right hip), the Longsword of Soul Chill equipped (at the left hip), the
-Staff of Conflagration in the inventory (not equipped), Flare selected, and 200 more magicka. Added
-spells: Absorb Health, Snowball, Spark, Shocking Touch, Cold Touch, Burning Touch and Protect (with
-the character's own Heal Minor Wounds and Nordic Frost).
+Boot it by double-clicking `playtest.bat` in this worktree (not committed): it runs `tools\play.ps1
+torches` (this worktree's adapter and runtime, straight into the save), waits while you play, then
+closes the game and keeps the runtime's log in `<builds>\torches\playtest-<n>`. The save is
+Vilverin, at the top of the stairs down into the ruin. The console can't be typed in VR, so the .bat
+puts a zombie 2 m in front (down the stairs) and switches the game's AI off (`player.placeatme
+00025e6e 1 150 0`, `tai`), so it stands still for the touch spells. The player has 3 torches, one
+equipped (at the right hip), the Longsword of Soul Chill equipped (at the left hip), the Staff of
+Conflagration in the inventory (not equipped), Flare selected, and 200 more magicka. Added spells:
+Absorb Health, Snowball, Spark, Shocking Touch, Cold Touch, Burning Touch and Protect (with the
+character's own Heal Minor Wounds and Nordic Frost).
 
 ## What to try, in order
 
@@ -34,8 +38,7 @@ the character's own Heal Minor Wounds and Nordic Frost).
    - Shocking Touch, Cold Touch, Burning Touch, Absorb Health (touch): charge it until it's ready,
      then touch a creature with that hand: it goes off into it (letting go in the air casts it too,
      at nothing).
-     There's nothing alive at the top of the stairs: go down, or use the console:
-     `player.placeatme 00025e6e 1 50 0` (a zombie) then `tai` (it stands still).
+     The zombie the .bat put down the stairs is standing still for it.
    - Protect (self): its shield shader over the body (not checked, see below).
 6. **The enchanted sword.** Draw the Longsword of Soul Chill from the left hip with the right hand:
    it shimmers with its enchantment's own effect shader (a purple rim glow, the game's colour,
@@ -76,6 +79,8 @@ Not checked:
 - **The torch hangs at the right hip** (the sword has the left). It's one constant, `TORCH_SLOT`
   in `crates/oblivion/src/torch.rs`, so holster configuration (section 6) can move it.
 - **A holstered torch still burns** and lights the player, like a torch hung on a belt.
+- **The flat game's crosshair is gone** (riding's commit, as the menus branch took it): the
+  activate icons stay.
 - **Upright things** (`OBJF_UPRIGHT`, the torch) hang flame up, leaning forward and out, and are
   only held flame up (their grip isn't reversible).
 - **Left behind**, more than 15 m away, the torch is back at the hip (it's still the game's equipped
