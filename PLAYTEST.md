@@ -21,12 +21,16 @@ the Swimming row of `docs/OBLIVION.md`.
    the water (a little pulse says so). Pull it and you're pulled past it the other way, about
    three times as fast as your hand goes. Let go, reach out again (an open hand goes through the
    water freely), catch and pull again. Between strokes you glide.
-   - A relaxed breaststroke (hands out, back and in over most of a second) swims about 1.5 times
-     the game's swim speed, a firm one 2 times. One firm stroke and a glide carries you about
-     16 m.
-   - The grip needn't be timed exactly. A stroke pulls only while your hand goes on away from
-     where that stroke started (or turned back), once it's 10 cm from there. Squeeze a little
-     before the reach ends, or let go a little after your hand starts back, and it just slips.
+   - At the surface a relaxed breaststroke (hands wide out, back and in over most of a second)
+     swims about 1.5 times the game's swim speed, a firm one 2 times. One firm stroke and a glide
+     carries you about 16 m.
+   - Both hands make one stroke together: their sweeps out and in cancel, and their pull back
+     carries you. The grip needn't be timed exactly: the stroke pulls only while your hands go on
+     away from where it started (or turned back), once they're 10 cm from there. Squeeze a little
+     before the reach ends, or let go a little after your hands start back, and it just slips.
+   - Each pull steers your glide its way, so uneven hands don't leave you drifting sideways.
+   - Pulling down as well as back takes you up as well as ahead (at the surface the game holds
+     you there): to swim level under the water, pull straight back.
    - A pull only ever carries you its way: it never slows you. One slower than you already go
      just slips. To stop, pull the other way, or glide out.
    - A hand holding the water buzzes as it pulls (not as it slips).
@@ -130,6 +134,22 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't catc
    - Simulated, your stroke with the grip squeezed early and let go late: 2.5 m/s (1.2 times the
      game's speed), never backwards; before, 1.0 with a dip backwards every stroke. Timed well,
      3.1 relaxed and 4.2 firm (1.5 and 2 times).
+8. **"A load of perfect breaststrokes, perfect grip and form: I didn't move, just slowly drifted
+   sideways."** (Log: `<builds>\swimming\playtest-5`.)
+   - Your hands sweep wide out first, then back and in. Each hand's stroke was measured from where
+     it caught the water, so after the sweep out its way pointed mostly sideways, and the pull back
+     and in counted for little: at 13:44:20 hands going back at 0.5 m/s pulled at 0.02. You swam
+     at half the game's speed.
+   - Sideways: the strokes only ever added speed their way, so any sideways bit glided on for
+     seconds and built up. You drifted about 20 degrees left of where you looked, with your hands
+     even.
+   - Down: your first catch, at 13:44:13, came with your hands going up, which dove you; nothing
+     brought you back up, and you sank to 11 m.
+   - Now both hands make one stroke (their mean), so a breaststroke's sweeps out and in cancel and
+     its pull back carries you, however the grip is timed. Each pull steers your glide its way.
+   - Simulated, your wide stroke, gripped early and let go late: 1.5 times the game's speed at the
+     surface (2 times firm); before, 0.6 to 1.0. Uneven hands (one sweeping a quarter wider) drift
+     about 6 degrees, not on and on.
 
 ## Checked in the game (emulated headset, `tools/oblivion.ps1`)
 
@@ -199,9 +219,12 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't catc
   - The hands holding the water take you the other way at 1.5 game swim speeds for each m/s of
     their pace (both hands: their mean), in about 0.08 s. A pull slower than you already go its
     way slips: it never slows you.
-  - A hand pulls only along its own stroke (since playtest 7): the way it goes on away from the
-    point of the stroke it's furthest from, once 10 cm from it. A grip squeezed early or let go
-    late doesn't throw you backwards.
+  - The hands holding the water make one stroke: their mean (since playtest 8). It pulls only
+    while it goes on away from the point of the stroke it's furthest from, once 10 cm from it
+    (since playtest 7), so a grip squeezed early or let go late doesn't throw you backwards, and a
+    breaststroke's sweeps out and in cancel.
+  - A pull steers your glide its way: what goes across it dies out by e in 0.25 s, as a swimmer's
+    streamlined body sheds a sideways drift.
   - At the surface (your head out) a stroke's rise is lost into the surface, as the game holds
     you there.
   - The water's drag: your speed glides out by e over 4 s, and sooner when fast (0.04 more for
