@@ -162,8 +162,28 @@ otherwise).
    exactly): the framework's marks choose a plate's corners by where its texture draws them
    (`uv_within`), the leather's corners where it meets the plate going with the plate, and the
    preview draws each model's textures with its triangles coloured by plate (`uv-<model>.png`) to
-   mark them from. Iron's bracers and couters are only their metal now, and the other sets are
-   being marked the same way.
+   mark them from. Iron's bracers and couters are only their metal now.
+
+   **Every set marked again the same way** (men's and women's): every hard cuff rigid on the
+   forearm to the end of its flare (split by place where the game blends the flare towards the
+   hand), the plate over the back of the hand rigid on the hand and coming apart from the cuff at
+   its seam, and only the hard part of each piece rigid: leather under the forearm, linings, gloves,
+   mail and straps bend. Couters are their plates only (ebony's rides the upper arm alone: its fan
+   runs 9-12 cm up the arm, as the game keeps it); the Legion's elbow band is rigid now (it crumpled)
+   with its strap soft; the Blades' and the dwarven forearm plates rigid to the wrist; the daedric
+   men's cuffs (whose rule chose nothing) and the women's arms (which had no rules) have plates now.
+   The women's iron, ebony, orcish and leather models have pieces of their own where the men's boxes
+   didn't fit. Each checked in the preview (wrists both ways, palms turned, a slight and a full
+   bend of the elbow, a squat). Left as they were: fur (soft), the knees (no rigid strap behind
+   one).
+
+   **Still to look at, from the preview:** steel's glove shows at the thumb's root through the
+   seam when the wrist bends in; thin dark gaps open at the cuffs' seams as the wrist bends (iron,
+   steel, glass, ebony, mithril, the Legion's), and between daedric's cuff band and hand plate
+   bending in; at a full bend, ebony's elbow fan dips into the forearm (as in the game's skinning),
+   the Blades' elbow shows a small notch, and the women's bare elbows a dark patch (the round
+   joints, not the marks). Unmarked still: the steel sleeve's plates under the rerebrace, glass's
+   lames under the pauldron (rigid, they'd poke through it raising the arm), knuckle plates.
 
 ## Not done
 

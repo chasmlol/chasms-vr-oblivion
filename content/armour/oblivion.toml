@@ -324,19 +324,30 @@ name = "Steel gauntlets"
 models = ['armor\steel\m\gauntlets.nif']
 covers = "hands"
 
+# The first shape is all plate, one island a hand: the cuff, belled towards the elbow, with a
+# narrower rim band over the wrist whose edge slants from x 0.668 on the thumb's side to 0.693 on
+# the little finger's; the plate over the back of the hand, running on from that edge to the
+# knuckles (x 0.75-0.776); and the finger lames past them. The game puts the rim band's corners
+# under the little finger's side mostly on the hand, and blends most of the hand plate's with the
+# forearm or the fingers, so split by weight the rim bent at the wrist and most of the hand plate
+# was soft: they're split by place. The cuff is rigid on the forearm to the end of its rim
+# (rolling with its twist).
 [[piece.plate]]
 name = "vambrace"
 mesh = 0
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+corners_within = { min = [0.5, 1.3, -0.15], max = [0.6937, 1.6, 0.15] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
+# The hand plate is rigid on the hand from the cuff's rim to the knuckles, coming apart from the
+# cuff at the rim so it slides under the rim as the wrist bends in and over it as the wrist bends
+# back. The box ends short of the knuckle row, so the plate takes the triangles up to it
+# and no further: the finger lames stay on the fingers' weights, bending from the knuckles.
 [[piece.plate]]
 name = "hand plate"
 mesh = 0
-vertices = "Bip01 * Hand"
-firm = 0.7
+corners_within = { min = [0.6937, 1.3, -0.15], max = [0.749, 1.6, 0.15] }
+seam = true
 ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
@@ -379,15 +390,23 @@ ride = { "Bip01 * Toe0" = 1.0 }
 
 [[piece]]
 name = "Leather cuirass"
-models = ['armor\leather\m\cuirass.nif', 'armor\leather\f\cuirass.nif']
+models = ['armor\leather\m\cuirass.nif']
 covers = "upper"
 
+# Each upper arm's sleeve is one island: bands of boiled leather over the outside (the texture's
+# u 0.1-0.4, v up to 0.36, with the hem and its buckled strap above them at v under 0.07) and a
+# panel of plain soft leather under the arm (v 0.47-0.8). Only the bands and the hem are rigid, on
+# the upper arm, with their corners blended towards the shoulder left soft (`firm`) so the top of
+# the sleeve follows the shoulder; the soft panel under the arm bends with it, as the cloth under
+# the iron bracers does.
 [[piece.plate]]
 name = "upper arm guard"
+mesh = 1
 bone = "Bip01 * UpperArmTwist"
 side = "both"
 vertices = ["Bip01 * UpperArmTwist", "Bip01 * UpperArm"]
 firm = 0.7
+uv_within = { min = [0.0, 0.0], max = [0.45, 0.4] }
 ride = { "Bip01 * UpperArm" = 1.0 }
 layer = 1
 
@@ -396,11 +415,17 @@ name = "Leather gauntlets"
 models = ['armor\leather\m\gauntlets.nif', 'armor\leather\f\gauntlets.nif']
 covers = "hands"
 
+# Each hand's gauntlet is one island: a bracer of boiled leather laced round the forearm from x
+# 0.555 to its end at x 0.666 (just short of the wrist), and a soft glove from there on. The game
+# blends the bracer's wrist end, and some of its middle, towards the hand, so splitting it by
+# weight left holes in it and let it bend like cloth: it's split by place instead. The whole bracer
+# is rigid on the forearm (rolling with its twist); the glove, the band at its wrist and the
+# fingers stay soft and bend with the wrist. (The women's model draws some of the bracer from
+# other parts of its texture, so the split is by place alone.)
 [[piece.plate]]
 name = "bracer"
 side = "both"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+corners_within = { min = [0.5, 1.3, -0.15], max = [0.667, 1.6, 0.15] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
@@ -444,11 +469,16 @@ name = "Chainmail gauntlets"
 models = ['armor\chainmail\m\gauntlets.nif', 'armor\chainmail\f\gauntlets.nif']
 covers = "hands"
 
+# Each glove is one island of mail, from its cuff at x 0.57 over the wrist to the fingers. The
+# only hard part is the riveted leather band round the cuff's open end and its turned-in lining (x
+# 0.57-0.59; the band is drawn at the texture's u 0.92-0.99): it's rigid on the forearm, rolling
+# with its twist. The mail from there on, the three little plates painted on it over the wrist and
+# the one painted on the back of the hand stay soft, so the glove bends at the wrist (rigid, the
+# mail over the wrist held straight on the forearm and creased where the hand bent away from it).
 [[piece.plate]]
 name = "cuff"
 side = "both"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.5
+corners_within = { min = [0.5, 1.3, -0.15], max = [0.6, 1.6, 0.15] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
@@ -565,14 +595,39 @@ name = "Elven gauntlets"
 models = ['armor\elven\m\gauntlets.nif']
 covers = "hands"
 
-# The vambrace (the cuff's corners on the hand stay soft: there are too few to make a plate).
+# The cuff is its own island: an ornate plate over the top and sides of the forearm (the texture's
+# right half, u from 0.5), whose wrist end flares out and runs on as a tongue over the back of the
+# hand (to x 0.746), and under the forearm a strip of lames (the left half, v 0.6-0.86) between
+# bands of leather at either end (v 0.43-0.53 at the wrist, from 0.95 at the elbow), with leather
+# caps closing its ends inside. The game puts much of the flare on the hand (some of its corners
+# wholly), so split by weight it bent at the wrist: only the metal is chosen, by its texture, and
+# it is rigid on the forearm to the tip of the tongue (rolling with its twist). The leather bands
+# and caps bend with the wrist, joined to the metal's edges.
 [[piece.plate]]
 name = "vambrace"
+mesh = 0
 bone = "Bip01 * ForearmTwist"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+uv_within = { min = [0.5, 0.41], max = [1.01, 1.0] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
+
+[[piece.plate]]
+name = "vambrace lames"
+mesh = 0
+bone = "Bip01 * ForearmTwist"
+uv_within = { min = [0.0, 0.59], max = [0.5, 0.87] }
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+layer = 1
+
+# The plate over the back of the hand (the gold square in the texture, u 0.12-0.56, v 0.21-0.43)
+# is two lames in the glove's island, from under the cuff's tongue (x 0.656) to the knuckles
+# (x 0.776): rigid on the hand, the glove's leather and fingers bending from its edges.
+[[piece.plate]]
+name = "hand plate"
+mesh = 0
+bone = "Bip01 * Hand"
+uv_within = { min = [0.1, 0.215], max = [0.57, 0.44] }
+ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
 name = "Elven greaves"
@@ -645,21 +700,61 @@ name = "Glass gauntlets"
 models = ['armor\glass\m\gauntlets.nif', 'armor\glass\f\gauntlets.nif']
 covers = "hands"
 
+# The cuff, the plate over the back of the hand and the leather glove are one island. The cuff's
+# wrist end slants from x 0.656 under the wrist to 0.695 over it, and the game blends it between
+# the forearm and the hand (as far as half and half), so its weights don't say where the cuff ends:
+# it's chosen by place and by texture. The cuff is rigid on the forearm (rolling with its twist)
+# right to its rim, and only its metal is: the green face (the texture's lower part, v from 0.64)
+# and its rolled rims (the band drawn at the texture's bottom edge, v 1.0-1.05). The leather panel
+# under the forearm and the lining inside the cuff (drawn in the leather above) stay soft, joined
+# to the metal's edges.
 [[piece.plate]]
 name = "vambrace"
-side = "both"
-largest = 0.34
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+corners_within = { min = [0.5, 1.3, -0.15], max = [0.65, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.64], max = [0.87, 1.06] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
+# The palm's leather starts at the cuff's rim and is drawn in the same part of the texture as the
+# cuff's flare at the elbow end, so past x 0.65 only the rim band (and the green face's corners
+# on it) is chosen: the leather stays soft, its edge riding the rim.
+[[piece.plate]]
+name = "vambrace rim"
+corners_within = { min = [0.64, 1.3, -0.15], max = [0.70, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.84], max = [0.87, 1.06] }
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+layer = 1
+
+# The framed plate over the back of the hand (u to 0.46, v 0.34-0.64) rides the hand. It starts at
+# the cuff's rim, so it comes apart there: it slides under the cuff as the wrist bends in and over
+# it as the wrist bends back, instead of stretching. The band of stones across the palm and round
+# the thumb (the men's its own mesh, the women's joined to the glove at the knuckle) is drawn
+# partly in the same frame, and rides the hand with it.
 [[piece.plate]]
 name = "hand plate"
-bone = "Bip01 * Hand"
-largest = 0.15
+corners_within = { min = [0.65, 1.3, -0.15], max = [0.765, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.34], max = [0.46, 0.642] }
+seam = true
 ride = { "Bip01 * Hand" = 1.0 }
-layer = 1
+
+# The hand plate's rims (the rim band drawn past the texture's right edge, u 1.0-1.8) and the
+# band's frame (u 1.05-1.47): rigid with the plate, so its edges don't lag behind it as the wrist
+# bends; the glove's leather and the fingers they meet bend.
+[[piece.plate]]
+name = "hand plate rims"
+corners_within = { min = [0.658, 1.3, -0.15], max = [0.8, 1.6, 0.15] }
+uv_within = { min = [1.0, 0.0], max = [1.8, 1.06] }
+seam = true
+ride = { "Bip01 * Hand" = 1.0 }
+
+# The band's strip of stones (u to 0.12, v 0.645-0.765; the cuff's face drawn beside it is
+# further right at the wrist).
+[[piece.plate]]
+name = "hand band"
+corners_within = { min = [0.651, 1.3, -0.15], max = [0.8, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.645], max = [0.12, 0.765] }
+seam = true
+ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
 name = "Glass greaves"
@@ -733,12 +828,17 @@ firm = 0.7
 ride = { "Bip01 * UpperArm" = 1.0 }
 layer = 1
 
+# Each sleeve is four metal bands from the shoulder to the wrist, one island. The game blends the
+# forearm's band between the forearm, its twist and the hand (the hand's share rising to half at
+# the wrist), so split by weight only one ring of it was rigid, and its end bent with the hand
+# inside the gauntlet's rigid cuff. It's split by place: from past the elbow (x 0.49) to its end
+# at the wrist, with the disc closing it, it's rigid on the forearm's twist. The ring where it
+# meets the upper arm's band, round the elbow, stays soft so the elbow bends there.
 [[piece.plate]]
 name = "vambrace"
 bone = "Bip01 * UpperArmTwist"
 side = "both"
-vertices = ["Bip01 * Forearm", "Bip01 * ForearmTwist"]
-firm = 0.7
+corners_within = { min = [0.49, 1.3, -0.2], max = [0.7, 1.6, 0.2] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 
 [[piece]]
@@ -746,18 +846,30 @@ name = "Dwarven gauntlets"
 models = ['armor\dwarven\m\gauntlets.nif']
 covers = "hands"
 
-[[piece.plate]]
-name = "cuff"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
-ride = { "Bip01 * ForearmTwist" = 1.0 }
-layer = 1
-
+# All metal. The cuff (the texture's right part, u from 0.6) and the hand's plates meet at the
+# cuff's rim (x 0.67-0.69), one island, and the game blends the whole cuff between the forearm and
+# the hand, so split by weight only its forearm end was rigid and its flare bent like cloth. The
+# hand plate is the back, the palm and the thumb's side of the hand, from under the cuff's rim to
+# short of the knuckles (x 0.758): the corners there on the hand or the forearm, so the thumb and
+# the fingers, on their own bones, stay soft and so do the knuckles. It's rigid on the hand,
+# sliding under the cuff as the wrist bends in and out of it as the wrist bends back. The cuff,
+# with the ring closing its forearm end, is rigid on the forearm's twist to the end of its flare.
+# It's marked after the hand plate so it keeps the corners at its rim that the hand plate's box
+# takes too, and with `seam` it takes only its own corners, not the hand plate's in the same
+# places, so the two come apart at the rim.
 [[piece.plate]]
 name = "hand plate"
-vertices = "Bip01 * Hand"
-firm = 0.7
+corners_within = { min = [0.66, 1.3, -0.15], max = [0.758, 1.6, 0.15] }
+vertices = ["Bip01 * Hand", "Bip01 * ForearmTwist", "Bip01 * Forearm"]
 ride = { "Bip01 * Hand" = 1.0 }
+
+[[piece.plate]]
+name = "cuff"
+corners_within = { min = [0.5, 1.3, -0.15], max = [0.7, 1.6, 0.15] }
+uv_within = { min = [0.6, 0.0], max = [1.0, 1.0] }
+seam = true
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+layer = 1
 
 [[piece]]
 name = "Dwarven greaves"
@@ -855,22 +967,36 @@ layer = 2
 
 [[piece]]
 name = "Orcish gauntlets"
-models = ['armor\orcish\m\gauntlets.nif', 'armor\orcish\f\gauntlets.nif']
+models = ['armor\orcish\m\gauntlets.nif']
 covers = "hands"
 
+# The vambrace, the fur round the wrist and the scales over the back of the hand are one mesh
+# and one island (the fingers are the bare hand's own). The vambrace's metal shell (the texture's
+# lower part, u to 0.8695 and v from 0.625) runs from over the elbow to a ring at the wrist (x
+# 0.653-0.675), where the game blends it a third (the right) to a half (the left) onto the hand,
+# so split by weight its last few centimetres bent with the wrist. It's rigid on the forearm's
+# twist to that ring, chosen by where the texture draws the metal. The leather under the forearm
+# (drawn from the texture's top band) and the fur past the ring bend: the leather stays joined to
+# the metal's edges. (The box starts at v 0.625, past the scales drawn just above the metal: from
+# 0.59 it took the scales' corners at the thumb's side of the wrist, which then folded.)
 [[piece.plate]]
 name = "vambrace"
-bone = "Bip01 * ForearmTwist"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+mesh = 0
+corners_within = { min = [0.4, 1.3, -0.2], max = [0.676, 1.6, 0.2] }
+uv_within = { min = [0.0, 0.625], max = [0.8695, 1.0] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
+# The scales over the back of the hand (the texture's middle, u 0.1-0.885, v 0.17-0.625), from
+# the fur's edge to short of the knuckles (x 0.70-0.765): the corners there on the hand or the
+# forearm, so its edge at the thumb, on the thumb's bones, and the knuckles bend. Under the fur
+# they bend with it (rigid there, their edge stood out of the fur as the wrist bent).
 [[piece.plate]]
 name = "hand plate"
-bone = "Bip01 * ForearmTwist"
-vertices = "Bip01 * Hand"
-firm = 0.7
+mesh = 0
+corners_within = { min = [0.70, 1.3, -0.2], max = [0.765, 1.6, 0.2] }
+uv_within = { min = [0.1, 0.17], max = [0.885, 0.625] }
+vertices = ["Bip01 * Hand", "Bip01 * ForearmTwist", "Bip01 * Forearm"]
 ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
@@ -918,7 +1044,7 @@ ride = { "Bip01 * Toe0" = 1.0 }
 
 [[piece]]
 name = "Ebony cuirass"
-models = ['armor\ebony\m\cuirass.nif', 'armor\ebony\f\cuirass.nif']
+models = ['armor\ebony\m\cuirass.nif']
 covers = "upper"
 
 [[piece.plate]]
@@ -954,23 +1080,120 @@ side = "both"
 within = { min = [0.1, 1.42, -0.3], max = [0.3, 1.7, 0.3] }
 layer = 2
 
+# The arm is one island from the shoulder to the wrist: the lames and bands over the upper arm,
+# the elbow plate, a leather strap across the inside of the elbow, and the plate over the forearm.
+# The upper arm's lames and bands (to x 0.39) are rigid on the upper arm; the mail panel under it
+# is held by the lames' edges all round, and there's no joint there for it to bend at.
 [[piece.plate]]
 name = "rerebrace"
-bone = ["Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
-side = "both"
-largest = 0.5
-vertices = ["Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
-firm = 0.7
+mesh = "Arms"
+corners_within = { min = [0.15, 1.3, -0.2], max = [0.39, 1.65, 0.2] }
 ride = { "Bip01 * UpperArm" = 1.0 }
 layer = 1
 
+# The elbow plate: a band over the point of the elbow, from one side of the arm to the other (x
+# 0.39-0.46), with a fan up the outside of the arm (to x 0.35), drawn as a T in the texture (u
+# 0.61-0.76, v 0.05-0.49), and its rims (u 0.87-0.96, v 0.36-0.44). It reaches far up the upper
+# arm, and the game keeps it there (its fan wholly on the upper arm, only the band's edge at the
+# elbow half on the forearm), so it's rigid on the upper arm rather than half and half about the
+# elbow, which would swing the fan off the arm. The leather strap across the inside of the elbow
+# (u 0.77-0.9, v 0.05-0.15) is soft, bending with the elbow from its ends.
+[[piece.plate]]
+name = "couter"
+mesh = "Arms"
+corners_within = { min = [0.30, 1.3, -0.2], max = [0.52, 1.65, 0.2] }
+uv_within = { min = [0.61, 0.05], max = [0.76, 0.489] }
+ride = { "Bip01 * UpperArm" = 1.0 }
+layer = 2
+
+[[piece.plate]]
+name = "couter rims"
+mesh = "Arms"
+corners_within = { min = [0.30, 1.3, -0.2], max = [0.52, 1.65, 0.2] }
+uv_within = { min = [0.87, 0.36], max = [0.96, 0.44] }
+ride = { "Bip01 * UpperArm" = 1.0 }
+layer = 2
+
+# The forearm's plate past the elbow (x 0.508 on), and the band at its wrist end: rigid on the
+# forearm (rolling with its twist) to its end, under the gauntlet's cuff, where the game blends it
+# towards the hand. Its first row past the elbow plate's edge bends with the elbow.
 [[piece.plate]]
 name = "vambrace"
-bone = ["Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
+mesh = "Arms"
+corners_within = { min = [0.508, 1.3, -0.2], max = [0.70, 1.65, 0.2] }
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+
+[[piece]]
+name = "Ebony cuirass (women's)"
+models = ['armor\ebony\f\cuirass.nif']
+covers = "upper"
+
+[[piece.plate]]
+name = "breastplate"
+mesh = 0
+side = "middle"
+largest = 1.0
+vertices = ["Bip01 Spine1", "Bip01 Spine2"]
+ride = { "Bip01 Spine2" = 0.6, "Bip01 Spine1" = 0.4 }
+
+[[piece.plate]]
+name = "tasset"
+mesh = 0
+bone = "Bip01 * Thigh"
 side = "both"
-largest = 0.5
-vertices = ["Bip01 * Forearm", "Bip01 * ForearmTwist"]
-firm = 0.7
+largest = 0.4
+pivot = "Bip01 * Thigh"
+layer = 1
+
+# The pauldrons and the plates over the front of the shoulders, as one each side.
+[[piece.plate]]
+name = "pauldron"
+bone = "Bip01 * Clavicle"
+side = "both"
+within = { min = [0.1, 1.42, -0.3], max = [0.3, 1.7, 0.3] }
+layer = 2
+
+# The arm is one island from the shoulder to the wrist, as the men's, laid out differently in its
+# texture. The plate over the upper arm (u 0.55-0.92, v 0.06-0.26) and the bands below it are rigid
+# on the upper arm; the leather strip under it (u 0.93-1.0) and the mail between it and the elbow
+# plate (v from 0.73) are soft, though held by the plates' edges.
+[[piece.plate]]
+name = "rerebrace"
+mesh = "Arms"
+corners_within = { min = [0.15, 1.3, -0.2], max = [0.42, 1.65, 0.2] }
+uv_within = { min = [0.55, 0.0], max = [0.925, 0.40] }
+ride = { "Bip01 * UpperArm" = 1.0 }
+layer = 1
+
+# The elbow plate: a band round the back of the elbow (x 0.41-0.48) with a fan up the outside of
+# the arm (to x 0.37), drawn as a T in the texture (u 0.55-0.69, v 0.29-0.73), and its rims (u
+# 0.80-0.88, v 0.35-0.41). The game keeps its fan wholly on the upper arm, so it's rigid there
+# rather than half and half about the elbow, which would swing the fan off the arm. The leather
+# strap across the inside of the elbow (u 0.93-1.0, v 0.04-0.26) is soft, bending with the elbow
+# from its ends.
+[[piece.plate]]
+name = "couter"
+mesh = "Arms"
+corners_within = { min = [0.30, 1.3, -0.2], max = [0.52, 1.65, 0.2] }
+uv_within = { min = [0.545, 0.29], max = [0.70, 0.73] }
+ride = { "Bip01 * UpperArm" = 1.0 }
+layer = 2
+
+[[piece.plate]]
+name = "couter rims"
+mesh = "Arms"
+corners_within = { min = [0.30, 1.3, -0.2], max = [0.52, 1.65, 0.2] }
+uv_within = { min = [0.80, 0.345], max = [0.88, 0.415] }
+ride = { "Bip01 * UpperArm" = 1.0 }
+layer = 2
+
+# The forearm's plate past the elbow (x 0.519 on), and the band at its wrist end: rigid on the
+# forearm (rolling with its twist) to its end, under the gauntlet's cuff, where the game puts the
+# band wholly on the hand. Its first rows past the elbow plate's edge bend with the elbow.
+[[piece.plate]]
+name = "vambrace"
+mesh = "Arms"
+corners_within = { min = [0.519, 1.3, -0.2], max = [0.70, 1.65, 0.2] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 
 [[piece]]
@@ -978,17 +1201,34 @@ name = "Ebony gauntlets"
 models = ['armor\ebony\m\gauntlets.nif', 'armor\ebony\f\gauntlets.nif']
 covers = "hands"
 
+# The cuff, the plate over the back of the hand, the mail under the wrist and the glove are one
+# island. The cuff's face (the texture's lower left, u to 0.49, v 0.55-0.96), the strips along its
+# sides and its rim at the wrist (u 0.37-0.54, v 0.51-0.57) are rigid on the forearm (rolling with
+# its twist) right to its wrist end (x 0.658-0.677), where the game blends it between the forearm
+# and the hand. The mail under the forearm is soft, joined to the metal's edges.
 [[piece.plate]]
 name = "cuff"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+corners_within = { min = [0.45, 1.3, -0.15], max = [0.68, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.50], max = [0.54, 0.97] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
+# The plate over the back of the hand (u to 0.365, v 0.29-0.54) and its rim (the strip along the
+# texture's bottom, v 0.965-0.99) ride the hand. The plate starts at the cuff's rim, so it comes
+# apart there, sliding under the cuff as the wrist bends in and over it as it bends back. The
+# palm's mail, the knuckles and the fingers bend.
 [[piece.plate]]
 name = "hand plate"
-vertices = "Bip01 * Hand"
-firm = 0.7
+corners_within = { min = [0.655, 1.3, -0.15], max = [0.77, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.29], max = [0.365, 0.54] }
+seam = true
+ride = { "Bip01 * Hand" = 1.0 }
+
+[[piece.plate]]
+name = "hand plate rim"
+corners_within = { min = [0.655, 1.3, -0.15], max = [0.77, 1.6, 0.15] }
+uv_within = { min = [0.08, 0.965], max = [0.92, 0.99] }
+seam = true
 ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
@@ -1085,19 +1325,47 @@ mesh = 1
 island = [3, 7]
 layer = 2
 
+# The arm is one island from the shoulder to the wrist: a mail sleeve (the texture's u from 0.72,
+# v 0.39-0.9) with metal plates, bands and fins over it, strapped on with leather straps (v from
+# 0.92, u to 0.44). Only the metal is rigid (u from 0.55, v to 0.385); the mail and the straps,
+# two of them round the elbow under its fins, bend.
+#
+# The upper arm's plates, bands and fin (to x 0.435): rigid on the upper arm.
 [[piece.plate]]
 name = "rerebrace"
-mesh = 2
-vertices = ["Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
-firm = 0.7
+mesh = "Arms"
+corners_within = { min = [0.15, 1.3, -0.2], max = [0.435, 1.65, 0.2] }
+uv_within = { min = [0.55, 0.0], max = [1.0, 0.385] }
 ride = { "Bip01 * UpperArm" = 1.0 }
 
+# The forearm's band and fin just past the elbow (x 0.49-0.56) and the band at the wrist: rigid on
+# the forearm, rolling with its twist.
 [[piece.plate]]
 name = "vambrace"
-mesh = 2
-vertices = ["Bip01 * Forearm", "Bip01 * ForearmTwist"]
-firm = 0.7
+mesh = "Arms"
+corners_within = { min = [0.475, 1.3, -0.2], max = [0.70, 1.65, 0.2] }
+uv_within = { min = [0.55, 0.0], max = [1.0, 0.385] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
+
+# The elbow's band (x 0.44-0.47) and its fin, over the outside of the elbow: half on the upper arm,
+# half on the forearm, turning about the elbow. Only the band's outer half (y from 1.43) is chosen,
+# so nothing rigid runs round the inside of the elbow; the fin leans forward over the forearm's own
+# fin, so its top (y from 1.565, to x 0.5145) is a box of its own.
+[[piece.plate]]
+name = "couter"
+mesh = "Arms"
+corners_within = { min = [0.435, 1.43, -0.2], max = [0.475, 1.56, 0.2] }
+uv_within = { min = [0.55, 0.0], max = [1.0, 0.385] }
+ride = { "Bip01 * UpperArm" = 0.5, "Bip01 * Forearm" = 0.5 }
+layer = 1
+
+[[piece.plate]]
+name = "couter fin"
+mesh = "Arms"
+corners_within = { min = [0.46, 1.565, -0.2], max = [0.5145, 1.5953, 0.2] }
+uv_within = { min = [0.55, 0.0], max = [1.0, 0.385] }
+ride = { "Bip01 * UpperArm" = 0.5, "Bip01 * Forearm" = 0.5 }
+layer = 1
 
 [[piece.plate]]
 name = "codpiece"
@@ -1126,24 +1394,68 @@ within = { min = [0.08, 1.45, -0.3], max = [0.3, 1.7, 0.3] }
 largest = 0.4
 layer = 2
 
+# The arm: plates, bands and three lames over the upper arm, mail from above the elbow to the
+# wrist (the texture's u from 0.75, v 0.4-0.66), leather straps under the upper arm (v from 0.9)
+# and a band at the wrist. The upper arm's metal (to x 0.47; u from 0.25, v to 0.36) is rigid on
+# the upper arm, the lames with it; the elbow is all mail, and bends.
+[[piece.plate]]
+name = "rerebrace"
+mesh = "Arms"
+corners_within = { min = [0.15, 1.3, -0.2], max = [0.47, 1.65, 0.2] }
+uv_within = { min = [0.25, -0.01], max = [1.0, 0.36] }
+ride = { "Bip01 * UpperArm" = 1.0 }
+
+# The band at the wrist (x 0.65-0.67, under the gauntlet's cuff), which the game blends towards the
+# hand: rigid on the forearm, rolling with its twist.
+[[piece.plate]]
+name = "vambrace"
+mesh = "Arms"
+corners_within = { min = [0.60, 1.3, -0.2], max = [0.70, 1.65, 0.2] }
+uv_within = { min = [0.47, 0.656], max = [1.0, 1.08] }
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+
 [[piece]]
 name = "Daedric gauntlets"
 models = ['armor\daedric\m\gauntlets.nif', 'armor\daedric\f\gauntlets.nif']
 covers = "hands"
 
+# The cuff, the plate over the wrist and the back of the hand, the leather under the forearm and the
+# glove are one island. The game blends the whole cuff between the forearm and the hand (the men's
+# never more than 0.64 on the forearm, so weights chose none of it): it's chosen by place and by
+# texture. The cuff (to x 0.645; its metal drawn at u from 0.40, v from 0.48) is rigid on the
+# forearm, rolling with its twist; the leather under it (u to 0.23, v 0.37-0.63) is soft, joined to
+# the metal's edges.
 [[piece.plate]]
 name = "cuff"
-largest = 0.4
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+corners_within = { min = [0.45, 1.3, -0.15], max = [0.645, 1.6, 0.15] }
+uv_within = { min = [0.40, 0.48], max = [1.0, 1.0] }
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+layer = 1
+
+# The plate over the back of the hand (u from 0.49, v from 0.69) starts over the cuff's end, 6 cm
+# behind the wrist: rigid on the hand, that end would swing down through the cuff as the wrist bends
+# back. Its first two rows (to x 0.70, the second about the wrist) are rigid with the cuff, and the
+# rest rides the hand, coming apart from them there: under them as the wrist bends back, opening
+# from them as it bends in.
+[[piece.plate]]
+name = "cuff band"
+corners_within = { min = [0.645, 1.3, -0.15], max = [0.70, 1.6, 0.15] }
+uv_within = { min = [0.49, 0.69], max = [1.0, 1.0] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
 [[piece.plate]]
 name = "hand plate"
-largest = 0.4
-vertices = "Bip01 * Hand"
-firm = 0.7
+corners_within = { min = [0.70, 1.3, -0.15], max = [0.80, 1.6, 0.15] }
+uv_within = { min = [0.49, 0.69], max = [1.0, 1.0] }
+seam = true
+ride = { "Bip01 * Hand" = 1.0 }
+
+# The ridge along the back of the hand, its own island: rigid on the hand.
+[[piece.plate]]
+name = "ridge"
+bone = "Bip01 * Hand"
+largest = 0.2
 ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
@@ -1214,41 +1526,82 @@ within = { min = [0.1, 1.45, -0.3], max = [0.3, 1.7, 0.3] }
 largest = 0.4
 layer = 2
 
+# The sleeves are mail from the shoulder to the wrist, one island an arm, with the rerebrace over
+# the upper arm (to x 0.40): a plate (the texture's u 0.5-0.72, v from 0.755; the men's model
+# draws part of it a whole texture lower, past v 1, hence the box's height), edged with a narrow
+# border, and a leather strap round the underside of the arm (x 0.34-0.39). Split by weight, the
+# rerebrace took the mail under the upper arm and at its elbow end, and the forearm's mail had 28
+# rigid corners: only the plate and its border are rigid now, on the upper arm, and the mail, the
+# strap and the trim at the wrist bend. The border is drawn from different parts of the two
+# models' textures, so it takes a rule for each (each chooses nothing in the other model).
 [[piece.plate]]
 name = "rerebrace"
 bone = "Bip01 * UpperArmTwist"
 side = "both"
 within = { min = [0.3, 1.4, -0.3], max = [0.5, 1.6, 0.3] }
-vertices = ["Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
-firm = 0.7
+uv_within = { min = [0.5, 0.755], max = [0.72, 1.95] }
 ride = { "Bip01 * UpperArm" = 1.0 }
 layer = 1
 
 [[piece.plate]]
-name = "vambrace"
+name = "rerebrace border (men's)"
 bone = "Bip01 * UpperArmTwist"
 side = "both"
 within = { min = [0.3, 1.4, -0.3], max = [0.5, 1.6, 0.3] }
-vertices = ["Bip01 * Forearm", "Bip01 * ForearmTwist"]
-firm = 0.7
-ride = { "Bip01 * ForearmTwist" = 1.0 }
+uv_within = { min = [0.73, 0.555], max = [0.9, 0.615] }
+ride = { "Bip01 * UpperArm" = 1.0 }
+layer = 1
+
+[[piece.plate]]
+name = "rerebrace border (women's)"
+bone = "Bip01 * UpperArmTwist"
+side = "both"
+within = { min = [0.3, 1.4, -0.3], max = [0.5, 1.6, 0.3] }
+uv_within = { min = [0.74, 0.995], max = [0.94, 1.04] }
+ride = { "Bip01 * UpperArm" = 1.0 }
+layer = 1
 
 [[piece]]
 name = "Mithril gauntlets"
 models = ['armor\mithril\m\gauntlets.nif']
 covers = "hands"
 
+# One island a hand: a mail glove, a leather band strapped under the forearm (the texture's v
+# 0.36-0.53), and two plates drawn from the same square of the texture (v from 0.56): the cuff
+# over the top of the forearm, peaking over the wrist (to x 0.697), and the plate over the back of
+# the hand (x 0.662-0.762), whose end is joined to the cuff's rim. The game blends the cuff's whole
+# wrist half between the forearm and the hand, so split by weight it bent at the wrist: the cuff's
+# metal is chosen by place and texture and is rigid on the forearm to the tip of its peak (rolling
+# with its twist). It takes two rules because the cuff's rows nearer the elbow are drawn from the
+# same rows of the texture as the hand plate: past x 0.647, where the hand plate begins, the box
+# leaves those rows (v from 0.755) out. The leather band, the leather inside the cuff's elbow end
+# and the mail bend, joined to the metal's edges.
 [[piece.plate]]
-name = "cuff"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+name = "vambrace"
+mesh = 0
+corners_within = { min = [0.5, 1.3, -0.15], max = [0.647, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.564], max = [1.0, 1.0] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
 [[piece.plate]]
+name = "vambrace rim"
+mesh = 0
+corners_within = { min = [0.647, 1.3, -0.15], max = [0.70, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.564], max = [0.94, 0.755] }
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+layer = 1
+
+# The hand plate (its own part of the texture, v 0.76-0.97, past x 0.655) is rigid on the hand,
+# coming apart from the cuff's rim so it slides under the cuff's peak as the wrist bends back. The
+# narrow edges joining it to the mail (u from 0.94, and the strip at v 0.68-0.70 over the
+# knuckles) stay soft.
+[[piece.plate]]
 name = "hand plate"
-vertices = "Bip01 * Hand"
-firm = 0.7
+mesh = 0
+corners_within = { min = [0.655, 1.3, -0.15], max = [0.9, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.755], max = [0.94, 0.975] }
+seam = true
 ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
@@ -1314,41 +1667,80 @@ side = "both"
 within = { min = [0.1, 1.45, -0.3], max = [0.3, 1.7, 0.3] }
 layer = 2
 
+# The sleeves, one island an arm in both models: a plate over the upper arm (the rerebrace, x to
+# 0.393, the texture's u 0.68-0.84, v 0.67-0.87) on a sleeve of mail (u from 0.85) that runs to the
+# wrist, and round the elbow (x 0.42-0.507) a couter: a band of the cuirass's plate (u 0.17-0.25,
+# v 0.31-0.57) over the elbow's back, top and underside, bordered at both ends (u 0.11-0.31,
+# v 0.065-0.13), with a leather strap and its buckles across the inside of the elbow. Split by
+# weight, the rerebrace took the mail under the upper arm and corners of the couter, the forearm's
+# mail had three rigid corners and the couter was left soft, crumpling as the elbow bent. Only the
+# plate is rigid now: the rerebrace on the upper arm, the couter and its borders half on the upper
+# arm and half on the forearm, turning about the elbow. The mail bends, and the strap bends with
+# the elbow from its ends (rigid, the arm would go through it at the least bend).
 [[piece.plate]]
 name = "rerebrace"
 bone = ["Bip01 * Forearm", "Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
 side = "both"
 largest = 0.6
-vertices = ["Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
-firm = 0.7
+uv_within = { min = [0.67, 0.65], max = [0.845, 0.88] }
 ride = { "Bip01 * UpperArm" = 1.0 }
 layer = 1
 
 [[piece.plate]]
-name = "vambrace"
+name = "couter"
 bone = ["Bip01 * Forearm", "Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
 side = "both"
 largest = 0.6
-vertices = ["Bip01 * Forearm", "Bip01 * ForearmTwist"]
-firm = 0.7
-ride = { "Bip01 * ForearmTwist" = 1.0 }
+uv_within = { min = [0.16, 0.30], max = [0.26, 0.58] }
+ride = { "Bip01 * UpperArm" = 0.5, "Bip01 * Forearm" = 0.5 }
+layer = 2
+
+[[piece.plate]]
+name = "couter borders"
+bone = ["Bip01 * Forearm", "Bip01 * UpperArm", "Bip01 * UpperArmTwist"]
+side = "both"
+largest = 0.6
+uv_within = { min = [0.11, 0.06], max = [0.31, 0.135] }
+ride = { "Bip01 * UpperArm" = 0.5, "Bip01 * Forearm" = 0.5 }
+layer = 2
 
 [[piece]]
 name = "Legion gauntlets"
 models = ['armor\legion\m\gauntlets.nif']
 covers = "hands"
 
+# One island a hand: the leather glove and finger plates, and a tube of blackened plate drawn in
+# one strip of the texture, top to bottom: the riveted cuff (v to 0.31, x to 0.65), a band with a
+# rolled edge over the wrist (v 0.31-0.39, to x 0.678) and the plate over the back of the hand
+# (v 0.39-0.55, to the knuckles at x 0.759). The game blends the band and the hand plate's first
+# rows between the forearm and the hand, and puts two corners in the middle of the hand plate
+# wholly on the forearm, so split by weight the band bent at the wrist and those two corners went
+# with the cuff: the cuff and its band are chosen by their part of the texture and are rigid on
+# the forearm (rolling with its twist).
 [[piece.plate]]
-name = "cuff"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+name = "vambrace"
+mesh = 0
+uv_within = { min = [0.0, 0.0], max = [1.0, 0.39] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
+# The hand plate is rigid on the hand from the band to the knuckles, coming apart from the band
+# so it slides under it as the wrist bends back (the box leaves out the cap closing the cuff's
+# elbow end, drawn from the same rows of the texture, and the bits past the knuckles). Its rolled
+# knuckle edge (drawn from the band's rows, a whole texture further on in v) goes with it; the
+# finger plates bend from there.
 [[piece.plate]]
 name = "hand plate"
-vertices = "Bip01 * Hand"
-firm = 0.7
+mesh = 0
+corners_within = { min = [0.6, 1.3, -0.15], max = [0.765, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.40], max = [1.0, 0.56] }
+seam = true
+ride = { "Bip01 * Hand" = 1.0 }
+
+[[piece.plate]]
+name = "hand plate edge"
+mesh = 0
+uv_within = { min = [0.29, 1.34], max = [1.01, 1.39] }
 ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
@@ -1423,12 +1815,18 @@ firm = 0.7
 ride = { "Bip01 * UpperArm" = 1.0 }
 layer = 1
 
+# Each sleeve, the upper arm's lames on it, is one island of the cuirass's riveted plate from the
+# shoulder to the wrist. The game blends its last 5 cm onto the hand (half at the wrist), so split
+# by weight its end bent with the wrist inside the gauntlet's rigid cuff. The forearm's part is
+# split by place: from past the elbow (x 0.475) to its end at the wrist, with the disc closing it,
+# it's rigid on the forearm's twist. From the upper arm's plate (to x 0.40) to there, round the
+# elbow, it's soft, so the elbow bends there and nothing rigid crosses its inside. (The women's
+# sleeve is the same shape.)
 [[piece.plate]]
 name = "vambrace"
 bone = "Bip01 * UpperArmTwist"
 side = "both"
-vertices = ["Bip01 * Forearm", "Bip01 * ForearmTwist"]
-firm = 0.7
+corners_within = { min = [0.475, 1.3, -0.2], max = [0.7, 1.6, 0.2] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 
 [[piece]]
@@ -1436,17 +1834,25 @@ name = "Blades gauntlets"
 models = ['armor\blades\m\gauntlets.nif']
 covers = "hands"
 
+# Leather gauntlets, one island each: a stiff cuff (the texture's right part, u from 0.52, with
+# its blue-piped band at the wrist), a raised panel over the back of the hand (the texture's
+# bordered panel, u to 0.47, v 0.29-0.665), and the glove. The game blends the cuff's whole second
+# half onto the hand, so split by weight only its forearm end was rigid and it bent like cloth at
+# the wrist. It's split by place: the cuff, to its rim at x 0.684, is rigid on the forearm's twist.
+# The panel is rigid on the hand from there, and comes apart from the cuff's rim, so it slides
+# under the cuff as the wrist bends in and out of it as the wrist bends back. The palm, the thumb
+# and the fingers are the glove's soft leather: they bend, joined to the cuff's rim.
 [[piece.plate]]
 name = "cuff"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+corners_within = { min = [0.5, 1.3, -0.15], max = [0.684, 1.6, 0.15] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
 [[piece.plate]]
 name = "hand plate"
-vertices = "Bip01 * Hand"
-firm = 0.7
+corners_within = { min = [0.684, 1.3, -0.15], max = [0.8, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.29], max = [0.47, 0.665] }
+seam = true
 ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
@@ -1501,10 +1907,16 @@ name = "Thief gauntlets"
 models = ['armor\thief\m\gauntlets.nif', 'armor\thief\f\gauntlets.nif']
 covers = "hands"
 
+# Each hand's gauntlet is one island: a bracer of boiled leather with straps round it, from x 0.51
+# to its slanting end at x 0.67-0.70, and a soft glove. The bracer is drawn from the texture's
+# lower part (u 0.15-0.85, v from 0.57) and the glove from above it. The game blends the bracer's
+# last 5 cm between the forearm and the hand, so splitting it by weight left that end soft and it
+# bent with the wrist like cloth: the whole bracer is chosen from the texture instead, rigid on
+# the forearm (rolling with its twist) to its end. The glove stays soft and stays joined to the
+# bracer's rim, bending with the wrist.
 [[piece.plate]]
 name = "bracer"
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+uv_within = { min = [0.15, 0.57], max = [0.85, 1.0] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
@@ -1552,11 +1964,17 @@ within = { min = [0.15, 1.45, -0.3], max = [0.3, 1.7, 0.3] }
 largest = 0.25
 layer = 2
 
+# The rerebrace: lames over the outside of the upper arm (mesh 2, drawn at the texture's u from
+# 0.75, v under 0.47), and a leather strap round the arm that holds them on (x 0.32-0.345, drawn
+# along the texture's foot, v from 0.85) with a stud on it, one island a side. The lames are rigid
+# on the upper arm; the strap and its stud stay soft, as only the metal is rigid. (The model has no
+# couters: its forearms and elbows are the bare arm.)
 [[piece.plate]]
 name = "rerebrace"
 bone = "Bip01 * UpperArm"
 side = "both"
 largest = 0.2
+uv_within = { min = [0.7, 0.0], max = [1.0, 0.5] }
 ride = { "Bip01 * UpperArm" = 1.0 }
 layer = 1
 
@@ -1574,19 +1992,30 @@ name = "Iron gauntlets (women's)"
 models = ['armor\iron\f\gauntlets.nif']
 covers = "hands"
 
+# Each hand's gauntlet is one island: a leather rim at the elbow end, the metal cuff over the
+# outside of the forearm, leather strapped under the forearm, and a leather glove. The cuff's metal
+# (the texture's u up to 0.70, v 0.1-0.525) runs to its rim at the wrist (x 0.66-0.69), and a
+# tongue of it goes on over the back of the hand to x 0.725 (u up to 0.33, v 0.45-0.58). The game
+# blends the whole rim between the forearm and the hand and has almost nothing wholly on the
+# forearm, so neither weights nor `firm` can find the cuff (they found one corner): it's split by
+# place at x 0.695. The cuff is rigid on the forearm (rolling with its twist), to the end of its
+# rim; the tongue is the hand plate, rigid on the hand and coming apart from the cuff at its seam
+# so it slides under or over the rim as the wrist bends. The rim at the elbow end, the leather and
+# straps under the forearm and the glove stay soft, so they bend with the wrist and the thumb.
 [[piece.plate]]
 name = "vambrace"
 mesh = 0
-vertices = ["Bip01 * ForearmTwist", "Bip01 * Forearm"]
-firm = 0.7
+corners_within = { min = [0.5, 1.3, -0.15], max = [0.695, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.1], max = [0.70, 0.525] }
 ride = { "Bip01 * ForearmTwist" = 1.0 }
 layer = 1
 
 [[piece.plate]]
 name = "hand plate"
 mesh = 0
-vertices = "Bip01 * Hand"
-firm = 0.7
+corners_within = { min = [0.695, 1.3, -0.15], max = [0.9, 1.6, 0.15] }
+uv_within = { min = [0.0, 0.45], max = [0.33, 0.58] }
+seam = true
 ride = { "Bip01 * Hand" = 1.0 }
 
 [[piece]]
@@ -1601,12 +2030,18 @@ side = "both"
 within = { min = [0.0, 0.6, -0.3], max = [0.3, 1.0, 0.3] }
 largest = 0.32
 
+# The knee cop (the game's model has one, on the left knee) and the two-sided leather strap that
+# holds it on round the back of the knee are one island. Only the cop (the texture's u from 0.74,
+# v from 0.74) is rigid, half on the thigh and half on the calf about the knee; the strap (its
+# outer face at u 0.49-0.58, its inner face drawn from the little patch at u 0.6-0.71) bends with
+# the knee, as a rigid strap behind it would have the calf go through it at the least bend.
 [[piece.plate]]
 name = "poleyn"
 bone = ["Bip01 * Thigh", "Bip01 * Calf"]
 side = "both"
 within = { min = [0.0, 0.42, -0.3], max = [0.3, 0.58, 0.3] }
 largest = 0.15
+uv_within = { min = [0.74, 0.74], max = [1.0, 1.0] }
 ride = { "Bip01 * Thigh" = 0.5, "Bip01 * Calf" = 0.5 }
 layer = 1
 
@@ -1641,6 +2076,26 @@ firm = 0.7
 ride = { "Bip01 * Toe0" = 1.0 }
 
 [[piece]]
+name = "Leather cuirass (women's)"
+models = ['armor\leather\f\cuirass.nif']
+covers = "upper"
+
+# A cap of boiled leather over each shoulder and down the upper arm to x 0.33 (the texture's u
+# under 0.2, v under 0.35), and on the right arm only a laced band round it below that (x
+# 0.27-0.37; u 0.26-0.48, v 0.33-0.5): mesh 4, one island a side. The men's rule chose the bare
+# arm's skin instead (mesh 2), as the caps are blended between the upper arm and its twist and so
+# have few corners firmly on either. They're chosen by place: from x 0.22 out, the cap and the
+# band are rigid on the upper arm; the cap's top over the shoulder (its corners a fifth to a half
+# on the clavicle) stays soft so it drapes with the shoulder as the arm lifts.
+[[piece.plate]]
+name = "upper arm guard"
+mesh = 4
+side = "both"
+corners_within = { min = [0.22, 1.3, -0.15], max = [0.45, 1.65, 0.15] }
+ride = { "Bip01 * UpperArm" = 1.0 }
+layer = 1
+
+[[piece]]
 name = "Elven cuirass (women's)"
 models = ['armor\elven\f\cuirass.nif']
 covers = "upper"
@@ -1666,3 +2121,45 @@ bone = "Bip01 Spine2"
 largest = 1.0
 vertices = ["Bip01 Spine1", "Bip01 Spine2"]
 ride = { "Bip01 Spine2" = 0.6, "Bip01 Spine1" = 0.4 }
+
+[[piece]]
+name = "Orcish gauntlets (women's)"
+models = ['armor\orcish\f\gauntlets.nif']
+covers = "hands"
+
+# Made differently from the men's: three meshes, the bare fingers (0), the fur round the wrist
+# with the scales over the back of the hand (1), and the vambrace (2). The game blends the
+# vambrace's last 7 cm onto the hand, up to two thirds at its end, so split by weight it bent like
+# cloth at the wrist. Its metal shell (the texture's lower part, u to 0.8695 and v from 0.625) is
+# rigid on the forearm's twist to its end at the wrist, chosen by where the texture draws the
+# metal; the leather under the forearm (drawn from the texture's top band) bends, joined to the
+# metal's edges.
+[[piece.plate]]
+name = "vambrace"
+mesh = 2
+uv_within = { min = [0.0, 0.625], max = [0.8695, 1.0] }
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+layer = 1
+
+# The fur's edge where it meets the vambrace's end. It's another mesh, so nothing joins it to the
+# vambrace: left soft, it went with the hand and a gap opened between them as the wrist bent back.
+# The ring of its corners on the vambrace's end (the texture's column at u 0.87, x to 0.676) rides
+# the forearm's twist with it, and the rest of the fur bends to the hand. (All its corners that
+# far, the scales' edge under the fur among them, made a jagged rim at the wrist.)
+[[piece.plate]]
+name = "fur edge"
+mesh = 1
+corners_within = { min = [0.6, 1.3, -0.2], max = [0.676, 1.6, 0.2] }
+uv_within = { min = [0.86, 0.63], max = [0.88, 1.0] }
+ride = { "Bip01 * ForearmTwist" = 1.0 }
+layer = 1
+
+# The scales over the back of the hand, as the men's: from the fur's edge to short of the
+# knuckles, the corners on the hand or the forearm, so the thumb's side and the knuckles bend.
+[[piece.plate]]
+name = "hand plate"
+mesh = 1
+corners_within = { min = [0.70, 1.3, -0.2], max = [0.765, 1.6, 0.2] }
+uv_within = { min = [0.1, 0.17], max = [0.885, 0.625] }
+vertices = ["Bip01 * Hand", "Bip01 * ForearmTwist", "Bip01 * Forearm"]
+ride = { "Bip01 * Hand" = 1.0 }
