@@ -44,6 +44,7 @@ pub mod iat;
 pub mod input;
 pub mod items;
 pub mod launcher;
+pub mod leaves;
 pub mod lighting;
 pub mod link;
 pub mod log;

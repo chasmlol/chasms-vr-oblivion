@@ -58,6 +58,8 @@ mod win {
     static LAST_TCL: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
     static REAL_SET_SAMPLER: AtomicUsize = AtomicUsize::new(0);
     static REAL_CREATE_VS: AtomicUsize = AtomicUsize::new(0);
+    static REAL_SET_VS: AtomicUsize = AtomicUsize::new(0);
+    static REAL_SET_VS_F: AtomicUsize = AtomicUsize::new(0);
 
     thread_local! {
         static MAKING: Cell<bool> = const { Cell::new(false) };
@@ -221,10 +223,21 @@ mod win {
                 hooks::install_into(set_sampler as *const (), set_sampler_state as *const (), "IDirect3DDevice9::SetSamplerState", &REAL_SET_SAMPLER);
                 tracing::info!("d3d9: the game's textures are filtered anisotropically ({}x)", anisotropy());
             }
-            // IDirect3DDevice9::CreateVertexShader (slot 91): the distant trees' shader.
-            if crate::distant_trees::enabled() {
+            // IDirect3DDevice9::CreateVertexShader (slot 91): the distant trees' shader, and which
+            // shaders are the leaves'.
+            if crate::distant_trees::enabled() || crate::leaves::enabled() {
                 let create_vs = unsafe { *(*(dev as *const *const usize)).add(91) };
                 hooks::install_into(create_vs as *const (), create_vertex_shader as *const (), "IDirect3DDevice9::CreateVertexShader", &REAL_CREATE_VS);
+            }
+            // IDirect3DDevice9::SetVertexShader (slot 92) and SetVertexShaderConstantF (94): the
+            // leaves' constants checked ([`crate::leaves`]).
+            if crate::leaves::enabled() {
+                let set_vs = unsafe { *(*(dev as *const *const usize)).add(92) };
+                hooks::install_into(set_vs as *const (), set_vertex_shader as *const (), "IDirect3DDevice9::SetVertexShader", &REAL_SET_VS);
+                let set_vs_f = unsafe { *(*(dev as *const *const usize)).add(94) };
+                hooks::install_into(set_vs_f as *const (), set_vertex_shader_constant_f as *const (), "IDirect3DDevice9::SetVertexShaderConstantF", &REAL_SET_VS_F);
+            } else {
+                tracing::info!("d3d9: testing: the leaves' constants as the game sets them (RUSTVR_OBLIVION_LEAVES_AS_GAME)");
             }
             match Gpu::new() {
                 Ok(gpu) => {
@@ -282,25 +295,57 @@ mod win {
     /// [`crate::distant_trees`] instead, the rest as they are.
     unsafe extern "system" fn create_vertex_shader(dev: *mut c_void, function: *const u32, out: *mut *mut c_void) -> windows::core::HRESULT {
         let real: CreateVertexShaderFn = unsafe { std::mem::transmute(REAL_CREATE_VS.load(Ordering::Acquire)) };
-        let ours = hooks::guard("CreateVertexShader", None, || {
+        // (The version and the constant table's comment token, then the table.)
+        let tokens = hooks::guard("CreateVertexShader", None, || {
             if function.is_null() {
                 return None;
             }
-            // (The version and the constant table's comment token, then the table.)
             let comment = unsafe { function.add(1).read() };
             let len = (comment >> 16) as usize;
             if comment & 0xFFFF != 0xFFFE || len > 0x4000 {
                 return None;
             }
-            let tokens = unsafe { std::slice::from_raw_parts(function, 2 + len) };
-            if !crate::distant_trees::is_distant_trees(tokens) {
+            Some(unsafe { std::slice::from_raw_parts(function, 2 + len) })
+        });
+        let ours = hooks::guard("CreateVertexShader", None, || {
+            if !crate::distant_trees::enabled() || !crate::distant_trees::is_distant_trees(tokens?) {
                 return None;
             }
             let code = crate::distant_trees::replacement()?;
             tracing::info!("d3d9: the distant trees' cards face the eye, not the way it looks");
             Some(code.as_ptr())
         });
-        unsafe { real(dev, ours.unwrap_or(function), out) }
+        let hr = unsafe { real(dev, ours.unwrap_or(function), out) };
+        if hr.is_ok() && !out.is_null() && crate::leaves::enabled() {
+            hooks::guard_void("CreateVertexShader", || {
+                if let Some(tokens) = tokens {
+                    crate::leaves::created(unsafe { *out } as usize, tokens);
+                }
+            });
+        }
+        hr
+    }
+
+    type SetVertexShaderFn = unsafe extern "system" fn(*mut c_void, *mut c_void) -> windows::core::HRESULT;
+    type SetVertexShaderConstantFFn = unsafe extern "system" fn(*mut c_void, u32, *const f32, u32) -> windows::core::HRESULT;
+
+    unsafe extern "system" fn set_vertex_shader(dev: *mut c_void, shader: *mut c_void) -> windows::core::HRESULT {
+        let real: SetVertexShaderFn = unsafe { std::mem::transmute(REAL_SET_VS.load(Ordering::Acquire)) };
+        hooks::guard_void("SetVertexShader", || crate::leaves::bind(shader as usize));
+        unsafe { real(dev, shader) }
+    }
+
+    unsafe extern "system" fn set_vertex_shader_constant_f(dev: *mut c_void, start: u32, data: *const f32, count: u32) -> windows::core::HRESULT {
+        let real: SetVertexShaderConstantFFn = unsafe { std::mem::transmute(REAL_SET_VS_F.load(Ordering::Acquire)) };
+        let fixed = if crate::leaves::bound() && !data.is_null() && count > 0 && count <= 256 {
+            hooks::guard("SetVertexShaderConstantF", None, || crate::leaves::set(start, unsafe { std::slice::from_raw_parts(data, count as usize * 4) }))
+        } else {
+            None
+        };
+        match &fixed {
+            Some(values) => unsafe { real(dev, start, values.as_ptr(), count) },
+            None => unsafe { real(dev, start, data, count) },
+        }
     }
 
     unsafe extern "system" fn test_cooperative_level(dev: *mut c_void) -> windows::core::HRESULT {
