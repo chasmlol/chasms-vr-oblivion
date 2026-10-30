@@ -868,6 +868,8 @@ mod game {
                 tracing::info!("grabs: {:#x} went from the hand", h.actor_id);
                 let h = self.holds[hand].take().unwrap();
                 self.done[hand] = h.serial;
+                // (Its body may be gone with it: the spring's let go without waking it.)
+                unspring(h.action, 0);
                 self.limp.remove(&h.actor_id);
                 return;
             }
