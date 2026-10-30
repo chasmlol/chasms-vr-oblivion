@@ -20,7 +20,11 @@ pub const MENU_BOOK: u32 = 0x402;
 const BOOK_REF: usize = 0x30;
 const BOOK_FORM: usize = 0x34;
 const BOOK_FLAGS: usize = 0x88;
+/// The skill a book teaches (0xFF none: read, a skill book teaches nothing more).
+const BOOK_SKILL: usize = 0x89;
 const SCROLL: u8 = 1;
+/// A reference's base form.
+const REFR_BASE: usize = 0x1C;
 const VT_HANDLE_CLICK: usize = 3 * 4;
 const EXIT: u32 = 31;
 /// `TESForm` form id.
@@ -73,6 +77,9 @@ struct State {
     reading: Option<usize>,
     /// B's presses as last seen.
     back: Option<u16>,
+    /// A book just read: its form and the skill it taught before (for the log: the game's own skill
+    /// rise is that it teaches nothing now).
+    read: Option<(usize, u8)>,
 }
 
 static STATE: std::sync::Mutex<Option<State>> = std::sync::Mutex::new(None);
@@ -84,6 +91,12 @@ pub fn frame() {
     let s = s.get_or_insert_with(State::default);
     let held = crate::items::held();
     let book = open();
+    if let Some((base, before)) = s.read.take()
+        && before != 0xFF
+    {
+        let now = mem::at::<u8>(base + BOOK_SKILL).unwrap_or(0);
+        tracing::info!("books: a skill book (skill {before}) read: {}", if now == 0xFF { "the game raised the skill" } else { "it still teaches (the skill was at its most)" });
+    }
     // B's presses (the runtime's "back"): on a book, the book's own Exit.
     let back = crate::link::last().map(|l| l.frame.intents.presses[Action::MenuBack as usize]);
     let pressed_back = matches!((s.back, back), (Some(a), Some(b)) if a != b);
@@ -106,6 +119,8 @@ pub fn frame() {
                 None if !crate::menus::menu_mode() => {
                     // Read as activating it does: the game's own book menu, skill rise and script.
                     let id = mem::at::<u32>(h.refr + FORM_ID).unwrap_or(h.id);
+                    let base = mem::deref(h.refr + REFR_BASE);
+                    s.read = Some((base, mem::at::<u8>(base + BOOK_SKILL).unwrap_or(0xFF)));
                     let ok = crate::console::run_script(&format!("{id:08X}.Activate player 1"));
                     tracing::info!("books: opened by the other hand ({id:08X}): {}", if ok { "read" } else { "not read" });
                 }

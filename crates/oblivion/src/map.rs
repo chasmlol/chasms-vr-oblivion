@@ -149,7 +149,11 @@ mod game {
                 _ => None,
             };
             if hand != s.hand {
-                tracing::info!("map: {}", if hand.is_some() { "drawn from the belt" } else { "put away" });
+                tracing::info!("map: {}", match (s.hand, hand) {
+                    (None, Some(_)) => "drawn from the belt",
+                    (Some(_), Some(_)) => "handed to the other hand",
+                    _ => "put away",
+                });
             }
             s.hand = hand;
             let menu = crate::menus::menu_mode();
