@@ -182,6 +182,9 @@ mod win {
     const RTTI_FORM: usize = 0x00B0_2F9C;
     const RTTI_FULL_NAME: usize = 0x00B0_3298;
 
+    /// Where the game's vtables are (its read-only data): a pointer whose first word isn't in
+    /// here isn't one of its objects.
+    const GAME_VTABLES: std::ops::Range<usize> = 0x00A3_0000..0x00B4_0000;
     /// `Actor`: its process (`HighProcess` near the player), its say-to target.
     const PROCESS: usize = 0x58;
     const HIGH_PROCESS_VTABLE: usize = 0x00A7_1814;
@@ -313,10 +316,15 @@ mod win {
         ok
     }
 
-    /// An event for the plugin, sent on the next frame (saves and loads happen outside it).
+    /// An event for the plugin, sent on the next frame it runs in (saves and loads happen outside
+    /// one); kept a ring's worth while it isn't running.
     fn tell(event: VoiceEvent) {
         let mut guard = VOICE.lock().unwrap();
-        guard.get_or_insert_with(Voice::default).events.push(event);
+        let events = &mut guard.get_or_insert_with(Voice::default).events;
+        if events.len() >= VOICE_EVENT_SLOTS {
+            events.remove(0);
+        }
+        events.push(event);
     }
 
     // ---- small helpers on the game's memory -------------------------------------------------
@@ -341,7 +349,8 @@ mod win {
 
     /// A form's name (its `TESFullName`), or "".
     fn full_name(form: usize) -> String {
-        if form == 0 {
+        // (only one of the game's own objects: the cast reads its vtable's type information)
+        if form == 0 || !GAME_VTABLES.contains(&mem::deref(form)) {
             return String::new();
         }
         type Cast = unsafe extern "C" fn(usize, i32, usize, usize, i32) -> usize;
@@ -388,11 +397,13 @@ mod win {
         Some(crate::camera::basis().point_from_game(Vec3::from(feet)) + Vec3::Y * 1.6)
     }
 
-    /// People near the player who can talk: the game's NPCs (not creatures), alive.
-    fn people() -> Vec<usize> {
+    /// People near the player who can talk (the game's NPCs, not creatures; alive), with where
+    /// each one's head is this frame.
+    fn people() -> Vec<(usize, Vec3)> {
         combat::high_actors()
             .into_iter()
             .filter(|&a| mem::deref(a) == 0x00A6_FC9C && combat::actor_value(a, 8) > 0)
+            .filter_map(|a| Some((a, head(a)?)))
             .collect()
     }
 
@@ -739,12 +750,12 @@ mod win {
     // ---- each frame -----------------------------------------------------------------------
 
     /// The one the head looks at most directly within talking distance (their id and actor).
-    fn looked_at(view: &View, people: &[usize]) -> Option<(u32, usize)> {
+    fn looked_at(view: &View, people: &[(usize, Vec3)]) -> Option<(u32, usize)> {
         let (eye, look) = (view.head_pos, view.look_dir.normalize_or_zero());
         people
             .iter()
-            .filter_map(|&a| {
-                let to = head(a)? - eye;
+            .filter_map(|&(a, head)| {
+                let to = head - eye;
                 let d = to.length();
                 let angle = look.angle_between(to / d.max(1e-3)).to_degrees();
                 (d <= TALKING_DISTANCE && angle <= LOOK_CONE).then_some((angle + d * 2.0, id_of(a), a))
@@ -787,6 +798,7 @@ mod win {
         let player = engine::player();
         let (lines_dir, voices_dir) = folders();
         let people = people();
+        let near = |id: u32, within: f32| people.iter().any(|&(a, h)| id_of(a) == id && h.distance(view.head_pos) <= within);
         let lines = crate::link::with_adapter(|a| a.read_voice_lines(&mut v.read)).unwrap_or_default();
         for line in lines {
             match line.kind {
@@ -794,7 +806,7 @@ mod win {
                     // Whoever's looked at now is being talked to; looking at no one keeps whoever
                     // was listening, while they're near.
                     let looked = looked_at(view, &people);
-                    let kept = v.listener.filter(|&(id, _)| find(id).and_then(head).is_some_and(|h| h.distance(view.head_pos) <= AROUND));
+                    let kept = v.listener.filter(|&(id, _)| near(id, AROUND));
                     let next = looked.map(|(id, _)| id).or(kept.map(|(id, _)| id));
                     if let Some((old, _)) = v.listener
                         && Some(old) != next
@@ -843,7 +855,7 @@ mod win {
         // The listener faces the player while engaged, and is let go after.
         if let Some((id, until)) = v.listener {
             match find(id) {
-                Some(actor) if now < until && head(actor).is_some_and(|h| h.distance(view.head_pos) <= AROUND) => face(actor, player),
+                Some(actor) if now < until && near(id, AROUND) => face(actor, player),
                 Some(actor) => {
                     release(actor);
                     v.listener = None;
@@ -859,7 +871,7 @@ mod win {
             if v.clips.is_none() {
                 v.clips = Some(clip_writer());
             }
-            let around: Vec<usize> = people.iter().copied().filter(|&a| head(a).is_some_and(|h| h.distance(view.head_pos) <= AROUND)).collect();
+            let around: Vec<usize> = people.iter().filter(|&&(_, h)| h.distance(view.head_pos) <= AROUND).map(|&(a, _)| a).collect();
             let mut scene: Box<VoiceScene> = bytemuck::zeroed_box();
             scene.flags = VS_READY | if crate::menus::menu_mode() { VS_DEAF } else { 0 };
             scene.listener = v.listener.map_or(0, |(id, _)| id);
