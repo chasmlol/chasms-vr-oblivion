@@ -50,7 +50,7 @@ pub use win::*;
 mod win {
     use crate::mem;
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     const SET_TARGET: usize = 0x005A_4980;
     const HUD_INFO_MENU: usize = 0x00B3_B33C;
@@ -118,6 +118,16 @@ mod win {
     static SHOWN: AtomicUsize = AtomicUsize::new(0);
     /// The card's action line as it's to be: the icon and the word, or none ([`card_now`]).
     static ACTION: Mutex<Option<(u32, usize)>> = Mutex::new(None);
+    /// How long the game takes to show a new thing on its card (seconds): it lays out the card's
+    /// lines over a few frames (a red line's box settled 0.1 s after it was set), and meanwhile the
+    /// card is of what it was: at first what the crosshair's on, a person's name. And how long the
+    /// card stays over a hand after the hand has nothing (it fades out there).
+    const SETTLE: f64 = 0.15;
+    const LINGER: f64 = 0.3;
+    /// When the card last became a hand's thing's, and when a hand last had one (the link's clock);
+    /// whether it was over the hand when the layout was last told.
+    static TIMES: Mutex<(f64, f64)> = Mutex::new((f64::MIN, f64::MIN));
+    static OVER_HAND: AtomicBool = AtomicBool::new(false);
 
     /// The card's thing: the world's thing in a hand, else a pocket's.
     fn held() -> usize {
@@ -307,7 +317,11 @@ mod win {
 
     fn show() {
         let refr = held();
-        if SHOWN.swap(refr, Ordering::AcqRel) != refr && REAL.load(Ordering::Acquire) != 0 {
+        let was = SHOWN.swap(refr, Ordering::AcqRel);
+        if was == 0 && refr != 0 {
+            TIMES.lock().unwrap().0 = crate::link::now();
+        }
+        if was != refr && REAL.load(Ordering::Acquire) != 0 {
             let real: unsafe extern "C" fn(usize, u8, u8) -> u8 = unsafe { std::mem::transmute(REAL.load(Ordering::Acquire)) };
             crate::hooks::guard_void("hud info", || unsafe {
                 real(refr, 0, 0);
@@ -316,21 +330,39 @@ mod win {
         }
     }
 
-    /// The card's place on the HUD, when it has moved since it was last told (for the layout). Only
-    /// while it's a hand's thing's: what else it shows (the crosshair's thing, or nothing as it fades)
-    /// isn't over a hand, and the card over the hand, fading, keeps the place it had.
-    pub fn moved() -> Option<[f32; 4]> {
-        if held() == 0 {
-            return None;
+    /// Whether the card is of a hand's thing now (the game has had a moment to show it), or was a
+    /// moment ago (it's fading out over the hand).
+    fn over_hand(now: f64) -> bool {
+        let mut t = TIMES.lock().unwrap();
+        if held() != 0 {
+            t.1 = now;
+            return now - t.0 >= SETTLE;
         }
-        let now = card_uv()?;
+        now - t.1 < LINGER
+    }
+
+    /// Once a frame: whether the layout's to be told again, as the card has moved on the HUD or come
+    /// over a hand or gone from it. Its place only changes while it's a hand's thing's (and the first
+    /// time it shows anything): what else it shows (the crosshair's thing, or nothing as it fades)
+    /// isn't over a hand, and the card over the hand, fading, keeps the place it had.
+    pub fn moved() -> bool {
+        let over = over_hand(crate::link::now());
+        let mut changed = OVER_HAND.swap(over, Ordering::AcqRel) != over;
         let mut last = LAST.lock().unwrap();
-        let far = last.is_none_or(|l| l.iter().zip(now).any(|(a, b)| (a - b).abs() > 0.01));
-        if far {
+        if (held() != 0 || last.is_none())
+            && let Some(now) = card_uv()
+            && last.is_none_or(|l| l.iter().zip(now).any(|(a, b)| (a - b).abs() > 0.01))
+        {
             *last = Some(now);
             tracing::info!("hud: the game's card of a thing is at {now:.3?} of its HUD");
+            changed = true;
         }
-        far.then_some(now)
+        changed
+    }
+
+    /// The card isn't of the thing in a hand yet (or there's none).
+    pub fn pending() -> bool {
+        !OVER_HAND.load(Ordering::Acquire)
     }
 
     pub fn last() -> Option<[f32; 4]> {

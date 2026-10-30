@@ -185,6 +185,13 @@ Not checked:
   - the card's part is at least 34% of the HUD's width from its right edge (its lines are
     right-aligned), and only changes while a hand's thing is on it;
   - the runtime draws it at one scale (the whole HUD would be 60 cm), not stretched to a width.
+- **The card over a hand only once it's the thing's** (round 7: as a hand first went into a pocket
+  the card showed the person's name with the red "Pickpocket"). The game's card was still of what
+  the crosshair was on (the person) while the game laid out the thing's name, about 0.1 s (the
+  log's boxes); the red line was already set. The layout now says when the card isn't of the hand's
+  thing yet (`HUDL_HELD_PENDING`: from when nothing's in a hand till 0.15 s after the card's set to
+  a hand's thing), and the runtime doesn't draw it over the hand meanwhile. Moving from one thing
+  to the next keeps it, and it stays 0.3 s after the hand has nothing, to fade out.
 
 ## Not done, known issues
 

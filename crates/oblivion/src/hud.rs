@@ -9,15 +9,15 @@
 //! sneak eye above it; the card of what it's on (its name and numbers) at the bottom right
 //! ([`crate::hud_info`]).
 
-use rustvr_protocol::{HUD_CENTER, HUD_HELD, HUD_HINTS, HUD_STATUS, HUD_SUBTITLES, HUDL_ADDITIVE, HUDL_REST_HIDDEN, HudElement, HudLayout};
+use rustvr_protocol::{HUD_CENTER, HUD_HELD, HUD_HINTS, HUD_STATUS, HUD_SUBTITLES, HUDL_ADDITIVE, HUDL_HELD_PENDING, HUDL_REST_HIDDEN, HudElement, HudLayout};
 
 fn element(role: u32, uv: [f32; 4]) -> HudElement {
     HudElement { role, uv, ..Default::default() }
 }
 
 /// The layout; `card`: where the game's card of a thing is on the HUD (`crate::hud_info`), for the
-/// thing in a hand.
-pub fn layout(card: Option<[f32; 4]>) -> HudLayout {
+/// thing in a hand; `pending`: the card isn't of the thing in a hand yet.
+pub fn layout(card: Option<[f32; 4]>, pending: bool) -> HudLayout {
     let mut elements = vec![
         // The bars, the equipped weapon and spell, the compass: on the off-hand wrist.
         element(HUD_STATUS, [0.0, 0.86, 0.5, 1.0]),
@@ -32,5 +32,5 @@ pub fn layout(card: Option<[f32; 4]>) -> HudLayout {
     if let Some(uv) = card {
         elements.push(element(HUD_HELD, uv));
     }
-    HudLayout::new(HUDL_ADDITIVE | HUDL_REST_HIDDEN, &elements)
+    HudLayout::new(HUDL_ADDITIVE | HUDL_REST_HIDDEN | if pending { HUDL_HELD_PENDING } else { 0 }, &elements)
 }
