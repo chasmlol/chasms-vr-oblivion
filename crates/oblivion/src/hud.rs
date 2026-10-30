@@ -203,9 +203,6 @@ mod win {
     /// arrow): the cream of its highlight for the beam's thread, the gold of its blade for the glow
     /// round it and its dot.
     const POINTER: [u32; 2] = [0xFFF7_DEFF, 0xFFCB_39FF];
-    /// `HUDInfoMenu`: what the crosshair is on (a reference).
-    const HUD_INFO_MENU: usize = 0x00B3_B33C;
-    const CROSSHAIR_REF: usize = 0x54;
     /// `ContainerMenu`: the container (or the merchant, bartering).
     const CONTAINER_REF: usize = 0x44;
     /// `DialogMenu`: the speaker.
@@ -462,7 +459,7 @@ mod win {
         // (What the crosshair was last on out of menus: what a menu opened by activating it is about.)
         static LOOKED_AT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         if !crate::menus::menu_mode() {
-            LOOKED_AT.store(mem::deref(mem::deref(HUD_INFO_MENU) + CROSSHAIR_REF), std::sync::atomic::Ordering::Relaxed);
+            LOOKED_AT.store(crate::hud_info::looked_at(), std::sync::atomic::Ordering::Relaxed);
             hud(&mut l, screen, &mut trees);
             return l;
         }
@@ -576,12 +573,13 @@ mod win {
         // looked at; its crosshair is hidden, as the hands aim), and the card of what it's on under it.
         let (w, h) = screen;
         let offset = |b: [f32; 4]| [((b[0] + b[2]) * 0.5 - w * 0.5) / h, -((b[1] + b[3]) * 0.5 - h * 0.5) / h, 0.0];
-        let crosshair = mem::deref(mem::deref(HUD_INFO_MENU) + CROSSHAIR_REF);
-        // A thing that can be taken says nothing while it's only looked at: neither its card nor its
-        // activate icon (a hand, red when taking it would be stealing). Once a hand has it, the
-        // game's card is the held thing's (`crate::hud_info`) and floats over it, and the icon is
-        // under the gaze again, as the game sets it for its target.
-        let quiet = !crate::hud_info::holding() && crosshair != 0 && crate::items::takeable_ref(crosshair).is_some();
+        let crosshair = crate::hud_info::looked_at();
+        // A thing that can be taken says nothing while it's only looked at: neither its card (the
+        // game never gets it, `crate::hud_info`) nor its activate icon (a hand, red when taking it
+        // would be stealing), nor that icon fading out after the gaze leaves it. Once a hand has
+        // it, the game's card is the held thing's and floats over it, and the icon is under the
+        // gaze again, as the game sets it for its target.
+        let quiet = crate::hud_info::quiet();
         let icons: &'static [From] = if quiet { &[From::Drawn("hudreticle_sneak")] } else { &[From::Drawn("hudreticle_reticle"), From::Drawn("hudreticle_sneak")] };
         let reticle = piece_box(trees.get(RETICLE), &Piece::of(icons, false));
         if let Some((b, uv)) = reticle.and_then(|b| Some((b, tiles::uv_of(b, screen, MARGIN)?))) {

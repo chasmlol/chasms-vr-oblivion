@@ -3,9 +3,10 @@
 //! their icons: value, weight, damage, armour, condition, uses, quality, a lock), drawn by the game
 //! in its font at the screen's bottom right. While a hand has one of the game's things
 //! ([`crate::items`]), it's that thing's: the game's own setting of its target (0x5A4980, called
-//! as the crosshair's target changes) is given the held thing instead. Where the card is on the
-//! HUD is read from the game's own layout of it (its tiles' places and sizes), so the runtime can
-//! put that piece of the HUD over the held thing ([`rustvr_protocol::HUD_HELD`]).
+//! as the crosshair's target changes) is given the held thing instead. A thing that can be taken,
+//! only looked at, is given as nothing: it has no card until a hand has it. Where the card is on
+//! the HUD is read from the game's own layout of it (its tiles' places and sizes), so the runtime
+//! can put that piece of the HUD over the held thing ([`rustvr_protocol::HUD_HELD`]).
 //!
 //! Its tiles are read as [`crate::tiles`] reads any menu's.
 
@@ -17,7 +18,7 @@ pub use win::*;
 #[cfg(all(windows, target_arch = "x86"))]
 mod win {
     use crate::mem;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     const SET_TARGET: usize = 0x005A_4980;
     const HUD_INFO_MENU: usize = 0x00B3_B33C;
@@ -26,6 +27,12 @@ mod win {
     static REAL: AtomicUsize = AtomicUsize::new(0);
     /// The thing a hand has (a reference), or 0.
     static HELD: AtomicUsize = AtomicUsize::new(0);
+    /// What the crosshair is on, as the game set it (0: nothing); the card may be another's.
+    static ASKED: AtomicUsize = AtomicUsize::new(0);
+    /// The last thing the crosshair was on could be taken.
+    static LAST_TAKEABLE: AtomicBool = AtomicBool::new(false);
+    /// The card's target (`HUDInfoMenu` +0x54), for when the setting of it isn't hooked.
+    const TARGET: usize = 0x54;
 
     /// Where the game's card is on its HUD now (the part of it, 0..1), if it shows one.
     pub fn card_uv() -> Option<[f32; 4]> {
@@ -36,8 +43,32 @@ mod win {
 
     unsafe extern "C" fn set_target(target: usize, a: u8, force: u8) -> u8 {
         let real: unsafe extern "C" fn(usize, u8, u8) -> u8 = unsafe { std::mem::transmute(REAL.load(Ordering::Acquire)) };
+        ASKED.store(target, Ordering::Release);
+        let takeable = target != 0 && crate::items::takeable_ref(target).is_some();
+        if target != 0 {
+            LAST_TAKEABLE.store(takeable, Ordering::Release);
+        }
+        // A thing that can be taken gets no card while it's only looked at, not even for a moment:
+        // the game fades its card out over 0.15 s once the crosshair leaves, so a card left to the
+        // HUD's cutting flashes up as the gaze passes over things.
         let held = HELD.load(Ordering::Acquire);
-        unsafe { real(if held != 0 { held } else { target }, a, force) }
+        unsafe { real(if held != 0 { held } else if takeable { 0 } else { target }, a, force) }
+    }
+
+    /// What the crosshair is on (0: nothing), whatever the card is of.
+    pub fn looked_at() -> usize {
+        if REAL.load(Ordering::Acquire) == 0 {
+            return mem::deref(mem::deref(HUD_INFO_MENU) + TARGET);
+        }
+        ASKED.load(Ordering::Acquire)
+    }
+
+    /// Nothing of what the crosshair is on should show (no card, no activate icon): it's a thing
+    /// that can be taken, only looked at, or nothing just after one (while the game's icon of it
+    /// fades out).
+    pub fn quiet() -> bool {
+        let on = looked_at();
+        !holding() && if on == 0 { LAST_TAKEABLE.load(Ordering::Acquire) } else { crate::items::takeable_ref(on).is_some() }
     }
 
     /// A hand has one of the game's things (the card is its).

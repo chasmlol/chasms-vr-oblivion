@@ -171,6 +171,13 @@ red there for someone else's thing hasn't been seen: worth a look on a shelf in 
   What I ruled out on the way: the inventory's own layout has no 3D, the game's first-person arms
   are hidden while each eye is drawn, the axe in your hand is drawn over the menu, and your
   character's body in the world stays hidden (the log says so).
+- **"When I move my head around near items I still see the item names pop up and disappear
+  instantly."** The game fades its card out over 0.15 s after the crosshair leaves a thing (and its
+  hand icon too). The card was hidden only while the crosshair was on the item, so as your gaze
+  left one, the item's name was let through for the rest of its fade. Now the game is never given
+  an item you're only looking at as the card's target, so it has no name to fade. The hand icon
+  stays hidden after the gaze leaves an item until it's looking at something else, so its fade
+  doesn't show either. Picking a thing up still shows its card over your hand.
 - **From the 15:50 run's log (see-through):** the inventory's pieces came out solid (covered 1.00
   at their middles). The dialogue's didn't: its two pieces were 0.22 and 0.57 at their middles the
   first time, 0.77 and 0.95 the second, and 0.51 and 0.00 the third. The runtime makes anything
