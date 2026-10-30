@@ -322,3 +322,54 @@ Calls made:
 
 * The stone follows the hand without turning with it (its own turning is its art's).
 * The well's light is a fixed column round its reference's place, not measured on its model.
+
+## 5. Shrines and offerings
+
+### How VR games do it
+
+* **Ritual is a gesture.** VR games that have altars (*Asgard's Wrath*'s offerings, *Skyrim VR*
+  mods' prayer by kneeling, *The Elder Scrolls: Blades*' shrines on mobile VR) let the player place
+  the offering with their hand and kneel or touch to pray; the reward answers the body, not a
+  button.
+* **Held, not clicked**: a short hold (half a second, felt building) separates a deliberate offering
+  from brushing past the altar.
+
+### Oblivion
+
+* **Daedric shrines** (activators `DA<Prince>Shrine`, `Architecture\DaedricStatues\DaedricShrine*.NIF`),
+  each with its own script (`DAAzuraStatueScript`...): on the player's activation, its own
+  checks (the quest's stage, the hour, the player's level, `player.getitemcount <offering>`), its
+  own message boxes ("You do not have the proper offering Azura requires.", "Azura demands a more
+  powerful champion...", and the question "Do you wish to offer Glow Dust to the altar of Azura?"
+  Yes / No). Answered yes (`GetButtonPressed` 0 in its `GameMode`), it takes the offering
+  (`RemoveItem`), the Daedra speaks (`Say`, the player's controls held), and the quest starts. The
+  forms a script uses are its referred-to list (the `Script`'s, each a variable's
+  form +8): the offering among them.
+* **The message box** (`MessageMenu`): its buttons (ten tiles); a click
+  (its `HandleClick`) on id 4 + n is button n, which the script reads.
+* **Wayshrines** (`WayshrineAltar01.NIF`, a script per god: `ShrineJulianos`...): on the
+  player's activation, the god's blessing for a pilgrim with fame (its spell, `FameJulianos`), or
+  "Seek greater fame to be judged worthy."; all nine visited, the Pilgrim's Grace power.
+* **The chapels' altars** (`CathedralStenIntAltar02.NIF`, "Altar of <god>", a script per god:
+  `AltarofAkatosh`...): on the player's activation, a sinner (a bounty, more infamy than
+  fame) is refused ("Seek not the Dragon's blessing, sinner!"); one who hasn't made the pilgrimage
+  to the god's wayshrine is told to; else once a day the god's blessing spell (`AltarAkatosh`: its
+  cures and fortifications).
+
+### Design
+
+* **An offering laid on a Daedric shrine**: a thing held to the shrine (its altar or statue) for half
+  a second that the shrine's own script names is the player's activation of the shrine: its script
+  decides everything as ever, and its own question is answered yes by the laying (the message box's
+  first button, as the player's click would). A message box without a question (not the proper
+  offering, too weak a champion, the wrong hour) is left for the player to read and close. A thing
+  lying about (one picked up by hand from the ground) is taken into the pack first by the game, since
+  the script counts the pack.
+* **A wayshrine or a chapel's altar, touched or knelt before**: an empty hand's palm on it for 0.6 s,
+  or kneeling before it (the head below 72% of the standing eye height, within 1.6 m, facing it) for
+  a second: its activation, its own blessing or refusal.
+
+Calls made:
+
+* Which thing is an offering comes from the shrine's own script (what it names), not a list of ours.
+* Kneeling is the head's height and the way it faces, not a pose of the legs.

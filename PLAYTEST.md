@@ -141,3 +141,34 @@ uses are the game's own (the stone's and the well's scripts, the inventory's use
 What I couldn't: anything in the game. The stone's grab (one of the runtime's constrained props, as
 the chains are) and its 3D moved by hand are untested; the well's column is a guess at its light's
 size (tell me if the hand has to be somewhere else).
+
+## 5. Shrines and offerings — `playtest-azura.bat`, `playtest-wayshrine.bat`, `playtest-chapel.bat`
+
+`playtest-azura.bat`: beside the Shrine of Azura at dusk (her hour), glow dust in your pack and a
+pinch on the ground ahead; saves as `rustvr-azura`.
+
+1. **Lay the offering**: pick up the glow dust from the ground and hold it to the shrine (its altar,
+   the statue's base) for half a second. It builds, then the shrine's own script: its question ("Do
+   you wish to offer Glow Dust...?") answered yes by the laying, the dust taken, and Azura speaks; her
+   quest starts. If your character is below level 2 the game says "Azura demands a more powerful
+   champion" instead (its rule): that's the laying working too.
+2. **Something else** held to the shrine does nothing (only what its script names is an offering).
+
+`playtest-wayshrine.bat`: beside a Wayshrine of Akatosh; saves as `rustvr-wayshrine`.
+
+3. **Touch it**: an empty hand's palm on the wayshrine for a moment: its blessing (or "Seek greater
+   fame to be judged worthy.", the game's rule).
+4. **Kneel**: kneel (or crouch low) in front of it, facing it, for a second: the same.
+
+`playtest-chapel.bat`: Chorrol's Chapel of Stendarr, its altar at the far end; saves as
+`rustvr-chapel`.
+
+5. **Touch or kneel at the altar**: its own words (the pilgrimage first, or its blessing once a day).
+
+What I checked: builds; unit tests (which models are shrines, kneeling). The shrines' activations and
+answers are their own scripts'.
+
+What I couldn't: anything in the game. The Azura and wayshrine set-outs move you by coordinates
+(`setpos`): if you arrive in the air or inside rock, say so. Things for offerings are mostly
+ingredients and pelts, which no slot gives by default: give a slot those categories (the holsters'
+editor), or pick the offering up off the ground as here.

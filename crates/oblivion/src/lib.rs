@@ -83,6 +83,7 @@ pub mod scene;
 pub mod settings;
 pub mod sigil;
 pub mod shapes;
+pub mod shrines;
 pub mod slot_menu;
 pub mod soul;
 pub mod sounds;

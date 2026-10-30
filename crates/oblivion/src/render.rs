@@ -198,6 +198,7 @@ mod win {
             crate::enchant::frame(link::now());
             crate::sigil::frame(link::now());
             crate::ayleid::frame();
+            crate::shrines::frame(link::now());
             crate::slot_menu::frame();
             crate::pockets::frame(link::now());
             crate::alchemy::frame(link::now());
@@ -394,6 +395,7 @@ mod win {
             time(Part::Items, || hooks::guard_void("enchant", || crate::enchant::place(view, now)));
             time(Part::Items, || hooks::guard_void("sigil", || crate::sigil::place(view, now)));
             time(Part::Items, || hooks::guard_void("ayleid", || crate::ayleid::place(view, &snap.frame, now)));
+            time(Part::Items, || hooks::guard_void("shrines", || crate::shrines::place(view, &snap.frame, now)));
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))
