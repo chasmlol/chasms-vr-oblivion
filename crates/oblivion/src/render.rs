@@ -173,6 +173,7 @@ mod win {
         let stereo = time(Part::Prepare, || hooks::guard("Render", None, prepare));
         let Some((snap, game, cam)) = stereo else { return unsafe { real(this, arg) } };
         let view = snap.view.expect("prepared with a view");
+        hooks::guard_void("reticle", crate::reticle::hide_crosshair);
         let Some(dev) = d3d9::device(engine::device() as *mut c_void) else { return unsafe { real(this, arg) } };
         let mut result = 0;
         let mut captured = [false; 2];
@@ -311,6 +312,8 @@ mod win {
             let head = glam::Vec3::from(snap.frame.hmd.pos);
             time(Part::Lighting, || hooks::guard_void("lighting", || crate::lighting::publish(view, head)));
             time(Part::Items, || hooks::guard_void("items", || crate::items::place(view, now)));
+            time(Part::Items, || hooks::guard_void("torch", || crate::torch::place(view)));
+            time(Part::Items, || hooks::guard_void("magic", || crate::magic::place(view)));
         }
         Some((snap, game, cam))
     }

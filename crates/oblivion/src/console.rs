@@ -83,6 +83,9 @@ pub fn run(line: &str) -> bool {
         let id = spell_named(spell).or_else(|| u32::from_str_radix(spell.trim_start_matches("0x"), 16).ok());
         return id.is_some_and(select_spell);
     }
+    if line.trim() == "InspectTorch" {
+        return crate::torch::inspect();
+    }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();
         let (Some(r), Some(m)) = (it.next(), it.next().and_then(|m| m.parse::<f32>().ok())) else { return false };

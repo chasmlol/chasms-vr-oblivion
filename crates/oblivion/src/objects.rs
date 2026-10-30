@@ -1,6 +1,6 @@
 //! The adapter's one object table for the runtime: the player's weapon and shield
-//! ([`crate::weapons`]) and the game's things lying about near the player ([`crate::items`]), each
-//! owner's entries kept apart and written together.
+//! ([`crate::weapons`]), their torch ([`crate::torch`]) and the game's things lying about near the
+//! player ([`crate::items`]), each owner's entries kept apart and written together.
 
 use rustvr_protocol::*;
 
@@ -8,6 +8,7 @@ use rustvr_protocol::*;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Owner {
     Weapons,
+    Torch,
     Items,
 }
 
@@ -15,22 +16,24 @@ pub enum Owner {
 #[derive(Default)]
 pub struct Parts {
     weapons: Vec<ObjectDesc>,
+    torch: Vec<ObjectDesc>,
     items: Vec<ObjectDesc>,
     seq: u32,
 }
 
 impl Parts {
-    /// Replaces `owner`'s entries and returns the merged table (weapons first; at most
+    /// Replaces `owner`'s entries and returns the merged table (weapons first, then the torch; at most
     /// [`MAX_OBJECTS`]), its sequence number bumped.
     pub fn set(&mut self, owner: Owner, descs: &[ObjectDesc], table: &mut ObjectTable) {
         let mine = match owner {
             Owner::Weapons => &mut self.weapons,
+            Owner::Torch => &mut self.torch,
             Owner::Items => &mut self.items,
         };
         mine.clear();
         mine.extend(descs.iter().filter(|d| d.id != 0));
         table.descs.fill(bytemuck::Zeroable::zeroed());
-        let all: Vec<&ObjectDesc> = self.weapons.iter().chain(&self.items).take(MAX_OBJECTS).collect();
+        let all: Vec<&ObjectDesc> = self.weapons.iter().chain(&self.torch).chain(&self.items).take(MAX_OBJECTS).collect();
         for (i, d) in all.iter().enumerate() {
             table.descs[i] = **d;
         }
