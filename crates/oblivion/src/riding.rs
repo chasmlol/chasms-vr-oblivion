@@ -20,6 +20,13 @@
 //!   while the horse goes, Y is kept at least |X| (its pace is capped at 1, so a full pace stays as
 //!   it is; a slow one turning hard goes a little faster), and it turns as hard as the game turns
 //!   a horse without stopping. Either axis past 98 is Run too.
+//! * **Its speed** ([`speed_controls`]): the rider asks for a speed as a share of the horse's full
+//!   gallop (`RR_SPEED`), and it's made of the game's two gaits at a pace: the horse's own walk and
+//!   run speeds are the game's (`Actor::GetWalkSpeed` 0x5E3590 and `GetRunSpeed` 0x5E3750, from
+//!   its Speed and the game's settings, as its own movement uses them), so a shire horse and
+//!   Shadowmere each go as fast as the game makes them. Up to a canter's speed it walks, at a
+//!   pace up to its walk's; faster, it gallops at a pace (the game moves and animates it at that
+//!   share of its gallop), never slower than [`GALLOP_LEAST`] of it.
 //! * **The rider** ([`publish`]): the horse's own animations carry the rider's `Bip01` tracks, so
 //!   the game animates the player's own skeleton in the saddle with every gait: the pelvis between
 //!   the hip joints, the knees and feet astride, the hands on the reins. The runtime's body sits
@@ -98,6 +105,15 @@ const EYE_OVER_SEAT: f32 = 0.85;
 const SPEED_EASE: f32 = 0.25;
 /// The game's gaits forward: walk, gallop.
 const GAITS: u32 = 2;
+/// The game's gallop is asked for no slower than this share of its full speed (slower, a gallop's
+/// stride drawn at a crawl): under the speed half way from the walk's to this, the horse walks;
+/// over it, it gallops (`GAIT_HYSTERESIS` either side of that, so a speed held there doesn't flick
+/// between the two).
+const GALLOP_LEAST: f32 = 0.4;
+const GAIT_HYSTERESIS: f32 = 0.1;
+/// `Actor::GetWalkSpeed` and `GetRunSpeed` (thiscall, the actor; game units a second).
+const WALK_SPEED: usize = 0x005E_3590;
+const RUN_SPEED: usize = 0x005E_3750;
 /// The joystick's axis at a pace of 1 (the game's |axis| · 0.02), and at the game's full turn
 /// (|axis| · 0.02 = 1.5, as fast as the turn keys turn a horse). Both under 98, where the game
 /// takes the stick as Run.
@@ -579,7 +595,7 @@ pub fn before_update() -> Option<Controls> {
         }
         *asked = Some((rt.mount_seq, rt.dismount_seq));
         if horse != 0 && state == State::Riding && rt.flags & RR_RIDING != 0 {
-            return Some(controls(&rt));
+            return Some(controls(&rt, horse));
         }
     }
     if horse != 0 {
@@ -590,8 +606,9 @@ pub fn before_update() -> Option<Controls> {
 }
 
 /// The rider's gait, pace and steering as the game's joystick and Run.
-pub fn controls(rt: &RtRide) -> Controls {
-    let pace = rt.pace.clamp(0.0, 1.0);
+pub fn controls(rt: &RtRide, horse: usize) -> Controls {
+    // A speed (the reins'): the game's walk or gallop at a pace.
+    let (pace, run) = if rt.flags & RR_SPEED != 0 && rt.gait > 0 { speed_controls(horse, rt.speed) } else { (rt.pace.clamp(0.0, 1.0), rt.gait >= GAITS as i32) };
     let x = (rt.steer.clamp(-1.0, 1.0) * TURN_AXIS).round() as i32;
     // (Going, the forward axis is at least the turn's: the game stops a horse whose stick points
     // more to the side than ahead, and turns it on the spot.)
@@ -601,16 +618,67 @@ pub fn controls(rt: &RtRide) -> Controls {
         g if g < 0 => ahead,
         _ => 0,
     };
-    let c = Controls { stick: [x, y], run: rt.gait >= GAITS as i32 };
+    let c = Controls { stick: [x, y], run };
     // What the game is given, when it changes (the turn by a fifth of the game's at least): with
     // the runtime's log of the hands, what the rider did and what the horse was told.
     static LAST: Mutex<Option<([i32; 2], bool)>> = Mutex::new(None);
     let mut last = LAST.lock().unwrap();
     if last.is_none_or(|(s, r)| s[1] != c.stick[1] || r != c.run || (s[0] - c.stick[0]).abs() >= (TURN_AXIS / 5.0) as i32 || (s[0] == 0) != (c.stick[0] == 0)) {
-        tracing::info!("riding: the game's controls: forward axis {}, turn axis {}{} (the rider's gait {}, pace {:.2}, steer {:+.2})", -c.stick[1], c.stick[0], if c.run { ", Run" } else { "" }, rt.gait, rt.pace, rt.steer);
+        tracing::info!(
+            "riding: the game's controls: forward axis {}, turn axis {}{} (the rider's gait {}, {}, steer {:+.2})",
+            -c.stick[1],
+            c.stick[0],
+            if c.run { ", Run" } else { "" },
+            rt.gait,
+            if rt.flags & RR_SPEED != 0 { format!("speed {:.2} of a gallop", rt.speed) } else { format!("pace {:.2}", rt.pace) },
+            rt.steer
+        );
         *last = Some((c.stick, c.run));
     }
     c
+}
+
+/// A speed (a share of the horse's full gallop) as the game's gait and pace: the pace, and whether
+/// it gallops (Run).
+fn speed_controls(horse: usize, share: f32) -> (f32, bool) {
+    static GALLOPING: Mutex<bool> = Mutex::new(false);
+    let (walk, run) = (game_speed(horse, WALK_SPEED), game_speed(horse, RUN_SPEED));
+    let mut galloping = GALLOPING.lock().unwrap();
+    let Some((walk, run)) = walk.zip(run).filter(|(w, r)| *w > 0.0 && r > w) else {
+        // (No speeds from the game: the gallop at the pace asked, never slower than its least.)
+        *galloping = true;
+        return (share.clamp(GALLOP_LEAST, 1.0), true);
+    };
+    let v = share.clamp(0.0, 1.0) * run;
+    let between = 0.5 * (walk + GALLOP_LEAST * run);
+    let was = *galloping;
+    *galloping = if was { v > between * (1.0 - GAIT_HYSTERESIS) } else { v > between * (1.0 + GAIT_HYSTERESIS) };
+    if *galloping != was {
+        tracing::info!(
+            "riding: {} at {:.2} of a gallop ({:.1} m/s; the horse walks at {:.1} m/s, gallops at {:.1})",
+            if *galloping { "into a gallop" } else { "down to a walk" },
+            share,
+            v / camera::UNITS_PER_METER,
+            walk / camera::UNITS_PER_METER,
+            run / camera::UNITS_PER_METER
+        );
+    }
+    if *galloping { ((v / run).max(GALLOP_LEAST), true) } else { ((v / walk).min(1.0), false) }
+}
+
+/// One of the game's speeds of an actor (`WALK_SPEED`, `RUN_SPEED`; game units a second).
+#[cfg(target_arch = "x86")]
+fn game_speed(actor: usize, f: usize) -> Option<f32> {
+    if actor == 0 || mem::deref(actor + PROCESS) == 0 {
+        return None;
+    }
+    let v = unsafe { std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> f32>(f)(actor) };
+    v.is_finite().then_some(v)
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn game_speed(_actor: usize, _f: usize) -> Option<f32> {
+    None
 }
 
 /// Tests (`PlayerHorse <base> [metres]`): a horse of the player's own beside them. The game places
