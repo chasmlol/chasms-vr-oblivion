@@ -25,8 +25,9 @@ soldier), `player.placeatme 0003DC25 1 100 0` (a hostile bandit boss),
 3. **The throat.** Put a hand round his neck (the lower part of the head, or the top of the torso)
    and squeeze: the fingers close round the neck. Lift: once you've pulled his head up past where he
    can stand, his legs go and he hangs from your hand, his feet off the floor. Keep squeezing: his
-   fatigue drains, faster while he's off his feet; held up, he claws at your hand and kicks, weaker
-   as he tires, until the game knocks him out. Let go, or throw him: he lies there and gets up when
+   fatigue drains, faster while he's off his feet; his hands clutch at yours (his arms are his own
+   while he's choked), and held up his legs kick, weaker as he tires, until the game knocks him
+   out. Let go, or throw him: he lies there and gets up when
    the game says (a few seconds after a knockdown, longer after a choke-out). Choked while he's
    standing, he collapses out of your hand when the game knocks him out.
 4. **The law.** Choking him, knocking him over, throwing him, or holding him for more than four
@@ -58,7 +59,8 @@ soldier), `player.placeatme 0003DC25 1 100 0` (a hostile bandit boss),
 * The throat: a standing soldier lifted by the neck is knocked down by the game and hangs about
   10 cm below the hand; the choke takes his fatigue from 280 to nothing; he struggles; thrown
   aside; 7 s later the game queues his get-up, he gets up and stands (knock states 1, 5, 6, 0).
-  Choked standing, the game knocks him out (knock states 4, 3) and he falls out of the hand.
+  Choked standing, his arms come up at the hand, the game knocks him out (knock states 4, 3) and
+  he sags from the hand (or falls out of it).
 * With his AI on, the choke is an assault: the player's bounty went from 0 to 40.
 * A shove at 1.7 to 2.8 m/s (his character controller took the push); a dead body pushed by an open
   hand moved.

@@ -201,13 +201,19 @@ mod game {
     const STEP_GAIN: f32 = 6.0;
     const STEP_MAX: f32 = 2.5;
     const STEP_TIME: f32 = 0.1;
-    /// Held up by the throat and still conscious, it struggles: a kick or a grab at the hand every
-    /// so often (seconds, and up to this much more), its legs this fast (m/s), its hands at the hand
-    /// at this speed; weaker as its fatigue goes.
+    /// Choked and still conscious, it struggles, weaker as its fatigue goes: its hands clutch at the
+    /// hand at its throat (drawn to it this fast at most, m/s, this many m/s for each metre away,
+    /// this much of the way from how they move each frame), and held off its feet its legs kick every
+    /// so often (seconds, and up to this much more), this fast.
+    const CLAW_SPEED: f32 = 2.0;
+    const CLAW_GAIN: f32 = 6.0;
+    const CLAW_BLEND: f32 = 0.35;
     const KICK_EVERY: f64 = 0.25;
     const KICK_SPREAD: f64 = 0.35;
     const KICK_SPEED: f32 = 2.5;
-    const CLAW_SPEED: f32 = 2.0;
+    /// A living actor's arms, which go physical when it's choked standing (they're its own to move,
+    /// reaching for the hand).
+    const ARMS: [u32; 6] = [5, 6, 7, 11, 12, 13];
     /// `Actor`'s character controller (thiscall: the actor), and its push (thiscall: controller, a
     /// move in game units, over this long).
     const CONTROLLER: usize = 0x0065_A2C0;
@@ -975,35 +981,50 @@ mod game {
             } else {
                 h.choking = false;
             }
-            // Held up by the throat (or the head) and conscious: it fights for air, its hands at the
-            // hand at its throat and its legs kicking, weaker as its fatigue goes.
+            // Choked (or held up by the head) and conscious: it fights for air, its hands clutching at
+            // the hand at its throat, and off its feet its legs kicking, weaker as its fatigue goes.
             let throat = g.flags & GRAB_THROAT != 0 || h.bone.code == HEAD;
-            if !dead && state != 0 && throat && now >= h.next_kick && let Some(p) = held {
-                let fatigue = combat::actor_value(h.actor, AV_FATIGUE) as f32;
+            let fatigue = combat::actor_value(h.actor, AV_FATIGUE) as f32;
+            if !dead && throat && fatigue > 0.0 && (state != 0 || h.choking) && let Some(p) = held {
                 let most = combat::base_actor_value(h.actor, AV_FATIGUE).max(1) as f32;
-                let root = mem::deref(h.actor + NI_NODE);
-                if fatigue > 0.0 && root != 0 {
-                    let k = (fatigue / most).clamp(0.3, 1.0);
-                    let wait = KICK_EVERY + KICK_SPREAD * self.random() as f64;
-                    let bones = skeleton(root);
-                    for b in &bones {
-                        let Some(at) = centre(b.body) else { continue };
-                        let v = if HANDS.contains(&b.code) {
-                            (p - at).normalize_or_zero() * CLAW_SPEED * k
-                        } else if LEGS.contains(&b.code) {
-                            let a = self.random() * std::f32::consts::TAU;
-                            Vec3::new(a.cos(), 0.3 + 0.4 * self.random(), a.sin()) * KICK_SPEED * k * (0.5 + 0.5 * self.random())
-                        } else {
-                            continue;
-                        };
+                let k = (fatigue / most).clamp(0.3, 1.0);
+                let (id, kick) = (h.actor_id, now >= h.next_kick);
+                let first = h.next_kick <= h.since + KICK_EVERY + 1e-3;
+                let bones = self.skeletons.get(&id).map(|sk| sk.bones.clone()).unwrap_or_default();
+                // Standing, its arms are its own to move now (they come back to its animation when
+                // it's let go of).
+                if state == 0
+                    && let Some(l) = self.limp.get_mut(&id)
+                {
+                    for b in bones.iter().filter(|b| ARMS.contains(&b.code)) {
+                        if !l.bones.iter().any(|x| x.0 == b.blend) {
+                            let (h0, v0) = gains(b.blend);
+                            l.bones.push((b.blend, h0, v0));
+                            set_gains(b.blend, 0.0, 0.0);
+                        }
+                    }
+                }
+                for b in bones.iter().filter(|b| HANDS.contains(&b.code)) {
+                    let Some(at) = centre(b.body) else { continue };
+                    let v = velocity(b.body);
+                    let to = ((p - at) * CLAW_GAIN).clamp_length_max(CLAW_SPEED * k);
+                    set_velocity(b.body, v.lerp(to, CLAW_BLEND));
+                }
+                if kick && state != 0 {
+                    for b in bones.iter().filter(|b| LEGS.contains(&b.code)) {
+                        let a = self.random() * std::f32::consts::TAU;
+                        let v = Vec3::new(a.cos(), 0.3 + 0.4 * self.random(), a.sin()) * KICK_SPEED * k * (0.5 + 0.5 * self.random());
                         set_velocity(b.body, velocity(b.body) * 0.3 + v);
                     }
+                }
+                if kick {
+                    let wait = KICK_EVERY + KICK_SPREAD * self.random() as f64;
                     if let Some(h) = self.holds[hand].as_mut() {
-                        if h.next_kick <= h.since + KICK_EVERY + 1e-3 {
-                            tracing::info!("grabs: {:#x} struggles (fatigue {fatigue:.0} of {most:.0})", h.actor_id);
-                        }
                         h.next_kick = now + wait;
                     }
+                }
+                if first && kick {
+                    tracing::info!("grabs: {id:#x} struggles (fatigue {fatigue:.0} of {most:.0})");
                 }
             }
             let Some(h) = self.holds[hand].as_mut() else { return };
