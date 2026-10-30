@@ -157,7 +157,7 @@ mod stubs {
     pub fn cut_at(_actor: u32, _bone: &str) -> bool {
         false
     }
-    pub fn test_cut(_bone: &str) -> bool {
+    pub fn test_cut(_bone: &str, _kill: bool) -> bool {
         false
     }
 }
@@ -218,6 +218,13 @@ mod game {
     const PIECE_IDS: u32 = 0x0B1E_8000;
     /// Shrunk to nothing (a world scale of zero breaks the game's bounds).
     const NOTHING: f32 = 1e-4;
+    /// The game's own decals (its blood's on a hit, as much as ours): the settings `fDecalLifetime`
+    /// and `iMaxDecalsPerFrame` (`Oblivion.ini` [Display]; {value, name} in memory). Its 10 s
+    /// lifetime takes the game's blood away long before ours dries; in VR it lasts as ours does.
+    const DECAL_LIFETIME: usize = 0x00B0_97C8;
+    const DECALS_PER_FRAME: usize = 0x00B0_97D0;
+    const GAME_DECALS_LAST: f32 = 600.0;
+    const GAME_DECALS_PER_FRAME: i32 = 20;
     /// The stumps spray the game's blood effect with every second pulse for this long (s).
     const SPRAYS_FOR: f64 = 10.0;
     const SPRAY_EVERY: f64 = 1.6;
@@ -261,16 +268,21 @@ mod game {
         name: String,
     }
 
-    /// Whether `obj` is an `NiNode` (or one of its kinds), by its `NiRTTI` chain; cached by vtable.
+    /// Whether `obj` is an `NiNode` (or one of its kinds), by its `NiRTTI` chain.
     fn is_node(obj: usize) -> bool {
-        static KNOWN: Mutex<Option<HashMap<usize, bool>>> = Mutex::new(None);
+        is_a(obj, "NiNode")
+    }
+
+    /// Whether `obj` is a `kind` (or one of its kinds), by its `NiRTTI` chain; cached by vtable.
+    fn is_a(obj: usize, kind: &'static str) -> bool {
+        static KNOWN: Mutex<Option<HashMap<(usize, &'static str), bool>>> = Mutex::new(None);
         let vt = mem::deref(obj);
         if vt == 0 {
             return false;
         }
         let mut known = KNOWN.lock().unwrap();
         let known = known.get_or_insert_with(HashMap::new);
-        if let Some(&k) = known.get(&vt) {
+        if let Some(&k) = known.get(&(vt, kind)) {
             return k;
         }
         let f = mem::deref(vt + VT_RTTI);
@@ -282,15 +294,34 @@ mod game {
                 if rtti == 0 {
                     break;
                 }
-                if crate::combat::read_str(mem::deref(rtti)) == "NiNode" {
+                if crate::combat::read_str(mem::deref(rtti)) == kind {
                     yes = true;
                     break;
                 }
                 rtti = mem::deref(rtti + 4);
             }
         }
-        known.insert(vt, yes);
+        known.insert((vt, kind), yes);
         yes
+    }
+
+    /// `NiGeometry`'s skin instance; `NiSkinInstance`'s data (its bone count at +0x40) and bones.
+    const GEOM_SKIN: usize = 0xB8;
+    const SKIN_DATA: usize = 0x08;
+    const SKIN_BONES: usize = 0x14;
+    const SKIN_DATA_COUNT: usize = 0x40;
+
+    /// Whether a mesh of the clone shows any of the piece: skinned to a bone under the cut, or a
+    /// rigid one under it. (The rest would only be drawn shrunk to nothing: they're hidden, so a
+    /// piece costs the game only its own meshes.)
+    fn shows_piece(geom: usize, inside: bool, piece: &std::collections::HashSet<usize>) -> bool {
+        let skin = mem::deref(geom + GEOM_SKIN);
+        if skin == 0 {
+            return inside;
+        }
+        let count = mem::at::<u32>(mem::deref(skin + SKIN_DATA) + SKIN_DATA_COUNT).unwrap_or(0).min(256) as usize;
+        let bones = mem::deref(skin + SKIN_BONES);
+        bones != 0 && (0..count).any(|i| piece.contains(&mem::deref(bones + i * 4)))
     }
 
     /// Every object under `root` (itself first), parents before children.
@@ -312,6 +343,28 @@ mod game {
             i += 1;
         }
         out
+    }
+
+    /// Every object under `root` (itself first), without their names: what's under a cut bone,
+    /// walked every frame (what's attached under it can change: a weapon taken from a hand).
+    fn under_node(root: usize, out: &mut Vec<usize>) {
+        out.clear();
+        out.push(root);
+        let mut i = 0;
+        while i < out.len() && out.len() < 400 {
+            let n = out[i];
+            if is_node(n) {
+                let data = mem::deref(n + CHILDREN);
+                let count = mem::at::<u16>(n + CHILD_COUNT).unwrap_or(0).min(256) as usize;
+                for k in 0..count {
+                    let c = mem::deref(data + k * 4);
+                    if c != 0 && mem::is_readable(c as *const u8, 0xB8) {
+                        out.push(c);
+                    }
+                }
+            }
+            i += 1;
+        }
     }
 
     /// The indices of `tree`'s nodes under `top` (itself included).
@@ -370,8 +423,11 @@ mod game {
         /// The creature (a corpse may leave the game's list of those it's processing: it's kept
         /// while it's still this creature with this 3D).
         actor: usize,
-        /// The creature's 3D it was cut from (another means it was loaded again: forgotten).
+        /// The creature's 3D it was cut from (another means it was loaded again: forgotten), and
+        /// its bones either side of the cut (the skeleton's: they last as long as the 3D does).
         root: usize,
+        cut_node: usize,
+        above_node: usize,
         /// The piece: its object, the clone that shows it, and the clone's nodes with their world
         /// transforms at the cut (the collapsed ones already collapsed).
         object: u32,
@@ -594,7 +650,7 @@ mod game {
         // The clone: the actor's 3D as it is, with no controllers or collision (nothing of it is
         // animated or simulated by the game: it's drawn where the runtime has the piece).
         let clone = clone_bare(&nodes);
-        let mut sv = Sever { limb, actor, root, object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), cut, desc, born: crate::link::now(), next_spray: 0.0 };
+        let mut sv = Sever { limb, actor, root, cut_node: nodes[top].ptr, above_node: parent, object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), cut, desc, born: crate::link::now(), next_spray: 0.0 };
         if clone != 0 {
             let copy = tree(clone);
             if copy.len() == nodes.len() && copy.iter().zip(&nodes).all(|(c, n)| c.name == n.name) {
@@ -610,6 +666,19 @@ mod game {
                         Some((c.ptr, if skeleton[i] && !inside[i] { collapse } else { x }, bound))
                     })
                     .collect();
+                // Only the meshes that show the piece are drawn.
+                let piece: std::collections::HashSet<usize> = copy.iter().enumerate().filter(|(i, _)| inside[*i]).map(|(_, c)| c.ptr).collect();
+                let mut hidden = 0;
+                for (i, c) in copy.iter().enumerate() {
+                    if is_a(c.ptr, "NiGeometry") && !shows_piece(c.ptr, inside[i], &piece) {
+                        unsafe {
+                            let f = (c.ptr + av::FLAGS) as *mut u16;
+                            f.write(f.read() | av::APP_CULLED);
+                        }
+                        hidden += 1;
+                    }
+                }
+                tracing::info!("gore: the piece's clone hides {hidden} meshes that don't show it");
                 let attach_to = mem::deref(root + PARENT);
                 if attach_to != 0 && is_node(attach_to) {
                     // (A reference of ours keeps it whatever happens to where it's attached.)
@@ -650,8 +719,9 @@ mod game {
     }
 
     /// Tests (`GoreCut <bone>`, `crate::console`): the nearest creature killed by the game (its
-    /// `kill`) and the limb at `bone` cut off it, as a full-strength blow of the blade would.
-    pub fn test_cut(bone: &str) -> bool {
+    /// `kill`; not with `kill` false) and the limb at `bone` cut off it, as a full-strength blow of
+    /// the blade would.
+    pub fn test_cut(bone: &str, kill: bool) -> bool {
         let Some(limb) = LIMBS.iter().find(|l| l.bone.eq_ignore_ascii_case(bone)) else { return false };
         let player = engine::player();
         let Some(me) = mem::at::<[f32; 3]>(player + engine::refr::POS).map(Vec3::from) else { return false };
@@ -664,7 +734,9 @@ mod game {
         if root == 0 || cut_off(id, limb.bone) {
             return false;
         }
-        crate::console::run_script(&format!("{id:08X}.kill"));
+        if kill {
+            crate::console::run_script(&format!("{id:08X}.kill"));
+        }
         let at = crate::combat::bones(root).get(limb.bone).and_then(|&n| Xf::read(n)).map(|x| camera::basis().point_from_game(x.t)).unwrap_or_default();
         let ev = CombatEvent { kind: CE_HIT, actor: id, object: crate::weapons::WEAPON_ID, what: DMG_SLASH, strength: 1.0, speed: 6.0, point: at.to_array(), dir: [1.0, 0.0, 0.0], ..Default::default() };
         tracing::info!("gore: a test cut: {id:#x}'s {}", limb.bone);
@@ -791,6 +863,19 @@ mod game {
         }
     }
 
+    /// The game's own blood decals last as long as the runtime's (its settings, in memory: the
+    /// player's `Oblivion.ini` is left as it is).
+    fn game_decals_last() {
+        let named = |at: usize, name: &str| crate::combat::read_str(mem::deref(at + 4)).starts_with(name);
+        if named(DECAL_LIFETIME, "fDecalLifetime") && mem::at::<f32>(DECAL_LIFETIME).is_some_and(|v| v > 0.0 && v < GAME_DECALS_LAST) {
+            unsafe { (DECAL_LIFETIME as *mut f32).write(GAME_DECALS_LAST) };
+            tracing::info!("gore: the game's own blood decals last {GAME_DECALS_LAST} s");
+        }
+        if named(DECALS_PER_FRAME, "iMaxDecalsPerFrame") && mem::at::<i32>(DECALS_PER_FRAME).is_some_and(|v| v < GAME_DECALS_PER_FRAME) {
+            unsafe { (DECALS_PER_FRAME as *mut i32).write(GAME_DECALS_PER_FRAME) };
+        }
+    }
+
     /// Once a frame, before the eyes: the bodies' blood and stumps for the runtime, the cut limbs
     /// shrunk away on the bodies, the pieces' clones where the runtime has the pieces.
     pub fn frame(view: Option<&rustvr_adapter::View>, now: f64) {
@@ -846,12 +931,11 @@ mod game {
                 b.id = id;
                 b.blood = blood_of(s, actor);
                 b.flags = if health(actor) > 0.0 { GB_ALIVE } else { 0 };
-                let root = mem::deref(actor + REFR_NODE);
                 if let Some(list) = s.severs.get_mut(&id) {
-                    let bones = crate::combat::bones(root);
+                    let mut nodes = Vec::new();
                     for v in list.iter_mut() {
-                        let (Some(&cut_node), Some(&above_node)) = (bones.get(v.limb.bone), bones.get(v.limb.parent)) else { continue };
-                        let (Some(cut), Some(above)) = (Xf::read(cut_node), Xf::read(above_node)) else { continue };
+                        let cut_node = v.cut_node;
+                        let (Some(cut), Some(above)) = (Xf::read(cut_node), Xf::read(v.above_node)) else { continue };
                         let axis = (cut.t - above.t).normalize_or(cut.r.x_axis);
                         if (b.count as usize) < MAX_STUMPS {
                             b.stumps[b.count as usize] = Stump { at: basis.point_from_game(cut.t).to_array(), radius: v.limb.radius, out: basis.dir_from_game(axis).normalize_or(Vec3::Y).to_array(), limb: v.limb.limb };
@@ -864,10 +948,10 @@ mod game {
                         }
                         // Shrunk to nothing at the joint on the body: the bone and all under it.
                         let collapse = Xf { r: cut.r, t: cut.t, s: NOTHING };
-                        let nodes = tree(cut_node);
-                        for n in &nodes {
-                            collapse.write(n.ptr);
-                            unsafe { ((n.ptr + BOUND) as *mut [f32; 4]).write_unaligned([cut.t.x, cut.t.y, cut.t.z, 1.0]) };
+                        under_node(cut_node, &mut nodes);
+                        for &n in &nodes {
+                            collapse.write(n);
+                            unsafe { ((n + BOUND) as *mut [f32; 4]).write_unaligned([cut.t.x, cut.t.y, cut.t.z, 1.0]) };
                         }
                         // The piece's clone where the runtime has it.
                         if v.clone != 0
@@ -891,6 +975,9 @@ mod game {
             let pieces: Vec<ObjectDesc> = s.severs.values().flat_map(|l| l.iter().map(|v| v.desc)).collect();
             let events = std::mem::take(&mut s.pending);
             s.frames += 1;
+            if s.frames % 300 == 1 {
+                game_decals_last();
+            }
             let table = (s.table_dirty || (s.table.count > 0 && s.frames % 120 == 0)).then(|| s.table.clone());
             s.table_dirty = false;
             let objects = std::mem::take(&mut s.objects_dirty);

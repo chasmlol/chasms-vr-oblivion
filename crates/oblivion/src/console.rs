@@ -75,7 +75,13 @@ pub fn run(line: &str) -> bool {
         return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(select_spell);
     }
     if let Some(bone) = line.strip_prefix("GoreCut ") {
-        return crate::gore::test_cut(bone.trim().trim_matches('"'));
+        let bone = bone.trim().trim_matches('"');
+        // (`GoreCut <bone> standing`: left alive, to look at the stump on a body that stands.)
+        let (bone, kill) = match bone.strip_suffix(" standing") {
+            Some(b) => (b, false),
+            None => (bone, true),
+        };
+        return crate::gore::test_cut(bone, kill);
     }
     if let Some(rest) = line.strip_prefix("PlaceInFront ") {
         let mut it = rest.split_whitespace();
