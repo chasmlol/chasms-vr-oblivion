@@ -56,6 +56,12 @@ Set up in the game's folder at your request, for the stutter and the distance:
   game's own lists miss now stand in the distance too. The generator also makes every shrub a far
   card, which doubled the far cards around the Imperial City; those are left out, as the game leaves
   them.
+- **The far land's shape, regenerated** (tes4ll) for six of the game's 36 far-land areas: the Imperial
+  City and Weye, Chorrol, Skingrad and Cheydinhal, and the land east of the Niben in the south-east
+  (`Data\Meshes\Landscape\LOD`).
+  About twice the game's detail in the land past the loaded cells, so hills and ridges hold their
+  shape further out. The edges of the map keep the game's own: there its far land shows scenery past
+  the border that the game has no land data for. Its colours are the game's own.
 - `undo-stutter-setup.bat` puts all of it back. If Steam verifies or updates the game, it puts the
   original exe back (only the 4GB patch is lost).
 
@@ -65,6 +71,9 @@ Set up in the game's folder at your request, for the stutter and the distance:
     distance, not come in as you get near.
 11. **Stutter again.** With Stutter Remover in, the hitches crossing cells (check 1) should be fewer
     again. Tell me about any new crash, and when it happened (loading, crossing cells, quitting).
+12. **The far hills.** From the shore at Weye, look out over the hills past the lake: their shape
+    should hold further out. Tell me if you see a seam, a step or a crack in the far land, and roughly
+    where (towards which town).
 
 ## `playtest-rain.bat`
 
@@ -123,10 +132,9 @@ below is in both.)
 - Your `Oblivion.ini` has the grass distance under `[Display]`, where the game doesn't read it: the
   grass reaches 43 m (`[Grass]`'s 3000). Raising `[Grass] fGrassEndDistance` grows it further, at a
   cost (it's now all round you).
-- The far land is the game's own. TES4qLOD's colour maps at 2048 or 4096 aren't sharper: it
-  colours from one 4x4-pixel average of each ground texture, so above 1024 it only blurs between the
-  land's points. tes4ll's meshes failed to fill on this install (a few hundred to two thousand
-  points a quad, against the game's thousands), so they aren't installed.
+- The far land's colours are the game's own. TES4qLOD's colour maps at 2048 or 4096 aren't sharper:
+  it colours from one 4x4-pixel average of each ground texture, so above 1024 it only blurs between
+  the land's points.
 - The ghosting on moving people: not found in the game's picture (the saved pictures, taken before
   the runtime moves them, show none). It's after: Virtual Desktop's spacewarp, the runtime's
   smoothing, or the frames the game misses at 120 Hz. The tests above will tell which.
