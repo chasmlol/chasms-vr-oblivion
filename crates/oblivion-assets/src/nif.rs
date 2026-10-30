@@ -6,8 +6,9 @@
 //!
 //! What's kept: the node tree (names, local transforms, children), triangle shapes (vertices,
 //! normals, UVs, vertex colours, triangles from lists or strips), their skinning (bones, bind
-//! transforms, weights), their textures and materials, extra data, and the Havok collision (rigid
-//! bodies: mass, centre, shapes).
+//! transforms, weights), their textures and materials, extra data, the Havok collision (rigid
+//! bodies: mass, centre, shapes), and a `.kf` animation's sequence (its nodes' transform keys, plain
+//! or B-spline, and its text keys: [`crate::anim`]).
 
 use anyhow::{Result, bail};
 use glam::{Mat3, Vec3};
@@ -77,9 +78,35 @@ pub enum Block {
     ConvexVertices { vertices: Vec<Vec3>, radius: f32 },
     ListShape { shapes: Vec<i32> },
     ConvexTransform { shape: i32, transform: [f32; 16] },
+    /// `NiControllerSequence`: an animation: each node it moves (its interpolator, and its name's
+    /// offset in the string palette), its text keys, the palette, its time span.
+    Sequence { name: String, controlled: Vec<(i32, u32)>, text_keys: i32, palette: i32, start: f32, stop: f32 },
+    StringPalette(String),
+    TextKeys(Vec<(f32, String)>),
+    /// `NiTransformInterpolator`: its constant transform (translation, rotation as w x y z, scale;
+    /// a value of -`f32::MAX` is unset) and its keys (`TransformData`).
+    TransformInterpolator { translation: Vec3, rotation: [f32; 4], scale: f32, data: i32 },
+    TransformData(Keyframes),
+    /// `NiBSplineCompTransformInterpolator`: its time span, its control points (`BSplineData`, as
+    /// 16-bit fractions) and how many (`BSplineBasis`), its constant transform, where each channel
+    /// starts in the points (translation, rotation, scale; 0xFFFF: none) and each channel's bias and
+    /// multiplier (translation, rotation, scale).
+    BSplineInterpolator { start: f32, stop: f32, data: i32, basis: i32, translation: Vec3, rotation: [f32; 4], handles: [u32; 3], bias_mult: [f32; 6] },
+    BSplineData { shorts: Vec<i16> },
+    BSplineBasis(u32),
     /// Read past: of no use here (stencil, vertex colour, z-buffer, wireframe, dither and shade
     /// properties, constraints).
     Other(String),
+}
+
+/// An animated node's keys: its rotation (quaternions w x y z, or `rotation_kind` 4: three
+/// angle channels about X, Y and Z) and its translation, each `(time, value)`.
+#[derive(Clone, Debug, Default)]
+pub struct Keyframes {
+    pub rotation_kind: u32,
+    pub quats: Vec<(f32, [f32; 4])>,
+    pub xyz: [Vec<(f32, f32)>; 3],
+    pub translations: Vec<(f32, Vec3)>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -355,6 +382,31 @@ fn key_group(r: &mut Reader, width: usize) -> Result<()> {
     r.skip(n * each)
 }
 
+/// A `KeyGroup` of `width` floats per value, kept: `(time, value)` (tangents and TBC read past).
+fn keys(r: &mut Reader, width: usize) -> Result<Vec<(f32, Vec<f32>)>> {
+    let n = r.u32()? as usize;
+    if n == 0 {
+        return Ok(Vec::new());
+    }
+    if n > 0x10000 {
+        bail!("{n} keys at {:#x}", r.at);
+    }
+    let interpolation = r.u32()?;
+    let mut out = Vec::with_capacity(n);
+    for _ in 0..n {
+        let t = r.f32()?;
+        let v = (0..width).map(|_| r.f32()).collect::<Result<Vec<_>>>()?;
+        if interpolation == 2 {
+            r.skip(width * 8)?;
+        }
+        if interpolation == 3 {
+            r.skip(12)?;
+        }
+        out.push((t, v));
+    }
+    Ok(out)
+}
+
 fn havok_material(r: &mut Reader) -> Result<()> {
     r.skip(4)
 }
@@ -616,32 +668,95 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             Block::Other(kind.into())
         }
         "NiTransformInterpolator" => {
-            r.skip(32 + 4)?;
-            Block::Other(kind.into())
+            let translation = r.vec3()?;
+            let rotation = r.vec4()?;
+            let scale = r.f32()?;
+            let data = r.i32()?;
+            Block::TransformInterpolator { translation, rotation, scale, data }
+        }
+        "NiBSplineCompTransformInterpolator" => {
+            let (start, stop) = (r.f32()?, r.f32()?);
+            let (data, basis) = (r.i32()?, r.i32()?);
+            let translation = r.vec3()?;
+            let rotation = r.vec4()?;
+            r.skip(4)?; // scale
+            let handles = [r.u32()?, r.u32()?, r.u32()?];
+            let mut bias_mult = [0f32; 6];
+            for v in &mut bias_mult {
+                *v = r.f32()?;
+            }
+            Block::BSplineInterpolator { start, stop, data, basis, translation, rotation, handles, bias_mult }
+        }
+        "NiBSplineData" => {
+            let n = r.u32()? as usize;
+            r.skip(n * 4)?;
+            let n = r.u32()? as usize;
+            if n > 0x100000 {
+                bail!("{n} B-spline points at {:#x}", r.at);
+            }
+            let shorts = (0..n).map(|_| r.u16().map(|v| v as i16)).collect::<Result<Vec<_>>>()?;
+            Block::BSplineData { shorts }
+        }
+        "NiBSplineBasisData" => Block::BSplineBasis(r.u32()?),
+        "NiControllerSequence" => {
+            let name = r.string()?;
+            let n = r.u32()? as usize;
+            if n > 0x1000 {
+                bail!("{n} controlled blocks at {:#x}", r.at);
+            }
+            r.skip(4)?; // array grow by
+            let mut controlled = Vec::with_capacity(n);
+            for _ in 0..n {
+                let interpolator = r.i32()?;
+                r.skip(4 + 1 + 4)?; // controller, priority, palette
+                let node = r.u32()?;
+                r.skip(4 * 4)?; // property type, controller type, controller and interpolator ids
+                controlled.push((interpolator, node));
+            }
+            r.skip(4)?; // weight
+            let text_keys = r.i32()?;
+            r.skip(4 + 4)?; // cycle type, frequency
+            let (start, stop) = (r.f32()?, r.f32()?);
+            r.skip(4)?; // manager
+            let _accum_root = r.string()?;
+            let palette = r.i32()?;
+            Block::Sequence { name, controlled, text_keys, palette, start, stop }
+        }
+        "NiStringPalette" => {
+            let palette = r.string()?;
+            r.skip(4)?;
+            Block::StringPalette(palette)
         }
         "NiFloatInterpolator" => {
             r.skip(4 + 4)?;
             Block::Other(kind.into())
         }
         "NiTransformData" | "NiKeyframeData" => {
-            let n = r.u32()?;
+            let n = r.u32()? as usize;
+            if n > 0x10000 {
+                bail!("{n} rotation keys at {:#x}", r.at);
+            }
+            let mut k = Keyframes::default();
             if n != 0 {
-                let kind = r.u32()?;
-                if kind == 4 {
-                    for _ in 0..3 {
-                        key_group(r, 1)?;
+                k.rotation_kind = r.u32()?;
+                if k.rotation_kind == 4 {
+                    for axis in 0..3 {
+                        k.xyz[axis] = keys(r, 1)?.into_iter().map(|(t, v)| (t, v[0])).collect();
                     }
                 } else {
-                    let each = match kind {
-                        3 => 4 + 16 + 12,
-                        _ => 4 + 16,
-                    };
-                    r.skip(n as usize * each)?;
+                    for _ in 0..n {
+                        let t = r.f32()?;
+                        let q = r.vec4()?;
+                        if k.rotation_kind == 3 {
+                            r.skip(12)?;
+                        }
+                        k.quats.push((t, q));
+                    }
                 }
             }
-            key_group(r, 3)?;
+            k.translations = keys(r, 3)?.into_iter().map(|(t, v)| (t, Vec3::new(v[0], v[1], v[2]))).collect();
             key_group(r, 1)?;
-            Block::Other(kind.into())
+            Block::TransformData(k)
         }
         "NiFloatData" => {
             key_group(r, 1)?;
@@ -649,12 +764,12 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
         }
         "NiTextKeyExtraData" => {
             r.string()?;
-            let n = r.u32()?;
-            for _ in 0..n {
-                r.skip(4)?;
-                r.string()?;
+            let n = r.u32()? as usize;
+            if n > 0x1000 {
+                bail!("{n} text keys at {:#x}", r.at);
             }
-            Block::Other(kind.into())
+            let keys = (0..n).map(|_| Ok((r.f32()?, r.string()?))).collect::<Result<Vec<_>>>()?;
+            Block::TextKeys(keys)
         }
         "bhkBlendCollisionObject" => {
             let target = r.i32()?;

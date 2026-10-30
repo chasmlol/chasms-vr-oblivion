@@ -45,7 +45,8 @@ fn archives() -> Option<&'static Archives> {
     .as_ref()
 }
 
-fn read(path: &str) -> Option<Nif> {
+/// One of the game's models (or animations) by its path in the archives (`meshes\\...`), read.
+pub fn read_nif(path: &str) -> Option<Nif> {
     let data = archives()?.read(path).ok()?;
     Nif::parse(&data).ok()
 }
@@ -54,7 +55,7 @@ fn read(path: &str) -> Option<Nif> {
 fn per_kg() -> f32 {
     static K: OnceLock<f32> = OnceLock::new();
     *K.get_or_init(|| {
-        let total: f32 = read(SKELETON).map(|n| n.blocks.iter().filter_map(|b| if let Block::RigidBody(r) = b { Some(r.mass) } else { None }).sum()).unwrap_or(0.0);
+        let total: f32 = read_nif(SKELETON).map(|n| n.blocks.iter().filter_map(|b| if let Block::RigidBody(r) = b { Some(r.mass) } else { None }).sum()).unwrap_or(0.0);
         let k = if total > 1.0 { total / PERSON_KG } else { 605.0 / PERSON_KG };
         tracing::info!("havok: the game's people weigh {total:.0} in its Havok masses: {k:.2} to the kilogram");
         k
@@ -69,7 +70,7 @@ pub fn body(path: &str) -> Option<Body> {
         return b.clone();
     }
     let full = if key.starts_with("meshes\\") { key.clone() } else { format!("meshes\\{key}") };
-    let found = read(&full).and_then(|n| of(&n));
+    let found = read_nif(&full).and_then(|n| of(&n));
     match &found {
         Some(b) => tracing::info!("havok: {path}: {:.2} kg, {} convex parts", b.mass, b.parts.len()),
         None => tracing::info!("havok: {path}: no Havok body"),

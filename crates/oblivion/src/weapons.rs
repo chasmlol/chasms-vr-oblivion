@@ -103,32 +103,73 @@ pub fn equipped_shield() -> Option<(usize, String)> {
     (!model.is_empty()).then_some((form, model))
 }
 
-/// The game's own swing, at the `Hit` key of its attack animations (`meshes\characters\_male/// onehandattackright.kf` and `...left.kf`, `onehandattackpower.kf`, and the same for `twohand`):
-/// the `Weapon` node through the Biped chain at that moment, its velocity and spin. A point `d`
-/// metres up the blade from the grip moves at `sqrt(a + 2 b d + c d^2)` m/s, at the weapon's speed 1
-/// (`a`: the grip's own speed squared). Measured from the game's animations (normal attacks: their
-/// right and left swings; the standing power attack).
-#[derive(Clone, Copy, Debug)]
-struct GameSwing {
-    right: (f32, f32, f32),
-    left: (f32, f32, f32),
-    power: (f32, f32, f32),
+/// How fast a point `d` metres up a weapon's blade from its grip moves in one of the game's own
+/// swings: `sqrt(a + 2 b d + c d^2)` m/s, at the weapon's speed 1 (`a`: the grip's own speed squared).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Curve(f32, f32, f32);
+
+impl Curve {
+    fn of(s: &oblivion_assets::anim::Swing) -> Curve {
+        let c = s.spin.cross(s.blade);
+        Curve(s.grip.length_squared(), s.grip.dot(c), c.length_squared())
+    }
+
+    fn at(&self, d: f32) -> f32 {
+        (self.0 + 2.0 * self.1 * d + self.2 * d * d).max(0.0).sqrt()
+    }
 }
 
-const ONE_HAND: GameSwing = GameSwing { right: (59.63, 86.51, 275.30), left: (115.25, 65.58, 255.99), power: (175.26, 226.75, 452.14) };
-const TWO_HAND: GameSwing = GameSwing { right: (16.88, 48.68, 191.09), left: (54.33, 86.60, 189.55), power: (96.10, 112.71, 246.39) };
+/// The game's own swings of a kind of weapon (one-handed, two-handed): its attack animations
+/// (`meshes\characters\_male\onehandattackright.kf` and `...left.kf`, its normal attacks, and
+/// `onehandattackpower.kf`; the same for `twohand`) at their `Hit` keys
+/// ([`oblivion_assets::anim::swing_at_hit`]), read from the game's archives once.
+#[derive(Clone, Copy, Debug)]
+struct GameSwing {
+    right: Curve,
+    left: Curve,
+    power: Curve,
+}
+
+/// What the game's animations give when they can't be read (measured from them, the same way).
+const ONE_HAND: GameSwing = GameSwing { right: Curve(59.63, 86.51, 275.30), left: Curve(115.25, 65.58, 255.99), power: Curve(175.26, 226.75, 452.14) };
+const TWO_HAND: GameSwing = GameSwing { right: Curve(16.88, 48.68, 191.09), left: Curve(54.33, 86.60, 189.55), power: Curve(96.10, 112.71, 246.39) };
 /// The middle of the iron longsword's blade (m from the grip): where the runtime's own full cut is
 /// (a one-handed sword's, [`FULL_SLASH_SPEED`]).
 const SWORD_MID: f32 = 0.48;
 
-fn speed_at((a, b, c): (f32, f32, f32), d: f32) -> f32 {
-    (a + 2.0 * b * d + c * d * d).max(0.0).sqrt()
+/// The game's own one-handed and two-handed swings.
+fn game_swings() -> &'static [GameSwing; 2] {
+    static S: std::sync::OnceLock<[GameSwing; 2]> = std::sync::OnceLock::new();
+    S.get_or_init(|| {
+        let read = |hand: &str, fallback: GameSwing| {
+            let curve = |attack: &str| {
+                let path = format!("meshes\\characters\\_male\\{hand}attack{attack}.kf");
+                crate::havok::read_nif(&path).and_then(|n| oblivion_assets::anim::swing_at_hit(&n)).map(|s| Curve::of(&s))
+            };
+            match (curve("right"), curve("left"), curve("power")) {
+                (Some(right), Some(left), Some(power)) => {
+                    let s = GameSwing { right, left, power };
+                    tracing::info!("weapons: the game's {hand} swing at its Hit: the grip at {:.1} m/s, a point 0.5 m up the blade at {:.1}; its power attack's at {:.1} and {:.1}", s.grip(), s.normal(0.5), s.power.0.sqrt(), s.power.at(0.5));
+                    s
+                }
+                _ => {
+                    tracing::warn!("weapons: the game's {hand} attack animations couldn't be read: their swing as measured");
+                    fallback
+                }
+            }
+        };
+        [read("onehand", ONE_HAND), read("twohand", TWO_HAND)]
+    })
+}
+
+fn swings_of(kind: u32) -> GameSwing {
+    game_swings()[matches!(kind, BLADE_TWO_HAND | BLUNT_TWO_HAND) as usize]
 }
 
 impl GameSwing {
     /// A normal attack's speed `d` up the blade (the right and left swings together).
     fn normal(&self, d: f32) -> f32 {
-        0.5 * (speed_at(self.right, d) + speed_at(self.left, d))
+        0.5 * (self.right.at(d) + self.left.at(d))
     }
     fn grip(&self) -> f32 {
         0.5 * (self.right.0.sqrt() + self.left.0.sqrt())
@@ -140,22 +181,21 @@ impl GameSwing {
 /// a power attack) at the scale where its one-handed sword's full cut at the middle of the blade is
 /// the runtime's own ([`FULL_SLASH_SPEED`]).
 pub fn to_hand() -> f32 {
-    FULL_SLASH_SPEED / ONE_HAND.normal(SWORD_MID)
+    FULL_SLASH_SPEED / game_swings()[0].normal(SWORD_MID)
 }
 
 /// How hard a weapon of the game's `kind` swung at `speed` must hit `d` metres up from its grip:
 /// (a full hit's speed there, a power hit's over it), m/s, as the game's own attack swings it.
 pub fn swing_speeds(kind: u32, speed: f32, d: f32) -> (f32, f32) {
-    let s = if matches!(kind, BLADE_TWO_HAND | BLUNT_TWO_HAND) { TWO_HAND } else { ONE_HAND };
+    let s = swings_of(kind);
     let normal = s.normal(d);
-    (to_hand() * speed * normal, speed_at(s.power, d) / normal.max(1e-3))
+    (to_hand() * speed * normal, s.power.at(d) / normal.max(1e-3))
 }
 
 /// How fast the hand moves in the game's own swing of a weapon of `kind` at `speed` (m/s, in the
 /// hand's scale): what a power hit wants the arm to do.
 pub fn grip_speed(kind: u32, speed: f32) -> f32 {
-    let s = if matches!(kind, BLADE_TWO_HAND | BLUNT_TWO_HAND) { TWO_HAND } else { ONE_HAND };
-    to_hand() * speed * s.grip()
+    to_hand() * speed * swings_of(kind).grip()
 }
 
 /// A shield as an object, measured on its model (Oblivion's shields: the disc across X and Y, its

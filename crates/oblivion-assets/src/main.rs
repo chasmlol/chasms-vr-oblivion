@@ -57,6 +57,23 @@ fn main() -> Result<()> {
                 dump(&nif);
             }
         }
+        Some("swing") => {
+            // An attack animation's swing at its Hit key (the game's own: what a full hit is
+            // measured against).
+            for path in &args[1..] {
+                let nif = Nif::parse(&archives.read(path)?)?;
+                match oblivion_assets::anim::swing_at_hit(&nif) {
+                    Some(s) => println!(
+                        "{path}: the grip at {:.2} m/s, spinning at {:.1} rad/s; a point 0.5 m up the blade at {:.2} m/s, 1 m up at {:.2}",
+                        s.grip.length(),
+                        s.spin.length(),
+                        s.speed_at(0.5),
+                        s.speed_at(1.0)
+                    ),
+                    None => println!("{path}: no swing (no Hit key, or the arm isn't in it)"),
+                }
+            }
+        }
         Some("export") => export(&archives, &args[1..])?,
         Some("preview") if args.len() == 3 => {
             let skeletons = Skeletons::load(&archives)?;
@@ -66,7 +83,7 @@ fn main() -> Result<()> {
             preview::save(&c.model, std::path::Path::new(&args[2]))?;
             println!("{path}: {} meshes, {} bones -> {}", c.model.meshes.len(), c.model.bones.len(), args[2]);
         }
-        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>... | export [--out <folder>] <prefix>... | preview <model> <png>"),
+        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>... | swing <kf>... | export [--out <folder>] <prefix>... | preview <model> <png>"),
     }
     Ok(())
 }

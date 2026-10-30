@@ -2,6 +2,7 @@
 //! Nothing here is ever written back into the game; what's extracted goes to `local_assets/`
 //! (git-ignored: the files are the game's).
 
+pub mod anim;
 pub mod bsa;
 pub mod dds;
 pub mod export;

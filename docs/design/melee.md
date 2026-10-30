@@ -239,6 +239,43 @@ speeds a full hit and a power hit need here.
   and the arm is as strong as the game says (`MeleeTable::arm`): a strong character swings the
   same weapon faster. A two-hander in one hand has one hand's torque against its whole length.
 
+### What changed in the rig
+
+* A held melee weapon turns by its inertia about the hold (Rapier's, from the game's shape and
+  mass): `ARM_TORQUE` (47 N m, so a 1.3 kg one-handed sword turns as everything held always has)
+  over that inertia, three times as hard in two hands, and as strong as the game says the arms
+  are. Measured in the game: an iron claymore (1.74 kg, 0.52 kg m^2 about its grip) turns at up to
+  96 rad/s^2 in one hand and 287 in two (85 and 187 m/s^2 linearly).
+* The drive's own motion of a held thing each step (before the solver stops it, less the player's
+  walk and turn) is kept ([`Rig::swing`]): what the combat judges.
+* A blade that cut clean through a creature goes on through it (that creature's parts stop
+  filtering that hand's held group) until it's out of it, at least 0.12 s, at most 1.5 s.
+* Blows on a held thing (`Rig::blow`): an impulse on its body after the drive, so the hold brings it
+  back at its own pace.
+* A second hand on a melee weapon's handle closes where it is (`Handle::take_turned`: the nearest
+  place along it, the hand's own turn about it), and slides along it with its trigger held; a free
+  grab of a melee weapon's handle (not a draw from a holster) moves nothing: the weapon stays, the
+  drawn hand goes onto the handle.
+* What didn't change: walls and floors already stopped held things, the holding hand sitting on
+  the thing and a ghost hand at the controller; an empty hand still follows its controller exactly.
+
+### Measured in the game
+
+* Masses: an iron longsword 1.24 kg, a claymore 1.74, a war axe 1.98, an iron shield 0.62 (its
+  Havok mass is half the longsword's).
+* A full hit's speed along a longsword's edge 5.0 to 10.1 m/s (more towards the tip), a power hit
+  1.5 times that; a claymore's 3.0 to 7.6 (it's slower: speed 0.8, a two-handed swing), a power
+  hit 1.31 times; the hand a power hit wants: 4.3 m/s for a one-handed sword, 2.2 for a claymore.
+* The game's swings at their `Hit` keys (m/s, at the weapon's speed 1): a one-handed attack's
+  grip 7.7 and 10.7 (right and left), its blade spinning at 16 rad/s; the power attack's grip
+  13.2, spinning at 27 rad/s; a two-handed attack's grip 4.1 and 7.4, its power attack's 9.8.
+  Against the runtime's full cut at the middle of a one-handed blade (7 m/s), the game swings
+  2.1 times as fast as an arm in VR: its blows count at 0.47 of their speed.
+* A parry (the guard swung across the blade at 1 to 3 m/s) recoils the attacker; a held guard
+  blocks, and the game's own block then takes the blow (the player's action is Block, the damage
+  less: 6 unblocked, 3 to 4 blocked, for the goblin's).
+* Fatigue: a full swing 9 (7 + 0.1 x a longsword's 20), a power swing 45.
+
 ### Oblivion
 
 * **The hit stays the game's**, scaled by the swing: while the adapter's hit runs, the weapon
