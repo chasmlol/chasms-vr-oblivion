@@ -190,14 +190,19 @@ mod game {
     const VT_KNOCKBACK: usize = 0x2F0;
     /// The game's clock: the hour (`GameHour`'s value).
     const GAME_TIME: usize = 0x00B3_32E0;
-    /// The head tracking's measure of where an actor looks (`BSFaceGenAnimationData`'s, 0x54B010;
-    /// thiscall: the face animation, the frame's time, the `Bip01 Head` bone, `Bip01 NonAccum`): the
-    /// angles from the head bone's world turn now to what it looks at. The face's update
-    /// (`BSFaceGenNiNode`'s, 0x55D4C0) turns the head bone on by them, so measured from a head a
-    /// hand has pushed, it turns it back: a push is undone within a few frames. (Its own turn is no
-    /// better: a bone whose body is dynamic has its blend object write its own turn too, flag 8, set
-    /// as its motion changes, 0x89ED20, so the push is in that as well.)
+    /// The head tracking (`BSFaceGenAnimationData`'s): its measure of where an actor looks (0x54B010;
+    /// thiscall: the face animation, the frame's time, the `Bip01 Head` bone, `Bip01 NonAccum`), the
+    /// angles from the head bone's world turn now to what it looks at, and its look (0x54B5A0;
+    /// thiscall: the face animation, the turn out, the time, the head bone). The look undoes the
+    /// head bone's turn and puts its own in its place (its reference bone's turn by the angles), and
+    /// the face's update (`BSFaceGenNiNode`'s, 0x55D4C0) turns the head bone by it: whatever the
+    /// physics made of the head is gone. (Its own turn has the push in it too: a bone whose body is
+    /// dynamic has its blend object write its own turn as well, flag 8, set as its motion changes,
+    /// 0x89ED20.) A bone's blend update (0x88F3D0, thiscall: the blend object, its bone at +8) starts
+    /// with the bone where its animation has it.
     const HEAD_TRACK_MEASURE: usize = 0x0054_B010;
+    const HEAD_TRACK_LOOK: usize = 0x0054_B5A0;
+    const BLEND_UPDATE: usize = 0x0088_F3D0;
     const CODE: std::ops::Range<usize> = 0x0040_1000..0x00A3_0000;
 
     /// Metres in a Havok unit.
@@ -484,12 +489,58 @@ mod game {
         mem::at::<f32>(mem::deref(GAME_TIME + 0xC) + 0x24)
     }
 
-    /// The heads the hands have (their `Bip01 Head` bones): the head tracking holds its look on
-    /// them as it was, rather than measuring them again from where the push has them. It still
-    /// turns them to look where they looked (the push on top of that), and measures them again once
-    /// the hands let them be.
+    /// The heads the hands have (their `Bip01 Head` bones), and how many. The head tracking turns
+    /// them to look where they looked (its measure held, not taken again from where the push has
+    /// them), and the push on top of that: how far the physics has turned the head from where its
+    /// animation has it. Let be, the head tracking measures them again.
     static HANDS_HEADS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+    static HANDS_HEAD_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    /// Each held head's turn as its animation has it this frame (taken as its blend starts).
+    static ANIMATED: Mutex<Vec<(usize, [f32; 9])>> = Mutex::new(Vec::new());
     static REAL_MEASURE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    static REAL_LOOK: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    static REAL_BLEND: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    fn held_head(node: usize) -> bool {
+        HANDS_HEAD_COUNT.load(std::sync::atomic::Ordering::Relaxed) != 0 && HANDS_HEADS.lock().is_ok_and(|h| h.contains(&node))
+    }
+
+    /// A bone's blend update: a held head's animated turn kept first (the blend's about to put the
+    /// physics in it).
+    unsafe extern "thiscall" fn blend(this: usize) {
+        let real: unsafe extern "thiscall" fn(usize) = unsafe { std::mem::transmute(REAL_BLEND.load(std::sync::atomic::Ordering::Acquire)) };
+        let node = mem::deref(this + 8);
+        if held_head(node)
+            && let Some(turn) = mem::at::<[f32; 9]>(node + av::WORLD_ROTATE)
+            && let Ok(mut animated) = ANIMATED.lock()
+        {
+            animated.retain(|x| x.0 != node);
+            animated.push((node, turn));
+        }
+        unsafe { real(this) }
+    }
+
+    /// The head tracking's look: for a held head, its own look with the push on top (the physics'
+    /// turn from the animated one, in the head's frame), so the head looks where the head tracking
+    /// has it and gives under the hand.
+    unsafe extern "thiscall" fn look(face: usize, out: *mut [f32; 9], time: u32, head: usize) -> *mut [f32; 9] {
+        let real: unsafe extern "thiscall" fn(usize, *mut [f32; 9], u32, usize) -> *mut [f32; 9] = unsafe { std::mem::transmute(REAL_LOOK.load(std::sync::atomic::Ordering::Acquire)) };
+        let r = unsafe { real(face, out, time, head) };
+        // (Its head tracking off, the game's own, the look is none and the push already shows.)
+        if r.is_null() || !held_head(head) || mem::at::<u8>(face + 474) != Some(0) {
+            return r;
+        }
+        let animated = ANIMATED.lock().ok().and_then(|mut a| a.iter().position(|x| x.0 == head).map(|i| a.swap_remove(i).1));
+        crate::hooks::guard_void("head tracking look", || {
+            let (Some(animated), Some(now)) = (animated, mem::at::<[f32; 9]>(head + av::WORLD_ROTATE)) else { return };
+            let push = crate::items::ni_matrix(animated).transpose() * crate::items::ni_matrix(now);
+            let pushed = crate::items::ni_matrix(unsafe { r.read_unaligned() }) * push;
+            if pushed.is_finite() {
+                unsafe { r.write_unaligned(crate::items::ni_rows(pushed)) };
+            }
+        });
+        r
+    }
 
     /// The head tracking measuring a head: not a head the hands have (its look held as it was).
     unsafe extern "thiscall" fn measure(face: usize, time: u32, head: usize, non_accum: usize) -> u8 {
@@ -673,7 +724,8 @@ mod game {
         /// said was pressed.
         touched: Option<f64>,
         touched_bone: u32,
-        /// Its head bone, while it's the hands' (the head tracking holds its look on it as it was).
+        /// Its head bone, while it's the hands' (the head tracking holds its look on it as it was, the
+        /// push on top).
         head: usize,
         /// Let go by every hand and untouched a while: blending back since, from these gains; back
         /// to its gains (its bodies out of the world the frame after).
@@ -832,6 +884,8 @@ mod game {
         static HOOKED: std::sync::Once = std::sync::Once::new();
         HOOKED.call_once(|| {
             crate::hooks::install_into(HEAD_TRACK_MEASURE as *const (), measure as *const (), "head tracking measure", &REAL_MEASURE);
+            crate::hooks::install_into(HEAD_TRACK_LOOK as *const (), look as *const (), "head tracking look", &REAL_LOOK);
+            crate::hooks::install_into(BLEND_UPDATE as *const (), blend as *const (), "bone blend", &REAL_BLEND);
         });
         with_state(|s| {
             let dt = ((now - s.last) as f32).clamp(0.0, 0.1);
@@ -865,8 +919,12 @@ mod game {
             if let Ok(mut heads) = HANDS_HEADS.lock() {
                 let now_held: Vec<usize> = s.limp.values().map(|l| l.head).filter(|&h| h != 0).collect();
                 if *heads != now_held {
-                    tracing::info!("grabs: the heads the hands have: {now_held:x?} (the head tracking holds its look on them)");
+                    tracing::info!("grabs: the heads the hands have: {now_held:x?} (the head tracking holds its look on them, the push on top)");
+                    HANDS_HEAD_COUNT.store(now_held.len(), std::sync::atomic::Ordering::Relaxed);
                     *heads = now_held;
+                    if let Ok(mut animated) = ANIMATED.lock() {
+                        animated.retain(|x| heads.contains(&x.0));
+                    }
                 }
             }
             let mut pushes = std::mem::replace(&mut s.pushes, bytemuck::zeroed_box());
