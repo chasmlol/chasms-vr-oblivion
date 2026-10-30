@@ -47,6 +47,11 @@ const CENTRE: f32 = 2.0;
 const RIGHT: f32 = 4.0;
 pub const HEIGHT: u16 = 0xFCA;
 pub const WIDTH: u16 = 0xFCB;
+/// A text's colour (0..255 each) and its font (1 Kingthings, 2 Kingthings shadowed: the HUD's).
+pub const RED: u16 = 0xFCC;
+pub const GREEN: u16 = 0xFCD;
+pub const BLUE: u16 = 0xFCE;
+pub const FONT: u16 = 0xFD3;
 /// Tile values' true (1 is false).
 pub const TRUE: f32 = 2.0;
 

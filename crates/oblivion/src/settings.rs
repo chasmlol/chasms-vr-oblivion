@@ -23,11 +23,17 @@ pub struct Settings {
     /// "belt" (the belt pouch on the weapon hand's side), "chest_left" or "chest_right"; empty (the
     /// default for now): it isn't on the body.
     pub map_slot: String,
+    /// The main menu in a real place in Cyrodiil (`crate::worldmenu`); off: the flat main menu.
+    pub menu_world: bool,
+    /// Which place (`crate::worldmenu::SPOTS`: "imperial-city", "cloud-ruler", "dive-rock",
+    /// "anvil", "rumare-night", "first-view"), or several separated by commas, one of them each time
+    /// the game starts; empty: the Imperial City across Lake Rumare.
+    pub menu_spot: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { d3d9on12: true, background: false, eye_width: 0, eye_height: 0, menu_background: 1.0, map_slot: String::new() }
+        Settings { d3d9on12: true, background: false, eye_width: 0, eye_height: 0, menu_background: 1.0, map_slot: String::new(), menu_world: true, menu_spot: String::new() }
     }
 }
 
@@ -64,7 +70,7 @@ mod tests {
     #[test]
     fn missing_keys_are_defaults() {
         let s = parse("background = true\n");
-        assert!(s.background && s.d3d9on12);
+        assert!(s.background && s.d3d9on12 && s.menu_world);
         assert_eq!(s.eye_width, 0);
     }
 }

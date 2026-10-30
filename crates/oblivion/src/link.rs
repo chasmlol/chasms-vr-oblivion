@@ -55,6 +55,11 @@ pub fn with_adapter<R>(f: impl FnOnce(&mut Adapter) -> R) -> Option<R> {
     ADAPTER.lock().unwrap().as_mut().map(f)
 }
 
+/// [`with_adapter`] from another thread, only if the game's thread isn't using it now.
+pub fn try_with_adapter<R>(f: impl FnOnce(&mut Adapter) -> R) -> Option<R> {
+    ADAPTER.try_lock().ok()?.as_mut().map(f)
+}
+
 /// What the game is doing this frame, read before the eyes are rendered.
 pub struct GameFrame {
     /// The game's own camera: the player's eye and where they look (None outside the world).
@@ -64,6 +69,15 @@ pub struct GameFrame {
     /// The race menu is open: the player stays in the world for it, before the mirror, its menu
     /// the part of the picture `menu_uv` says.
     pub race_menu: Option<[f32; 4]>,
+    /// The game is loading another place (its loading screen, or its fade after one): the rig
+    /// waits for it.
+    pub loading: bool,
+    /// The player has no body in the game yet (the main menu's place, `crate::worldmenu`): the
+    /// runtime draws the hands alone.
+    pub hands_only: bool,
+    /// Face this way from this frame (a look yaw): the view recentred on it (the main menu's place
+    /// faces its view).
+    pub recenter: Option<f32>,
     pub now: f64,
     pub dt: f32,
 }
@@ -90,16 +104,20 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
                 adapter.tracking.recenter();
             }
         }
+        if g.recenter.is_some() {
+            adapter.tracking.recenter();
+        }
         let anchor = Anchor {
             eye: ride.as_ref().map_or(eye, |c| c.eye),
             base_eye: ride.as_ref().map_or(eye, |c| c.base_eye),
-            look_yaw: ride.as_ref().map_or(g.look_yaw, |c| c.look_yaw),
+            look_yaw: g.recenter.unwrap_or(ride.as_ref().map_or(g.look_yaw, |c| c.look_yaw)),
             scripted: false,
         };
         adapter.tracking.update(&frame, &anchor, g.now, g.dt)
     });
     let mut gs: GameState = bytemuck::Zeroable::zeroed();
     gs.flags = GS_PLAYER_RIG | if view.is_some() { GS_IN_GAME } else { 0 } | if g.menu { GS_MENU } else { 0 };
+    gs.flags |= if g.loading { GS_LOADING } else { 0 } | if g.hands_only { GS_HANDS_ONLY } else { 0 };
     // (The runtime keeps its crouch in step with the game's sneaking.)
     if view.is_some() && crate::player::sneaking() {
         gs.flags |= GS_CROUCHED;

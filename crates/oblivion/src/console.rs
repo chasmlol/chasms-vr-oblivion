@@ -334,6 +334,12 @@ pub fn parse(text: &str) -> Vec<(From, f32, String)> {
     out
 }
 
+/// A test still has lines to run at the main menu (`menu ...`: a save to load): the main menu isn't
+/// taken into the world for it (`crate::worldmenu`).
+pub fn pending_at_menu() -> bool {
+    TEST.lock().unwrap().as_ref().is_some_and(|t| t.lines.iter().any(|(from, _, _)| *from == From::Menu))
+}
+
 /// Reads the test file (once).
 pub fn load_test(dir: &std::path::Path) {
     let path = dir.join("rustvr-console-test");
