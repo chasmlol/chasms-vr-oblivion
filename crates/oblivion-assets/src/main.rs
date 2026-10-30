@@ -263,7 +263,7 @@ fn dump(nif: &Nif) {
                 println!("{i:3} {pad}shape '{}' {n} skin {skin} props {:?} bounds {bounds}", av.name, av.properties);
             }
             Block::SourceTexture { file } => println!("{i:3} texture {file}"),
-            Block::RigidBody(r) => println!("{i:3} rigid body shape {} mass {} centre {:?} layer {} motion {}", r.shape, r.mass, r.center, r.layer, r.motion),
+            Block::RigidBody(r) => println!("{i:3} rigid body{} shape {} mass {} centre {:?} translation {:?} layer {} motion {}", if r.transformed { " (T)" } else { "" }, r.shape, r.mass, r.center, r.translation, r.layer, r.motion),
             Block::Sequence(s) => {
                 println!("{i:3} sequence '{}' {}..{} text keys {:?}", s.name, s.start, s.stop, nif.get(s.text_keys));
                 for (name, a, b) in nif.sequence_ends(s) {
