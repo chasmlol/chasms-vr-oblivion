@@ -26,6 +26,25 @@ pub const MENU_MAIN: u32 = 0x414;
 const PLAYER: usize = 0x00B3_33C4;
 const PARENT_CELL: usize = 0x40;
 
+/// The interface's own 3D scene (`InterfaceManager` +4, "Menu3DRoot"): its render (0x57F170)
+/// draws it under the menus whenever its bound isn't empty.
+const MENU_3D: usize = 4;
+/// `NiAVObject`'s world bound's radius.
+const BOUND_RADIUS: usize = 0x2C;
+/// A reference's 3D (`TESObjectREFR` +0x3C): the player's, their body as seen in third person.
+const REFR_NODE: usize = 0x3C;
+
+/// Testing what's drawn behind an open menu besides the world: how big the interface's own 3D is
+/// (None or 0: it draws nothing), and whether the player's body is hidden (in first person it
+/// should be).
+pub fn log_drawn_under() {
+    let ui3d = mem::deref(mem::deref(INTERFACE_MANAGER) + MENU_3D);
+    let radius = (ui3d != 0).then(|| mem::at::<f32>(ui3d + BOUND_RADIUS)).flatten();
+    let body = mem::deref(mem::deref(PLAYER) + REFR_NODE);
+    let hidden = (body != 0).then(|| mem::at::<u16>(body + crate::engine::av::FLAGS)).flatten().map(|f| f & crate::engine::av::APP_CULLED != 0);
+    tracing::info!("menus: under the menu, the game's own 3D (Menu3DRoot) is {radius:?} across; the player's body hidden {hidden:?}");
+}
+
 /// The menu of this type is open (`kMenuType_*`).
 pub fn menu_open(kind: u32) -> bool {
     let data = mem::deref(TILE_MENUS + 4);

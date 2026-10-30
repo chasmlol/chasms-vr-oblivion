@@ -16,9 +16,9 @@ trigger to click. The right stick scrolls, and B closes.
 ## What to try, in order
 
 1. **Look around (the HUD).**
-   - Raise your left hand and look at the back of your wrist: the health, magicka and fatigue bars
-     and your weapon and spell icons are there, like a watch, with the compass just up your forearm
-     from them. Any active effects stack above the compass.
+   - Turn your left palm up and look at it: the health, magicka and fatigue bars and your weapon
+     and spell icons float over the inside of your wrist, with the compass above them and any
+     active effects above the compass. Turn the palm back to the side and they fade away.
    - Look at Jensine: the game's card of what you're looking at (her name) floats just under the
      point you're looking at, just in front of her. It eases after your head instead of being
      fixed to it. It's the same card that says "Open Door".
@@ -149,6 +149,34 @@ door or a container still has its icon and card. The red hand was the game's onl
 theft. While a hand has a thing, the game's card is aimed at it (that's how the card shows over your
 hand), and the icon comes back under your gaze, as the game sets it for its target. Whether it turns
 red there for someone else's thing hasn't been seen: worth a look on a shelf in Jensine's shop.
+
+## Playtest 2 (30 October, real headset)
+
+- **"Make the left-hand HUD things only show when I twist my wrist up, palm facing almost
+  upwards."** The wrist pieces (the bars with the weapon and spell, the compass, the active
+  effects) now show only while the off hand's palm is turned up and you look at it. They're fully
+  there within about 40 degrees of straight up and gone by about 57, fading between, so a hand
+  passing in front of the eyes doesn't bring them up. They float over the inside of the wrist and
+  stack upwards as you see them (bars nearest the wrist), instead of along the back of the forearm,
+  which faces down once the palm is up. The palm is read from the controller's grip pose (OpenXR's
+  grip: its +X is out of a left hand's palm), so a left-handed player gets it on the right wrist.
+- **"When I opened my inventory I can see an axe in the back, bleeding in behind the menu."** Not
+  found yet. What I ruled out:
+  - The inventory itself draws no 3D: its layout (`menus\main\inventory_menu.xml`) is only
+    images and text, and hovering an item shows the game's 2D pop-up of its numbers.
+  - The game's first-person arms (holding your Fine Iron War Axe) are hidden while each eye is
+    drawn, and the world under a menu is drawn the same way as outside it.
+  - The axe in your hand is drawn by the runtime over the menu, never under it.
+  - What's left: the game draws a 3D scene of its own under its menus (`Menu3DRoot`, whenever it
+    holds anything), or the game's world draws your character's body there. Half a second after a
+    menu opens, the adapter's log now says "menus: under the menu, the game's own 3D (Menu3DRoot) is
+    X across; the player's body hidden Y". Anything other than 0 (or None) across, or the body not
+    hidden, is where the axe comes from. It could also be an axe in the room showing through the
+    menu (the pickaxe you threw earlier).
+- **From the 15:50 run's log (see-through):** the inventory's pieces came out solid (covered 1.00
+  at their middles). The dialogue's didn't: its two pieces were 0.22 and 0.57 at their middles the
+  first time, 0.77 and 0.95 the second, and 0.51 and 0.00 the third. The runtime makes anything
+  over half solid, so the dialogue's pieces can still show the world through them.
 
 ## What was checked in the game (emulated headset, captures)
 

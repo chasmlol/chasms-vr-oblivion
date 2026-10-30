@@ -369,6 +369,7 @@ mod win {
                             tracing::info!("hud: piece {i} (group {}) is covered {mean:.2} at its middle (least {least:.2})", e.group);
                         }
                     }
+                    crate::menus::log_drawn_under();
                 }
             }
             a.submit(info);
