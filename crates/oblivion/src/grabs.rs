@@ -125,6 +125,8 @@ mod game {
     const NODE_CHILDREN: usize = 0xB0;
     const NODE_COUNT: usize = 0xB6;
     const NODE_COLLISION: usize = 0xA8;
+    /// `NiAVObject`'s parent.
+    const PARENT: usize = 0x1C;
     /// `bhkBlendCollisionObject` (and the subclass that adds a rotation).
     const BLEND_VTABLES: [usize; 2] = [0x00A9_643C, 0x00A9_6384];
     const BLEND_BODY: usize = 0x10;
@@ -190,16 +192,12 @@ mod game {
     const VT_KNOCKBACK: usize = 0x2F0;
     /// The game's clock: the hour (`GameHour`'s value).
     const GAME_TIME: usize = 0x00B3_32E0;
-    /// An actor's face animation (`BSFaceGenAnimationData`; thiscall: the actor, through its
-    /// process), and its head tracking: whether it's off (vtable +0x98) and turning it off or on
-    /// (+0x9C: off, at once). While it's on, the head tracking measures where the head bone points
-    /// now (its world turn, the physics in it) and turns it on to what the actor looks at
-    /// (`BSFaceGenNiNode`'s update, 0x55D4C0, by the angles of 0x54B010): a push on the head is undone
-    /// within a few frames. Off, it turns the head no further (and the face's own animation blends
-    /// back to rest, as the game has it whenever it turns it off).
-    const FACE_ANIMATION: usize = 0x005E_12B0;
-    const VT_TRACKING_OFF: usize = 0x98;
-    const VT_SET_TRACKING_OFF: usize = 0x9C;
+    /// The head tracking's measure of where an actor looks (`BSFaceGenAnimationData`'s, 0x54B010;
+    /// thiscall: the face animation, the frame's time, the `Bip01 Head` bone, `Bip01 NonAccum`): the
+    /// angles from the head bone's world turn now to what it looks at. The face's update
+    /// (`BSFaceGenNiNode`'s, 0x55D4C0) turns the head bone on by them, so measured from a head a
+    /// hand has pushed, it turns it back: a push is undone within a few frames.
+    const HEAD_TRACK_MEASURE: usize = 0x0054_B010;
     const CODE: std::ops::Range<usize> = 0x0040_1000..0x00A3_0000;
 
     /// Metres in a Havok unit.
@@ -486,25 +484,39 @@ mod game {
         mem::at::<f32>(mem::deref(GAME_TIME + 0xC) + 0x24)
     }
 
-    /// An actor's head tracking turned off (true) or on again: its face animation, if this turned it
-    /// off (it wasn't already).
-    fn head_tracking(actor: usize, off: bool) -> usize {
-        type Face = unsafe extern "thiscall" fn(usize) -> usize;
-        type Off = unsafe extern "thiscall" fn(usize) -> u8;
-        type SetOff = unsafe extern "thiscall" fn(usize, u32, u32);
-        if mem::deref(actor + PROCESS) == 0 {
-            return 0;
+    /// The heads the hands have (their `Bip01 Head` bones): the head tracking measures them from
+    /// their animation, as if no hand were on them, so it turns them to what they look at as far as
+    /// it would anyway, and the push stays on top of that.
+    static HANDS_HEADS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+    static REAL_MEASURE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    /// The head tracking measuring a head: for a head the hands have, from where its animation
+    /// has it (its parent's world turn and its own, the animation's: a blend object doesn't write a
+    /// bone's own turn), then its world turn as the hands left it again.
+    unsafe extern "thiscall" fn measure(face: usize, time: u32, head: usize, non_accum: usize) -> u8 {
+        let real: unsafe extern "thiscall" fn(usize, u32, usize, usize) -> u8 = unsafe { std::mem::transmute(REAL_MEASURE.load(std::sync::atomic::Ordering::Acquire)) };
+        let ours = HANDS_HEADS.lock().is_ok_and(|h| h.contains(&head));
+        let drawn = if ours {
+            crate::hooks::guard("head tracking", None, || {
+                let drawn: [f32; 9] = mem::at(head + av::WORLD_ROTATE)?;
+                let parent: [f32; 9] = mem::at(mem::deref(head + PARENT) + av::WORLD_ROTATE)?;
+                let own: [f32; 9] = mem::at(head + av::LOCAL_ROTATE)?;
+                let animated = crate::items::ni_rows(crate::items::ni_matrix(parent) * crate::items::ni_matrix(own));
+                unsafe { ((head + av::WORLD_ROTATE) as *mut [f32; 9]).write_unaligned(animated) };
+                static SAID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+                if SAID.swap(head, std::sync::atomic::Ordering::Relaxed) != head {
+                    tracing::info!("grabs: the head tracking measures the head {head:#x} from its animation");
+                }
+                Some(drawn)
+            })
+        } else {
+            None
+        };
+        let r = unsafe { real(face, time, head, non_accum) };
+        if let Some(drawn) = drawn {
+            unsafe { ((head + av::WORLD_ROTATE) as *mut [f32; 9]).write_unaligned(drawn) };
         }
-        let face = unsafe { std::mem::transmute::<usize, Face>(FACE_ANIMATION)(actor) };
-        let (Some(is_off), Some(set_off)) = (virt(face, VT_TRACKING_OFF), virt(face, VT_SET_TRACKING_OFF)) else { return 0 };
-        let was_off = unsafe { std::mem::transmute::<usize, Off>(is_off)(face) } != 0;
-        if was_off == off {
-            return 0;
-        }
-        // (Not at once: the face's own animation eases to and from rest.)
-        unsafe { std::mem::transmute::<usize, SetOff>(set_off)(face, off as u32, 0) };
-        tracing::info!("grabs: {:#x}'s head tracking {}", mem::at::<u32>(actor + FORM_ID).unwrap_or(0), if off { "off: its head is the hands'" } else { "back on" });
-        face
+        r
     }
 
     /// The game's knockback with no push: the actor goes down where it is, every bone Havok's.
@@ -675,8 +687,8 @@ mod game {
         /// said was pressed.
         touched: Option<f64>,
         touched_bone: u32,
-        /// Its face animation, while the hands have its head tracking off (its head theirs).
-        quiet: usize,
+        /// Its head bone, while it's the hands' (the head tracking measures it from its animation).
+        head: usize,
         /// Let go by every hand and untouched a while: blending back since, from these gains; back
         /// to its gains (its bodies out of the world the frame after).
         back: Option<f64>,
@@ -831,6 +843,10 @@ mod game {
         if engine::player() == 0 {
             return;
         }
+        static HOOKED: std::sync::Once = std::sync::Once::new();
+        HOOKED.call_once(|| {
+            crate::hooks::install_into(HEAD_TRACK_MEASURE as *const (), measure as *const (), "head tracking measure", &REAL_MEASURE);
+        });
         with_state(|s| {
             let dt = ((now - s.last) as f32).clamp(0.0, 0.1);
             s.last = now;
@@ -860,6 +876,13 @@ mod game {
             }
             s.grabs = grabs;
             s.blend_back(now);
+            if let Ok(mut heads) = HANDS_HEADS.lock() {
+                let now_held: Vec<usize> = s.limp.values().map(|l| l.head).filter(|&h| h != 0).collect();
+                if *heads != now_held {
+                    tracing::info!("grabs: the heads the hands have: {now_held:x?} (the head tracking measures them from their animation)");
+                    *heads = now_held;
+                }
+            }
             let mut pushes = std::mem::replace(&mut s.pushes, bytemuck::zeroed_box());
             if crate::link::with_adapter(|a| a.read_game_pushes(&mut pushes)).unwrap_or(false) {
                 let n = (pushes.count as usize).min(MAX_GAME_PUSHES);
@@ -897,7 +920,7 @@ mod game {
             let standing = !dead && knock_state(actor) == 0;
             if standing && !self.limp.contains_key(&g.actor) {
                 bodies_in_world(root, true);
-                self.limp.insert(g.actor, Limp { actor, root, bones: Vec::new(), since: now, touched: None, touched_bone: 0, quiet: 0, back: None, leaving: Vec::new(), restored: false });
+                self.limp.insert(g.actor, Limp { actor, root, bones: Vec::new(), since: now, touched: None, touched_bone: 0, head: 0, back: None, leaving: Vec::new(), restored: false });
                 return;
             }
             self.done[hand] = g.serial;
@@ -936,8 +959,8 @@ mod game {
                     }
                     set_gains(b.blend, heir, if heir == 0.0 { 0.0 } else { 1.0 });
                 }
-                if full.contains(&HEAD) && l.quiet == 0 {
-                    l.quiet = head_tracking(actor, true);
+                if full.contains(&HEAD) {
+                    l.head = bones.iter().find(|b| b.code == HEAD).map_or(0, |b| b.node);
                 }
             }
             let world = world_of(actor);
@@ -994,7 +1017,7 @@ mod game {
                 match self.limp.get_mut(&p.id) {
                     None => {
                         bodies_in_world(root, true);
-                        self.limp.insert(p.id, Limp { actor, root, bones: Vec::new(), since: now, touched: Some(now), touched_bone: 0, quiet: 0, back: None, leaving: Vec::new(), restored: false });
+                        self.limp.insert(p.id, Limp { actor, root, bones: Vec::new(), since: now, touched: Some(now), touched_bone: 0, head: 0, back: None, leaving: Vec::new(), restored: false });
                     }
                     Some(l) => {
                         // (Touched again as it blends back, it stays as the hands left it, and
@@ -1017,8 +1040,8 @@ mod game {
                             }
                         }
                         // (Its head the hand's, the game's head tracking would turn it back.)
-                        if touched.iter().any(|t| t.0 == HEAD) && l.quiet == 0 {
-                            l.quiet = head_tracking(actor, true);
+                        if touched.iter().any(|t| t.0 == HEAD) {
+                            l.head = sk.bones.iter().find(|b| b.code == HEAD).map_or(0, |b| b.node);
                         }
                         let soft = sk.bones.iter().filter(|b| l.bones.iter().any(|x| x.0 == b.blend) && mem::deref(b.body + BODY_WORLD) != 0);
                         if let Some(b) = nearest(&mut soft.into_iter()) {
@@ -1254,9 +1277,6 @@ mod game {
                 let down = is_dead(l.actor) || knock_state(l.actor) != 0;
                 if l.restored || down {
                     bodies_in_world(l.root, false);
-                    if l.quiet != 0 {
-                        head_tracking(l.actor, false);
-                    }
                     tracing::info!("grabs: {id:#x} let go{}", if down { " (down: its bones are the game's)" } else { ": back to its animation" });
                     return false;
                 }
