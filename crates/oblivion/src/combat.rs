@@ -181,7 +181,8 @@ pub(crate) fn read_str(p: usize) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// The named nodes under `root` that are bones (named `Bip01...`), and a few named attachments.
+/// The named nodes under `root` that are bones (named `Bip01...`), and a few named attachments: the
+/// `Weapon` node, and the equipped shield's own (as `Shield`).
 fn bones(root: usize) -> HashMap<String, usize> {
     let mut out = HashMap::new();
     let mut stack = vec![(root, 0u32)];
@@ -193,8 +194,11 @@ fn bones(root: usize) -> HashMap<String, usize> {
         }
         let name = read_str(mem::deref(node + NODE_NAME));
         let descend = depth <= 2 || name.starts_with("Bip01");
-        if name.starts_with("Bip01") || name == "Weapon" || name == "Shield" {
+        if name.starts_with("Bip01") || name == "Weapon" {
             out.insert(name, node);
+        } else if name.starts_with("Shield") {
+            // An equipped shield's model, on the left forearm's twist: "Shield (<its form>)".
+            out.insert("Shield".into(), node);
         }
         if !descend {
             continue;
@@ -379,6 +383,26 @@ fn guard_parts(actor: usize, b: &HashMap<String, usize>) -> Vec<(Vec3, Vec3, f32
     out
 }
 
+/// Once a creature: what its guard was made of (its `Weapon` and `Shield` nodes, its equipped
+/// weapon's and shield's forms).
+fn log_guard_once(id: u32, actor: usize, b: &HashMap<String, usize>, parts: usize) {
+    static SEEN: Mutex<Option<std::collections::HashSet<u32>>> = Mutex::new(None);
+    if !SEEN.lock().unwrap().get_or_insert_with(Default::default).insert(id) {
+        return;
+    }
+    let process = mem::deref(actor + 0x58);
+    let form = |off: usize| mem::deref(mem::deref(process + off) + 8);
+    tracing::info!(
+        "combat: {id:#x}'s guard: {parts} parts (its Weapon node {}, its Shield node {}, its weapon form {:#x}, its shield form {:#x}, the weapon's length {:?}, the shield's disc {:?})",
+        b.contains_key("Weapon"),
+        b.contains_key("Shield"),
+        form(EQUIPPED_WEAPON),
+        form(EQUIPPED_SHIELD),
+        weapon_length(actor),
+        shield_disc(actor)
+    );
+}
+
 /// The capsules of a humanoid skeleton: (from bone, to bone, radius, part, material).
 const HUMANOID: &[(&str, &str, f32, u32, u32)] = &[
     ("Bip01 Pelvis", "Bip01 Neck", 0.17, PART_TORSO, MAT_LEATHER),
@@ -438,7 +462,9 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
             a.count = 1;
         }
         // Its guard: what blades stop on (and, while it holds it up, a hit on it is a blocked one).
-        for (p, q, r) in guard_parts(actor, &b) {
+        let guard = guard_parts(actor, &b);
+        log_guard_once(id, actor, &b, guard.len());
+        for (p, q, r) in guard {
             let i = a.count as usize;
             if i >= MAX_ACTOR_PARTS {
                 break;
