@@ -95,6 +95,14 @@ over it with a blue outline.
 - `reach_cmu_15_06.png`: leaning and reaching forward.
 - `aim_lafan.png`: LaFAN1 aiming, never trained on.
 
+The drawn body in the test range, on the emulated headset (`<builds>\ik\pictures\range\`, both
+eyes side by side): looking 60° down with the hands hanging (`down_hanging.png`), a two-handed
+hold at the chest (`gun_level.png`, `gun_down.png`), the hands low in front (`handwork.png`), the
+head turned 60° away from them (`look_side.png`), both hands up (`reach_up.png`), and the mirror
+standing, holding, reaching up and with the hands low (`mirror_*.png`; `mirror_closeups.png` has
+the mirror enlarged). Looking down, the belly and both legs show below the hanging arms, each arm
+runs from the shoulder to its controller, and the mirror shows the same pose each time.
+
 ## What to look at in the headset
 
 1. **Look down at yourself standing still, hands at your sides.** The chest and shoulders should be
@@ -124,10 +132,13 @@ over it with a blue outline.
 
 ## What I couldn't check
 
-- **Nothing in the headset or in Oblivion** (the rule for the night). The test range's emulated
-  headset was busy with the other two sessions' runs most of the night; one capture run overlapped
-  another session's by mistake and gave nothing, and the drawn body from the range is not in these
-  results.
+- **Nothing in a real headset or in Oblivion** (the rule for the night). Only the emulated
+  headset in the test range: the range's mannequin, not Oblivion's body, and scripted poses, not
+  your motion.
+- **The two-handed hold in the mirror** (`mirror_gun.png`): with both hands at shoulder height
+  close in front of the chest, both elbows go out to the sides at about the hands' height. That is
+  how a shouldered rifle is often held, but look at it with a real one: a support elbow hanging
+  lower would look more natural.
 - **How close a real Quest's body tracking is** to the truth fed into the measurements.
 - **Absolute chest placement from the eyes**: motion capture can't settle it (its markers sit on top
   of the shoulders), so it follows ANSUR; look at it first.
