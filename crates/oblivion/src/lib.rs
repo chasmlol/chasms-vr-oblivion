@@ -55,6 +55,7 @@ pub mod mirror_spell;
 pub mod movement;
 pub mod objects;
 pub mod player;
+pub mod profile;
 pub mod proxy;
 pub mod render;
 pub mod resolution;

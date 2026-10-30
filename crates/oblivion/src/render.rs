@@ -325,7 +325,9 @@ mod win {
 
     unsafe extern "thiscall" fn render_hook(this: *mut c_void, arg: i32) -> i32 {
         let real: RenderFn = unsafe { std::mem::transmute(REAL_RENDER.load(Ordering::Acquire)) };
-        GAME_THREAD.store(unsafe { windows::Win32::System::Threading::GetCurrentThreadId() }, Ordering::Release);
+        let thread = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
+        GAME_THREAD.store(thread, Ordering::Release);
+        crate::profile::frame_start(thread);
         // A picture of the world into a texture of the game's own making (a save's picture, taken
         // as an autosave goes through a door) is the game's, drawn as it draws it: two eyes drawn
         // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
