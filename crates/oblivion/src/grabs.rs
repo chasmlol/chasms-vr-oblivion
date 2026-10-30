@@ -86,20 +86,21 @@ pub fn lifts_by(code: u32) -> bool {
 /// is how far towards the animation the body's driven each frame (the rest of the bone is where the
 /// body is: it bends under the hand), and the velocity gain how much of the body's speed is set to
 /// that each frame, the rest kept: below 1 the body carries on past where it's driven and comes
-/// back, a wobble. Loose for what hangs (an arm, the head when the chest is pushed): leant on, it
-/// gives most of the way and wobbles back in about a second. Firm for the spine and the neck: it
-/// gives about a third and is back in a quarter of a second. Stiff for a leg it stands on, and the
-/// chest an arm hangs from.
+/// back, a wobble. Loose for what hangs (an arm, the head): leant on, it gives most of the way and
+/// wobbles back in about a second. Firm for the spine: it gives about a third and is back in a
+/// quarter of a second. Stiff for a leg it stands on, and the chest an arm or the head hangs from.
 pub const LOOSE: (f32, f32) = (0.2, 0.1);
 pub const FIRM: (f32, f32) = (0.5, 0.3);
 pub const STIFF: (f32, f32) = (0.7, 0.5);
 
 /// The bones a touch on the bone with this part code moves, and how (see [`LOOSE`]): the head
-/// turns on its neck; the chest gives, and the head and the arms swing with it; an arm swings from
-/// its shoulder; a leg gives a little. (The pelvis holds the body up: it stays the animation's.)
+/// turns on its neck, loosely (only its turn is drawn, at the animation's place, and only so much
+/// of it as the heir leaves: firm, a face pushed hardly moved); the chest gives, and the head and
+/// the arms swing with it; an arm swings from its shoulder; a leg gives a little. (The pelvis holds
+/// the body up: it stays the animation's.)
 pub fn touch(code: u32) -> &'static [(u32, (f32, f32))] {
     match code {
-        HEAD => &[(HEAD, FIRM), (SPINE2, STIFF)],
+        HEAD => &[(HEAD, LOOSE), (SPINE2, STIFF)],
         PELVIS | SPINE1 | SPINE2 => &[(SPINE1, FIRM), (SPINE2, FIRM), (HEAD, LOOSE), (5, LOOSE), (6, LOOSE), (7, LOOSE), (11, LOOSE), (12, LOOSE), (13, LOOSE)],
         5..=7 => &[(5, LOOSE), (6, LOOSE), (7, LOOSE), (SPINE2, STIFF)],
         11..=13 => &[(11, LOOSE), (12, LOOSE), (13, LOOSE), (SPINE2, STIFF)],
@@ -138,7 +139,13 @@ mod game {
     const MOTION_COM: usize = 0x60;
     const MOTION_MASS_INV: usize = 0xC0;
     const MOTION_LIN_VEL: usize = 0xD0;
+    const MOTION_ANG_VEL: usize = 0xE0;
     const MOTION_SAVED: usize = 0xF0;
+    /// The motion's `getInertiaInvWorld` (vtable +0x3C: three columns out) and `applyPointImpulse`
+    /// (+0x60: the impulse, the point; both world, Havok's units), as the game's own grab uses them
+    /// (`hkMouseSpringAction`'s step, 0x8B8B60).
+    const VT_INERTIA_INV_WORLD: usize = 0x3C;
+    const VT_POINT_IMPULSE: usize = 0x60;
     const LAYER_BIPED: u32 = 8;
     const BODIES_IN_WORLD: usize = 0x0088_CE30;
     const ACTIVATE: usize = 0x008A_6410;
@@ -404,13 +411,38 @@ mod game {
         activate(body);
     }
 
-    /// A body gets what its speed lacks of a push `speed` m/s along `dir`.
-    fn give(body: usize, dir: Vec3, speed: f32) {
-        let v = velocity(body);
-        let lack = speed - v.dot(dir);
-        if lack > 0.0 {
-            set_velocity(body, v + dir * lack);
+    /// A body pushed at `point` (the runtime's world) along `dir`, `speed` m/s: the point gets what
+    /// its speed lacks of the push, by an impulse there (Havok's own, as the game's grab pulls), so a
+    /// push off its middle turns it too: a cheek pushed turns the head. Its mass and inertia say how
+    /// much impulse that is. (A body Havok can't push, a keyframed one, gets nothing.)
+    fn give(body: usize, point: Vec3, dir: Vec3, speed: f32) {
+        let m = motion(body);
+        let (Some(com), Some(inv_mass)) = (mem::at::<[f32; 4]>(m + MOTION_COM), mem::at::<f32>(m + MOTION_MASS_INV)) else { return };
+        let (Some(inertia), Some(impulse_at)) = (virt(m, VT_INERTIA_INV_WORLD), virt(m, VT_POINT_IMPULSE)) else { return };
+        let mut i = [V4::default(); 3];
+        type Inertia = unsafe extern "thiscall" fn(usize, *mut V4);
+        unsafe { std::mem::transmute::<usize, Inertia>(inertia)(m, i.as_mut_ptr()) };
+        let i_inv = Mat3::from_cols(Vec3::from_slice(&i[0].0[..3]), Vec3::from_slice(&i[1].0[..3]), Vec3::from_slice(&i[2].0[..3]));
+        // In Havok's world: the lever from its centre of mass, and how fast the point moves along
+        // the push now.
+        let at = to_hk(point);
+        let r = at - Vec3::new(com[0], com[1], com[2]);
+        let n = camera::basis().dir_to_game(dir).normalize_or_zero();
+        let v: [f32; 4] = mem::at(m + MOTION_LIN_VEL).unwrap_or_default();
+        let w: [f32; 4] = mem::at(m + MOTION_ANG_VEL).unwrap_or_default();
+        let moving = (Vec3::new(v[0], v[1], v[2]) + Vec3::new(w[0], w[1], w[2]).cross(r)).dot(n);
+        let lack = speed / HK_METRES - moving;
+        // (How much the point's speed along the push changes for each unit of impulse there.)
+        let rn = r.cross(n);
+        let k = inv_mass + rn.dot(i_inv * rn);
+        if !(lack > 0.0) || !(k > 1e-6) || !k.is_finite() || !at.is_finite() || n == Vec3::ZERO {
+            return;
         }
+        let j = n * (lack / k);
+        activate(body);
+        let (impulse, at) = (V4([j.x, j.y, j.z, 0.0]), V4([at.x, at.y, at.z, 0.0]));
+        type Impulse = unsafe extern "thiscall" fn(usize, *const V4, *const V4);
+        unsafe { std::mem::transmute::<usize, Impulse>(impulse_at)(m, &impulse, &at) };
     }
 
     fn activate(body: usize) {
@@ -608,8 +640,10 @@ mod game {
         root: usize,
         bones: Vec<(usize, f32, f32)>,
         since: f64,
-        /// When a hand (or what it holds) last pressed into it.
+        /// When a hand (or what it holds) last pressed into it, and the bone (its part code) it last
+        /// pressed.
         touched: Option<f64>,
+        touched_bone: u32,
         /// Let go by every hand and untouched a while: blending back since, from these gains; back
         /// to its gains (its bodies out of the world the frame after).
         back: Option<f64>,
@@ -830,7 +864,7 @@ mod game {
             let standing = !dead && knock_state(actor) == 0;
             if standing && !self.limp.contains_key(&g.actor) {
                 bodies_in_world(root, true);
-                self.limp.insert(g.actor, Limp { actor, root, bones: Vec::new(), since: now, touched: None, back: None, leaving: Vec::new(), restored: false });
+                self.limp.insert(g.actor, Limp { actor, root, bones: Vec::new(), since: now, touched: None, touched_bone: 0, back: None, leaving: Vec::new(), restored: false });
                 return;
             }
             self.done[hand] = g.serial;
@@ -910,7 +944,7 @@ mod game {
                 if let Some(b) = nearest(&mut sk.bones.iter())
                     && mem::deref(b.body + BODY_WORLD) != 0
                 {
-                    give(b.body, dir, speed);
+                    give(b.body, point, dir, speed);
                 }
                 return;
             }
@@ -918,13 +952,13 @@ mod game {
             // put in Havok's world first, and touched the frame after, with them in their bones'
             // places), and the soft body nearest the push gets it. (Held, the hand's grab moves it.)
             let held = self.holds.iter().flatten().any(|h| h.actor_id == p.id);
-            let touched = nearest(&mut sk.bones.iter()).map_or(&[][..], |b| touch(b.code));
+            let bone = nearest(&mut sk.bones.iter()).map_or(0, |b| b.code);
+            let touched = touch(bone);
             if !held && !touched.is_empty() {
                 match self.limp.get_mut(&p.id) {
                     None => {
                         bodies_in_world(root, true);
-                        self.limp.insert(p.id, Limp { actor, root, bones: Vec::new(), since: now, touched: Some(now), back: None, leaving: Vec::new(), restored: false });
-                        tracing::info!("grabs: {:#x} touched", p.id);
+                        self.limp.insert(p.id, Limp { actor, root, bones: Vec::new(), since: now, touched: Some(now), touched_bone: 0, back: None, leaving: Vec::new(), restored: false });
                     }
                     Some(l) => {
                         // (Touched again as it blends back, it stays as the hands left it, and
@@ -933,6 +967,10 @@ mod game {
                         l.leaving.clear();
                         l.restored = false;
                         l.touched = Some(now);
+                        if l.touched_bone != bone {
+                            l.touched_bone = bone;
+                            tracing::info!("grabs: {:#x} touched on its bone {bone} at {speed:.2} m/s", p.id);
+                        }
                         for &(code, (heir, vel)) in touched {
                             for b in sk.bones.iter().filter(|b| b.code == code) {
                                 if !l.bones.iter().any(|x| x.0 == b.blend) {
@@ -944,7 +982,7 @@ mod game {
                         }
                         let soft = sk.bones.iter().filter(|b| l.bones.iter().any(|x| x.0 == b.blend) && mem::deref(b.body + BODY_WORLD) != 0);
                         if let Some(b) = nearest(&mut soft.into_iter()) {
-                            give(b.body, dir, speed);
+                            give(b.body, point, dir, speed);
                         }
                     }
                 }
