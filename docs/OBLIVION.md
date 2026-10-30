@@ -31,10 +31,11 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 
 ## Setting up
 
-The game's models are converted once into `local_assets/oblivion` (never committed):
+The game's models are converted once into `local_assets/oblivion` (never committed; the clutter is
+what's in people's pockets):
 
 ```
-cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters
+cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons meshes/characters/_male meshes/characters/khajiit meshes/characters/argonian meshes/armor meshes/clothes textures/characters meshes/clutter meshes/oblivion/sigil meshes/dungeons/misc
 ```
 
 Then `python tools/install_oblivion.py` builds and installs the adapter beside `Oblivion.exe`.
