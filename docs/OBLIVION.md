@@ -11,7 +11,7 @@ translates. Where the adapter hooks the game is at the end, under "Hooks".
 | Part | What it does | Where |
 |---|---|---|
 | The picture | Oblivion's Direct3D 9 device is made on D3D9On12. After each eye's render, the back buffer goes through a shared Direct3D 12 texture and fence into the runtime's eye texture. | `d3d9.rs` |
-| The eyes | The world render runs once per eye each frame, with the camera at that eye's pose and the eye's own asymmetric frustum. The game's first-person arms aren't drawn. | `render.rs`, `camera.rs` |
+| The eyes | The world render runs once per eye each frame, with the camera at that eye's pose and the eye's own asymmetric frustum. The game's first-person arms aren't drawn. The sky is centred on each eye (at infinity for both) and the weather on the head; each eye is a frame of the renderer's own, so the actors' skinned bodies are made for its camera. What else the game makes once a frame: `docs/research/visuals.md`. | `render.rs`, `camera.rs` |
 | Resolution | The game renders each eye at the headset's eye size as the runtime asks for it (its recommended size times the runtime's Resolution scale): the window, back buffer and every render target are made at that size. | `resolution.rs` |
 | Depth | Each eye's depth buffer (resolved from its samples under the game's antialiasing) goes to the runtime as linear depth, so the hands, the body and what they hold are hidden behind the world. | `d3d9.rs`, `depth.rs` |
 | Collision | The runtime's physics gets the world Oblivion's own Havok has: every fixed body's shapes near the player (the land, buildings, rocks, trees, furniture) as triangles, so what the hands hold, drop and throw stops at it and lands on it. | `collision.rs`, `docs/research/oblivion-havok.md` |
