@@ -82,6 +82,8 @@ fist (the grip squeezed): the other hand still swims.
 - **Hands under the surface,** seen from above, now show (they were hidden by the water).
 - **The game's splash** where hands slapped in, at 3.9 and 7.2 m/s (droplets seen in a capture).
 - **A jumps out of the water** at the surface: the player rose clear of it.
+- **The heartbeat** started at breath 0.30 under the water (the log, and the emulated controllers'
+  haptic calls).
 - **The floating body,** as stick figures: a swimmer streaming out behind at speed, treading water
   at rest.
 - **Tests:** unit tests of the crates touched pass (protocol, IK, avatar, runtime `--lib`, the
@@ -101,8 +103,11 @@ fist (the grip squeezed): the other hand still swims.
   your legs well. They were checked as stick figures and numbers only.
 - **The game's other water,** checked only as code: Water Walking, Water Breathing,
   dangerous water, and swimming indoors.
-- **The heartbeat's pulses on the emulated controllers,** checked only in the code. The breath
-  reaching low was seen in the log.
+- **The comfort vignette while arm-swimming,** and **ducking your face into the water no longer
+  crouching,** changed in code only (both small): watch for the vignette if it's on in the Comfort
+  tab, and check you don't come out of the water sneaking.
+- **The game's swimming sounds** while the arms swim (it plays its own while it sees a swimmer):
+  the emulated headset has no ears.
 
 ## Decisions
 
@@ -117,6 +122,9 @@ fist (the grip squeezed): the other hand still swims.
     goes with how squarely the palm meets its motion.
   - The push is the hand's velocity against the head, reversed, past a 0.25 m/s dead zone.
   - Strokes accelerate you and the water's drag glides it out over 1.4 s.
+- **Ducking while swimming isn't crouching.** The game's swimmer isn't crouched, so a crouch pressed
+  in the water would still be on at the shore. Ducking your face into the water just puts it there.
+- **The comfort vignette** (if it's on) closes in while the arms swim you, as it does for the stick.
 - **No buoyancy, no auto-surfacing.** Oblivion has none under water: a still swimmer hangs where
   they are. That's also the comfortable choice, since nothing moves your view but you. When breath
   runs low you're warned (the meter, the gasp, the heartbeat in the hands), and surfacing is yours.
