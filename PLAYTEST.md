@@ -12,6 +12,50 @@ why it works the way it does: `docs/research/riding.md`.
 Run `playtest.bat` in this worktree (`<worktrees>\riding`): it installs this build and boots the save; press
 a key in its window when you're done and it closes the game and puts your settings back.
 
+## Round 5: fine steering, a real walk, and spurs as hard as you do them
+
+Built and unit-tested; not in the game yet. Your fourth ride's logs are in
+`<builds>\riding\playtest-4`.
+
+1. **"The turning is TERRIBLE... all or nothing, I have to fully reach over to turn... can you make
+   it continuous so you can steer ever so slightly."** Three things made it so:
+   - the reins did nothing for the first 5 cm and only reached a full turn at 17 cm;
+   - the turn went to the game as a joystick, and Oblivion ramps a horse's turn up slowly (from
+     nothing to full over half a second), so a small, short correction hardly turned it and a long
+     one overshot;
+   - to stop Oblivion halting the horse on a hard turn (round 3), the forward push was raised to
+     match the turn, so turning sped the horse up.
+
+   Now the reins steer from **1.5 cm** (a trembling hand's worth: drift under that is still taken
+   up) and give a **full turn at 12 cm**, gently at first, smoothed against tremor. And the horse is
+   **turned directly**: each game frame its heading is turned by the game's own heading turn (what
+   Oblivion's horse turning itself calls), at exactly the share of the game's full turn (67.5° a
+   second) the reins ask for, from a degree a second up, with no ramp and no effect on its speed. It
+   turns while standing too.
+2. **"The horse doesn't do the vanilla walk animation, just a very slowed sprint one."** I'd
+   taken the game's "run speed" for the horse (4.1 m/s) as its gallop, but it gallops at 8.6 m/s
+   (your log), so anything over 1.6 m/s was a gallop at 40-50% speed: that slowed sprint. Now
+   slow speeds are **the game's walk** (up to 1.3 m/s, slower at a slower pace), and the gallop is
+   never drawn slower than 60% of itself (5.2 m/s); in between it walks until half way, then
+   gallops.
+3. **"Doing a mini spur makes him walk slow as well."** A spur is now **as hard as you do it**: a
+   flick by how fast your hand snaps down (a gentle flick to a sharp one), the trigger by how far
+   you squeeze it (a light squeeze to a full one). A light spur from a stand walks it slowly; a
+   harder one walks it faster or breaks into a gallop; the hardest surges to its full gallop. Each
+   surge settles back to 70% of itself over about 8 s (so a light spur's walk slows a little, a
+   gallop eases to a steady gallop), and spurs add up: keep spurring hard to stay flat out.
+
+### Try this round
+
+- **Steer** with the tiniest moves: one rein back a couple of centimetres, both hands a little to
+  a side. The horse should drift gently that way; more, more; about 12 cm for its sharpest. Try it
+  standing, walking and galloping: it should never stop or speed up to turn.
+- From a stand, **a gentle flick or a light squeeze**: a slow walk. Another: a faster walk. A
+  sharp flick: a gallop. Spur hard again and again: flat out.
+- Pull the reins at a gallop: it slows through the gallop, then drops to a walk, then stands.
+- Tell me how the steering feels (the 12 cm can go shorter or longer: the menu's "Rein travel for
+  a full turn"), and how light a spur needs to be to walk.
+
 ## Round 4: a fluid speed, and reins that don't freak out near the horse
 
 Built and unit-tested; not in the game yet. Your third ride's logs are in
@@ -201,10 +245,11 @@ built, and its unit tests pass.
    saddle horn, either side of the mane: close a hand there (either hand, or both). A tick in the
    hand says you have one; the rein runs from the bit along the neck to your fist.
 4. **Spur on.** A flick of the reins (snap a rein hand down a few centimetres, quickly, and stop) or
-   the trigger of a hand on a rein: a surge to its full gallop, fading slowly to a canter. Spur again
-   to keep it flat out. A pulse in the rein hands each time.
+   the trigger of a hand on a rein, as hard as you want it to go: a light one walks it, the
+   hardest surges it to its full gallop; each surge fades slowly to 70% of itself. Spur again to
+   keep it going. A pulse in the rein hands each time.
 5. **Steer.** Pull one rein back towards you (left rein: left), or move both hands to one side (a
-   neck rein), or open one rein out to its side. Nothing within 5 cm; full turn at 17 cm. The view
+   neck rein), or open one rein out to its side. From 1.5 cm, finely; full turn at 12 cm. The view
    turns with the horse, smoothly; a vignette closes in while it turns hard or gallops.
 6. **Slow and stop.** Pull both reins back: it slows as hard as you pull (hardest at 15 cm), and
    where you let go it keeps that speed. To back up: at a stand, ease the reins, pull them right back
@@ -283,20 +328,25 @@ built, and its unit tests pass.
   A held pull slows only to a stand; backing is asked for on its own (a pull begun at a stand, held
   1.2 s), so it can't follow from slowing down. A spur always counts, and gives reins held back.
   The values are guesses for the headset (5, 17 and 10 cm): the menu has them all.
-- **Speed is fluid, made of the game's gaits** (round 4): the reins ask for a share of the horse's
-  full gallop; a spur surges it to full (rising at 0.5 a second), fading to a cruise (0.55, over
-  8 s); a pull takes off up to 0.7 a second, as hard as it's pulled, and the cruise follows it down.
-  The adapter makes that speed of Oblivion's walk and gallop at a pace with the game's own walk and
-  run speeds for that horse (`GetWalkSpeed`, `GetRunSpeed`); the gallop is never
-  asked for under 40% of its speed (slower, its stride is drawn at a crawl), and below the speed
-  half way from the walk to that, it walks. The turn rate is the game's own
+- **Speed is fluid, made of the game's gaits** (rounds 4 and 5): the reins ask for a share of the
+  horse's full gallop; a spur surges it by as much as it's done (0.1 of a gallop for the lightest,
+  all of it for the hardest: a flick's speed from 1.1 to 3.5 m/s, a trigger's squeeze from 30% to
+  all of it), rising at 0.5 a second, fading over 8 s to 70% of the surge; a pull takes off up to
+  0.7 a second, as hard as it's pulled, and the cruise follows it down. The adapter makes that
+  speed of Oblivion's walk and gallop at a pace with the game's own walk speed for that horse
+  (`GetWalkSpeed`) and its gallop, 2.1 times `GetRunSpeed` (4.1 m/s, where the
+  horse gallops at 8.6 on the headset); the gallop is never asked for under 60% of its speed
+  (slower, it looked like a slowed-down sprint), and below the speed half way from the walk to
+  that, it walks. The turn rate is the game's own
   (`iHorseTurnDegreesPerSecond` 45, ramping at 80 per second, times 1.5 at full rein like the turn
   keys). Max speed is the game's full gallop for that horse (not raised).
-- **Turning never stops the horse** (round 3): the game takes a stick that points more to the side
+- **The horse is turned straight** (round 5): the game takes a stick that points more to the side
   than ahead as a slide, which on a horse halts it and turns it on the spot (the player's update,
-  the game's). While the horse goes, the forward axis given to the game is kept at least the turn
-  axis; the game caps the pace at 1, so a full pace is unchanged (a slow stick pace turning hard
-  goes a little faster).
+  the game's), and ramps a horse's turn up at 80°/s² (round 3 kept the forward axis at least the
+  turn axis, which made turning speed it up). Now the stick's X is 0, and each game frame the
+  horse's heading is turned by the game's own heading turn (`GetHeading` + an angle to
+  `SetHeading`, which its horse turning calls) at the rider's share of `iHorseTurnDegreesPerSecond`
+  (read live) times the turn keys' 1.5: continuous, no ramp, never stopping or speeding it.
 - **The view sits on the saddle** (round 3): seated, its anchor is the rider's eye 0.85 m over the
   saddle's seat (on the horse's live spine), not the game's camera, which after a re-mount stays at
   a standing player's height on the horse's back. 0.85 m is where the game's camera was on every
@@ -350,6 +400,9 @@ built, and its unit tests pass.
 
 ## Not done
 
+- Round 5 isn't checked in the game yet (built and unit-tested only). The horse turned on the spot
+  turns without the game's turning animation (if it has one for horses); 2.1 for the gallop is
+  measured on the chestnut horse only.
 - Round 4 isn't checked in the game yet (built and unit-tested only). The slowed gallop as a canter
   depends on how Oblivion draws a gallop at a pace: if it looks wrong, the least gallop (40%) can go
   up.
