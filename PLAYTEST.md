@@ -27,7 +27,9 @@ note. The inn's own patrons walk about further in. The research and the design a
    own card over it (its name, value and weight). It's still his while your hand is in the pocket:
    let go there and it's back, nothing tried.
 4. **Pull it out.** The game decides as it leaves the pocket, with its own chance: 40 + 0.6 x (your
-   Sneak - his), both with Luck, minus a tenth per gold of value taken, between 5 and 85%.
+   Sneak - his), both with Luck, minus a tenth per gold of value taken, between 5 and 85%. This
+   character's Sneak makes it about 40% against Bruce: expect to be caught (the console's
+   `player.setav sneak 100` makes it 85%, the most the game allows).
    - **Success:** it's yours (marked stolen). Put it at a hip or a shoulder to keep it.
    - **Caught:** a hard jolt and the thing is gone from your hand. Then the game's own reaction:
      the pickpocketing crime (bounty 25), his disposition, his alarm or attack, and he can never be
