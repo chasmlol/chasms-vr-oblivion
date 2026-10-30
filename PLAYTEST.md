@@ -30,8 +30,9 @@ the Swimming row of `docs/OBLIVION.md`.
      10 cm from there. Squeeze a little before the reach ends, or let go a little after your hands
      start back, and it just slips.
    - The next stroke never takes your glide's speed: it only adds to it, and turns it its way, so
-     uneven hands don't leave you drifting sideways. Only a stroke back against your glide, 20 cm
-     or longer, slows you: that's how to stop, and keep going back.
+     uneven hands don't leave you drifting sideways. Only a push back against your glide slows
+     you, and takes you back: both hands pushed forward together (a breaststroke's sweep out goes
+     a little forward too, but its hands spread wide, so it never does).
    - Pulling down as well as back takes you up as well as ahead (at the surface the game holds
      you there): to swim level under the water, pull straight back.
    - A pull slower than you already go just slips.
@@ -184,6 +185,16 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't catc
     - Simulated (gripped early, let go late): a light breaststroke 1.7 times the game's speed (0.9
       before), relaxed 2.6 (2.2), firm 3 (3.1). A light stroke backwards from still, -4.6 m/s
       (-2.6); gliding ahead at 4 m/s, strokes backwards have you going back within a second (two).
+11. **"Backwards is way too hard to trigger"** (not too slow). While you glide ahead (faster than
+    1 m/s, so most of the time with the long glide), a stroke back had to be 20 cm long to count at
+    all, and then only stopped you: two or three strokes to go back. That was so a breaststroke's
+    sweep out, going a little forward, didn't slow you.
+    - Now a push back counts from 10 cm like any stroke, if it's more push than sweep: the hands
+      going that way at least half as far as they move apart or together. A breaststroke's sweep
+      out spreads the hands wide; a push back takes them forward together.
+    - Simulated: swimming ahead at about 5.8 m/s, one 30 cm push back has you going back in 0.6 s
+      (two strokes and 1.7 s before); a 20 cm push, 0.7 s (it never did before). Breaststrokes keep
+      their speed: their sweep out, 10 to 18 cm forward, never counts against you.
 
 ## Checked in the game (emulated headset, `tools/oblivion.ps1`)
 
@@ -260,8 +271,9 @@ Hands holding something (a weapon, a torch, a thing you've picked up) don't catc
   - Gliding (faster than 1 m/s), a stroke never takes your speed (since playtest 9): it speeds you
     up to its pace along your glide (a slower one slips), and turns your glide its way (by e in
     0.25 s, as fast as it's strong against your speed), as a swimmer's streamlined body follows
-    the stroke. Only a stroke back against the glide (more than 120 degrees from it), once 20 cm
-    long, slows you. Nearly still, a stroke takes you its way at its pace.
+    the stroke. Only a push back against the glide (more than 120 degrees from it) slows you
+    (since playtest 11): it counts while it's gone at least half as far as the hands have moved
+    apart or together, so a breaststroke's sweep out never does. Nearly still, a stroke takes you its way at its pace.
   - At the surface (your head out) a stroke's rise is lost into the surface, as the game holds
     you there.
   - The water's drag: your speed glides out by e over 6 s, and sooner when fast (0.025 more for
