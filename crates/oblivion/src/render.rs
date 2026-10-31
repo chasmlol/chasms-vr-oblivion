@@ -368,7 +368,10 @@ mod win {
                 }
             }
         };
-        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, now, dt })?;
+        // (Paused over it, the race menu isn't the menu shown: the pause menu is, as anywhere else,
+        // with the runtime's own settings beside it. The player still stands where they stood.)
+        let shown = race_menu.filter(|_| !crate::menus::paused());
+        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu: shown, now, dt })?;
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);

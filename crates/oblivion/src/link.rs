@@ -61,8 +61,8 @@ pub struct GameFrame {
     pub eye: Option<Vec3>,
     pub look_yaw: f32,
     pub menu: bool,
-    /// The race menu is open: the player stays in the world for it, before the mirror, its menu
-    /// the part of the picture `menu_uv` says.
+    /// The race menu is open (and not paused over): the player stays in the world for it, before
+    /// the mirror, its menu the part of the picture `menu_uv` says.
     pub race_menu: Option<[f32; 4]>,
     pub now: f64,
     pub dt: f32,

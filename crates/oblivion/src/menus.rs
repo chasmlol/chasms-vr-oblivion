@@ -107,6 +107,12 @@ pub fn menu_mode() -> bool {
 /// would open the pause menu over it.
 const ESCAPE_CLOSES: [u32; 10] = [0x3F5, 0x3F7, 0x3F9, 0x3FA, 0x3FB, 0x3FC, 0x3FD, 0x40E, 0x40F, MENU_MAIN];
 
+/// The pause menu or one of its own is open, over whatever the game was showing (the race menu, a
+/// container): the game's own settings, beside which the runtime shows its.
+pub fn paused() -> bool {
+    ESCAPE_CLOSES.iter().any(|&m| m != MENU_MAIN && menu_open(m))
+}
+
 /// A menu in the world is on top, one the game's Menu Mode closes.
 #[cfg(target_arch = "x86")]
 pub fn tab_closes() -> bool {
