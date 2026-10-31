@@ -30,6 +30,7 @@ the main menu in Cyrodiil, a changed overscan takes at the next start, and the o
 | `00-check.bat` | Check the build and the desktop view: Lake Rumare's shore at 1 pm | trailer |
 | `01-face-sculpt.bat` | Shaping your face by hand: a new game, the prison cell's race menu, the big copy of your head and the mirror; pull the nose long, the ears out | trailer |
 | `02-daedric-archer-weye.bat` | Daedric armour, the Daedric Bow on your back and Daedric Arrows, outside the Wawnet Inn in Weye at 1 pm (the hamlet across the bridge from the Imperial City, its houses and people) | trailer |
+| `03-glass-imperial-city-evening.bat` | Glass armour in the Imperial City's Market District at 7 pm, no spell selected | trailer |
 
 ## The overscan
 
@@ -53,6 +54,6 @@ about 18 for its camera's lag behind a turning head.
 - `tgm`: god mode. `tai`: AI off (people freeze). `tcl`: no clipping.
 - `player.placeatme <base id> 1 <distance> <direction>`: someone or something placed by you.
 - The adapter's own: `PlaceAt <base> <ahead> <right> <up> [<turn>]`, `PlaceInFront <ref> <metres>`,
-  `SelectSpell <name>`, `EquipAll <id>`, `PlayerHorse <base> [<metres>]`, `GoreCut <bone>`
+  `SelectSpell <name>` (`SelectSpell none`: no spell, nothing in the off hand), `EquipAll <id>`, `PlayerHorse <base> [<metres>]`, `GoreCut <bone>`
   (`crates/oblivion/src/console.rs`).
 - Where a door leads (a spot to stand at): its teleport in `Oblivion.esm`, as clip 02's place was found.

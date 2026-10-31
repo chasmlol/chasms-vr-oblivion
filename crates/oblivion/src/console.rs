@@ -158,6 +158,24 @@ pub fn select_spell(_id: u32) -> bool {
     false
 }
 
+/// Selects no spell at all, as the game does when its selected spell is taken away: none in the
+/// off hand (its trigger the game's use), the HUD's magic icon the default one.
+#[cfg(target_arch = "x86")]
+fn select_no_spell() -> bool {
+    type Select = unsafe extern "thiscall" fn(usize, usize);
+    let player = crate::engine::player();
+    if player == 0 {
+        return false;
+    }
+    unsafe { std::mem::transmute::<usize, Select>(SET_ACTIVE_SPELL)(player, 0) };
+    true
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn select_no_spell() -> bool {
+    false
+}
+
 /// The form id of the player's spell called `name` (as the magic menu lists their spells and
 /// powers), if they have one.
 fn spell_named(name: &str) -> Option<u32> {
@@ -191,8 +209,9 @@ pub fn equip_all(_id: u32) -> bool {
 
 /// Runs a console line: `LoadGame <save>` loads a save, `NewGame` starts a new game (at the main
 /// menu: a boot straight into the character creator), `SelectSpell <name or hex id>` selects one
-/// of the player's spells by its name, or any spell by its id (a spell the game makes, as the mirror
-/// spell, has no id to know beforehand), `EquipAll <hex id>` equips all the player has of a thing (a
+/// of the player's spells by its name (`none`: no spell at all), or any spell by its id (a spell
+/// the game makes, as the mirror spell, has no id to know beforehand), `EquipAll <hex id>` equips
+/// all the player has of a thing (a
 /// stack of arrows), `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in
 /// front of the player (and that far over their feet), facing them (tests), `GoreCut <bone>` cuts a
 /// limb off the nearest creature as a killing blow would (`crate::gore`, tests), `PlayerHorse <base
@@ -223,6 +242,9 @@ pub fn run(line: &str) -> bool {
     }
     if let Some(spell) = line.strip_prefix("SelectSpell ") {
         let spell = spell.trim().trim_matches('"');
+        if spell.eq_ignore_ascii_case("none") {
+            return select_no_spell();
+        }
         let id = spell_named(spell).or_else(|| u32::from_str_radix(spell.trim_start_matches("0x"), 16).ok());
         return id.is_some_and(select_spell);
     }
