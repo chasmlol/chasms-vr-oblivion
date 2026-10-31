@@ -122,6 +122,7 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     let mut guard = ADAPTER.lock().unwrap();
     let adapter = guard.as_mut()?;
     let frame = adapter.poll()?;
+    crate::resolution::keep(frame.eye_size);
     let mut riding = false;
     let mut view_bob = ViewBob::default();
     let view = g.eye.and_then(|eye| {

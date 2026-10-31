@@ -2,47 +2,50 @@
 
 Each `.bat` here boots Oblivion straight into one shot, set up and ready: put the headset on and
 record the desktop view (the window on the monitor). Press a key in the bat's window when you're
-done: it closes the game and puts your settings back.
+done: it closes the game.
 
 Every bat:
 
 - closes any game another `.bat` left running;
-- turns the desktop view on (`RUSTVR_DESKTOP_VIEW=1`: `tools\oblivion.ps1` turns it off otherwise);
-- sets the shot's look in the RustVR menu's Studio tab, and anything else the shot needs, with
-  `studio.ps1` (your `settings.toml` is copied aside first and put back when the bat closes, so
-  anything you change in the menu during the shot goes back too);
+- turns the desktop view on for that run (`RUSTVR_DESKTOP_VIEW=1`: `tools\oblivion.ps1` turns it
+  off otherwise);
 - installs the build it names and boots the save, moves you, gives you things and runs the console
   lines the shot needs (`tools\play.ps1`);
 - keeps the run's `rustvr.log` in `<builds>\trailer\clip-<shot>-<n>`.
 
-The trailer build is main as of `d2a3a62` (protocol v15), built in `<builds>\trailer`. Shots that
-need a feature not in main yet boot that feature's own build (`play.ps1 <feature>`).
+The bats never touch your RustVR settings (`%LOCALAPPDATA%\RustVR\settings.toml`): the desktop
+view's look, its field of view and the overscan are whatever you set in the RustVR menu, and stay
+so. The looks are in the menu's Studio tab.
 
-If a bat's window was closed without pressing a key, run `powershell -File clips\studio.ps1 -Restore`
-(or the next bat's close does it): your settings sit in `%LOCALAPPDATA%\RustVR\settings.before-clip.toml`
-until then.
+The trailer build is main as of `d2a3a62` (protocol v15), built in `<builds>\trailer`, with the
+trailer branch's fixes: the game plays on (controls, clock, sound) with another window in front, the
+desktop view opens in front of the game's window, the boot's New Game reaches the prison cell with
+the main menu in Cyrodiil, a changed overscan takes at the next start, and the overscan goes up to
+20. Shots that need a feature not in main yet boot that feature's own build (`play.ps1 <feature>`).
 
 ## Shots
 
-| Bat | Shot | Build | Look |
-|---|---|---|---|
-| `00-check.bat` | Check the build and the desktop view: Lake Rumare's shore at 1 pm | trailer | Cinematic |
-| `01-face-sculpt.bat` | Shaping your face by hand: a new game, the prison cell's race menu, the big copy of your head and the mirror; pull the nose long, the ears out | trailer | Cinematic |
-| `02-daedric-archer-weye.bat` | Daedric armour, the Daedric Bow on your back and Daedric Arrows, outside the Wawnet Inn in Weye at 1 pm (the hamlet across the bridge from the Imperial City, its houses and people) | trailer | Cinematic |
+| Bat | Shot | Build |
+|---|---|---|
+| `00-check.bat` | Check the build and the desktop view: Lake Rumare's shore at 1 pm | trailer |
+| `01-face-sculpt.bat` | Shaping your face by hand: a new game, the prison cell's race menu, the big copy of your head and the mirror; pull the nose long, the ears out | trailer |
+| `02-daedric-archer-weye.bat` | Daedric armour, the Daedric Bow on your back and Daedric Arrows, outside the Wawnet Inn in Weye at 1 pm (the hamlet across the bridge from the Imperial City, its houses and people) | trailer |
 
-## The looks (Studio tab)
+## The overscan
 
-| Look | For |
-|---|---|
-| Clean | the game's picture as it is; your own field of view (128 degrees now) |
-| Cinematic | establishing shots, the menu, books, alchemy, faces: 90 degree lens, 24 fps blur, focus pulled to what you look at or hold up |
-| Hyper-real | body-cam: fights, dungeon crawls, gore; chest-worn camera, fisheye, hard sharpening |
-| Action | fights, archery, riding: shake on every blow, the view widens at a run |
-| Vintage | a flashback or a joke beat: heavy grain, warm faded print |
+The game draws each eye wider than the headset shows by the overscan, and bigger to stay as sharp.
+It can't change its size while it runs: a new overscan takes when the game starts again (the menu
+says how much of it shows until then). With this headset (Virtual Desktop: about 54 degrees out, 40
+in, 44 up and 55 down an eye):
 
-`studio.ps1 -Look <look> -Set "spectator.fov=100;studio.grain=0"` sets a look and anything else
-(`section.key=value`; a bare key is the studio's). Setting a studio value by hand makes the look
-"custom", as the Studio tab does.
+| Overscan | Each eye | Pixels |
+|---|---|---|
+| 11 | 4669x5026 | 1x |
+| 15 | 5591x6005 | 1.4x |
+| 20 (the most) | 7249x7898 | 2.4x |
+
+A 128 degree desktop view needs about 10 degrees to have picture at its edges with the head still,
+about 18 for its camera's lag behind a turning head.
 
 ## Handy console lines for `-Commands`
 
@@ -52,3 +55,4 @@ until then.
 - The adapter's own: `PlaceAt <base> <ahead> <right> <up> [<turn>]`, `PlaceInFront <ref> <metres>`,
   `SelectSpell <name>`, `EquipAll <id>`, `PlayerHorse <base> [<metres>]`, `GoreCut <bone>`
   (`crates/oblivion/src/console.rs`).
+- Where a door leads (a spot to stand at): its teleport in `Oblivion.esm`, as clip 02's place was found.

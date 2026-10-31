@@ -6,9 +6,9 @@
 //! `nHeight` (0xB06C4C/0xB06C50), makes its window, then makes its renderer at that size (0x498340).
 //! [`apply`] runs as the window is made: it waits for the runtime (it may be starting alongside the
 //! game) and puts the eye size in all four, so the device, the back buffer and every render target
-//! the game makes are that size. The size the runtime gave is kept ([`SAVED`], beside the game), for
-//! a game started before the headset is on: the runtime waits for the headset before it knows its
-//! size, and the game can't wait for it.
+//! the game makes are that size. The size the runtime asks for is kept ([`SAVED`], beside the game:
+//! at the start, and whenever it changes after, [`keep`]), for a game started before the headset is
+//! on: the runtime waits for the headset before it knows its size, and the game can't wait for it.
 
 use crate::{mem, settings};
 use std::time::{Duration, Instant};
@@ -79,6 +79,32 @@ pub fn eye_size() -> Option<(u32, u32)> {
             }
             saved
         }
+    }
+}
+
+/// The eye size the runtime asks for now (each of its frames), kept for the game's next start: the
+/// game can't change its size while it runs, so a bigger overscan or resolution scale set in the menu
+/// takes when it starts again. A game started before the headset was on never heard the size at
+/// start, and kept the one from before for good (an overscan raised from 11 to 30 never took).
+pub fn keep(size: [u32; 2]) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static KEPT: AtomicU64 = AtomicU64::new(0);
+    let s = settings::get();
+    if size[0] < 16 || size[1] < 16 || s.background || (s.eye_width > 0 && s.eye_height > 0) {
+        return;
+    }
+    let packed = (size[0] as u64) << 32 | size[1] as u64;
+    if KEPT.swap(packed, Ordering::Relaxed) == packed {
+        return;
+    }
+    let Some(p) = saved_path() else { return };
+    let saved = std::fs::read_to_string(&p).ok().and_then(|t| parse_saved(&t));
+    if saved == Some((size[0], size[1])) {
+        return;
+    }
+    match std::fs::write(&p, format!("{} {}\n", size[0], size[1])) {
+        Ok(()) => tracing::info!("resolution: the runtime asks for {}x{} now (was {saved:?}): the game starts at it next time", size[0], size[1]),
+        Err(e) => tracing::warn!("resolution: keeping the eye size in {}: {e}", p.display()),
     }
 }
 
