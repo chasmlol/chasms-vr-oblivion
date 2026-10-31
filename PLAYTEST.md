@@ -23,7 +23,15 @@ The research and the design are in `docs/research/facesculpt.md`.
   new game's loading flagged. That half-started game is likely what crashed the save you then loaded
   from the menu (the crash was in its loading screen). Now the .bat waits until the menu is shown,
   done fading in and not showing a box of its own, as it is when a player clicks it, and the log
-  says whether the menu began to close (`console: NewGame -> ran`, or `-> failed`).
+  says whether the menu began to close (`console: NewGame -> ran`, or `-> failed`). In the third
+  run it did: the main menu closed and the race menu opened in the prison cell 8 s later.
+- **The third run went at 4 to 5 frames a second.** That wasn't this feature: the runtime's
+  Supersampling was 1.55 (saved in `%LOCALAPPDATA%\RustVR\settings.toml` at 13:52, during another
+  feature's test), so the game drew each eye at 7237x7791 rather than 4669x5026, 2.4 times the
+  pixels, and the GPU ran out. Handing each eye's picture over took about 70 ms and its depth about
+  55 ms, where both had taken under 1 ms. The first playtest had the race menu, the mirror and the
+  copy of the head up at 1.0 and ran at 70 to 95 frames a second. Play at 1.0 (the in-headset
+  settings' Supersampling).
 
 ## What changed since the first playtest
 
@@ -136,18 +144,15 @@ The research and the design are in `docs/research/facesculpt.md`.
     within 5, the age exactly where it was. Keeping it there takes at most 0.16 ms a frame. The first
     version's coordinates reached 28 in the same strokes.
 - **The new game:** the game's own steps (the main menu's New, its "Start new game?" box,
-  which button is Yes, and when a menu fading in can be closed), not run. The second playtest's log
-  shows the first try ran on the menu's first frame and left it up.
+  which button is Yes, and when a menu fading in can be closed). The second playtest's log shows
+  the first try ran on the menu's first frame and left it up; the third shows the fixed one start
+  the new game, the race menu open in the cell and the face ready to be shaped by hand.
 
 ## What I couldn't check
 
 - **Nothing of it has run in the game since the fixes.** The game can't be started from here.
-- **The new game start.** The fixed one has never run. Watch for:
-  - the game staying at the main menu: the log says `console: NewGame -> ran` when the menu began
-    to close for it, `-> failed` when it didn't, and nothing at all while it's still waiting for the
-    menu;
-  - the new game's film playing anyway (it should be skipped; a click skips it in the game);
-  - the race menu opening in the cell with the copy of the head, as it did with the save.
+- **The new game's film:** whether it was skipped (the race menu came 8 s after the main menu
+  closed, loading included).
 - **Feel:** whether the face now follows the hand enough for you, now that the rest stays still. The
   balance (how still the rest is held against how far the part follows) is one number, easy to move
   either way: tell me which way.
