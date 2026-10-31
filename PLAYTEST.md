@@ -97,7 +97,8 @@ from any start; the fighters only come once you step into the arena.
 
 **Enemies** (arena)
 
-17. Ragdolls on muscles: shove one, knock it down; it gets up once it's still (a push puts it back
+17. Ragdolls on muscles: a dummy or a fighter stands still and moves smoothly (no shaking, in
+    slowed time too); shove one, knock it down; it gets up once it's still (a push puts it back
     down). Falls and slams hurt.
 18. Reactions by force: a light hit flinches it, a hard one staggers or floors it, and any stagger
     stops its swing.
@@ -110,9 +111,10 @@ from any start; the fighters only come once you step into the arena.
 
 **Grappling and unarmed**
 
-21. Grab a dummy or a fighter: by the neck while it's unaware, it goes down at once; by a shoulder
-    or a wrist it struggles, and may break free (your hand is forced off); lift it and it falls or
-    your hand comes off; the throat chokes it (it drops its weapons).
+21. Grab a dummy or a fighter: your hand and the body stay steady in the hold (no shaking); by the
+    neck while it's unaware, it goes down at once; by a shoulder or a wrist it struggles, and may
+    break free (your hand is forced off); lift it and it falls or your hand comes off; the throat
+    chokes it (it drops its weapons).
 22. Tear a limb off with both hands: take a dummy by both shoulders (or an arm and the head) and
     yank them apart hard.
 23. Punches (an empty hand: only a hard punch does anything) and kicks (the movement stick's click,
@@ -140,10 +142,32 @@ from any start; the fighters only come once you step into the arena.
 31. Stamina: off by default. To try it, add to `%LOCALAPPDATA%\RustVR\settings.toml`:
     `[melee]` / `stamina = true` (and `stamina_time = 3` to tire fast). The HUD shows it.
 
+**Guns, grenades, knives and spells on them** (the range's main hall and the bench)
+
+32. Shoot a dummy or a fighter (the rifle and pistol on the table by the start): a rifle round goes
+    through (two to the body kill), a pistol takes four (a head shot sooner); armour soaks some
+    (plate sparks); shot through the arm, a fighter drops its weapon; a dead body jerks when shot.
+33. Grenades (the chest pouch, or the throwables' table): a frag kills within about 2 m, floors
+    everything within 4 m, tears limbs off within about a metre and throws the bodies (Metro's
+    incendiary, once extracted, sets them alight). The room's tables and walls shield them.
+34. Throwing knives (the table at your left): one that sticks in a dummy hurts it as a thrown
+    dagger does (a head or a throat kills), and rides with it as it moves.
+35. Spells: cast the fire bolt or the shock at a dummy (charge, then throw towards it): the fire
+    bolt hurts and knocks it down, the shock jolts it and may stun it.
+
 ## Checked here, and not
 
 Checked with the emulated headset (scripts and captures), with the numbers seen in the logs:
 
+* the shaking: a standing dummy's upper arms were twisting back and forth at 94 rad/s with nothing
+  touching it, and a head held by the throat at 35 rad/s; now still (0.00 rad/s idle, 0.1 held), a
+  wrist held while your hand sways follows smoothly, and an armed fighter stands still (unit
+  probes, run and removed);
+* the rifle into the training dummy's chest: 30 a round, dead at the second; a frag let go at your
+  feet half a metre from it: dead, 10 parts torn off, and the second dummy 1.5 m off killed; a
+  throwing knife into the left dummy's chest at 10 m/s: in, 27.8 (temporary scenarios, removed);
+  offline: a pistol round at the throat 15, a frag a metre from the bench's first dummy killing
+  the three nearest and flooring the other two, a fire bolt landing;
 * grips: the maul taken with the hand rolled 60 degrees and turned 30 off its grip goes into the
   hand at its grip (125 degrees off at the grab, 7 after 0.15 s), the fist round the haft; the
   staff in both hands, each hand onto the shaft; the sword taken by the middle of its grip, raised
@@ -170,15 +194,17 @@ Checked with the emulated headset (scripts and captures), with the numbers seen 
   it to death, knockouts standing and limp, a punch's push on a body that's down, a wave cleared and
   the next arriving, a disarmed fighter fetching a sword and another fleeing;
 * the climb area stays quiet; the arena's first wave comes at once;
-* the runtime's own scenarios: the melee ones pass (stab, stab into the floor, knife, taking the
-  sword by its pommel), but for the sword's chop, which fails about half its runs with or without
-  this round's changes (each run its blade meets a different part of the dummy, and the check wants
-  exactly one hit); the eight that need Metro 2033's extracted guns and sounds fail
+* the runtime's own scenarios: the melee ones pass (stab, stab into the floor, knife, the grenade,
+  the spell, taking the sword by its pommel, and the sword's chop this time; it fails about half
+  its runs with or without this round's changes: each run its blade meets a different part of the
+  dummy, and the check wants exactly one hit); the eight that need Metro 2033's extracted guns and sounds fail
   on this machine (it has none extracted), and crouch and wall_fade failed once in a full run but
   pass on their own. The unit tests pass, but for two arm IK tests and a bullet-hole picture test
   that already failed before this work.
 
-Not checked: anything by feel in a real headset (the weight and the grips above all), the gloves'
+Not checked: anything by feel in a real headset (the weight, the grips and a held body's
+steadiness above all), the pistol on a fighter, the incendiary, a knife riding a
+fighter as it moves, a spell cast at a fighter in the headset, the gloves'
 pull in the headset, a fighter's weapon taken by its handle and wrenched away since the grips
 snap, sounds by ear (the runs
 were silent: the new voice lines, the clash), the controllers' buzz, a heavy weapon's push on your
@@ -203,10 +229,14 @@ script's hand missed the pommel).
 * The runtime's gore stays its own (wounds bleed, blood runs and pools), with its blade blood and
   neck bleed.
 * Fire and shock alternate as they're cast (the range has no spell wheel).
+* The guns' and grenades' damage on the creatures is ours (a pistol 15, a rifle 30 and
+  through, a shotgun 45, by the armour and the part multipliers; a frag 120 at its centre
+  falling off over 6 m, limbs torn off within 1.2 m). A thrown knife is a thrown dagger; a spell
+  cast at a creature lands at once (no flight), as a fire bolt's or a lightning hit.
 
 ## Known issues
 
-* Thrown and telekinesis-held things are judged as weapons only if they're melee weapons (a thrown
-  bottle breaks, but doesn't hurt).
+* Thrown and telekinesis-held things are judged as weapons only if they're melee weapons or
+  throwing knives (a thrown bottle breaks, but doesn't hurt).
 * A body held at full stretch on a stuck blade drops it (the stuck rule: the grip's past your
   reach).
