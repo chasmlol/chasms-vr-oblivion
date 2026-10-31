@@ -415,14 +415,24 @@ body sat in the chair, the head free to look round, the trigger again to get up.
 also stood a player who'd used the trigger straight up again (their real head was still a standing
 one), and turned the game's player to the head's look as the game turned them to the seat.
 
-* **Sitting down is the game's activation of the furniture**: the trigger with the reticle on it
-  (the game's own icon for it, from as far as the game reaches), so the game walks and turns them to
-  its marker and plays its sitting; a bed asks its own way (sleep or wait, its ownership, trespass
-  and crime).
+* **Pointed at with a hand**, as the gravity gloves point (the second playtest asked for it: not
+  looked at): along the arm from the shoulder through an empty hand, the seat under that line or
+  nearest the middle of the gloves' 15-degree cone, in front of the eyes, out to 6 m, held 0.1 s (a
+  tick in the hand). The seat pointed at is the game's crosshair's target: after the game's own
+  update of its crosshair (the interface's, from the player's update before it acts on
+  its controls), its reference to activate (what the Activate control activates)
+  is the seat, and the HUD's card and the reticle's icon are the seat's
+  (the game's own): they float at it.
+* **Sitting down is the game's activation of the furniture**: the trigger (the game's Activate on
+  its crosshair's target), so the game turns them to its marker and plays its sitting; a bed asks
+  its own way (sleep or wait, its ownership, trespass and crime).
 * **Dark while the game moves them**: sitting down (states 1 to 3), getting up (5), and a moment
   after either (the runtime's fade for getting on and off a horse, `SEAT_MOVING`).
 * **The view seated**: recentred on the seat once it's dark, facing the way the game sat them, the
-  eye over the seat at 48% of the game's standing eye height over the feet (a sitting body's): the
+  eye over the seat at 51% of the player's standing eye height (the runtime's measure: where its
+  body's skeleton has the eyes sitting upright, so the body sits and isn't stretched; the second
+  playtest's 48% of the game's own eye height over the feet, 2.4 m in the log, kept the view at a
+  standing height): the
   player's head as it is then is the seated eye, so it's right whether they stand in their room or
   sit on a real chair. They look round and lean freely; the room's limit holds the view near the
   seat.
@@ -435,8 +445,9 @@ one), and turned the game's player to the head's look as the game turned them to
 
 Calls made:
 
-* The game's own reach for the trigger (about 2 m): the reticle shows the seat's icon as far as the
-  game would activate it.
+* Seats are pointed at out to 6 m (the gloves reach 10: a seat across a hall is a long way to be
+  moved to); the game moves the player onto its marker however far it is, in the dark.
+* Any empty hand's trigger sits them in the seat pointed at (the game's Activate is one control).
 * The body sitting by the head's height is gone: a player crouching by a chair to pick something up
   isn't sat in it, and one sitting on a real chair isn't stood up by the game.
 * Lying down isn't asked for: sitting on the bed is enough for the game's own sleep question.

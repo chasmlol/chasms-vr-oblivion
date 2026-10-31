@@ -401,6 +401,7 @@ mod win {
             time(Part::Items, || hooks::guard_void("sigil", || crate::sigil::place(view, now)));
             time(Part::Items, || hooks::guard_void("ayleid", || crate::ayleid::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("shrines", || crate::shrines::place(view, &snap.frame, now)));
+            time(Part::Items, || hooks::guard_void("seats", || crate::rest::point(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("surrender", || crate::surrender::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("plants", || crate::plants::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("keys", || crate::keys::place(view, &snap.frame, now)));

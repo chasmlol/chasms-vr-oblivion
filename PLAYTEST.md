@@ -178,9 +178,11 @@ editor), or pick the offering up off the ground as here.
 Chorrol's Grey Mare at night (its chairs and benches; its beds upstairs, owned); saves as
 `rustvr-rest`. Play standing.
 
-1. **Sit**: look at one of the inn's chairs or benches from a step or two away: the game's icon for
-   it shows at the reticle. Pull the trigger (an empty hand). The view goes dark while the game sits
-   you down, and comes back with you in the seat, facing out of it, at a sitting eye height.
+1. **Sit**: point an empty hand at one of the inn's chairs or benches, from up to 6 m away, as you
+   point the gravity gloves at a thing (your arm out towards it, the chair in front of you): a tick
+   in the hand, and the game's icon and its name ("Chair") float at it. Pull the trigger. The view
+   goes dark while the game sits you down, and comes back with you in the seat, facing out of it,
+   at a sitting eye height (about 80 cm over the seat).
 2. **Seated**: look round and lean: the head is free, the view stays at the seat. Look down: your
    body is sat on the seat, its feet on the floor. The stick and walking in your room don't move you.
 3. **Get up**: pull the trigger again. Dark while the game stands you up, then back on your feet.
@@ -188,11 +190,15 @@ Chorrol's Grey Mare at night (its chairs and benches; its beds upstairs, owned);
    "You cannot sleep in an owned bed."). Rent a room from the innkeeper and the bed opens its sleep
    and wait menu instead (sleep with the laser).
 
-Tell me especially: is the seated eye too high or too low? Are you facing out of the chair? Does the
-body sit on the seat (not in front of it, not inside it)? Is the dark too long or too short?
+Tell me especially: does pointing pick the chair you mean (and not when you don't)? Is the seated
+eye too high or too low? Are you facing out of the chair? Does the body sit on the seat (not in
+front of it, not inside it)? Is the dark too long or too short?
 
-What I checked: builds; unit tests (a seat's top found on a furniture's mesh, not its floor or back;
-the seated eye; the IK's legs on a chair, the feet on the floor).
+What I checked: builds; unit tests (pointing at a seat as the gloves point: under the line, in the
+cone, held a little wider, not too far; a seat's top found on a furniture's mesh, not its floor or
+back; the seated eye where the body sits upright; the IK's legs on a chair, the feet on the floor).
+The second playtest's log: the game did sit you (its sitting 0, 3, 4) and the seat was found 0.46 m
+over the feet, but the eye went 1.14 m over it, a standing height: fixed.
 
 What I couldn't: anything in the game: where the game puts the player's feet when it sits them
 (the seat is looked for under them, then a little behind and before), how long its sitting down
