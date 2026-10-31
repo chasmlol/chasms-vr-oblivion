@@ -12,9 +12,9 @@ window closes the game and keeps the runtime's and the voice plugin's logs in
 `<builds>\voice\playtest-<n>`.
 
 Look at someone a few steps away and talk. They turn to you as you start, and answer in their own
-voice: cloned from the game's own lines for them, the mouth moving with the game's own lip sync, the
-voice coming from them. Your first line to someone new takes a moment longer: their voice is being
-made from the game's clips.
+voice: cloned from the game's own lines for them, streamed into the game as it's made, the mouth
+moving with the words, the voice coming from them. Your first line to someone new takes a moment
+longer: their voice is being made from the game's clips.
 
 ## Before the first run (once)
 
@@ -32,10 +32,11 @@ made from the game's clips.
 RustVR's menu (the menu button) has a **Voice** tab: Voice on or off, the microphone (the headset's
 own, Virtual Desktop's, unless you pick another), their voices' volume (2.5 times the game's own
 by default, up to 4: a limiter keeps them under full scale, turned down around a loud word rather
-than clipped), acting lines out (on: their voice follows the line's "[sneering]"; it's twice the
-voice server's work, so answers are slower), talking over them to cut them off (for headphones),
-and how long a pause ends what you're saying. Changing the mic or how it listens restarts the
-voice plugin (what people were told since your last save goes with it).
+than clipped), acting lines out (on: their voice follows the line's "[sneering]"; a quarter more of
+the voice server's work), their voice streaming as it's made (on: the soonest; off: the way it
+was before, a few words at a time, each made whole first), talking over them to cut them off (for
+headphones), and how long a pause ends what you're saying. Changing any of these but the volume
+restarts the voice plugin (what people were told since your last save goes with it).
 
 ## What to try, in order
 
@@ -43,9 +44,13 @@ voice plugin (what people were told since your last save goes with it).
    say "Hello there."
    - As you start speaking they turn to face you (if they're standing; not if they're walking
      somewhere or busy at something, as in the flat game) and look at you.
-   - A second or three after you stop: they answer, a sentence or two, in an Imperial (or their
-     race's) voice, the subtitle at the bottom as the game shows its own lines, their lips moving
-     with the words and their face showing how they say it (angry, happy, sad...).
+   - A couple of seconds after you stop: they answer, a sentence or two, in an Imperial (or their
+     race's) voice, the subtitle at the bottom as the game shows its own lines (a sentence at a
+     time, as each is reached), their lips moving with the words and their face showing how they
+     say it (angry, happy, sad...). The voice runs on as it's made, with no breaks inside a word.
+   - If they open their mouth but nothing's heard, or their mouth doesn't move, or it's out of
+     step with the voice: turn **Their voice streams as it's made** off in the Voice tab (the
+     way it was) and tell me which it was.
    - The voice is from them: turn your head and it moves round you; step back and it's quieter.
 2. **Ask them about themselves and the city.** "What do you sell?", "Heard any news?", "What do you
    think of the Emperor?" They should know their own name, work and guild, be as friendly as their
@@ -67,10 +72,16 @@ voice plugin (what people were told since your last save goes with it).
    menu's, as before.
 7. **Their name.** Look at someone: the card with their name is under their chin now, not over
    their face, and the talk icon sits just over the card, where it was before.
-8. **Memory.** Tell someone something ("My name is ..., I'm looking for my brother."), save (a new
+8. **They look at your head.** Stand in front of anyone who's looking at you (talking to you, the
+   game's dialogue open, or just watching you pass) and move your real head: lean left and right,
+   crouch, stand on your toes, step aside in the room. Their head and eyes follow your headset,
+   not the spot the thumbstick puts you at. Do it in the game's dialogue menu too. (Their body
+   still turns by where you stand, as the game has it; the head and eyes do the rest, within the
+   game's own limits: about 45 degrees either side, 30 up or down.)
+9. **Memory.** Tell someone something ("My name is ..., I'm looking for my brother."), save (a new
    save), talk a bit more, then load that save and ask them what you told them: they remember what
    was said before the save, not after.
-9. **The brain page.** On the desktop, http://127.0.0.1:8090 shows the exact prompt each person
+10. **The brain page.** On the desktop, http://127.0.0.1:8090 shows the exact prompt each person
    gets, every line and how long each step took (/history keeps the session).
 
 ## What I checked, and what I couldn't
@@ -88,10 +99,19 @@ Checked (without the game):
 - The `.lip` format and every engine function used were checked in play and
   against the game's own files (`docs/research/voice.md`).
 
+Also checked, for streaming and the looks (without the game): Breeze's speed (one server and two
+at once, plain and acted), Parakeet's word times on a growing line as the stream asks for them
+(50 to 90 ms a time, every word in place a quarter second behind the voice), the plugin's cut
+between words, the protocol's rings; the game's sound, face and look functions read off the
+game's own behaviour in play (`docs/design/voice.md`, `npcs.md`).
+
 Not checked (needs you and the game):
 
 - Anything in the game: the hooks into its dialogue (speaking, the lip file, the subtitle, turning
   and looking), the personas built from its data, the clips copied out of its archives.
+- The streamed line: the voice written into the game's playing sound, the mouth set each frame,
+  the subtitles and expressions as each sentence is reached, its end. And the look-at hook on the
+  headset (and in the dialogue menu).
 - Every one of the 1,100 bios: I read about thirty against their pages and searched them all for
   game terms (levels, quests, "the player"); the rest are as the LLM wrote them from their page.
 - The Virtual Desktop mic and how the open mic copes with the headset's own speakers.
@@ -101,15 +121,18 @@ Known for now:
 - The game's dialogue menu speaks in 2D, centred; in the world (theirs, and the game's own greetings)
   voices are 3D, a few dB quieter at the same loudness. If they're still quiet at 4, the game's
   own Voice slider at full (and its effects or music a little lower) is the rest of the room.
-- With acting lines out on, Breeze makes their voice a little slower than they speak it while the
-  game renders (your last run: 1.0 to 1.6 times as long as the voice lasts). So in a long answer
-  they now and then wait for the rest. They wait at a pause (a comma, a full stop), and no word is
-  cut in two any more. With acting off (the Voice tab), Breeze runs about twice as fast: no waits,
-  and they start sooner.
-- From the end of what you say to their first word is about 3 s (2.8 to 4.9 s in your last run):
+- In the headset Breeze makes their voice a little slower than they speak it: the game's rendering
+  has most of the GPU (a second of acted voice took 1.2 to 1.3 s in your last run; 0.5 s with the
+  game closed). So in a long answer they now and then wait for the rest, between two words. Acting
+  isn't what slows it (a quarter more work), nor would a second Breeze help (I tried: the GPU's
+  time splits between them). Less for the GPU to render (the game's resolution or supersampling)
+  is what would let it keep up.
+- From the end of what you say to their first word was about 3 s in your last run (2.8 to 4.9 s):
   the mic's pause 0.3 s, speech to text 0.05 to 0.15 s, DeepSeek's first sentence 0.5 to 0.8 s,
   Breeze's first sound 0.5 to 0.8 s (1.4 to 2.4 s for a voice it hasn't made since it started),
-  and the first piece of voice made whole, a second or so, before the game can play it.
+  and the first piece of voice made whole, a second or so, before the game could play it.
+  Streamed, that last is the first word or two and the start of the next (Parakeet has to hear
+  where the word ends): about half a second sooner.
 - Someone walking somewhere keeps walking while they talk (they look at you, they don't stop).
 - Their own greeting ("Hello", as the game has people greet you when you pass) can talk over a line.
 - The mic doesn't hear you while someone's talking, and you can't cut them off: the Quest's

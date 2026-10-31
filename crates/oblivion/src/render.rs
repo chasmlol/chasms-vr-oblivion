@@ -359,6 +359,11 @@ mod win {
         };
         let talking = menu && crate::tiles::top_menu() == crate::menus::MENU_DIALOG;
         let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, talking, now, dt })?;
+        // (people look at the headset: in the dialogue menu, aimed here)
+        crate::look::publish(snap.view.as_ref());
+        if talking {
+            crate::look::aim_in_dialogue();
+        }
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);

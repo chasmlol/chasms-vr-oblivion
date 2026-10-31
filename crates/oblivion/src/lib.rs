@@ -54,6 +54,7 @@ pub mod lighting;
 pub mod link;
 pub mod lock;
 pub mod log;
+pub mod look;
 pub mod magic;
 pub mod mem;
 pub mod menus;

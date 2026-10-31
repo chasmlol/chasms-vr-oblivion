@@ -13,10 +13,14 @@
 //! * **Their voice**: those same lines' voice files. Lines only this person says (their own
 //!   actor's) make a voice of their own; otherwise their race and sex's voice, as in the game.
 //!   The files are copied out of the game's archives for the plugin to clone.
-//! * **A line**: the plugin writes `<n>.wav` and the mouth's shapes; here they become the game's
-//!   own lip file, and the person speaks the WAV with the game's own `Actor::Speak`, into their
-//!   process's voice slot, with its talking state, its subtitle, their expression from how the
-//!   line is said: the face moves with the game's lip sync and the voice comes from them in 3D.
+//! * **A line**, streamed (RustVR's Voice setting, on by default): the person speaks a long silent
+//!   sound with the game's own `Actor::Speak` (into their process's voice slot, with its talking
+//!   state: the voice from them in 3D, at the game's voice volume), and the plugin's voice is
+//!   written into that sound's buffer just ahead of where it plays, as it comes; each frame their
+//!   face's mouth is set to the plugin's mouth shapes at the voice where it plays, each sentence
+//!   brings its subtitle and their expression from how it's said. Otherwise, a sentence at a
+//!   time: the plugin writes `<n>.wav` and the mouth's shapes; here they become the game's own lip
+//!   file, and the person speaks the WAV, the face moving with the game's lip sync.
 //! * **Memory** goes with the game's saves: every save and load is told to the plugin.
 
 /// Talking distance: the game starts dialogue by activation, at arm's reach, and has no distance
@@ -229,6 +233,39 @@ mod win {
     const VT_STOP_SOUND: usize = 0x344;
     const VT_SAY_TO_LOOK: usize = 0x484;
     const VT_CLEAR_SAY_TO_LOOK: usize = 0x49C;
+    /// `HighProcess`'s talking flag.
+    const TALKING: usize = 0x228;
+    /// The audio manager (its global) and its sound by id (thiscall: the manager, the id; 0 once
+    /// it's gone). A sound (`TESGameSound`): its flags (0x200: waiting to play, or paused for a
+    /// menu) and its `IDirectSoundBuffer8`, the whole sound in one buffer the game fills once and
+    /// never again. The buffer's GetCurrentPosition, Lock and Unlock.
+    const AUDIO_MANAGER: usize = 0x00B3_C214;
+    const FIND_SOUND: usize = 0x006A_B130;
+    const SOUND_WAITING: u32 = 0x200;
+    const SOUND_BUFFER: usize = 0x50;
+    const DSB_POSITION: usize = 0x10;
+    const DSB_LOCK: usize = 0x2C;
+    const DSB_UNLOCK: usize = 0x4C;
+    /// The head's face (`BSFaceGenAnimationData`, the process's vtable +0xE8, thiscall: the actor)
+    /// and its virtuals: drop its keys to come (the expressions', the mouth's, the modifiers', the
+    /// custom one's), a mouth's keyframe (the 16 phonemes, its time: 0, at once), a blend to rest
+    /// (the channel, 0 the mouth; its time; 1), an expression (its index, 0 to 1); and the game's
+    /// setting that shows expressions.
+    const VT_FACE: usize = 0xE8;
+    const FACE_VTABLE: usize = 0x00A6_424C;
+    const VT_FACE_CLEAR: usize = 0xB0;
+    const VT_FACE_MOUTH: usize = 0xA0;
+    const VT_FACE_REST: usize = 0xA8;
+    const VT_FACE_EXPRESSION: usize = 0xC8;
+    const EXPRESSIONS_ON: usize = 0x00B1_206C;
+    /// A streamed line's silent sound (seconds: a longer line goes on in another).
+    const STREAM_SECONDS: u32 = 30;
+    /// The voice is written this far past where the sound card reads the buffer (seconds).
+    const WRITE_MARGIN: f32 = 0.02;
+    /// The mouth leads where the buffer plays by the sound's way to the ears (seconds).
+    const MOUTH_LEAD: f32 = 0.03;
+    /// A streamed line nothing's come for this long, with no end said, is given up (seconds).
+    const QUIET: f64 = 10.0;
     const VT_PACKAGE: usize = 0x184;
     const VT_NO_TURN_A: usize = 0x36C;
     const VT_NO_TURN_B: usize = 0x4DC;
@@ -286,6 +323,33 @@ mod win {
         own: bool,
     }
 
+    /// A line streamed as it's made (`VoiceStream`): it plays in a long silent sound of the game's,
+    /// spoken as any line, its voice written into the sound's buffer just ahead of where it plays,
+    /// the mouth set each frame to the voice's where it plays.
+    struct Streamed {
+        speaker: u32,
+        line: u32,
+        rate: u32,
+        how: String,
+        /// The voice and its mouth so far, from the line's start.
+        samples: Vec<i16>,
+        frames: Vec<[f32; 16]>,
+        /// Its sentences to come: where each starts (a sample), how it's said, its words.
+        sentences: VecDeque<(u32, String, String)>,
+        /// The line's length (samples), once the plugin's said it.
+        end: Option<u32>,
+        /// The game's sound (its id; 0: none yet), its buffer's bytes, the samples written into it,
+        /// where the next go (a byte), and each run of samples (where in the buffer it starts, the
+        /// sample there): the voice running out, the next goes on past where it plays, after a gap.
+        sound: u32,
+        bytes: u32,
+        written: usize,
+        at: u32,
+        runs: Vec<(u32, usize)>,
+        /// When anything last came.
+        heard: f64,
+    }
+
     /// A sentence of the plugin's, waiting to be said after the one before.
     struct Pending {
         speaker: u32,
@@ -305,6 +369,10 @@ mod win {
         /// What the game's dialogue has each person say, and their voice's key (once each).
         known: HashMap<u32, (Vec<Said>, String)>,
         queue: VecDeque<Pending>,
+        /// The line being streamed, and one just ended (its speaker, when: the game ends it its own
+        /// way a frame later, or it's ended here).
+        stream: Option<Streamed>,
+        ending: Option<(u32, f64)>,
         /// The one talking now, until when.
         talking: Option<(u32, f64)>,
         scene_at: f64,
@@ -350,6 +418,7 @@ mod win {
                     v.listener = None;
                     v.talking = None;
                     v.queue.clear();
+                    v.stream = None;
                     v.known.clear();
                 }
             }
@@ -737,16 +806,15 @@ mod win {
     /// The actor speaks line `n`'s WAV as the game's speakers do (`SayTopic`): its sound in their
     /// voice slot, their lip file, expression, talking state and time, the subtitle, looking at
     /// the player. How long it takes (seconds).
-    fn speak(actor: usize, player: usize, line: u32, how: &str, text: &str) -> f64 {
+    fn speak(actor: usize, player: usize, file: &str, how: &str, text: &str) -> f64 {
         let process = high_process(actor);
         if process == 0 {
             return 0.0;
         }
-        let path = format!("Data\\Sound\\Voice\\RustVR\\{line}.wav");
+        let path = format!("Data\\Sound\\Voice\\RustVR\\{file}");
         let Ok(c_path) = std::ffi::CString::new(path) else { return 0.0 };
         let (kind, value) = emotion(how);
         type Speak = unsafe extern "thiscall" fn(usize, *const u8, usize, u32, u32, u32, u32, u32, u32, u32) -> f64;
-        type Subtitle = unsafe extern "C" fn(*const u8, usize, u32, f32) -> u8;
         type SetF = unsafe extern "thiscall" fn(usize, f32);
         vcall1(process, VT_STOP_SOUND, 0);
         let lip_distance = mem::at::<i32>(LIP_DISTANCE);
@@ -763,17 +831,280 @@ mod win {
             unsafe { std::mem::transmute::<usize, SetF>(set_time)(process, seconds as f32) };
         }
         vcall1(process, VT_SAY_TO_LOOK, player);
+        subtitle(process, text);
+        tracing::info!("voice: {} says {file} ({}, {kind}/{value}, {seconds:.1} s): \"{text}\"", full_name(base(actor)), EMOTIONS[kind as usize]);
+        seconds
+    }
+
+    /// The subtitle for a line said in the process's voice slot (if the game shows them).
+    fn subtitle(process: usize, text: &str) {
+        type Subtitle = unsafe extern "C" fn(*const u8, usize, u32, f32) -> u8;
         if mem::at::<u8>(SUBTITLES_ON).is_some_and(|on| on != 0)
             && !text.trim().is_empty()
             && let Ok(c_text) = std::ffi::CString::new(text)
         {
             unsafe { std::mem::transmute::<usize, Subtitle>(SUBTITLE)(c_text.as_ptr() as *const u8, mem::deref(process + VOICE_SLOT), 0, -1.0) };
         }
-        tracing::info!("voice: {} says line {line} ({}, {kind}/{value}, {seconds:.1} s): \"{text}\"", full_name(base(actor)), EMOTIONS[kind as usize]);
-        seconds
     }
 
-    /// Stops what they're saying (the player talked over them).
+    /// The face of an actor's head (None without one).
+    fn face_of(actor: usize) -> Option<usize> {
+        let process = high_process(actor);
+        let f = mem::deref(mem::deref(process) + VT_FACE);
+        if process == 0 || !engine::CODE.contains(&f) {
+            return None;
+        }
+        type F = unsafe extern "thiscall" fn(usize, usize) -> usize;
+        let face = unsafe { std::mem::transmute::<usize, F>(f)(process, actor) };
+        (face != 0 && mem::deref(face) == FACE_VTABLE).then_some(face)
+    }
+
+    fn face_call(face: usize, slot: usize) -> Option<usize> {
+        let f = mem::deref(mem::deref(face) + slot);
+        engine::CODE.contains(&f).then_some(f)
+    }
+
+    /// The mouth at once in these shapes (FaceGen's 16 phonemes, 0 to 1), its keys to come dropped.
+    fn set_mouth(face: usize, shapes: &[f32; 16]) {
+        let (Some(clear), Some(mouth)) = (face_call(face, VT_FACE_CLEAR), face_call(face, VT_FACE_MOUTH)) else { return };
+        let shapes = shapes.map(|w| if w.is_finite() { w.clamp(0.0, 1.0) } else { 0.0 });
+        type Clear = unsafe extern "thiscall" fn(usize, u32, u32, u32, u32);
+        type Mouth = unsafe extern "thiscall" fn(usize, *const f32, f32);
+        unsafe {
+            std::mem::transmute::<usize, Clear>(clear)(face, 0, 1, 0, 0);
+            std::mem::transmute::<usize, Mouth>(mouth)(face, shapes.as_ptr(), 0.0);
+        }
+    }
+
+    /// The mouth shut, a blend to rest as the game ends its lip sync.
+    fn mouth_to_rest(face: usize) {
+        let Some(rest) = face_call(face, VT_FACE_REST) else { return };
+        type Rest = unsafe extern "thiscall" fn(usize, u32, f32, u32);
+        unsafe { std::mem::transmute::<usize, Rest>(rest)(face, 0, 0.2, 1) };
+    }
+
+    /// Their expression from how a sentence is said (as `Actor::Speak` sets it, if the game shows
+    /// expressions): the emotion's expression (0x54F590's table) at its value.
+    fn set_expression(face: usize, how: &str) {
+        let (kind, value) = emotion(how);
+        let index = match kind {
+            1 | 2 => 0,
+            3 => 1,
+            5 => 2,
+            4 => 3,
+            6 => 4,
+            _ => return,
+        };
+        if mem::at::<u8>(EXPRESSIONS_ON).is_some_and(|on| on != 0)
+            && let Some(f) = face_call(face, VT_FACE_EXPRESSION)
+        {
+            type Expression = unsafe extern "thiscall" fn(usize, u32, f32);
+            unsafe { std::mem::transmute::<usize, Expression>(f)(face, index, value as f32 / 100.0) };
+        }
+    }
+
+    /// The long silent sound a streamed line plays in (`stream-<rate>.wav`, written once, with no
+    /// lip file: the mouth is set here).
+    fn silent_wav(lines_dir: &Path, rate: u32) -> Option<String> {
+        let name = format!("stream-{rate}.wav");
+        let path = lines_dir.join(&name);
+        if !path.exists() {
+            let data = (rate * STREAM_SECONDS * 2) as usize;
+            let mut wav = Vec::with_capacity(44 + data);
+            wav.extend(b"RIFF");
+            wav.extend((36 + data as u32).to_le_bytes());
+            wav.extend(b"WAVEfmt ");
+            wav.extend(16u32.to_le_bytes());
+            wav.extend(1u16.to_le_bytes());
+            wav.extend(1u16.to_le_bytes());
+            wav.extend(rate.to_le_bytes());
+            wav.extend((rate * 2).to_le_bytes());
+            wav.extend(2u16.to_le_bytes());
+            wav.extend(16u16.to_le_bytes());
+            wav.extend(b"data");
+            wav.extend((data as u32).to_le_bytes());
+            wav.resize(44 + data, 0);
+            std::fs::create_dir_all(lines_dir).ok()?;
+            std::fs::write(&path, wav).ok()?;
+        }
+        let _ = std::fs::remove_file(path.with_extension("lip"));
+        Some(name)
+    }
+
+    /// A sound of the game's by its id (0: gone).
+    fn sound(id: u32) -> usize {
+        let manager = mem::deref(AUDIO_MANAGER);
+        if manager == 0 || id == 0 {
+            return 0;
+        }
+        type F = unsafe extern "thiscall" fn(usize, u32) -> usize;
+        unsafe { std::mem::transmute::<usize, F>(FIND_SOUND)(manager, id) }
+    }
+
+    /// Where a DirectSound buffer plays and where it may be written from (bytes).
+    fn buffer_position(dsb: usize) -> Option<(u32, u32)> {
+        let f = mem::deref(mem::deref(dsb) + DSB_POSITION);
+        if dsb == 0 || f == 0 {
+            return None;
+        }
+        type F = unsafe extern "system" fn(usize, *mut u32, *mut u32) -> i32;
+        let (mut play, mut write) = (0u32, 0u32);
+        (unsafe { std::mem::transmute::<usize, F>(f)(dsb, &mut play, &mut write) } >= 0).then_some((play, write))
+    }
+
+    /// Writes 16-bit samples into a DirectSound buffer from a byte.
+    fn buffer_write(dsb: usize, at: u32, pcm: &[i16]) -> bool {
+        let (lock, unlock) = (mem::deref(mem::deref(dsb) + DSB_LOCK), mem::deref(mem::deref(dsb) + DSB_UNLOCK));
+        if lock == 0 || unlock == 0 || pcm.is_empty() {
+            return false;
+        }
+        type Lock = unsafe extern "system" fn(usize, u32, u32, *mut *mut u8, *mut u32, *mut *mut u8, *mut u32, u32) -> i32;
+        type Unlock = unsafe extern "system" fn(usize, *mut u8, u32, *mut u8, u32) -> i32;
+        let bytes: &[u8] = bytemuck::cast_slice(pcm);
+        let (mut p1, mut l1, mut p2, mut l2) = (std::ptr::null_mut(), 0u32, std::ptr::null_mut(), 0u32);
+        if unsafe { std::mem::transmute::<usize, Lock>(lock)(dsb, at, bytes.len() as u32, &mut p1, &mut l1, &mut p2, &mut l2, 0) } < 0 {
+            return false;
+        }
+        unsafe {
+            let first = (l1 as usize).min(bytes.len());
+            if !p1.is_null() {
+                std::ptr::copy_nonoverlapping(bytes.as_ptr(), p1, first);
+            }
+            if !p2.is_null() {
+                std::ptr::copy_nonoverlapping(bytes[first..].as_ptr(), p2, (l2 as usize).min(bytes.len() - first));
+            }
+            std::mem::transmute::<usize, Unlock>(unlock)(dsb, p1, l1, p2, l2);
+        }
+        true
+    }
+
+    /// How a streamed line's frame went.
+    #[derive(PartialEq)]
+    enum Flow {
+        Going,
+        /// Said to its end (or given up), and ended here.
+        Ended,
+        /// Over without a word more: the game stopped it, or they're gone.
+        Gone,
+    }
+
+    /// The streamed line's frame: what's come since, into the game's sound; the mouth where it
+    /// plays; each sentence's subtitle and expression as it's reached; its end.
+    fn stream_frame(s: &mut Streamed, now: f64, player: usize, lines_dir: &Path) -> Flow {
+        let before = (s.samples.len(), s.frames.len());
+        crate::link::with_adapter(|a| a.take_voice_stream(s.line, &mut s.samples, &mut s.frames));
+        if (s.samples.len(), s.frames.len()) != before {
+            s.heard = now;
+        }
+        let Some(actor) = find(s.speaker) else { return Flow::Gone };
+        let process = high_process(actor);
+        if process == 0 {
+            return Flow::Gone;
+        }
+        if s.sound == 0 {
+            if s.samples.len() <= s.written {
+                let waits = now - s.heard < QUIET && s.end.is_none_or(|e| s.written < e as usize);
+                return if waits { Flow::Going } else { Flow::Gone };
+            }
+            let Some(file) = silent_wav(lines_dir, s.rate) else { return Flow::Gone };
+            speak(actor, player, &file, &s.how, "");
+            let handle = mem::deref(process + VOICE_SLOT);
+            s.sound = if handle == 0 { 0 } else { mem::at::<u32>(handle).unwrap_or(0) };
+            if sound(s.sound) == 0 {
+                tracing::warn!("voice: line {}'s sound didn't start", s.line);
+                return Flow::Gone;
+            }
+            s.bytes = s.rate * STREAM_SECONDS * 2;
+            s.at = 0;
+            s.runs.clear();
+            s.runs.push((0, s.written));
+        }
+        let snd = sound(s.sound);
+        if snd == 0 {
+            // (its sound played to its end with more to say: the rest in another; else the game
+            // stopped it: a menu, the player far off)
+            if s.at + 2 > s.bytes && s.written < s.samples.len() {
+                s.sound = 0;
+                return Flow::Going;
+            }
+            end_line(actor);
+            return Flow::Ended;
+        }
+        let dsb = mem::deref(snd + SOUND_BUFFER);
+        let Some((play, write)) = buffer_position(dsb) else { return Flow::Gone };
+        let waiting = mem::at::<u32>(snd).is_some_and(|f| f & SOUND_WAITING != 0);
+        // (what's written played already, the voice ran out: what's come goes on past where it
+        // plays)
+        if s.written < s.samples.len() && s.at < write && !(waiting && play == 0) {
+            s.at = ((write as f32 + WRITE_MARGIN * s.rate as f32 * 2.0) as u32 & !1).min(s.bytes);
+            s.runs.push((s.at, s.written));
+        }
+        let n = (s.samples.len() - s.written).min(((s.bytes - s.at) / 2) as usize);
+        if n > 0 && buffer_write(dsb, s.at, &s.samples[s.written..s.written + n]) {
+            s.written += n;
+            s.at += n as u32 * 2;
+        }
+        // Where it plays, in the line's samples (and whether that's voice, not a gap).
+        let i = s.runs.iter().rposition(|&(b, _)| b <= play).unwrap_or(0);
+        let (start, first) = s.runs[i];
+        let run_end = s.runs.get(i + 1).map_or(s.written, |r| r.1);
+        let at = first + ((play.saturating_sub(start)) / 2) as usize;
+        let voice = !waiting && at < run_end;
+        if let Some(face) = face_of(actor) {
+            let hop = (s.rate / VOICE_STREAM_FPS).max(1) as f32;
+            let t = (at as f32 + MOUTH_LEAD * s.rate as f32) / hop;
+            let (f, into) = (t as usize, t.fract());
+            let shapes = match (voice, s.frames.get(f), s.frames.get(f + 1)) {
+                (true, Some(a), Some(b)) => std::array::from_fn(|p| a[p] + (b[p] - a[p]) * into),
+                (true, Some(a), None) => *a,
+                _ => [0.0; 16],
+            };
+            set_mouth(face, &shapes);
+            // (a sentence starts as its voice plays; not in the wait before it comes)
+            let reached = if voice { at } else { at.min(run_end.saturating_sub(1)).max(first) };
+            while let Some((from, how, text)) = s.sentences.front()
+                && (*from as usize) <= reached
+            {
+                set_expression(face, how);
+                subtitle(process, text);
+                s.sentences.pop_front();
+            }
+        }
+        // (talking while there's voice to come; the game's dialogue lets a line end at 0)
+        let left = s.at.saturating_sub(play) as f32 / (s.rate * 2) as f32;
+        let set_time = mem::deref(mem::deref(process) + VT_SET_TALK_TIME);
+        if engine::CODE.contains(&set_time) {
+            type SetF = unsafe extern "thiscall" fn(usize, f32);
+            unsafe { std::mem::transmute::<usize, SetF>(set_time)(process, (left + 0.3).max(0.5)) };
+        }
+        let done = s.end.is_some_and(|e| s.written >= e as usize) || (s.end.is_none() && now - s.heard > QUIET);
+        if done && !waiting && play >= s.at {
+            tracing::info!("voice: line {} said ({:.1} s)", s.line, s.written as f32 / s.rate as f32);
+            end_line(actor);
+            return Flow::Ended;
+        }
+        Flow::Going
+    }
+
+    /// A streamed line's end: its sound stopped (its subtitle with it), no talk time left, the
+    /// mouth shut; the game's own dialogue ends their talking (a frame later).
+    fn end_line(actor: usize) {
+        let process = high_process(actor);
+        if process == 0 {
+            return;
+        }
+        vcall1(process, VT_STOP_SOUND, 0);
+        let set_time = mem::deref(mem::deref(process) + VT_SET_TALK_TIME);
+        if engine::CODE.contains(&set_time) {
+            type SetF = unsafe extern "thiscall" fn(usize, f32);
+            unsafe { std::mem::transmute::<usize, SetF>(set_time)(process, 0.0) };
+        }
+        if let Some(face) = face_of(actor) {
+            mouth_to_rest(face);
+        }
+    }
+
+    /// Stops what they're saying (the player talked over them), the mouth shut.
     fn hush(actor: usize) {
         let process = high_process(actor);
         if process != 0 {
@@ -784,12 +1115,15 @@ mod win {
             {
                 unsafe { *((process + TALK_TIME) as *mut f32) = 0.0 };
             }
+            if let Some(face) = face_of(actor) {
+                mouth_to_rest(face);
+            }
         }
     }
 
     /// A listener turns to the player and looks at them, as the game's speakers turn to whom
     /// they talk to (`SayTopic`): not while on their way somewhere or using something, and only
-    /// past the game's talking turn angle.
+    /// past the game's turn angle (0.8 of `iActorTurnDegree`), to the headset.
     fn face(actor: usize, player: usize) {
         let process = high_process(actor);
         if process == 0 {
@@ -801,11 +1135,13 @@ mod win {
         if busy || mem::deref(process + NO_TURN_FIELD) != 0 || vcall0(process, VT_NO_TURN_A) & 0xFF != 0 || vcall0(process, VT_NO_TURN_B) & 0xFF != 0 {
             return;
         }
-        let (Some(me), Some(them), Some(rot)) = (mem::at::<[f32; 3]>(player + engine::refr::POS), mem::at::<[f32; 3]>(actor + engine::refr::POS), mem::at::<[f32; 3]>(actor + engine::refr::ROT)) else { return };
+        // (to the headset, where the room puts the player, else their feet)
+        let me = crate::look::head().or_else(|| mem::at::<[f32; 3]>(player + engine::refr::POS));
+        let (Some(me), Some(them), Some(rot)) = (me, mem::at::<[f32; 3]>(actor + engine::refr::POS), mem::at::<[f32; 3]>(actor + engine::refr::ROT)) else { return };
         // Headings: 0 north (+y), turning east (+x).
         let heading = (me[0] - them[0]).atan2(me[1] - them[1]).rem_euclid(std::f32::consts::TAU);
         let off = (heading - rot[2] + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
-        let within = mem::at::<i32>(TALK_TURN_ANGLE).unwrap_or(30) as f32;
+        let within = 0.8 * mem::at::<i32>(TALK_TURN_ANGLE).unwrap_or(90) as f32;
         if off.abs().to_degrees() > within {
             type Turn = unsafe extern "C" fn(usize, f32, u32);
             unsafe { std::mem::transmute::<usize, Turn>(TURN_TO)(actor, heading, 1) };
@@ -856,6 +1192,9 @@ mod win {
                 v.connected = false;
                 v.listener = None;
                 v.queue.clear();
+                if let Some(actor) = v.stream.take().and_then(|s| find(s.speaker)) {
+                    hush(actor);
+                }
             }
             return;
         }
@@ -900,13 +1239,76 @@ mod win {
                     }
                 }
                 VL_SAY => v.queue.push_back(Pending { speaker: line.speaker, line: line.line, ms: line.duration_ms, how: line.how().to_string(), text: line.text().to_string() }),
+                VL_STREAM => {
+                    if let Some(actor) = v.stream.take().filter(|s| s.sound != 0).and_then(|s| find(s.speaker)) {
+                        hush(actor);
+                    }
+                    v.stream = Some(Streamed {
+                        speaker: line.speaker,
+                        line: line.line,
+                        rate: line.at.clamp(8000, 48000),
+                        how: line.how().to_string(),
+                        samples: Vec::new(),
+                        frames: Vec::new(),
+                        sentences: VecDeque::new(),
+                        end: None,
+                        sound: 0,
+                        bytes: 0,
+                        written: 0,
+                        at: 0,
+                        runs: Vec::new(),
+                        heard: now,
+                    });
+                }
+                VL_SUBTITLE => {
+                    if let Some(s) = v.stream.as_mut().filter(|s| s.line == line.line) {
+                        s.sentences.push_back((line.at, line.how().to_string(), line.text().to_string()));
+                    }
+                }
+                VL_END => {
+                    if let Some(s) = v.stream.as_mut().filter(|s| s.line == line.line) {
+                        s.end = Some(line.at);
+                    }
+                }
                 VL_STOP => {
                     v.queue.clear();
                     if let Some(actor) = v.talking.take().and_then(|(id, _)| find(id)) {
                         hush(actor);
                     }
+                    if let Some(actor) = v.stream.take().and_then(|s| find(s.speaker)) {
+                        hush(actor);
+                    }
                 }
                 _ => {}
+            }
+        }
+
+        // The streamed line, as it comes; one just ended, its talking off if the game hasn't.
+        if let Some((id, at)) = v.ending
+            && now - at > 0.1
+        {
+            v.ending = None;
+            // (not if they've a line in their voice slot again: the game's own, or ours)
+            if let Some(process) = find(id).map(high_process).filter(|&p| p != 0)
+                && mem::at::<u8>(process + TALKING).is_some_and(|t| t != 0)
+                && mem::deref(process + VOICE_SLOT) == 0
+                && v.stream.as_ref().is_none_or(|s| s.speaker != id)
+            {
+                vcall1(process, VT_SET_TALKING, 0);
+            }
+        }
+        if let Some(s) = v.stream.as_mut() {
+            let speaker = s.speaker;
+            match stream_frame(s, now, player, &lines_dir) {
+                Flow::Going => {
+                    v.listener = Some((speaker, now + ENGAGED));
+                    v.talking = Some((speaker, now + 0.1));
+                }
+                Flow::Ended => {
+                    v.stream = None;
+                    v.ending = Some((speaker, now));
+                }
+                Flow::Gone => v.stream = None,
             }
         }
 
@@ -921,7 +1323,7 @@ mod win {
                 if !write_lip(&lines_dir, next.line) {
                     tracing::warn!("voice: no mouth shapes for line {}: the game's own flapping mouth", next.line);
                 }
-                let seconds = speak(actor, player, next.line, &next.how, &next.text);
+                let seconds = speak(actor, player, &format!("{}.wav", next.line), &next.how, &next.text);
                 let length = if seconds <= 0.0 { 0.2 } else if next.ms > 0 { next.ms as f64 / 1000.0 } else { seconds };
                 v.talking = Some((next.speaker, now + length));
                 v.listener = Some((next.speaker, now + seconds + ENGAGED));
