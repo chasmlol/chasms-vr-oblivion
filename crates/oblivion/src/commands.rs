@@ -8,6 +8,10 @@
 //! * **Looking at someone**, out of menus: "what have you got for sale" (and the like) activates
 //!   them and, once their dialogue is up, clicks its "Barter"; "can we talk" activates them.
 //!
+//! Said as people say them: each phrase also with the words people put round it ("alright mate,
+//! what have you got?", "tell me about the Imperial City"), not with anything at all (a wildcard
+//! hears "wares" in "the weather's nice").
+//!
 //! The recognizer runs on a thread of its own (its own COM apartment) with one rule of the phrases
 //! now, set from the game's frame as what shows changes; what it hears comes back to the frame.
 
@@ -28,12 +32,17 @@ const BARTER: [&str; 13] = [
     "i want to buy something",
 ];
 const TALK: [&str; 4] = ["can we talk", "let's talk", "i'd like to talk", "hello there"];
+/// The words people put before and after asking someone something, and before a menu's word.
+const BEFORE: [&str; 6] = ["", "alright", "alright mate", "hey", "so", "okay"];
+const AFTER: [&str; 5] = ["", "mate", "then", "friend", "there"];
+const ASKING: [&str; 5] = ["", "tell me about", "what about", "what do you know about", "any"];
 /// A menu's text longer than this (characters, words) is what's said or written in it, not a
 /// thing to pick.
 const LONGEST: usize = 48;
 const MOST_WORDS: usize = 7;
-/// What's heard counts at this much of the recognizer's confidence (0 to 1).
-const SURE: f32 = 0.7;
+/// What's heard counts at this much of the recognizer's confidence (0 to 1): what's said is about
+/// 0.95; "what have you been up to, mate" heard as "what have you got, mate", 0.68.
+const SURE: f32 = 0.8;
 
 /// A phrase as the recognizer has it: lower case, its letters, digits and apostrophes, one space
 /// between words.
@@ -45,6 +54,17 @@ pub fn phrase(text: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+/// `phrase` with each of the words before and after it.
+pub fn said(phrase: &str, before: &[&str], after: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    for b in before {
+        for a in after {
+            out.push([*b, phrase, *a].iter().filter(|w| !w.is_empty()).copied().collect::<Vec<_>>().join(" "));
+        }
+    }
+    out
 }
 
 /// Whether a menu's text is something to pick (a topic, a button), not what's said or written.
@@ -149,14 +169,18 @@ mod win {
             let mut does: Vec<(String, Does)> = Vec::new();
             if on && menus::menu_mode() {
                 for (text, _) in texts() {
-                    let p = phrase(&text);
-                    if !does.iter().any(|(q, _)| *q == p) {
-                        does.push((p, Does::Pick(text)));
+                    for p in said(&phrase(&text), &ASKING, &[""]) {
+                        if !does.iter().any(|(q, _)| *q == p) {
+                            does.push((p, Does::Pick(text.clone())));
+                        }
                     }
                 }
             } else if on && is_person(hud_info::looked_at()) {
-                does.extend(BARTER.iter().map(|p| (p.to_string(), Does::Barter)));
-                does.extend(TALK.iter().map(|p| (p.to_string(), Does::Talk)));
+                for (phrases, what) in [(&BARTER[..], Does::Barter), (&TALK[..], Does::Talk)] {
+                    for base in phrases {
+                        does.extend(said(base, &BEFORE, &AFTER).into_iter().map(|p| (p, what.clone())));
+                    }
+                }
             }
             let phrases: Vec<String> = does.iter().map(|(p, _)| p.clone()).collect();
             if phrases != s.phrases {
@@ -345,5 +369,13 @@ mod tests {
         // (what they say, and a number, aren't things to pick)
         assert!(!pickable("Well met, traveller. The city has been quiet since the Emperor's death, but the guards still talk."));
         assert!(!pickable("250") && !pickable(""));
+    }
+
+    #[test]
+    fn a_phrase_is_also_said_with_the_words_round_it() {
+        let all = said("what have you got", &BEFORE, &AFTER);
+        assert_eq!(all.len(), BEFORE.len() * AFTER.len());
+        assert!(all.contains(&"what have you got".to_string()) && all.contains(&"alright mate what have you got then".to_string()));
+        assert!(said("rumors", &ASKING, &[""]).contains(&"any rumors".to_string()));
     }
 }

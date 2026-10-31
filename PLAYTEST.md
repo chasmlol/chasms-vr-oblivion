@@ -89,11 +89,14 @@ restarts the voice plugin (what people were told since your last save goes with 
 11. **Simple voice commands** (Windows' own speech recognition, no AI: the Voice tab's "Simple
     voice commands", on). They work with "Talk to the game's characters" off too.
     - Activate someone for the game's dialogue and read a topic out loud ("Rumors", "The
-      Imperial City"): it's picked, as a click on it would. "Goodbye" closes it. Any short text
-      in any menu works the same (a button's word).
-    - Out of menus, look at a shopkeeper and say "What have you got for sale?" (or "What do you
-      sell?", "Show me your wares", "Let's trade"): their dialogue opens and its Barter is clicked.
-      "Can we talk?" just opens their dialogue.
+      Imperial City", or "any rumors", "tell me about the Imperial City"): it's picked, as a click
+      on it would. "Goodbye" closes it. Any short text in any menu works the same (a button's
+      word).
+    - Out of menus, look at a shopkeeper and ask what they sell, as you'd say it ("What have you
+      got?", "Alright mate, what are you selling?", "Show me your wares", "Let's trade"): their
+      dialogue opens and its Barter is clicked. "Can we talk?" just opens their dialogue. A
+      phrase is heard with "alright", "hey", "so", "okay" before it and "mate", "then", "friend",
+      "there" after; anything else round it, it may not be.
     - The adapter's log (`rustvr-oblivion.log`) says each thing it heard and how sure it was
       (`voice commands: heard ...`).
 
