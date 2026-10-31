@@ -14,6 +14,9 @@ const MARK_TEMPORARY: usize = 0x0046_B590;
 const SET_TEXT: usize = 0x004F_9E50;
 const COMPILE_AND_RUN: usize = 0x004F_BF00;
 const DESTRUCTOR: usize = 0x004F_C980;
+/// The console's manager (`ConsoleManager`, cdecl, made if it isn't there when asked with 1): its
+/// first word is the script context a console line runs in. Nothing makes it before a game is
+/// loaded unless asked (at the main menu, `crate::worldmenu`'s lines).
 const SCRIPT_STATE: usize = 0x0058_5C10;
 /// `sizeof(Script)` in the game.
 const SCRIPT_SIZE: usize = 0x50;
@@ -38,6 +41,87 @@ pub fn load_game(name: &str) -> bool {
 #[cfg(not(target_arch = "x86"))]
 pub fn load_game(_name: &str) -> bool {
     false
+}
+
+/// The main menu's New, answered: `InterfaceManager*` (`*0xB3A6E0`), the button its message box had
+/// pressed (+0xB0; the game counts them from 1, and its "Start new game?" box puts "Yes" first), and
+/// the main menu's answer to that box (0x5B5DF0, thiscall, `this` unused: on a 1 it starts the new
+/// game, as xOBSE's `OnNewGame` catches at 0x5B5EFD).
+const INTERFACE_MANAGER: usize = 0x00B3_A6E0;
+const BUTTON_PRESSED: usize = 0xB0;
+const NEW_GAME_ANSWERED: usize = 0x005B_5DF0;
+/// The interface's menu fades under way (`InterfaceManager` +0x130: its first at +0x10; each is the
+/// menu, the time, the length, the previous and the next, at +0x10), and a `Menu`'s state (+0x24: 8
+/// fading in, 1 shown, 2 closing; 0x583F40 moves them on as their fades end) and busy byte (+0x4D:
+/// the main menu's clicks wait while it's set, a box of its own up).
+const FADES: usize = 0x130;
+const FADES_FIRST: usize = 0x10;
+const FADE_NEXT: usize = 0x10;
+const MENU_STATE: usize = 0x24;
+const MENU_CLOSING: u32 = 2;
+const MENU_BUSY: usize = 0x4D;
+
+/// The main menu is there to be clicked: shown, done fading in, and not busy with a box of its own.
+/// The game opens a menu hidden and fades it in, and its close does nothing to a menu not yet shown
+/// (0x584740 checks its `visible`): New answered on the menu's first frame left the menu up and the
+/// rest of the answer done (the character generation quest started, a new game's loading flagged:
+/// a save loaded from the menu then crashed in its loading screen).
+#[cfg(target_arch = "x86")]
+fn main_menu_settled() -> bool {
+    use crate::{mem, menus::MENU_MAIN, tiles};
+    let im = mem::deref(INTERFACE_MANAGER);
+    let menu = tiles::menu(MENU_MAIN);
+    if im == 0
+        || menu == 0
+        || tiles::value(tiles::menu_tile(MENU_MAIN), tiles::VISIBLE) != Some(tiles::TRUE)
+        || mem::at::<u8>(menu + MENU_BUSY) != Some(0)
+    {
+        return false;
+    }
+    let mut fade = mem::deref(mem::deref(im + FADES) + FADES_FIRST);
+    for _ in 0..64 {
+        if fade == 0 {
+            return true;
+        }
+        if mem::deref(fade) == menu {
+            return false;
+        }
+        fade = mem::deref(fade + FADE_NEXT);
+    }
+    false
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn main_menu_settled() -> bool {
+    false
+}
+
+/// Starts a new game, as the main menu's New answered "Yes" does: its film, then the character
+/// generation quest (the prison cell, and the race menu). Only at a main menu a player could click
+/// (the test waits for one); true if the main menu has begun to close for it.
+#[cfg(target_arch = "x86")]
+pub fn new_game() -> bool {
+    let im = crate::mem::deref(INTERFACE_MANAGER);
+    if im == 0 || !main_menu_settled() {
+        return false;
+    }
+    type Answered = unsafe extern "thiscall" fn(usize);
+    unsafe {
+        *((im + BUTTON_PRESSED) as *mut u8) = 1;
+        std::mem::transmute::<usize, Answered>(NEW_GAME_ANSWERED)(0);
+    }
+    crate::mem::at::<u32>(crate::tiles::menu(crate::menus::MENU_MAIN) + MENU_STATE) == Some(MENU_CLOSING)
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn new_game() -> bool {
+    false
+}
+
+/// A test command due that the game isn't ready for waits a frame: `NewGame` for a main menu a
+/// player could click.
+fn waits(cmd: &str) -> bool {
+    cmd.trim() == "NewGame" && !main_menu_settled()
 }
 
 /// `LookupFormByID` (cdecl) and `PlayerCharacter::SetActiveSpell` (thiscall, a `MagicItem*`).
@@ -93,7 +177,8 @@ pub fn equip_all(_id: u32) -> bool {
     false
 }
 
-/// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <name or hex id>` selects one
+/// Runs a console line: `LoadGame <save>` loads a save, `NewGame` starts a new game (at the main
+/// menu: a boot straight into the character creator), `SelectSpell <name or hex id>` selects one
 /// of the player's spells by its name, or any spell by its id (a spell the game makes, as the mirror
 /// spell, has no id to know beforehand), `EquipAll <hex id>` equips all the player has of a thing (a
 /// stack of arrows), `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in
@@ -120,6 +205,9 @@ pub fn run(line: &str) -> bool {
     }
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
+    }
+    if line.trim() == "NewGame" {
+        return new_game();
     }
     if let Some(spell) = line.strip_prefix("SelectSpell ") {
         let spell = spell.trim().trim_matches('"');
@@ -292,13 +380,14 @@ fn run_with(line: &str, calling: usize) -> bool {
     type ThisFn = unsafe extern "thiscall" fn(*mut c_void);
     type SetTextFn = unsafe extern "thiscall" fn(*mut c_void, *const u8);
     type RunFn = unsafe extern "thiscall" fn(*mut c_void, *mut c_void, u32, *mut c_void) -> u8;
-    type StateFn = unsafe extern "C" fn() -> *mut *mut c_void;
+    type StateFn = unsafe extern "C" fn(u8) -> *mut *mut c_void;
     let Ok(text) = std::ffi::CString::new(line) else { return false };
     let mut obj = [0u8; SCRIPT_SIZE + 16];
     let script = obj.as_mut_ptr() as *mut c_void;
     unsafe {
-        let state = std::mem::transmute::<usize, StateFn>(SCRIPT_STATE)();
+        let state = std::mem::transmute::<usize, StateFn>(SCRIPT_STATE)(1);
         if state.is_null() || (*state).is_null() {
+            tracing::warn!("console: no console for {line:?} to run in");
             return false;
         }
         std::mem::transmute::<usize, ThisFn>(CONSTRUCTOR)(script);
@@ -411,6 +500,12 @@ pub fn parse(text: &str) -> Vec<(From, f32, String)> {
     out
 }
 
+/// A test still has lines to run at the main menu (`menu ...`: a save to load): the main menu isn't
+/// taken into the world for it (`crate::worldmenu`).
+pub fn pending_at_menu() -> bool {
+    TEST.lock().unwrap().as_ref().is_some_and(|t| t.lines.iter().any(|(from, _, _)| *from == From::Menu))
+}
+
 /// Reads the test file (once).
 pub fn load_test(dir: &std::path::Path) {
     let path = dir.join("rustvr-console-test");
@@ -456,7 +551,7 @@ pub fn tick() {
         };
         let mut due = Vec::new();
         test.lines.retain(|(from, at, cmd)| {
-            let ready = since(*from).is_some_and(|s| now.duration_since(s).as_secs_f32() >= *at);
+            let ready = since(*from).is_some_and(|s| now.duration_since(s).as_secs_f32() >= *at) && !waits(cmd);
             if ready {
                 due.push(cmd.clone());
             }

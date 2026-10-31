@@ -10,7 +10,7 @@
 #   (neither)            leaves the game for the real headset (a playtest); -Close puts it away later.
 # Closing puts back everything it changed (Oblivion.ini, rustvr-oblivion.toml) and gives the lock back.
 #
-#   powershell -File tools\oblivion.ps1 [-Save rustvr-city] [-At ICMarketDistrict] [-Give "0000000A 5,0000000F 100"]
+#   powershell -File tools\oblivion.ps1 [-Save rustvr-city | -NewGame] [-At ICMarketDistrict] [-Give "0000000A 5,0000000F 100"]
 #       [-Hour 14] [-Weather 00038EEE] [-Commands "tgm|player.setav marksman 100"]
 #       [-Sim tools\xrsim\x.toml | -Hold 30] [-Out captures\run] [-Settings "eye_width = 2048; eye_height = 2048"] [-NoBuild]
 #   powershell -File tools\oblivion.ps1 -Close
@@ -19,9 +19,13 @@
 # up Oblivion's launcher. Builds go to $env:CARGO_TARGET_DIR (a worktree's own), else target\.
 # Test saves: rustvr-base (a Nord in iron armour), rustvr-city (Imperial City market), rustvr-weye
 # (open ground on Lake Rumare's shore), rustvr-ruin (Vilverin, an Ayleid ruin), rustvr-chorrol
-# (Chorrol, its stables); `-Save "Skip Tutorial"` and the player's own saves load too.
+# (Chorrol, its stables); `-Save "Skip Tutorial"` and the player's own saves load too. `-Save none`
+# loads nothing: the game stays at its main menu (in its place in Cyrodiil, crates/oblivion's worldmenu).
+# -NewGame starts a new game instead (the main menu's New, answered yes, its film skipped): the
+# prison cell and the race menu, as a player starting out has them.
 param(
     [string]$Save = "rustvr-city",
+    [switch]$NewGame,
     [string]$At = "",
     [string[]]$Give = @(),
     [int]$Hour = -1,
@@ -132,7 +136,7 @@ try {
 
     # The console lines: the save as soon as the main menu is up, then the rest once in the game.
     $lines = @()
-    if ($Save) { $lines += "menu LoadGame `"$Save`"" }
+    if ($NewGame) { $lines += "menu NewGame"; $Save = "a new game" } elseif ($Save -and $Save -ne "none") { $lines += "menu LoadGame `"$Save`"" }
     if ($At) { $lines += "game+0.5 coc $At" }
     $t = if ($At) { 4 } else { 1 }
     # (From the Bash tool a list arrives as one string: items split on commas, commands on "|".)

@@ -55,18 +55,42 @@ pub fn with_adapter<R>(f: impl FnOnce(&mut Adapter) -> R) -> Option<R> {
     ADAPTER.lock().unwrap().as_mut().map(f)
 }
 
+/// [`with_adapter`] from another thread, only if the game's thread isn't using it now.
+pub fn try_with_adapter<R>(f: impl FnOnce(&mut Adapter) -> R) -> Option<R> {
+    ADAPTER.try_lock().ok()?.as_mut().map(f)
+}
+
 /// What the game is doing this frame, read before the eyes are rendered.
 pub struct GameFrame {
     /// The game's own camera: the player's eye and where they look (None outside the world).
     pub eye: Option<Vec3>,
     pub look_yaw: f32,
     pub menu: bool,
-    /// The race menu is open: the player stays in the world for it, before the mirror, its menu
-    /// the part of the picture `menu_uv` says.
+    /// The race menu is open (and not paused over): the player stays in the world for it, before
+    /// the mirror, its menu the part of the picture `menu_uv` says.
     pub race_menu: Option<[f32; 4]>,
+    /// The game's own first-person bob ([`crate::camera::first_person_bob`]): in `eye`, and held
+    /// out of the headset's view.
+    pub bob: Option<crate::camera::Bob>,
+    /// The game's camera, which sees the bob (None outside the world, and in the race menu).
+    pub camera: Option<crate::camera::CameraState>,
+    /// The game is loading another place (its loading screen, or its fade after one): the rig
+    /// waits for it.
+    pub loading: bool,
+    /// The player has no body in the game yet (the main menu's place, `crate::worldmenu`): the
+    /// runtime draws the hands alone.
+    pub hands_only: bool,
+    /// Face this way from this frame (a look yaw): the view recentred on it (the main menu's place
+    /// faces its view).
+    pub recenter: Option<f32>,
     pub now: f64,
     pub dt: f32,
 }
+
+/// The most of the game's bob held out of the headset's view (metres). Further (a dodge's dip is
+/// 0.26 m), the adapter SDK would take the gap between the eye and the eye without it for a scripted
+/// camera and follow it; the rest of a dip that deep goes with the view, never a jump.
+const BOB_HELD: f32 = 0.2;
 
 #[derive(Clone, Copy)]
 pub struct Snapshot {
@@ -75,15 +99,36 @@ pub struct Snapshot {
     pub view: Option<View>,
 }
 
+/// How high the game's eye is over the player's feet (metres): the runtime stands the body on the
+/// game's ground there and sizes it to match, and a real crouch keeps the view at the head. On a
+/// horse, as it last was on foot (the body sits in the saddle).
+fn eye_above_feet(eye: Option<Vec3>, riding: bool) -> f32 {
+    static ON_FOOT: Mutex<f32> = Mutex::new(0.0);
+    let mut on_foot = ON_FOOT.lock().unwrap();
+    let p = crate::engine::player();
+    let feet = (p != 0 && !riding).then(|| crate::mem::at::<[f32; 3]>(p + crate::engine::refr::POS)).flatten();
+    if let (Some(eye), Some(feet)) = (eye, feet) {
+        let h = eye.y - crate::camera::basis().point_from_game(Vec3::from(feet)).y;
+        if *on_foot == 0.0 {
+            tracing::info!("link: the game's eye is {h:.2} m over the player's feet: the body stands on the game's ground");
+        }
+        *on_foot = h;
+    }
+    *on_foot
+}
+
 /// One game frame: the runtime's latest frame, the tracking mapping, the game's state.
 pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     let mut guard = ADAPTER.lock().unwrap();
     let adapter = guard.as_mut()?;
     let frame = adapter.poll()?;
+    let mut riding = false;
+    let mut view_bob = ViewBob::default();
     let view = g.eye.and_then(|eye| {
         // On a horse the view turns with it, and is anchored on the rider's eye over the saddle held
         // steady on it (crate::riding): just seated, it faces the horse's way.
         let ride = crate::riding::carry(eye, g.dt);
+        riding = ride.is_some();
         if let Some(c) = &ride {
             adapter.tracking.carry_turn(c.turn);
             if c.recenter {
@@ -94,16 +139,31 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
         // Not on a horse: the view is the rider's eye over the saddle.)
         #[cfg(all(windows, target_arch = "x86"))]
         adapter.tracking.set_lead(if ride.is_some() { Vec3::ZERO } else { crate::movement::lead(eye, g.dt, g.now) });
+        // The game's own bob: on foot its first-person animations' (held out of the headset's view,
+        // up to `BOB_HELD`), on a horse the gait's under the rider's eye. Given to the runtime for
+        // its desktop view, as the game's camera sees it.
+        let held = g.bob.map_or(Vec3::ZERO, |b| b.offset.clamp_length_max(BOB_HELD));
+        if g.recenter.is_some() {
+            adapter.tracking.recenter();
+        }
         let anchor = Anchor {
             eye: ride.as_ref().map_or(eye, |c| c.eye),
-            base_eye: ride.as_ref().map_or(eye, |c| c.base_eye),
-            look_yaw: ride.as_ref().map_or(g.look_yaw, |c| c.look_yaw),
+            base_eye: ride.as_ref().map_or(eye - held, |c| c.base_eye),
+            look_yaw: g.recenter.unwrap_or(ride.as_ref().map_or(g.look_yaw, |c| c.look_yaw)),
             scripted: false,
         };
+        if let Some(cam) = &g.camera {
+            match (&ride, g.bob) {
+                (Some(c), _) => view_bob = crate::camera::view_bob(cam, c.eye - c.base_eye, 0.0, 0.0),
+                (None, Some(b)) => view_bob = crate::camera::view_bob(cam, b.offset, b.yaw, b.pitch),
+                (None, None) => {}
+            }
+        }
         adapter.tracking.update(&frame, &anchor, g.now, g.dt)
     });
     let mut gs: GameState = bytemuck::Zeroable::zeroed();
     gs.flags = GS_PLAYER_RIG | if view.is_some() { GS_IN_GAME } else { 0 } | if g.menu { GS_MENU } else { 0 };
+    gs.flags |= if g.loading { GS_LOADING } else { 0 } | if g.hands_only { GS_HANDS_ONLY } else { 0 };
     // (The runtime keeps its crouch in step with the game's sneaking.)
     if view.is_some() && crate::player::sneaking() {
         gs.flags |= GS_CROUCHED;
@@ -114,6 +174,8 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     }
     gs.game_zoom = 1.0;
     if view.is_some() {
+        gs.eye_above_feet = eye_above_feet(g.eye, riding);
+        gs.view_bob = view_bob;
         gs.light = crate::lighting::hint();
         // The game's water, for swimming by the arms.
         #[cfg(target_arch = "x86")]

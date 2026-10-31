@@ -1,7 +1,9 @@
 //! Where the game's frames go: the time of each part of a frame (the runtime's frame and what the
-//! adapter does with it before the eyes, each eye's render, the picture and depth copies, and the
-//! rest of the game's frame between renders), averaged and the worst, logged every few seconds
-//! with how much of its 32-bit address space the game has left.
+//! adapter does with it before the eyes, each eye's render, the picture and depth copies, the
+//! game's waits for its background thread, and the rest of the game's frame between renders),
+//! averaged and the worst, logged every few seconds with how much of its 32-bit address space the
+//! game has left and its video memory against the budget Windows gives it (past it, what a frame
+//! uses is copied in and out of the system's memory: every part that waits on the GPU slows).
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -17,11 +19,15 @@ pub enum Part {
     Eye,
     Capture,
     Depth,
+    /// The game's waits for its background thread's lock (in a render's and out of it).
+    Loader,
+    /// The mirror's world (the race menu's mirror, the mirror spell's): its render and its copies.
+    Mirror,
     /// From one render's end to the next one's start: the game's update, its menus, Present.
     Between,
 }
 
-const N: usize = 9;
+const N: usize = 11;
 const PARTS: [(Part, &str); N] = [
     (Part::Prepare, "prepare"),
     (Part::Combat, "combat"),
@@ -31,6 +37,8 @@ const PARTS: [(Part, &str); N] = [
     (Part::Eye, "eye renders"),
     (Part::Capture, "picture copies"),
     (Part::Depth, "depth copies"),
+    (Part::Loader, "waits for the loader"),
+    (Part::Mirror, "the mirror's world"),
     (Part::Between, "between renders"),
 ];
 
@@ -114,7 +122,13 @@ fn memory() -> String {
         return String::new();
     }
     let mb = |b: u64| b / (1024 * 1024);
-    format!("address space {} of {} MB free", mb(m.ullAvailVirtual), mb(m.ullTotalVirtual))
+    #[cfg(target_arch = "x86")]
+    let video = crate::d3d9::video_memory()
+        .map(|(used, budget)| format!("; video memory {used} of {budget} MB{}", if used > budget { " (over its budget)" } else { "" }))
+        .unwrap_or_default();
+    #[cfg(not(target_arch = "x86"))]
+    let video = String::new();
+    format!("address space {} of {} MB free{video}", mb(m.ullAvailVirtual), mb(m.ullTotalVirtual))
 }
 
 #[cfg(not(windows))]

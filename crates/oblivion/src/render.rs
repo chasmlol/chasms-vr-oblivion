@@ -8,6 +8,15 @@
 //! Outside the world (the main menu, loading screens) the render isn't called: the whole picture
 //! goes to the runtime as a menu panel.
 //!
+//! **Loading doesn't leave the world** (`docs/research/worldmenu.md`). While the game loads another
+//! place it can't draw one: the runtime is given the last picture of the world again ([`held`]: the
+//! bridge's last copies of the eyes and their depth, with the poses they were drawn from,
+//! `SLOT_HELD`), and holds the place round the player while the game's loading bar floats in it
+//! (its UI drawn with its alpha, as over the world). The game's own fade after a load (its fader 2)
+//! is the handover: each picture says how much of it there still is (`SlotInfo::held_over`), and the
+//! fader's quad isn't drawn (the runtime fades). While the loading screen is open a thread beats for
+//! the adapter, so a load that blocks the game for seconds doesn't count it gone.
+//!
 //! **Under the game's menus the world goes on.** Opening most menus, the game renders the world once
 //! into a texture and from then on draws that frozen picture behind them ([`world_picture`]); in VR
 //! the head goes on moving, so the picture isn't taken and the world is rendered for both eyes every
@@ -27,7 +36,7 @@ mod win {
     use crate::d3d9::{self, HUD};
     use crate::link::{self, GameFrame, Snapshot};
     use crate::{engine, hooks, mem};
-    use rustvr_protocol::{DEPTH_LINEAR, MIR_RENDER, SLOT_AUX, SLOT_DEPTH, SLOT_HUD, SLOT_MENU, SLOT_MIRROR, SLOT_STEREO, SlotInfo};
+    use rustvr_protocol::{DEPTH_LINEAR, MIR_RENDER, SLOT_AUX, SLOT_DEPTH, SLOT_HELD, SLOT_HUD, SLOT_MENU, SLOT_MIRROR, SLOT_STEREO, SlotInfo};
     use std::ffi::c_void;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -49,16 +58,105 @@ mod win {
     static EYES: Mutex<Option<Eyes>> = Mutex::new(None);
     static LAST: Mutex<f64> = Mutex::new(0.0);
 
+    /// The last picture of the world given to the runtime: how it was drawn, to give it again while
+    /// the game can't draw one ([`held`]).
+    #[derive(Clone, Copy)]
+    struct LastWorld {
+        /// Its eyes' poses, fields of view, world mappings and depth.
+        info: SlotInfo,
+        /// The projection's near and far planes (game units), for its depth again.
+        near_far: (f32, f32),
+        /// It was of the main menu's place: the player has no body yet.
+        menu_world: bool,
+    }
+    static LAST_WORLD: Mutex<Option<LastWorld>> = Mutex::new(None);
+
+    /// The game's fader 2 (of three full-screen faders at 0xB12DC4, 24 bytes each: name, active, its
+    /// node, its alpha 0..1, its time): the black a cell or a save load starts, held for ten frames
+    /// under the new place once it's loaded, then faded back.
+    const FADER_NODE: usize = 0x00B1_2E00;
+    const FADER_ALPHA: usize = 0x00B1_2E04;
+    /// The film playing, and its state (2: drawn by the menus' render).
+    const FILM: usize = 0x00B3_3428;
+    const FILM_STATE: usize = 0x20;
+    const FILM_SHOWN: u32 = 2;
+
+    /// How much of the game's fade after a load there is now, if it's there.
+    fn fader() -> Option<f32> {
+        let node = mem::deref(FADER_NODE);
+        (node != 0).then(|| mem::at::<f32>(FADER_ALPHA).filter(|a| a.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0))
+    }
+
+    /// The fader's quad isn't drawn: the runtime fades (from the place held, or from black).
+    fn fade_in_runtime() {
+        let node = mem::deref(FADER_NODE);
+        let Some(flags) = (node != 0).then(|| mem::at::<u16>(node + engine::av::FLAGS)).flatten() else { return };
+        if flags & engine::av::APP_CULLED == 0 {
+            unsafe { ((node + engine::av::FLAGS) as *mut u16).write(flags | engine::av::APP_CULLED) };
+            static SAID: std::sync::Once = std::sync::Once::new();
+            SAID.call_once(|| tracing::info!("render: the game's fade after a load is the runtime's (from the place held), its black quad not drawn"));
+        }
+    }
+
+    /// A film is on the screen (the new game's intro): shown as it is, not held over.
+    fn film() -> bool {
+        let f = mem::deref(FILM);
+        f != 0 && mem::at::<u32>(f + FILM_STATE) == Some(FILM_SHOWN)
+    }
+
+    /// The game is loading another place: its loading screen, or its fade after one.
+    fn loading() -> bool {
+        crate::menus::menu_open(crate::menus::MENU_LOADING) || fader().is_some()
+    }
+
+    /// The game can't draw its world now, and the place the player was in is held: loading, or the
+    /// main menu waiting for its place.
+    fn holding() -> bool {
+        LAST_WORLD.lock().unwrap().is_some() && !film() && (loading() || crate::worldmenu::waiting())
+    }
+
+    /// While the loading screen is open: since when, and the game's last Present ([`beat`]).
+    static LOADING_SINCE: Mutex<Option<f64>> = Mutex::new(None);
+    static LAST_PRESENT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    /// How long the adapter is said to be alive for the game while it loads (s).
+    const BEAT_FOR: f64 = 60.0;
+
+    /// The adapter's heartbeat while the game loads, from a thread of its own: a load can block the
+    /// game's thread between two Presents longer than the runtime waits before counting the adapter
+    /// gone (and letting go of the place it holds).
+    fn beat() {
+        let mut said = false;
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            let Some(since) = *LOADING_SINCE.lock().unwrap() else {
+                said = false;
+                continue;
+            };
+            let now = link::now();
+            let last = f64::from_bits(LAST_PRESENT.load(Ordering::Acquire));
+            if now - since < BEAT_FOR && now - last > 0.5 && link::try_with_adapter(|a| a.heartbeat()).is_some() && !said {
+                said = true;
+                tracing::info!("render: the game is busy loading ({:.1} s since its last frame): the adapter beats for it", now - last);
+            }
+        }
+    }
+
     static REAL_FRAME: AtomicUsize = AtomicUsize::new(0);
     type FrameFn = unsafe extern "thiscall" fn(*mut c_void) -> i32;
 
     /// The game's background thread (0xB3F940: it loads and changes the scene graph, cells
     /// and actors' 3D) shares the scene with the render through a semaphore: the world render takes
     /// it at its start (`mov eax, [B3F940]` at 0x40C8F7, then its wait) and gives it back at its end
-    /// (`mov esi, [B3F940]` at 0x40D059, then its release). Rendered once per eye, the thread could
-    /// run between the eyes and change the scene under the second. Those two places read these
-    /// instead (patched at install): the first eye takes the lock and keeps it, the second gives it
-    /// back; a single render does both, as the game does.
+    /// (`mov esi, [B3F940]` at 0x40D059, then its release). Those two places read these instead
+    /// (patched at install), so the eyes can be rendered under one hold of it ([`hold_loader`]);
+    /// by default each render takes and gives it, as the game's one render does.
+    ///
+    /// The thread can change the scene only while no render holds the lock: on a desktop most of
+    /// the frame. Two eyes and their copies held it for most of each frame (6..12 ms of 9), so it
+    /// fell behind loading the cells ahead, and the game stood waiting for it at the next render's
+    /// start (0x404D60), most of all crossing into new cells. Given back after each eye, it can work
+    /// while that eye's picture is copied; a thing it adds then shows in the second eye a frame
+    /// before the first.
     static LOCK_TAKE: AtomicUsize = AtomicUsize::new(0);
     static LOCK_GIVE: AtomicUsize = AtomicUsize::new(0);
     const BACKGROUND: usize = 0x00B3_F940;
@@ -73,10 +171,50 @@ mod win {
         let take = crate::mem::patch_code(TAKE_AT, &[0xA1, b0, b1, b2, b3], &[0xA1, t0, t1, t2, t3]);
         let give = crate::mem::patch_code(GIVE_AT, &[0x8B, 0x35, b0, b1, b2, b3], &[0x8B, 0x35, g0, g1, g2, g3]);
         if take && give {
-            tracing::info!("render: both eyes are rendered under one hold of the background thread's lock");
+            tracing::info!("render: the renders take and give the background thread's lock as the adapter says");
         } else {
-            tracing::error!("render: the background thread's lock isn't held across the eyes (patched: take {take}, give {give})");
+            tracing::error!("render: the background thread's lock is the game's, once a render (patched: take {take}, give {give})");
         }
+    }
+
+    /// Testing, `RUSTVR_OBLIVION_HOLD_LOADER=1`: the background thread's lock is held across all the
+    /// renders of a frame, as before, to compare the stutter.
+    fn hold_loader() -> bool {
+        static HOLD: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *HOLD.get_or_init(|| {
+            let hold = std::env::var("RUSTVR_OBLIVION_HOLD_LOADER").is_ok_and(|v| v == "1");
+            if hold {
+                tracing::info!("render: testing: the background thread's lock is held across the eyes (RUSTVR_OBLIVION_HOLD_LOADER)");
+            }
+            hold
+        })
+    }
+
+    /// The game's wait for its background thread's lock (0x404D60, cdecl, a first timeout in
+    /// milliseconds): the world render's at its start, and the game's own elsewhere. Timed on the
+    /// game's thread, as how long its frame stood waiting for the thread (the stutter crossing into
+    /// new cells); one over 20 ms is logged.
+    const LOADER_WAIT: usize = 0x0040_4D60;
+    static REAL_LOADER_WAIT: AtomicUsize = AtomicUsize::new(0);
+    /// The thread the world render runs on (the game's), once it has.
+    static GAME_THREAD: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+    unsafe extern "C" fn loader_wait(ms: u32) -> i32 {
+        let real: unsafe extern "C" fn(u32) -> i32 = unsafe { std::mem::transmute(REAL_LOADER_WAIT.load(Ordering::Acquire)) };
+        let thread = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
+        if GAME_THREAD.load(Ordering::Acquire) != thread {
+            return unsafe { real(ms) };
+        }
+        let t0 = std::time::Instant::now();
+        let r = unsafe { real(ms) };
+        let waited = t0.elapsed();
+        hooks::guard_void("the background thread's lock's wait", || {
+            crate::timing::add(crate::timing::Part::Loader, waited);
+            if waited > std::time::Duration::from_millis(20) {
+                tracing::info!("render: the game waited {:.0} ms for its background thread (loading)", waited.as_secs_f64() * 1000.0);
+            }
+        });
+        r
     }
 
     /// The lock as the next render takes and gives it.
@@ -104,6 +242,132 @@ mod win {
         unsafe { real(this) }
     }
 
+    /// The world's shadow scene node (`*0xB42F54`) and its actors' shadow lights
+    /// (`ShadowSceneLight`, an `NiTPointerList` at +0xF8: each entry's next at +0, its light at +8).
+    const SHADOW_SCENE: usize = 0x00B4_2F54;
+    const SHADOW_LIGHTS: usize = 0xF8;
+    /// A shadow light's clip planes are made for this frame (u8). Each draw of an actor's shadow on
+    /// what it falls on clips it to the shadow light's frustum with six user clip planes, which
+    /// Direct3D takes in the camera's clip space: the first draw of a frame puts the light's
+    /// planes (+0x150) into the camera's clip space, keeps them (+0x1B4) and sets this; the rest
+    /// take the kept ones (0x7C9CCA, and 0x7FC556 for the SM3 shaders). Only the light's shadow map
+    /// render clears it (0x7D4F67), with the first eye, so the second eye and the mirror clipped
+    /// the shadows with the first eye's planes, which cut them away: the actors' shadows were in
+    /// the left eye only.
+    const CLIP_PLANES_MADE: usize = 0x214;
+
+    /// The actors' shadow lights, as the list has them (bounded: the background thread's lock is
+    /// held, but a broken list mustn't hang the render).
+    fn shadow_lights() -> Vec<usize> {
+        let ssn = mem::deref(SHADOW_SCENE);
+        let mut lights = Vec::new();
+        let mut entry = if ssn == 0 { 0 } else { mem::deref(ssn + SHADOW_LIGHTS) };
+        while entry != 0 && lights.len() < 1024 {
+            let light = mem::deref(entry + 8);
+            if light != 0 {
+                lights.push(light);
+            }
+            entry = mem::deref(entry);
+        }
+        lights
+    }
+
+    /// Testing: what the actors' shadow lights are after a render: how many, how many drew their
+    /// shadow in it (their clip planes made), how many are seen (+0x118, 0xFF: not) and faded in
+    /// (+0xD8), and the first one's clip planes as that render made them (+0x1B4).
+    fn shadow_lights_state() -> String {
+        let lights = shadow_lights();
+        let made = lights.iter().filter(|&&l| mem::at::<u8>(l + CLIP_PLANES_MADE) == Some(1)).count();
+        let seen = lights.iter().filter(|&&l| mem::at::<u16>(l + 0x118).is_some_and(|m| m != 0xFF)).count();
+        let fades: Vec<f32> = lights.iter().filter_map(|&l| mem::at::<f32>(l + 0xD8)).collect();
+        let planes = lights.first().and_then(|&l| mem::at::<[f32; 24]>(l + 0x1B4));
+        format!("{} shadow lights, {made} drew a shadow, {seen} seen, fades {fades:.2?}; the first's clip planes {planes:.3?}", lights.len())
+    }
+
+    /// The actors' shadow lights' clip planes are made again, for the next render's camera.
+    fn shadow_clip_planes_again() {
+        for light in shadow_lights() {
+            if mem::at::<u8>(light + CLIP_PLANES_MADE).is_some() {
+                unsafe { ((light + CLIP_PLANES_MADE) as *mut u8).write(0) };
+            }
+        }
+    }
+
+    /// The world render centres the sky and the weather on the scene graph's camera node
+    /// ([`engine::camera_node`], where the game's camera is): at its start it copies the node's
+    /// position (`NiAVObject` +0x54) into the "Sky" node (`*0xB333D8`: the dome, the clouds, the
+    /// sun, the moons, the stars) and the "Weather" node (`*0xB333DC`: rain, snow, the sun's glare)
+    /// and updates them. An eye is elsewhere (where the head is: the room's offset, the real head's
+    /// height, the steps smoothed), so the dome and its clouds were centred off the eyes, near
+    /// enough to show parallax, and swam and bobbed as the player walked. The two copies take the
+    /// node from these words instead (patched at install: `mov eax, [0xB333CC]` and the walk to its
+    /// first child at 0x40C95F and 0x40C9AA become `mov eax, [word]` and a jump past the walk).
+    /// For a single render they hold the camera node, as the game has it. In the eyes, the sky is
+    /// centred on each render's camera (it's at infinity for both eyes, turning only as the head
+    /// turns) and the weather on the head, one place for both eyes, so rain and snow keep their
+    /// depth.
+    static SKY_FROM: AtomicUsize = AtomicUsize::new(0);
+    static WEATHER_FROM: AtomicUsize = AtomicUsize::new(0);
+    const SKY_COPY_AT: usize = 0x0040_C95F;
+    const WEATHER_COPY_AT: usize = 0x0040_C9AA;
+
+    /// A stand-in for the camera node as those copies read it: its position (+0x54) only.
+    #[repr(C)]
+    struct Centre([std::sync::atomic::AtomicU32; 24]);
+    static SKY_CENTRE: Centre = Centre([const { std::sync::atomic::AtomicU32::new(0) }; 24]);
+    static WEATHER_CENTRE: Centre = Centre([const { std::sync::atomic::AtomicU32::new(0) }; 24]);
+
+    impl Centre {
+        /// Puts the stand-in at `p` (game units) and it in `from`'s word.
+        fn centre(&self, from: &AtomicUsize, p: glam::Vec3) {
+            let at = engine::av::LOCAL_TRANSLATE / 4;
+            for (i, v) in p.to_array().into_iter().enumerate() {
+                self.0[at + i].store(v.to_bits(), Ordering::Release);
+            }
+            from.store(self as *const Centre as usize, Ordering::Release);
+        }
+    }
+
+    fn patch_centres() {
+        let [b0, b1, b2, b3] = (crate::engine::SCENE_GRAPH as u32).to_le_bytes();
+        let walk = [0xA1, b0, b1, b2, b3, 0x66, 0x83];
+        let patch = |at: usize, word: &AtomicUsize| {
+            let [w0, w1, w2, w3] = (word as *const AtomicUsize as u32).to_le_bytes();
+            // (The jump goes past the 27 bytes of the walk, from the end of these 7.)
+            crate::mem::patch_code(at, &walk, &[0xA1, w0, w1, w2, w3, 0xEB, 27 - 7])
+        };
+        let (sky, weather) = (patch(SKY_COPY_AT, &SKY_FROM), patch(WEATHER_COPY_AT, &WEATHER_FROM));
+        if sky && weather {
+            tracing::info!("render: the sky is centred on each eye and the weather on the head");
+        } else {
+            tracing::error!("render: the sky and the weather are centred on the game's camera (patched: sky {sky}, weather {weather})");
+        }
+    }
+
+    /// The sky and the weather centred on the camera node, as the game has them.
+    fn centre_on_camera_node() {
+        let node = engine::camera_node();
+        SKY_FROM.store(node, Ordering::Release);
+        WEATHER_FROM.store(node, Ordering::Release);
+    }
+
+    /// The "Sky" node (`*0xB333D8`), whose world position is where the render put the sky.
+    const SKY_NODE: usize = 0x00B3_33D8;
+
+    /// The fixes for what the game makes once a frame from one camera (the sky's centre, a
+    /// skinned model's bones, the actors' shadows' clip planes) are on. Testing, `RUSTVR_OBLIVION_MONO_VISUALS=1`: they're off, to
+    /// see what they fix.
+    fn per_eye_visuals() -> bool {
+        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *ON.get_or_init(|| {
+            let on = !std::env::var("RUSTVR_OBLIVION_MONO_VISUALS").is_ok_and(|v| v == "1");
+            if !on {
+                tracing::info!("render: testing: the sky is centred on the game's camera, the eyes share the renderer's frame and the shadows' clip planes (RUSTVR_OBLIVION_MONO_VISUALS)");
+            }
+            on
+        })
+    }
+
     /// The game's redraw from the outdoor cell grid (thiscall), which it also runs as soon as its
     /// lost device is reset: it reads the grid's middle cell without asking if there is one, and
     /// indoors there isn't (a crash on any device reset inside a building; the device is lost when
@@ -114,8 +378,6 @@ mod win {
     /// grid (`TES` +8).
     const GRID_CELL: usize = 0x0048_2150;
     const TES: usize = 0x00B3_33A0;
-    /// The texture the game draws the world into behind its menus (`Main::Render`'s argument then).
-    const WORLD_TEXTURE: usize = 0x00B3_33E8;
     /// A reference's 3D (`TESObjectREFR` +0x3C): the player's third-person body.
     const PLAYER_3D: usize = 0x3C;
     static REAL_GRID_REDRAW: AtomicUsize = AtomicUsize::new(0);
@@ -136,19 +398,29 @@ mod win {
         unsafe { real(this) }
     }
 
-    /// The world's frozen picture behind the game's menus (0x40D160, thiscall on `OSGlobals`), which
-    /// the frame takes on opening a menu (the call at 0x40DA62; at 0x40DEF5 for sleep and wait):
-    /// rendered once into a texture (0xB333E8), it's what 0x40D4D0 draws behind the menus from
-    /// then on (while 0xB33397 says it's there) instead of rendering the world. In VR it isn't
-    /// taken: with it never there, 0x40D4D0 renders the world, both eyes, every frame. (Its other
-    /// callers, a door's or a save's picture, are the game's as ever.)
+    /// The world's frozen picture (0x40D160, thiscall on `OSGlobals`): rendered once into a texture
+    /// (0xB333E8), it's what 0x40D4D0 draws from then on (while 0xB33397 says it's there)
+    /// instead of rendering the world. The frame takes it on opening a menu (the call at 0x40DA62; at
+    /// 0x40DEF5 for sleep and wait), a cell's load as it starts (0x4455FF indoors, 0x445A32 outdoors:
+    /// the picture behind the loading screen's fade), a question box over the load's fade (0x5BCB78)
+    /// and 0x44E789. In VR it's never taken: with it never there, 0x40D4D0 renders the world, both
+    /// eyes, every frame it can, and while it can't the runtime holds the last picture of it. (Taken,
+    /// it went into the game's texture while the eyes were read from the back buffer, black: the
+    /// place held through a door was black.)
     const WORLD_PICTURE: usize = 0x0040_D160;
-    const WORLD_PICTURE_CALLS: [(usize, [u8; 5]); 2] = [(0x0040_DA62, [0xE8, 0xF9, 0xF6, 0xFF, 0xFF]), (0x0040_DEF5, [0xE8, 0x66, 0xF2, 0xFF, 0xFF])];
+    const WORLD_PICTURE_CALLS: [(usize, [u8; 5]); 6] = [
+        (0x0040_DA62, [0xE8, 0xF9, 0xF6, 0xFF, 0xFF]),
+        (0x0040_DEF5, [0xE8, 0x66, 0xF2, 0xFF, 0xFF]),
+        (0x0044_55FF, [0xE8, 0x5C, 0x7B, 0xFC, 0xFF]),
+        (0x0044_5A32, [0xE8, 0x29, 0x77, 0xFC, 0xFF]),
+        (0x0044_E789, [0xE8, 0xD2, 0xE9, 0xFB, 0xFF]),
+        (0x005B_CB78, [0xE8, 0xE3, 0x05, 0xE5, 0xFF]),
+    ];
 
     unsafe extern "thiscall" fn world_picture(this: *mut c_void) {
         if link::last().is_some_and(|s| s.view.is_some()) {
             static SAID: std::sync::Once = std::sync::Once::new();
-            SAID.call_once(|| tracing::info!("render: a menu opened: the world goes on being rendered under it (no frozen picture)"));
+            SAID.call_once(|| tracing::info!("render: the game's frozen picture of the world skipped (a menu, a load): the world goes on being rendered, or held"));
             return;
         }
         let real: unsafe extern "thiscall" fn(*mut c_void) = unsafe { std::mem::transmute(WORLD_PICTURE) };
@@ -163,14 +435,17 @@ mod win {
             let rel = (ours as i32).wrapping_sub(at as i32 + 5).to_le_bytes();
             done += mem::patch_code(at, &expect, &[0xE8, rel[0], rel[1], rel[2], rel[3]]) as u32;
         }
-        tracing::info!("render: the menus' frozen picture of the world is skipped in VR ({done} of 2 calls)");
+        tracing::info!("render: the game's frozen picture of the world is skipped in VR ({done} of {} calls)", WORLD_PICTURE_CALLS.len());
     }
 
     pub fn install() {
+        std::thread::spawn(beat);
         set_lock(true, true);
         patch_lock();
         patch_world_picture();
+        patch_centres();
         hooks::install_into(ACTOR_SHADOWS as *const (), actor_shadows as *const (), "actor shadows", &REAL_SHADOWS);
+        hooks::install_into(LOADER_WAIT as *const (), loader_wait as *const (), "the background thread's lock's wait", &REAL_LOADER_WAIT);
         hooks::install_into(engine::FRAME as *const (), frame_hook as *const (), "Main::Frame", &REAL_FRAME);
         hooks::install_into(engine::RENDER as *const (), render_hook as *const (), "Main::Render", &REAL_RENDER);
         hooks::install_into(GRID_REDRAW as *const (), grid_redraw as *const (), "the outdoor grid's redraw", &REAL_GRID_REDRAW);
@@ -184,6 +459,7 @@ mod win {
         FIRST.call_once(|| tracing::info!("render: the game's frames run"));
         hooks::guard_void("Frame", || {
             crate::console::tick();
+            crate::worldmenu::frame();
             crate::player::before_update();
             crate::items::frame(link::now());
             crate::archery::frame(link::now());
@@ -202,12 +478,22 @@ mod win {
 
     unsafe extern "thiscall" fn render_hook(this: *mut c_void, arg: i32) -> i32 {
         let real: RenderFn = unsafe { std::mem::transmute(REAL_RENDER.load(Ordering::Acquire)) };
+        let thread = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
+        GAME_THREAD.store(thread, Ordering::Release);
+        crate::profile::frame_start(thread);
         // A picture of the world into a texture of the game's own making (a save's picture, taken
-        // as an autosave goes through a door) is the game's, drawn as it draws it: two eyes drawn
-        // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
-        // menus goes into its world texture.)
+        // as an autosave goes through a door; the frozen picture, out of VR) is the game's, drawn as
+        // it draws it: two eyes drawn into it, read back at its size, crashed it, and the eyes read
+        // from the back buffer then aren't the world's. (The frame's own render passes 0.)
+        centre_on_camera_node();
         d3d9::rendering(true);
-        let result = if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
+        // The fog's terms for the game's own camera (a render of its own; each eye's are its own).
+        hooks::guard_void("fog", || {
+            if let (Some(dev), Some(game)) = (d3d9::device(engine::device() as *mut c_void), camera::read(engine::world_camera())) {
+                d3d9::fog_frustum(&dev, &game.frustum);
+            }
+        });
+        let result = if arg != 0 {
             unsafe { real(this, arg) }
         } else {
             crate::timing::render_start();
@@ -266,21 +552,56 @@ mod win {
         });
         let renders = if mirror_cam.is_some() { 3 } else { 2 };
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let log = LOGGED.fetch_add(1, Ordering::Relaxed) % 600 == 30;
+        let frame = LOGGED.fetch_add(1, Ordering::Relaxed);
+        let log = frame % 600 == 30;
+        // (Testing, for the actors' shadows: every 90 frames, the first 200 times.)
+        let log_shadows = frame % 90 == 45 && frame < 90 * 200;
         let mut mirror_done = None;
+        let per_eye = per_eye_visuals();
+        // (Testing: the eye pictures' frame, and the kind of draw it leaves out.)
+        let pictures = hooks::guard("eye pictures", None, || pictures_due(link::now()));
+        if let Some((_, kind)) = pictures {
+            crate::families::leave_out(kind);
+        }
+        let eyes = [0, 1].map(|eye| camera::eye_camera(&view, &snap.frame.eyes[eye], &snap.frame.fov[eye], &game));
+        if per_eye {
+            WEATHER_CENTRE.centre(&WEATHER_FROM, (glam::Vec3::from(eyes[0].pos) + glam::Vec3::from(eyes[1].pos)) * 0.5);
+        }
         for eye in 0..renders {
+            // Each render after the first is a frame of the renderer's own. The bones of a skinned
+            // model (the actors' bodies, clothes and armour) are made relative to the camera that
+            // draws it first in a frame, so with one frame for all the renders the second eye and
+            // the mirror drew the actors' bodies where the first eye's camera saw them: in the
+            // second eye, the eyes' width aside from their heads, weapons and shadows, which are
+            // drawn where they are.
+            if eye > 0 && per_eye {
+                engine::next_render_frame();
+                shadow_clip_planes_again();
+            }
             if eye == 2 {
                 let s = mirror_cam.expect("a third render is the mirror's");
                 camera::write(cam, &s);
-                set_lock(false, true);
+                if per_eye {
+                    SKY_CENTRE.centre(&SKY_FROM, glam::Vec3::from(s.pos));
+                }
+                d3d9::fog_frustum(&dev, &s.frustum);
+                set_lock(!hold_loader(), true);
                 SECOND_EYE.store(true, Ordering::Release);
-                result = time(Part::Eye, || unsafe { real(this, arg) });
-                let colour = hooks::guard("capture mirror", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::MIRROR)).unwrap_or(false));
-                let depth = hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
+                // (Timed apart from the eyes: a third render of the world at the eyes' size.)
+                let (r, colour, depth) = time(Part::Mirror, || {
+                    let r = unsafe { real(this, arg) };
+                    if log_shadows {
+                        tracing::info!("render: the mirror: {}", shadow_lights_state());
+                    }
+                    let colour = hooks::guard("capture mirror", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::MIRROR)).unwrap_or(false));
+                    let depth = hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
+                    (r, colour, depth)
+                });
+                result = r;
                 mirror_done = (colour && depth).then_some((s.frustum[4], s.frustum[5]));
                 continue;
             }
-            let s = camera::eye_camera(&view, &snap.frame.eyes[eye], &snap.frame.fov[eye], &game);
+            let s = eyes[eye];
             if log {
                 tracing::info!(
                     "render: eye {eye}: tracking pos {:?} rot {:?} -> game pos {:?} dir {:?} up {:?} frustum {:?}; game camera pos {:?} dir {:?}; view anchor {:?} yaw {} wpm {}",
@@ -298,20 +619,47 @@ mod win {
                 );
             }
             camera::write(cam, &s);
-            set_lock(eye == 0, eye + 1 == renders);
+            if per_eye {
+                SKY_CENTRE.centre(&SKY_FROM, glam::Vec3::from(s.pos));
+            }
+            d3d9::fog_frustum(&dev, &s.frustum);
+            if hold_loader() {
+                set_lock(eye == 0, eye + 1 == renders);
+            } else {
+                set_lock(true, true);
+            }
             SECOND_EYE.store(eye == 1, Ordering::Release);
             result = time(Part::Eye, || unsafe { real(this, arg) });
+            if log_shadows {
+                tracing::info!("render: eye {eye}: {}", shadow_lights_state());
+            }
+            if log {
+                let sky = mem::at::<[f32; 3]>(mem::deref(SKY_NODE) + engine::av::WORLD_TRANSLATE).map(glam::Vec3::from);
+                tracing::info!(
+                    "render: eye {eye}: the sky's centre is {:.2?} units from the eye (the game's camera {:.2} units)",
+                    sky.map(|c| c.distance(glam::Vec3::from(s.pos))),
+                    glam::Vec3::from(s.pos).distance(glam::Vec3::from(game.pos))
+                );
+            }
             captured[eye] = time(Part::Capture, || hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false)));
             depth[eye] = time(Part::Depth, || hooks::guard("capture depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), eye)).unwrap_or(false)));
         }
         set_lock(true, true);
         SECOND_EYE.store(false, Ordering::Release);
         camera::write(cam, &game);
+        centre_on_camera_node();
+        d3d9::fog_frustum(&dev, &game.frustum);
         if let Some(f) = arms_flags {
             unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f) };
         }
         if let Some(f) = outside_flags {
             unsafe { ((outside + engine::av::FLAGS) as *mut u16).write(f) };
+        }
+        crate::families::leave_out(0);
+        if let Some((n, kind)) = pictures
+            && captured == [true, true]
+        {
+            hooks::guard_void("eye pictures", || eye_pictures(n, kind));
         }
         hooks::guard_void("Render end", || {
             // The menus are drawn next: alone over clear, with their alpha, they're the HUD layer.
@@ -321,6 +669,62 @@ mod win {
             *EYES.lock().unwrap() = Some(Eyes { snap, captured, depth, near_far: (game.frustum[4], game.frustum[5]), mirror: mirror_done });
         });
         result
+    }
+
+    /// Testing, `RUSTVR_OBLIVION_EYE_PNG=<folder>`: both eyes' pictures (the world, before the HUD,
+    /// at most 2048 pixels wide) are saved there every 10 seconds from 5 seconds in, up to 60 pairs
+    /// (`<n>-left.png`, `<n>-right.png`), to hold the eyes up to each other. With
+    /// `RUSTVR_OBLIVION_LEAVE_OUT=1`, every 5 seconds, up to 240, each frame leaving a kind of draw out
+    /// (`<n>-without-<kind>-left.png`: [`crate::families`]).
+    fn pictures_dir() -> Option<&'static std::path::PathBuf> {
+        static DIR: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+        DIR.get_or_init(|| std::env::var_os("RUSTVR_OBLIVION_EYE_PNG").filter(|v| !v.is_empty()).map(std::path::PathBuf::from)).as_ref()
+    }
+
+    /// This frame's eye pictures' number, if they're due, and the kind of draw its renders leave out
+    /// (testing, [`crate::families`]: every 5 s, the kinds in turn; else every 10 s, none).
+    fn pictures_due(now: f64) -> Option<(u32, u8)> {
+        pictures_dir()?;
+        let leave_out = crate::families::enabled();
+        static NEXT: Mutex<(f64, u32)> = Mutex::new((0.0, 0));
+        let mut next = NEXT.lock().unwrap();
+        if next.0 == 0.0 {
+            next.0 = now + 5.0;
+        }
+        if now < next.0 || next.1 >= if leave_out { 240 } else { 60 } {
+            return None;
+        }
+        next.0 = now + if leave_out { 5.0 } else { 10.0 };
+        next.1 += 1;
+        let kind = if leave_out { ((next.1 - 1) as usize % crate::families::KINDS.len()) as u8 } else { 0 };
+        Some((next.1, kind))
+    }
+
+    fn eye_pictures(n: u32, kind: u8) {
+        let Some(dir) = pictures_dir() else { return };
+        let label = if crate::families::enabled() { format!("-without-{}", crate::families::KINDS[kind as usize]) } else { String::new() };
+        let mut pictures = Vec::new();
+        for (eye, name) in [(0, "left"), (1, "right")] {
+            match link::with_adapter(|a| d3d9::read_bgra(a.gpu(), eye, 2048)) {
+                Some(Ok(p)) => pictures.push((dir.join(format!("{n:03}{label}-{name}.png")), p)),
+                Some(Err(e)) => tracing::warn!("render: the {name} eye's picture: {e:#}"),
+                None => {}
+            }
+        }
+        // (Written off the render thread: a picture takes longer than a frame.)
+        std::thread::spawn(move || {
+            for (path, (w, h, mut px)) in pictures {
+                // (The copies are B8G8R8A8; the picture is opaque.)
+                for p in px.as_chunks_mut::<4>().0 {
+                    p.swap(0, 2);
+                    p[3] = 255;
+                }
+                match rustvr_gpu::save_png_fast(&path, w, h, &px) {
+                    Ok(()) => tracing::info!("render: the eye's picture is {}", path.display()),
+                    Err(e) => tracing::warn!("render: saving {}: {e:#}", path.display()),
+                }
+            }
+        });
     }
 
     /// The runtime's frame and the game's camera, when the eyes are to be rendered.
@@ -349,7 +753,10 @@ mod win {
         // The race menu puts the game's camera in front of the player's face, looking back at them:
         // the player stays where they stood (the eye and its look before it opened), so the world
         // doesn't jump forward and back as it opens and closes.
-        let (eye, look_yaw) = {
+        let (eye, look_yaw) = if let Some(eye) = crate::worldmenu::eye() {
+            // (The main menu's place: on its spot, whatever the game's camera says.)
+            (eye, game.look_yaw())
+        } else {
             static STOOD: Mutex<Option<(glam::Vec3, f32)>> = Mutex::new(None);
             let mut stood = STOOD.lock().unwrap();
             match (race_menu.is_some(), *stood) {
@@ -363,7 +770,19 @@ mod win {
                 }
             }
         };
-        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, now, dt })?;
+        let hands_only = crate::worldmenu::up();
+        let recenter = crate::worldmenu::take_recenter();
+        // The game's own bob, as its camera sees it (none in the race menu or the main menu's place:
+        // its camera isn't the player's eyes).
+        // Its posture left out: where its camera has sat lately isn't a bob (`camera::Rest`).
+        static REST: std::sync::Mutex<camera::Rest> = std::sync::Mutex::new(camera::Rest::new());
+        let bob = (race_menu.is_none() && !hands_only).then(|| hooks::guard("view bob", None, camera::first_person_bob)).flatten();
+        let (bob, rest) = REST.lock().unwrap_or_else(|e| e.into_inner()).take(bob, dt);
+        camera::note_bob(bob.as_ref(), rest, &game, now);
+        // (Paused over it, the race menu isn't the menu shown: the pause menu is, as anywhere else,
+        // with the runtime's own settings beside it. The player still stands where they stood.)
+        let shown = race_menu.filter(|_| !crate::menus::paused());
+        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu: shown, bob, camera: race_menu.is_none().then_some(game), loading: loading(), hands_only, recenter, now, dt })?;
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);
@@ -401,13 +820,96 @@ mod win {
             link::set_size(w, h);
         }
         let aspect = d3d9::backbuffer_size(&dev).map(|(w, h)| w as f32 / h.max(1) as f32).unwrap_or(1.0);
+        let now = link::now();
+        LAST_PRESENT.store(now.to_bits(), Ordering::Release);
+        {
+            let mut since = LOADING_SINCE.lock().unwrap();
+            let open = crate::menus::menu_open(crate::menus::MENU_LOADING);
+            *since = if open { Some(since.unwrap_or(now)) } else { None };
+        }
+        hooks::guard_void("the game's fade", fade_in_runtime);
         let eyes = EYES.lock().unwrap().take();
         match eyes {
             Some(e) if e.captured == [true, true] => stereo(&dev, &e, aspect),
-            _ => menu(&dev, aspect),
+            _ if holding() => held(&dev, aspect),
+            // (The main menu waiting for its place with nothing to hold, as the game starts, or a
+            // loading screen's first pictures, drawn before its UI goes in with its alpha: nothing
+            // new, the runtime keeps what it shows, until the loading bar alone. Not a menu to the
+            // runtime, so its own settings don't come up in its room meanwhile.)
+            _ if crate::worldmenu::waiting() && !crate::menus::menu_open(crate::menus::MENU_LOADING) || crate::menus::menu_open(crate::menus::MENU_LOADING) && !d3d9::ui_pass_on() => {
+                let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: false, race_menu: None, bob: None, camera: None, loading: false, hands_only: true, recenter: None, now, dt: 0.0 });
+            }
+            // (Loading with no place to hold, the first time: its bar floats in the runtime's room.)
+            _ => menu(&dev, aspect, d3d9::ui_pass_on() && crate::menus::menu_open(crate::menus::MENU_LOADING)),
         }
         d3d9::ui_pass(&dev, false);
         hooks::guard_void("menu 3D", || crate::menus::hide_menu_3d(false));
+        // While the game loads, the UI it draws next goes into the HUD copy with its alpha, as over
+        // the world: its loading bar alone floats (`crate::hud`). (A world rendered first turns it
+        // off for the eyes.)
+        if crate::menus::menu_open(crate::menus::MENU_LOADING) {
+            d3d9::ui_pass(&dev, true);
+        }
+    }
+
+    /// The last picture of the world again, held while the game can't draw one (see the module's
+    /// notes), with the game's UI of the moment (once it's drawn with its alpha: its loading bar).
+    fn held(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32) {
+        let Some(last) = *LAST_WORLD.lock().unwrap() else { return };
+        let alpha_ui = d3d9::ui_pass_on();
+        let snap = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: crate::menus::menu_mode(), race_menu: None, bob: None, camera: None, loading: true, hands_only: last.menu_world, recenter: None, now: link::now(), dt: 0.0 });
+        {
+            static SAID: Mutex<bool> = Mutex::new(false);
+            let mut said = SAID.lock().unwrap();
+            if !*said {
+                *said = true;
+                let why = if crate::menus::menu_open(crate::menus::MENU_LOADING) {
+                    "it's loading"
+                } else if crate::worldmenu::waiting() {
+                    "its main menu is waiting for its place"
+                } else {
+                    "it's fading in"
+                };
+                tracing::info!("render: the game can't draw its world ({why}): the last picture of it is held round the player");
+            }
+        }
+        link::with_adapter(|a| {
+            let gpu = a.gpu().clone();
+            let hud = d3d9::capture(dev, &gpu, HUD);
+            let mut have_hud = false;
+            let mut have_depth = false;
+            {
+                let Some(slot) = a.begin_slot() else { return };
+                for eye in 0..2 {
+                    if !d3d9::deliver(&gpu, eye, &slot.eyes[eye].tex) {
+                        return;
+                    }
+                }
+                if let (true, Some(dst)) = (hud, slot.hud.as_ref()) {
+                    have_hud = d3d9::deliver(&gpu, HUD, &dst.tex);
+                }
+                if let (true, Some(d)) = (last.info.flags & SLOT_DEPTH != 0, slot.depth.as_ref()) {
+                    have_depth = (0..2).all(|eye| d3d9::deliver_depth(&gpu, eye, &d[eye], last.near_far.0, last.near_far.1));
+                }
+            }
+            let mut info = last.info;
+            // (Paced as this frame's picture: the runtime waits for the one it asked for.)
+            if let Some(s) = snap {
+                info.frame_index = s.frame.frame_index;
+            }
+            info.flags = SLOT_STEREO | SLOT_HELD | if have_hud { SLOT_HUD } else { 0 } | if have_depth { SLOT_DEPTH } else { 0 };
+            info.hud_aspect = aspect;
+            info.held_over = 0.0;
+            if have_hud {
+                // (Nothing floats until the UI is drawn with its alpha: the flat screen's isn't cut.)
+                let layout = if alpha_ui { crate::hud::layout() } else { crate::hud::nothing() };
+                if let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(layout)) {
+                    a.write_hud_layout(&layout);
+                }
+                info.hud_layout = a.hud_layout_seq();
+            }
+            a.submit(info);
+        });
     }
 
     fn stereo(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, e: &Eyes, aspect: f32) {
@@ -454,6 +956,14 @@ mod win {
                 info.depth_flags = DEPTH_LINEAR;
             }
             info.hud_aspect = aspect;
+            // How much of the game's fade after a load there still is: the runtime draws the place
+            // it held over this one that much.
+            info.held_over = fader().unwrap_or(0.0);
+            // (What's given again while the game can't draw its world.)
+            let mut kept = info;
+            kept.flags &= SLOT_STEREO | SLOT_DEPTH;
+            kept.held_over = 0.0;
+            *LAST_WORLD.lock().unwrap() = Some(LastWorld { info: kept, near_far: e.near_far, menu_world: crate::worldmenu::up() });
             // The game's card of the things on the hands: which it's of now (`crate::hud_info`).
             hooks::guard_void("hud info", || {
                 crate::hud_info::moved();
@@ -480,9 +990,11 @@ mod win {
         });
     }
 
-    fn menu(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32) {
+    /// No world: the game's whole picture as a panel, or (`floating`: its UI drawn with its alpha,
+    /// as over the world) its menus' pieces floating in the runtime's room.
+    fn menu(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32, floating: bool) {
         // Keeps the link alive and says the game is in its menus.
-        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, now: link::now(), dt: 0.0 });
+        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, bob: None, camera: None, loading: loading(), hands_only: false, recenter: None, now: link::now(), dt: 0.0 });
         link::with_adapter(|a| {
             let gpu = a.gpu().clone();
             if !d3d9::capture(dev, &gpu, HUD) {
@@ -496,9 +1008,10 @@ mod win {
                 }
             }
             let mut info: SlotInfo = bytemuck::Zeroable::zeroed();
-            info.flags = SLOT_MENU | SLOT_HUD;
+            info.flags = if floating { SLOT_HUD } else { SLOT_MENU | SLOT_HUD };
             info.hud_aspect = aspect;
-            if let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(crate::hud::outside())) {
+            let layout = if floating { crate::hud::layout() } else { crate::hud::outside() };
+            if let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(layout)) {
                 a.write_hud_layout(&layout);
             }
             info.hud_layout = a.hud_layout_seq();

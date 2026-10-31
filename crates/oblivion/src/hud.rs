@@ -15,6 +15,8 @@
 //! | a count, a question, haggling | where the eyes look, the menu under it where it was | the box |
 //! | a service from dialogue (spells, training, repair, recharge, persuasion) | beside the speaker | the menu, cut from the screen |
 //! | a thing's own (a lock being picked, an altar's enchanting or spellmaking, a sigil stone) | beside the thing | the menu, cut from the screen |
+//! | the main menu, in its place in Cyrodiil (`crate::worldmenu`) | over the view, beside its subject | the logo, then each word (Continue, New, Load, Options, Credits, Exit) in a column under it, in the HUD's cream |
+//! | the loading screen (the place the player was in held round them, `crate::render`) | ahead of the player | its bar alone, with its word |
 //! | the race menu (a new character) | beside the mirror (the runtime's: `GS_MENU_IN_WORLD`, [`crate::render`]) | none here: the runtime shows the part of the picture it's in |
 //! | anything else | ahead of the player | the menu, cut from the screen |
 //! | a book or a note being read | over the book in the hand, turned to the eyes (or held in the off hand: one read from the inventory or a shelf) | a book's two pages, a note's scroll |
@@ -205,7 +207,7 @@ mod win {
     const RETICLE: u32 = 0;
 
     /// `Tile::UpdateFloat(this, id, value)` (thiscall): sets a value and updates what's drawn from it.
-    const UPDATE_FLOAT: usize = 0x0058_CEB0;
+    pub const UPDATE_FLOAT: usize = 0x0058_CEB0;
     /// The laser in the colours of the game's own cursor (`textures\menus\misc\cursor.dds`, a gold
     /// arrow): the cream of its highlight for the beam's thread, the gold of its blade for the glow
     /// round it and its dot.
@@ -304,6 +306,118 @@ mod win {
         Piece::of(&[From::Drawn("hol_buttons")], true),
         Piece::of(&[From::Drawn("hol_title")], false),
     ];
+
+    /// The main menu (`options\main_menu.xml`): its words (each a `prefabs\button_floating.xml`: its
+    /// text, and under it while the cursor's on it the dialogue's brush-stroke), in the game's order.
+    const MAIN_WORDS: [&str; 6] = ["main_continue", "main_new", "main_load", "main_options", "main_credits", "main_exit"];
+    /// Each word's text in its button.
+    const MAIN_WORD_TEXT: &str = "button_text";
+    /// The brush-stroke under a word reaches this far left of its button (`button_floating`, x -10).
+    const STROKE_LEFT: f32 = 12.0;
+    /// How much bigger than a menu's line the main menu's words float over the view (a title's size),
+    /// and its logo.
+    const MAIN_WORD_SCALE: f32 = 1.35;
+    const MAIN_LOGO_SCALE: f32 = 0.75;
+    /// The game's text over its world: the HUD's cream (`hud_main_menu.xml`) in Kingthings shadowed
+    /// (font 2), as Bethesda's own in-game loading bar has it (`loading_bar_ingame_menu.xml`). The
+    /// main menu's and the loading screen's brown is for the parchment and pictures behind them.
+    const OVER_WORLD: [(u16, f32); 4] = [(tiles::RED, 254.0), (tiles::GREEN, 244.0), (tiles::BLUE, 183.0), (tiles::FONT, 2.0)];
+
+    /// The loading screen (`loading_menu.xml`): its bar (the empty ribbon, the ribbon filled as far as
+    /// the load's gone, its slider) with its word under it.
+    const LOADING_BAR: &[Piece] = &[Piece::of(&[From::Drawn("load_progress")], false)];
+    /// The loading screen's own black over the screen, its location's picture (with its hint) and its
+    /// title page: clear in VR, the place held showing round the bar instead.
+    const LOADING_BACKDROP: [&str; 3] = ["black", "load_main", "load_title_page"];
+    const LOADING_WORD: &str = "load_loading";
+    /// The loading bar a little bigger than a line of text: it's read at a glance.
+    const LOADING_SCALE: f32 = 1.4;
+
+    /// Sets a tile's value through the game's own update (so what it draws follows), when it isn't
+    /// that already.
+    fn set_value(tile: usize, id: u16, v: f32) {
+        if tiles::value(tile, id).is_some_and(|now| (now - v).abs() < 0.5) {
+            return;
+        }
+        type Update = unsafe extern "thiscall" fn(usize, u32, f32);
+        crate::hooks::guard_void("tile value", || unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(tile, id as u32, v) });
+    }
+
+    /// A text tile in the game's colours for text over its world ([`OVER_WORLD`]).
+    fn over_world(tile: usize) {
+        for (id, v) in OVER_WORLD {
+            set_value(tile, id, v);
+        }
+    }
+
+    /// The main menu in its place (`crate::worldmenu`): over the view, beside what it's of, the logo
+    /// and then each word in a column under it (the game's row would be 40 degrees wide), each word
+    /// a piece of its own that the laser points at (`point`: not while a question is over them), so
+    /// the game's own hover (the brush-stroke, its focus sound) and click do the rest. The box the
+    /// logo and words take, if any show. (The flat main menu, with no place, isn't cut: it's its
+    /// panel.)
+    fn main_menu(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees, point: bool) -> Option<[f32; 4]> {
+        if !crate::worldmenu::up() {
+            return None;
+        }
+        let (subject, side) = crate::worldmenu::subject()?;
+        let tree = trees.get(crate::menus::MENU_MAIN);
+        // (Each word's text over the world in the HUD's colours: found under its button.)
+        for word in MAIN_WORDS {
+            let Some(i) = tree.0.iter().position(|p| p.name.eq_ignore_ascii_case(word)) else { continue };
+            let depth = tree.0[i].depth;
+            if let Some(text) = tree.0[i + 1..].iter().take_while(|p| p.depth > depth).find(|p| p.name.eq_ignore_ascii_case(MAIN_WORD_TEXT)) {
+                over_world(text.tile);
+            }
+        }
+        let words: Vec<[f32; 4]> = MAIN_WORDS.iter().filter_map(|w| tree.rect(w)).map(|b| [b[0] - STROKE_LEFT, b[1], b[2], b[3]]).collect();
+        if words.is_empty() {
+            return None;
+        }
+        let logo = tree.drawn("oblivion_logo");
+        let h = screen.1.max(1.0);
+        let n = l.add_group(HudGroup { anchor: ANCHOR_VISTA, side, at: subject.to_array(), id: crate::menus::MENU_MAIN, ..Default::default() });
+        if n == 0 {
+            return None;
+        }
+        // (A column, the logo on top: each piece's height in the group's units, as it floats.)
+        let word_flags = HUDE_SOFT | if point { HUDE_POINT } else { 0 };
+        let items: Vec<([f32; 4], f32, u32)> = logo.map(|b| (b, MAIN_LOGO_SCALE, 0)).into_iter().chain(words.iter().map(|b| (*b, MAIN_WORD_SCALE, word_flags))).collect();
+        let tall = |b: &[f32; 4], k: f32| (b[3] - b[1] + 2.0 * MARGIN) / h * k;
+        let total = items.iter().map(|(b, k, _)| tall(b, *k)).sum::<f32>() + GAP * (items.len() - 1) as f32;
+        let mut top = total * 0.5;
+        for (b, k, flags) in items {
+            let t = tall(&b, k);
+            if let Some(uv) = tiles::uv_of(b, screen, MARGIN) {
+                l.push(HudElement { scale: k, ..HudElement::piece(n, uv, [0.0, top - t * 0.5, 0.0], flags) });
+            }
+            top -= t + GAP;
+        }
+        // (All it takes on the screen: what a question over it is moved clear of.)
+        logo.into_iter().chain(words).fold(None, tiles::grow)
+    }
+
+    /// The loading screen in VR: its bar alone, floating ahead, over the place held round the player
+    /// (`crate::render`). The screen's black, its picture and its title page are made clear (their
+    /// `alpha`, through the game's own update, as each new loading screen comes) and its word is the
+    /// HUD's, as Bethesda's in-game bar has it.
+    fn loading_bar(l: &mut HudLayout, screen: (f32, f32), trees: &mut Trees) {
+        let tree = trees.get(crate::menus::MENU_LOADING);
+        for name in LOADING_BACKDROP {
+            if let Some(p) = tree.find(name) {
+                set_value(p.tile, tiles::ALPHA, 0.0);
+            }
+        }
+        if let Some(p) = tree.find(LOADING_WORD) {
+            over_world(p.tile);
+        }
+        let first = l.count as usize;
+        if add_group(l, HudGroup { anchor: ANCHOR_PLAYER, id: crate::menus::MENU_LOADING, ..Default::default() }, crate::menus::MENU_LOADING, LOADING_BAR, screen, trees).is_some() {
+            for e in &mut l.elements[first..l.count as usize] {
+                e.scale = LOADING_SCALE;
+            }
+        }
+    }
 
     /// The menus' trees, each read once a frame as it's needed.
     #[derive(Default)]
@@ -481,7 +595,7 @@ mod win {
     fn put_back() {
         let mut moved = MOVED.lock().unwrap();
         if let Some((tile, dy)) = moved.take()
-            && [MENU_CONTAINER, MENU_INVENTORY, MENU_STATS, MENU_MAGIC, MENU_MAP].iter().any(|&k| tiles::menu_tile(k) == tile)
+            && [MENU_CONTAINER, MENU_INVENTORY, MENU_STATS, MENU_MAGIC, MENU_MAP, crate::menus::MENU_MAIN].iter().any(|&k| tiles::menu_tile(k) == tile)
         {
             move_menu(tile, -dy);
         }
@@ -580,6 +694,11 @@ mod win {
         // A line of the game's ordinary text (a list row's name: 38 units with its leading).
         l.text_height = 36.0 / screen.1;
         let mut trees = Trees::default();
+        // The game loading another place: its bar alone.
+        if crate::menus::menu_open(crate::menus::MENU_LOADING) {
+            loading_bar(&mut l, screen, &mut trees);
+            return l;
+        }
         // (What the crosshair was last on out of menus: what a menu opened by activating it is about.)
         static LOOKED_AT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         if !crate::menus::menu_mode() {
@@ -650,13 +769,31 @@ mod win {
                 big_four(&mut l, &mut trees);
             }
             MENU_BOOK => book(&mut l, screen, &mut trees),
+            // The main menu in its place: its words over the view, alone (the runtime's settings
+            // aren't beside them: they're beside the pause menu, in a game).
+            crate::menus::MENU_MAIN => {
+                main_menu(&mut l, screen, &mut trees, true);
+            }
             MENU_QUANTITY | MENU_MESSAGE | MENU_NEGOTIATE => {
                 // A count, a question or a haggle over another menu: where the eyes look, the menu
                 // under it where it was.
-                let under = if tiles::menu_tile(MENU_CONTAINER) != 0 { container(&mut l, &mut trees) } else { big_four(&mut l, &mut trees) };
-                let popup = add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);
-                if let (Some((kind, u)), Some(p)) = (under, popup) {
-                    make_room((tiles::menu_tile(kind), u), (tiles::menu_tile(top), p), screen);
+                // (Over the main menu in its place, its words stay where they float, under the
+                // question, and aren't pointed at: the question is the game's to answer first.)
+                if tiles::menu_tile(crate::menus::MENU_MAIN) != 0 && crate::worldmenu::up() {
+                    // (The question's box is drawn over the middle of the screen, across the main
+                    // menu's row of words: they're moved apart on the screen, as a menu in a game
+                    // is, so each piece is its own.)
+                    let under = main_menu(&mut l, screen, &mut trees, false);
+                    let popup = add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);
+                    if let (Some(u), Some(p)) = (under, popup) {
+                        make_room((tiles::menu_tile(crate::menus::MENU_MAIN), u), (tiles::menu_tile(top), p), screen);
+                    }
+                } else {
+                    let under = if tiles::menu_tile(MENU_CONTAINER) != 0 { container(&mut l, &mut trees) } else { big_four(&mut l, &mut trees) };
+                    let popup = add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);
+                    if let (Some((kind, u)), Some(p)) = (under, popup) {
+                        make_room((tiles::menu_tile(kind), u), (tiles::menu_tile(top), p), screen);
+                    }
                 }
             }
             // (The race menu stands beside the mirror the player is made before: the runtime puts
@@ -795,6 +932,13 @@ mod win {
     pub fn measure_due() -> Option<HudLayout> {
         let mut m = MEASURE.lock().unwrap();
         if m.as_ref().is_some_and(|(at, _)| crate::link::now() >= *at) { m.take().map(|(_, l)| l) } else { None }
+    }
+
+    /// Nothing of the game's UI floats (its picture of the moment is a flat screen's, not cut).
+    pub fn nothing() -> HudLayout {
+        let mut l = HudLayout::new(HUDL_ALPHA | HUDL_REST_HIDDEN, &[]);
+        l.pointer = POINTER;
+        l
     }
 
     /// Out of the world (the main menu, loading): the game's screen whole, as before; only the
