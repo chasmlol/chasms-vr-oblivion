@@ -305,15 +305,23 @@ mod win {
                         Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
                     }
                 }
+                // (nothing to listen for: the rule off, as it was; a rule of no words can't be
+                // committed, SPERR_NO_TERMINATING_RULE_PATH)
                 if let Some(list) = latest {
-                    grammar.SetRuleState(PCWSTR::null(), std::ptr::null_mut(), SPRS_INACTIVE)?;
-                    grammar.ClearRule(rule)?;
-                    for p in &list {
-                        grammar.AddWordTransition(rule, SPSTATEHANDLE::default(), &HSTRING::from(p.as_str()), w!(" "), SPWT_LEXICAL, 1.0, std::ptr::null())?;
-                    }
-                    grammar.Commit(0)?;
-                    if !list.is_empty() {
-                        grammar.SetRuleState(PCWSTR::null(), std::ptr::null_mut(), SPRS_ACTIVE)?;
+                    let set = || -> windows::core::Result<()> {
+                        grammar.SetRuleState(PCWSTR::null(), std::ptr::null_mut(), SPRS_INACTIVE)?;
+                        if list.is_empty() {
+                            return Ok(());
+                        }
+                        grammar.ClearRule(rule)?;
+                        for p in &list {
+                            grammar.AddWordTransition(rule, SPSTATEHANDLE::default(), &HSTRING::from(p.as_str()), w!(" "), SPWT_LEXICAL, 1.0, std::ptr::null())?;
+                        }
+                        grammar.Commit(0)?;
+                        grammar.SetRuleState(PCWSTR::null(), std::ptr::null_mut(), SPRS_ACTIVE)
+                    };
+                    if let Err(e) = set() {
+                        tracing::warn!("voice commands: the {} phrases weren't taken: {e}", list.len());
                     }
                 }
                 let _ = context.WaitForNotifyEvent(100);

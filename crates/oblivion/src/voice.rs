@@ -36,25 +36,57 @@ const ENGAGED: f64 = 12.0;
 /// Oblivion's emotions, as its dialogue responses and `Actor::Speak` have them.
 pub const EMOTIONS: [&str; 7] = ["neutral", "anger", "disgust", "fear", "sad", "happy", "surprise"];
 
-/// The game's emotion for how a line is said (its own words for it: "angrily", "with a laugh"),
-/// and how strongly (0 to 100). Neutral for anything else.
+/// The game's emotion for how a line is said (its own words for it: "angrily", "hurt, but still
+/// beaming"), the first of its words that says one, and how strongly (0 to 100: plainly enough to
+/// see on a face, more for "very" and the like, less for "mildly"). Neutral for anything else.
 pub fn emotion(how: &str) -> (u32, u32) {
     let how = how.to_lowercase();
-    let strong = ["very", "furious", "terrified", "sobbing", "shout", "yell", "scream", "roar"].iter().any(|w| how.contains(w));
+    let strong = ["very", "furious", "terrified", "sobbing", "shout", "yell", "scream", "roar", "livid", "ecstatic", "beside"].iter().any(|w| how.contains(w));
+    let mild = ["mild", "slight", "a little", "a bit", "faint", "soft", "quiet", "gentl"].iter().any(|w| how.contains(w));
     let kinds: [(u32, &[&str]); 6] = [
-        (1, &["ang", "furious", "annoy", "irrit", "snap", "shout", "yell", "growl", "stern", "cold", "harsh"]),
-        (2, &["disgust", "revolt", "sneer", "contempt", "scorn"]),
-        (3, &["afraid", "fear", "scared", "nervous", "terrif", "worried", "anxious", "whisper"]),
-        (4, &["sad", "sorrow", "mourn", "grief", "tired", "weary", "sigh", "sob", "regret"]),
-        (5, &["laugh", "happy", "warm", "cheer", "smil", "amus", "glad", "friendly", "joy", "chuckl", "grin", "pleased"]),
-        (6, &["surpris", "shock", "astonish", "startl", "amazed", "disbelief"]),
+        (
+            1,
+            &[
+                "angr", "anger", "furious", "fury", "annoy", "irrit", "snap", "shout", "yell", "growl", "stern", "cold", "harsh", "scowl", "glar", "frown", "bitter", "sharp",
+                "huff", "seeth", "livid", "irate", "indignant", "outrag", "menac", "threat", "snarl", "grumbl", "grump", "exasperat", "impatien", "curt", "gruff", "terse",
+            ],
+        ),
+        (2, &["disgust", "revolt", "sneer", "contempt", "scorn", "disdain", "sniff", "repuls", "distaste", "grimac", "appal", "nause", "loath", "sour"]),
+        (
+            3,
+            &[
+                "afraid", "fear", "scared", "nervous", "terrif", "worried", "anxious", "whisper", "trembl", "shak", "stammer", "hesitant", "uneas", "panic",
+                "frighten", "timid", "wary", "flinch", "jumpy",
+            ],
+        ),
+        (
+            4,
+            &[
+                "sad", "sorrow", "mourn", "grief", "tired", "weary", "sigh", "sob", "regret", "hurt", "wound", "disappoint", "deflat", "crestfallen", "glum", "gloom",
+                "melanchol", "wistful", "somber", "sombre", "downcast", "tear", "cry", "lonely", "ashamed", "sheepish", "apolog", "sulk", "pout",
+            ],
+        ),
+        (
+            5,
+            &[
+                "laugh", "happy", "warm", "cheer", "smil", "amus", "glad", "friendly", "joy", "chuckl", "grin", "pleased", "beam", "delight", "eager", "thrill",
+                "excit", "enthus", "bright", "gush", "giggl", "proud", "adoring", "fond", "playful", "grateful", "relie", "merry", "jovial", "wink", "teas", "chirp",
+                "bubbl", "hearty", "ecstatic", "elated", "gleeful", "glee",
+            ],
+        ),
+        (
+            6,
+            &[
+                "surpris", "shock", "astonish", "startl", "amazed", "disbelief", "gasp", "aghast", "stunned", "wide-eyed", "incredul", "taken aback", "baffl",
+                "confus", "bewilder", "puzzl",
+            ],
+        ),
     ];
-    for (kind, words) in kinds {
-        if words.iter().any(|w| how.contains(w)) {
-            return (kind, if strong { 80 } else { 50 });
-        }
+    let first = kinds.iter().filter_map(|(kind, words)| words.iter().filter_map(|w| how.find(w)).min().map(|at| (at, *kind))).min();
+    match first {
+        Some((_, kind)) => (kind, if strong { 100 } else if mild { 40 } else { 70 }),
+        None => (0, 50),
     }
-    (0, 50)
 }
 
 /// Oblivion's lip file for the mouth's frames (FaceGen's 16 phonemes, 30 a second): the 12-byte
@@ -1409,12 +1441,20 @@ mod tests {
 
     #[test]
     fn how_a_line_is_said_is_its_emotion() {
-        assert_eq!(emotion("angrily"), (1, 50));
-        assert_eq!(emotion("shouting furiously"), (1, 80));
-        assert_eq!(emotion("with a laugh"), (5, 50));
-        assert_eq!(emotion("Sadly"), (4, 50));
-        assert_eq!(emotion("surprised"), (6, 50));
+        assert_eq!(emotion("angrily"), (1, 70));
+        assert_eq!(emotion("shouting furiously"), (1, 100));
+        assert_eq!(emotion("with a laugh"), (5, 70));
+        assert_eq!(emotion("Sadly"), (4, 70));
+        assert_eq!(emotion("surprised"), (6, 70));
+        assert_eq!(emotion("mildly amused"), (5, 40));
         assert_eq!(emotion(""), (0, 50));
+        // (the Adoring Fan's own: the first of its words that says one)
+        assert_eq!(emotion("hurt, but still beaming").0, 4);
+        assert_eq!(emotion("confused, then delighted").0, 6);
+        assert_eq!(emotion("trying to scowl, but it comes out wobbly").0, 1);
+        assert_eq!(emotion("eagerly").0, 5);
+        assert_eq!(emotion("evenly").0, 0);
+        assert_eq!(emotion("in a strange, changing voice").0, 0);
     }
 
     #[test]
