@@ -6,7 +6,8 @@ The desktop view (the window on the monitor, for recording and streaming) gets a
 effects only it shows. They'd make you sick in a headset, and they make footage look filmed. The
 headset's view never changes.
 
-Everything is in the RustVR menu's new **Studio** tab, and it's saved with the settings. How it's
+Everything is in the RustVR menu's new **Studio** tab, and it's saved with the settings. There
+are no black bars anywhere: the letterbox is gone, as you asked after the first look. How it's
 built and why is in `framework/docs/research/desktop-fx.md`.
 
 ## The looks
@@ -16,10 +17,10 @@ Pick one at the top of the Studio tab. Change anything by hand and it becomes "c
 | Look | What it is |
 |---|---|
 | **Clean** | The game's picture as it is: no effects. Snap turns still glide. |
-| **Cinematic** | A film's look: a 2.39:1 letterbox and a 90 degree lens. |
+| **Cinematic** | A film's look, through a 90 degree lens. |
 | **Hyper-real** | A body camera's look (Unrecord, Bodycam): a wide lens bent towards a fisheye, worn on the chest. |
-| **Action** | Every shot and blow felt; the view widens at a run; 2:1. |
-| **Vintage** | Old film: 4:3, heavy grain, a strong glow, faded warm colour. |
+| **Action** | Every shot and blow felt; the view widens at a run; punchy colour. |
+| **Vintage** | Old film: heavy grain, a strong glow, faded warm colour. |
 
 - **Cinematic** also has:
   - 24 frames at a 180 degree shutter's motion blur;
@@ -73,7 +74,7 @@ Watch the monitor (or OBS) while you play.
      about the size Oblivion has them on a flat screen.
    - Subtitles should sit low in the middle.
    - The activate icon should be in the middle when you look at something.
-   - All of them are crisp, over any effects, inside any letterbox.
+   - All of them are crisp, over any effects.
    - Open a menu: the HUD goes and the menus float in the world as before.
    - **Tell me** if anything is the wrong size or in the wrong place.
 10. **Your own mix.** Every effect has its own switch and strengths below the looks.
@@ -97,7 +98,6 @@ The unit tests cover:
 
 - what's a jump and what isn't: a snap, a crouch, a load, a game's hitch;
 - the shake wearing off;
-- the letterbox;
 - the flat HUD's layout;
 - the looks;
 - reading a `.cube` LUT.
