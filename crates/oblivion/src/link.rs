@@ -75,15 +75,35 @@ pub struct Snapshot {
     pub view: Option<View>,
 }
 
+/// How high the game's eye is over the player's feet (metres): the runtime stands the body on the
+/// game's ground there and sizes it to match, and a real crouch keeps the view at the head. On a
+/// horse, as it last was on foot (the body sits in the saddle).
+fn eye_above_feet(eye: Option<Vec3>, riding: bool) -> f32 {
+    static ON_FOOT: Mutex<f32> = Mutex::new(0.0);
+    let mut on_foot = ON_FOOT.lock().unwrap();
+    let p = crate::engine::player();
+    let feet = (p != 0 && !riding).then(|| crate::mem::at::<[f32; 3]>(p + crate::engine::refr::POS)).flatten();
+    if let (Some(eye), Some(feet)) = (eye, feet) {
+        let h = eye.y - crate::camera::basis().point_from_game(Vec3::from(feet)).y;
+        if *on_foot == 0.0 {
+            tracing::info!("link: the game's eye is {h:.2} m over the player's feet: the body stands on the game's ground");
+        }
+        *on_foot = h;
+    }
+    *on_foot
+}
+
 /// One game frame: the runtime's latest frame, the tracking mapping, the game's state.
 pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     let mut guard = ADAPTER.lock().unwrap();
     let adapter = guard.as_mut()?;
     let frame = adapter.poll()?;
+    let mut riding = false;
     let view = g.eye.and_then(|eye| {
         // On a horse the view turns with it, and is anchored on the rider's eye over the saddle held
         // steady on it (crate::riding): just seated, it faces the horse's way.
         let ride = crate::riding::carry(eye, g.dt);
+        riding = ride.is_some();
         if let Some(c) = &ride {
             adapter.tracking.carry_turn(c.turn);
             if c.recenter {
@@ -114,6 +134,7 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     }
     gs.game_zoom = 1.0;
     if view.is_some() {
+        gs.eye_above_feet = eye_above_feet(g.eye, riding);
         gs.light = crate::lighting::hint();
         // The game's water, for swimming by the arms.
         #[cfg(target_arch = "x86")]
