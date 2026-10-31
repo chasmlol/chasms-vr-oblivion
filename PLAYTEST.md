@@ -51,6 +51,14 @@ The research and the design are in `docs/research/facesculpt.md`.
   One run at 1.55 with the race menu open tells which: over budget means memory; under it, with
   `the mirror's world` large, means the third render.
 
+  The fifth run (14:50, 1.55, the race menu open) didn't slow: 60 frames a second, the game's video
+  memory 9.9 of a 31.4 GB budget, the mirror's world 3 ms a frame. Whatever slowed the third and
+  fourth runs came from outside the game then (another program on the GPU, or its memory); if it
+  comes back, these lines say which.
+- **The desktop view showed no copy of the head.** The eyes drew it with the held things; the
+  desktop view made its own list of those and left it out. It's in now. (The .bat turns the
+  desktop view on: `RUSTVR_DESKTOP_VIEW=1`.)
+
 ## What changed since the first playtest
 
 - **A pull moved the whole head.** That had three causes, all fixed:
