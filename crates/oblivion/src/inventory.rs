@@ -399,6 +399,10 @@ mod game {
         drawn: HashMap<u32, Out>,
         /// Copies to use as their use at the mouth would (a stone crushed in the hand).
         to_use: Vec<u32>,
+        /// A thing of a form the game has just given the player, to put in a hand (until when); and
+        /// one put there, not to sound coming out of the pack as one drawn does (until when).
+        give: Option<(usize, usize, f64)>,
+        quiet: Option<(usize, f64)>,
         states: Box<ObjectStates>,
         logged: usize,
     }
@@ -418,6 +422,8 @@ mod game {
             published: -100.0,
             drawn: HashMap::new(),
             to_use: Vec::new(),
+            give: None,
+            quiet: None,
             states: bytemuck::zeroed_box(),
             logged: usize::MAX,
         }))
@@ -685,6 +691,22 @@ mod game {
         player != 0 && use_one(player, form, 0, 0)
     }
 
+    /// How many of a thing the player has now.
+    pub fn count(form: usize) -> i32 {
+        let player = engine::player();
+        if player == 0 { 0 } else { count_of(player, form) }
+    }
+
+    /// One of a thing of `form` the game has just given the player (a plant's ingredient, plucked)
+    /// into hand `hand`, the runtime's copy held where the hand is, if the hand is still closed
+    /// (`Inventory::give_item`); once the inventory has it, within a second or two.
+    pub fn give(form: usize, hand: usize, now: f64) {
+        with_state(|s| {
+            s.give = Some((form, hand, now + 2.0));
+            s.next_scan = 0.0;
+        });
+    }
+
     /// A stack's name and count as the inventory last had it.
     pub fn describe(id: u32) -> Option<(String, u32)> {
         with_state(|s| s.inv.item(id).map(|i| (i.name().to_owned(), i.count)))
@@ -726,8 +748,12 @@ mod game {
                 for st in mine {
                     let Some((form, list)) = stack(s, st.parent) else { continue };
                     // Just drawn: the game's own sound of taking a thing of its kind out.
+                    let quiet = s.quiet.is_some_and(|(f, until)| f == form && now < until);
                     let d = *s.drawn.entry(st.id).or_insert_with(|| {
-                        item_sound(player, form, true);
+                        // (One the game put in the hand has made the game's own sound already.)
+                        if !quiet {
+                            item_sound(player, form, true);
+                        }
                         Out { form, uses: 0, let_go: None, taken: false }
                     });
                     if d.taken {
@@ -778,6 +804,21 @@ mod game {
                 s.next_scan = now + SCAN_EVERY;
                 let before: Vec<u8> = bytemuck::bytes_of(&*s.inv).to_vec();
                 scan(s, player);
+                // A thing the game has given the player, into the hand that took it: its stack (the
+                // one without an extra list of its own: a plain one, just added).
+                if let Some((form, hand, until)) = s.give {
+                    let id = s.ids.iter().filter(|((f, _), _)| *f == form).min_by_key(|((_, list), _)| *list != 0).map(|(_, id)| *id).filter(|id| s.inv.item(*id).is_some());
+                    if let Some(id) = id {
+                        s.inv.give_seq = s.inv.give_seq.wrapping_add(1);
+                        s.inv.give_hand = hand as u32;
+                        s.inv.give_item = id;
+                        s.quiet = Some((form, now + 2.0));
+                        s.give = None;
+                        tracing::info!("inventory: {} into the {} hand", s.inv.item(id).map_or("?", |i| i.name()), if hand == 0 { "left" } else { "right" });
+                    } else if now > until {
+                        s.give = None;
+                    }
+                }
                 if changed || bytemuck::bytes_of(&*s.inv) != before.as_slice() || now - s.published > REPUBLISH {
                     publish(s, now);
                 }

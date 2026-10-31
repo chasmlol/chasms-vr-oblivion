@@ -201,6 +201,7 @@ mod win {
             crate::shrines::frame(link::now());
             crate::rest::frame();
             crate::surrender::frame();
+            crate::plants::frame(link::now());
             crate::slot_menu::frame();
             crate::pockets::frame(link::now());
             crate::alchemy::frame(link::now());
@@ -403,6 +404,7 @@ mod win {
             time(Part::Items, || hooks::guard_void("shrines", || crate::shrines::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("rest", || crate::rest::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("surrender", || crate::surrender::place(view, &snap.frame, now)));
+            time(Part::Items, || hooks::guard_void("plants", || crate::plants::place(view, &snap.frame, now)));
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))

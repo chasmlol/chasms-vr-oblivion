@@ -217,3 +217,27 @@ held), the dialogue the game's.
 
 What I couldn't: anything in the game: that the game reads the Block held for the yield the frame
 before the activation is untested.
+
+## 8. Harvesting plants by hand — `playtest-plants.bat`
+
+Outside Vilverin with four plants set out around your feet: a Nirnroot ahead (it always gives),
+Lavender to the left and Columbine to the right (four in five give), a Fly Amanita close in front
+(one in two). Saves as `rustvr-plants`.
+
+1. **Pluck**: put a hand into a plant (its flower or cap), close the grip, and pull the hand away
+   about a hand's width while still closed. Closing on it is a light buzz that grows as you pull;
+   the pluck snaps. The game's own harvest: "You successfully harvest Lavender." and its sound, or
+   "You find nothing of use." (its season's chance).
+2. **In the hand**: when it gave, the ingredient is in the hand that plucked it (keep the grip
+   closed until it's there, a moment). Put it in a slot (it's already in the pack), hold it at the
+   mouth to eat it, or let it go to drop it.
+3. **Plucked already**: the same plant again gives "You find nothing of use." (the game marks it
+   harvested until the cell resets; it doesn't look any different).
+4. **Not by accident**: reach through a plant and out again with the grip open, or close the grip
+   in it and open it again without pulling: nothing is harvested.
+
+What I checked: builds; unit tests (a hand in a plant's bounds); the runtime's rig tests with the
+new hand-out.
+
+What I couldn't: anything in the game: whether a plant's meshes' bounds are where its flower is,
+whether 7 cm is a natural pluck, and whether the ingredient reaches the hand before you open it.

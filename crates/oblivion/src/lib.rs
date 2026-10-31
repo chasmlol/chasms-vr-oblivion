@@ -69,6 +69,7 @@ pub mod mirror_spell;
 pub mod movement;
 pub mod nodes;
 pub mod objects;
+pub mod plants;
 pub mod player;
 pub mod pockets;
 pub mod props;
