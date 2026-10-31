@@ -25,13 +25,16 @@ The research and the design are in `docs/research/facesculpt.md`.
   done fading in and not showing a box of its own, as it is when a player clicks it, and the log
   says whether the menu began to close (`console: NewGame -> ran`, or `-> failed`). In the third
   run it did: the main menu closed and the race menu opened in the prison cell 8 s later.
-- **The third run went at 4 to 5 frames a second.** That wasn't this feature: the runtime's
-  Supersampling was 1.55 (saved in `%LOCALAPPDATA%\RustVR\settings.toml` at 13:52, during another
-  feature's test), so the game drew each eye at 7237x7791 rather than 4669x5026, 2.4 times the
-  pixels, and the GPU ran out. Handing each eye's picture over took about 70 ms and its depth about
-  55 ms, where both had taken under 1 ms. The first playtest had the race menu, the mirror and the
-  copy of the head up at 1.0 and ran at 70 to 95 frames a second. Play at 1.0 (the in-headset
-  settings' Supersampling).
+- **The third and fourth runs went at 3 to 5 frames a second**, with the runtime's Supersampling
+  at 1.55: the game drew each eye at 7237x7791 rather than 4669x5026, 2.4 times the pixels. Other
+  features run fine at 1.55 (interact's runs that hour: 100 to 140 frames a second), but none of
+  them opens the race menu, and no run before these had the race menu open at that size. In the
+  race menu the game draws the world a third time, at the eyes' full size, for the mirror's view
+  (here the prison cell, with its 20 lights). The first playtest had the race menu, the mirror and
+  this feature at 4669x5026 and ran at 70 to 95. Nothing this feature adds grows with the eyes'
+  size (the face is a buffer rewritten as it changes, the copy of the head one small model). Each
+  eye's picture waited about 55 ms on the GPU before it could be handed over, where it waited under
+  1 ms at 4669x5026: the GPU was full. Why so much more than 2.4 times is still open.
 
 ## What changed since the first playtest
 
