@@ -297,6 +297,16 @@ impl CastingLight {
         unsafe { std::mem::transmute::<usize, Update>(MAGIC_LIGHT_UPDATE)(self.0, dt) };
     }
 
+    /// The game's `MagicLight` itself (to hand it to the game, which then owns it).
+    pub fn raw(&self) -> usize {
+        self.0
+    }
+
+    /// One handed out by [`CastingLight::raw`] that the game didn't take.
+    pub fn from_raw(p: usize) -> CastingLight {
+        CastingLight(p)
+    }
+
     /// The light itself (`NiPointLight`).
     pub fn light(&self) -> usize {
         mem::deref(self.0 + 8)

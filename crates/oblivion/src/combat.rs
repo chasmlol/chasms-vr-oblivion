@@ -4,10 +4,7 @@
 //!   (its high-process list), as capsules on its own skeleton's bones (`Bip01 ...`): the head, the
 //!   spine, the arms, the hands, the legs and the feet, each as thick as what it wears
 //!   ([`crate::shapes`]).
-//! * **The player's spells** ([`spells`]): the spells, powers and lesser powers on the player's
-//!   own list, with how each is delivered (its effects' range), what it costs the player now
-//!   (the game's own cost), the colour of its first effect's light, which one is selected, and
-//!   the player's magicka.
+//! * **The player's spells** and the hands' casts are `crate::spells`'s.
 //! * **What the hands did** ([`apply`], on the game's thread before its frame):
 //!   * A melee hit is the game's own hit: the player's hit routine (`Actor` vtable 0x3AC,
 //!     0x5FEBF0) on that creature, the way the attack animation would land it. That brings the
@@ -16,10 +13,7 @@
 //!     nothing.
 //!   * A block (the hand's weapon meeting a creature's swing) is the game's own block: its Block
 //!     control held through the blow, so the game's block rules, skill and sounds decide it.
-//!   * A cast is the game's own cast, at once: the caster's usability check (enough magicka, not
-//!     silenced), its cost, and an immediate cast (0x69BE90: no casting animation, the hand
-//!     already did that). The projectile leaves the palm along the hand's aim: the projectile
-//!     spawn (0x69F490) is given the hand's position and the aim's angles while the cast runs.
+//!   * A cast or a spell picked from the wheel goes to `crate::spells`.
 
 use crate::camera;
 use crate::engine::{self, refr};
@@ -48,41 +42,13 @@ const ACTOR_VTABLES: [usize; 2] = [0x00A6_FC9C, 0x00A7_10F4];
 pub(crate) fn is_actor(actor: usize) -> bool {
     actor != 0 && ACTOR_VTABLES.contains(&mem::deref(actor))
 }
-/// `TESObjectREFR`: its base form, its 3D root.
-const BASE_FORM: usize = 0x1C;
+/// `TESObjectREFR`: its 3D root.
 const NI_NODE: usize = 0x3C;
-/// `Actor`: its magic caster; the vtable slot of `GetActorValue` and of the hit routine.
-const MAGIC_CASTER: usize = 0x5C;
+/// `Actor`: the vtable slot of `GetActorValue` and of the hit routine.
 const VT_GET_AV: usize = 0x284;
 const VT_HIT: usize = 0x3AC;
 const GET_BASE_AV: usize = 0x005F_1910;
 const AV_HEALTH: u32 = 8;
-const AV_MAGICKA: u32 = 9;
-/// `PlayerCharacter::GetActiveMagicItem` (thiscall): the selected spell's `MagicItem*` (inside its
-/// spell at +0x18).
-const ACTIVE_MAGIC_ITEM: usize = 0x0065_D4A0;
-/// `TESActorBase::spellList` entries (`TESSpellList` at +0x54, its list at +4).
-const SPELL_LIST: usize = 0x58;
-/// `SpellItem`: its `MagicItem` (name at +4, effects at +0x0C of it), then its data (`SPIT`:
-/// type, cost, level, flags) at +0x34 in this build (xOBSE's header has +0x38).
-const MAGIC_ITEM: usize = 0x18;
-const SPELL_TYPE: usize = 0x34;
-const SPELL_COST: usize = 0x38;
-const SPELL_EFFECTS: usize = 0x28;
-/// `EffectItem`: range, its `EffectSetting`; `EffectSetting`: its light; a light's colour.
-const EFFECT_RANGE: usize = 0x10;
-const EFFECT_SETTING: usize = 0x1C;
-const SETTING_LIGHT: usize = 0x70;
-const LIGHT_COLOUR: usize = 0x78;
-/// `MagicCaster` vtable slots: apply the cost, is it usable.
-const VT_APPLY_COST: usize = 0x18;
-const VT_USABLE: usize = 0x1C;
-/// `MagicCaster` immediate cast (`this`, item, target, unknown).
-const CAST_IMMEDIATE: usize = 0x0069_BE90;
-/// The game's staff cast (thiscall on the actor: its equipped weapon's inventory entry).
-const USE_STAFF: usize = 0x005E_4920;
-/// The projectile spawn (cdecl, 12 arguments: ... x, y, z, angle x, y, z).
-pub const SPAWN_PROJECTILE: usize = 0x0069_F490;
 /// `NiNode` children (`NiTArray`: data at +0xB0, first free entry at +0xB6).
 const NODE_CHILDREN: usize = 0xB0;
 const NODE_COUNT: usize = 0xB6;
@@ -102,17 +68,10 @@ const FIST_REACH: f32 = 0.15;
 /// How long a block holds the Block control (seconds): through the blow it meets.
 const BLOCK_HOLD: f64 = 0.5;
 
-/// Spell types the hand casts: a spell, a power, a lesser power.
-const CASTABLE_TYPES: [u32; 3] = [0, 2, 3];
-
 /// The game's magic effects by their codes (`NiTPointerMap<EffectSetting>`: buckets at +8, as many
 /// as +4 says, a code's bucket the code modulo that; each entry {next, code, effect}).
 const EFFECT_SETTINGS: usize = 0x00B3_3508;
-/// `EffectItem`: its code; a script effect's info (`ScriptEffectInfo`: its visual effect's code at
-/// +0x10).
-const EFFECT_CODE: usize = 0x00;
-const EFFECT_SCRIPT_INFO: usize = 0x18;
-const SCRIPT_VISUAL: usize = 0x10;
+/// A script effect's code.
 pub const SCRIPT_EFFECT: u32 = u32::from_le_bytes(*b"SEFF");
 
 /// The game's magic effect (`EffectSetting`) with this code, or 0.
@@ -132,15 +91,6 @@ pub fn effect_setting(code: u32) -> usize {
         entry = mem::deref(entry);
     }
     0
-}
-
-/// The magic effect an effect looks like: its own, or for a script effect the one it was given the
-/// look of (its visual effect), as the game shows it.
-fn looks_like(effect: usize) -> usize {
-    let info = mem::deref(effect + EFFECT_SCRIPT_INFO);
-    let visual = if mem::at::<u32>(effect + EFFECT_CODE) == Some(SCRIPT_EFFECT) && info != 0 { mem::at::<u32>(info + SCRIPT_VISUAL).unwrap_or(0) } else { 0 };
-    let shown = if visual != 0 { effect_setting(visual) } else { 0 };
-    if shown != 0 { shown } else { mem::deref(effect + EFFECT_SETTING) }
 }
 
 pub(crate) fn read_str(p: usize) -> String {
@@ -411,111 +361,6 @@ pub fn actors() -> (Box<Actors>, HashMap<u32, usize>) {
     (table, by_id)
 }
 
-#[cfg(target_arch = "x86")]
-fn active_magic_item(player: usize) -> usize {
-    type F = unsafe extern "thiscall" fn(usize) -> usize;
-    unsafe { std::mem::transmute::<usize, F>(ACTIVE_MAGIC_ITEM)(player) }
-}
-
-#[cfg(not(target_arch = "x86"))]
-fn active_magic_item(_player: usize) -> usize {
-    0
-}
-
-/// The player's spells now, and each one's `SpellItem` by id.
-pub fn spells() -> (Box<Spells>, HashMap<u32, usize>) {
-    let mut table: Box<Spells> = bytemuck::zeroed_box();
-    let mut by_id = HashMap::new();
-    let player = engine::player();
-    if player == 0 {
-        return (table, by_id);
-    }
-    let magicka = actor_value(player, AV_MAGICKA) as f32;
-    table.magicka = magicka;
-    table.magicka_max = base_actor_value(player, AV_MAGICKA) as f32;
-    table.cast_time = 0.5;
-    // The game's own casting art goes where the runtime's casting is (`crate::magic`).
-    table.flags = SPELLS_GAME_ART;
-    let active = active_magic_item(player);
-    static ACTIVE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(usize::MAX);
-    if ACTIVE.swap(active, std::sync::atomic::Ordering::Relaxed) != active {
-        tracing::info!("combat: the player's active magic item {active:#x}");
-    }
-    let base = mem::deref(player + BASE_FORM);
-    let mut entry = base + SPELL_LIST;
-    let mut guard = 0;
-    while entry != 0 && guard < 512 && (table.count as usize) < MAX_SPELLS {
-        guard += 1;
-        let spell = mem::deref(entry);
-        entry = mem::deref(entry + 4);
-        if spell == 0 {
-            continue;
-        }
-        let kind = mem::at::<u32>(spell + SPELL_TYPE).unwrap_or(u32::MAX);
-        if !CASTABLE_TYPES.contains(&kind) {
-            continue;
-        }
-        let Some(id) = mem::at::<u32>(spell + FORM_ID) else { continue };
-        let mut s: Spell = bytemuck::Zeroable::zeroed();
-        s.id = id;
-        s.set_name(&read_str(mem::deref(spell + MAGIC_ITEM + 4)));
-        // Delivery: target if any effect is, else touch if any is, else on the player.
-        let (mut range, mut colour) = (DELIVER_SELF, None);
-        let mut e = spell + SPELL_EFFECTS;
-        let mut n = 0;
-        while e != 0 && n < 16 {
-            n += 1;
-            let effect = mem::deref(e);
-            e = mem::deref(e + 4);
-            if effect == 0 {
-                continue;
-            }
-            let r = mem::at::<u32>(effect + EFFECT_RANGE).unwrap_or(0);
-            range = range.max(r.min(2));
-            if colour.is_none() {
-                let light = mem::deref(looks_like(effect) + SETTING_LIGHT);
-                colour = mem::at::<[u8; 4]>(light + LIGHT_COLOUR).filter(|_| light != 0);
-            }
-        }
-        s.delivery = range;
-        let c = colour.unwrap_or([255, 220, 160, 0]);
-        s.color = [c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0];
-        s.cost = mem::at::<u32>(spell + SPELL_COST).unwrap_or(0) as f32;
-        s.flags = if kind != 0 { SPELL_POWER } else { 0 };
-        if spell + MAGIC_ITEM == active {
-            s.flags |= SPELL_SELECTED;
-        }
-        if kind != 0 || s.cost <= magicka {
-            s.flags |= SPELL_CASTABLE;
-        }
-        let i = table.count as usize;
-        table.spells[i] = s;
-        table.count += 1;
-        by_id.insert(id, spell);
-    }
-    (table, by_id)
-}
-
-/// The player's spell with form id `id` (its `SpellItem`), as last published.
-pub fn spell_item(id: u32) -> Option<usize> {
-    KNOWN.lock().unwrap().as_ref()?.spells.get(&id).copied()
-}
-
-/// A cast the adapter is making: the projectile goes from here this way (game units, radians).
-#[derive(Clone, Copy, Debug)]
-pub struct Launch {
-    pub pos: [f32; 3],
-    pub pitch: f32,
-    pub heading: f32,
-}
-
-static LAUNCH: Mutex<Option<Launch>> = Mutex::new(None);
-
-/// The launch of the cast being made now, if any (for the projectile spawn hook).
-pub fn launch() -> Option<Launch> {
-    *LAUNCH.lock().unwrap()
-}
-
 /// Angles (pitch looking down positive, heading 0 north turning east) of a direction in the
 /// protocol's space.
 pub fn angles(dir: Vec3) -> (f32, f32) {
@@ -531,14 +376,13 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
         return;
     }
     // The game's rule: no fighting from the saddle (nor casting). The hands still swing, as a
-    // rider's would, but nothing lands.
-    if crate::riding::mounted() {
-        if !events.is_empty() {
-            tracing::info!("combat: {} blows or casts from the saddle: the game doesn't fight mounted", events.len());
-        }
-        return;
-    }
+    // rider's would, but nothing lands. (A spell can still be picked.)
+    let mounted = crate::riding::mounted();
     for ev in events {
+        if mounted && ev.kind != CE_SELECT {
+            tracing::info!("combat: a blow or cast from the saddle: the game doesn't fight mounted");
+            continue;
+        }
         match ev.kind {
             CE_HIT => {
                 // (Gone since it was published: the game's frame ran in between.)
@@ -560,10 +404,20 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
                 // (A blow that kills, or one into a corpse, may take a limb: the gore's.)
                 crate::gore::after_hit(target, ev, before);
             }
-            CE_CAST if ev.object == crate::weapons::WEAPON_ID => cast_staff(player, ev, actors),
+            CE_CAST if ev.object == crate::weapons::WEAPON_ID => crate::spells::cast_staff(player, ev),
             CE_CAST => {
                 let Some(&spell) = spells.get(&ev.what) else { continue };
-                cast(player, spell, ev, actors);
+                crate::spells::cast(player, spell, ev, actors);
+            }
+            CE_SELECT => {
+                if let Some(&spell) = spells.get(&ev.what) {
+                    crate::spells::select(spell);
+                }
+            }
+            CE_CAST_REFUSED => {
+                if let Some(&spell) = spells.get(&ev.what) {
+                    crate::spells::failed(spell);
+                }
             }
             CE_BLOCK => {
                 tracing::info!("combat: the player blocks {:#x}{}", ev.actor, if ev.flags & CEF_PARRY != 0 { " (a parry)" } else { "" });
@@ -573,65 +427,6 @@ pub fn apply(events: &[CombatEvent], actors: &HashMap<u32, usize>, spells: &Hash
             _ => {}
         }
     }
-}
-
-/// While the game casts for the hand: the projectile leaves `ev.point` along `ev.dir` (the launch
-/// the projectile spawn takes) and the player faces that way (the game aims some things by where
-/// the caster faces); `f` casts.
-#[cfg(target_arch = "x86")]
-fn launching(player: usize, ev: &CombatEvent, f: impl FnOnce()) {
-    let dir = Vec3::from_array(ev.dir);
-    let (pitch, heading) = angles(dir);
-    let pos = camera::basis().point_to_game(Vec3::from_array(ev.point)).to_array();
-    *LAUNCH.lock().unwrap() = Some(Launch { pos, pitch, heading });
-    let rot = (player + refr::ROT) as *mut f32;
-    let (old_pitch, old_heading) = unsafe { (rot.read(), rot.add(2).read()) };
-    unsafe {
-        rot.write(pitch);
-        rot.add(2).write(heading.rem_euclid(std::f32::consts::TAU));
-    }
-    f();
-    unsafe {
-        rot.write(old_pitch);
-        rot.add(2).write(old_heading);
-    }
-    *LAUNCH.lock().unwrap() = None;
-}
-
-/// A staff's cast: the game's own (0x5E4920, as its staff attack does it: the enchantment's cost
-/// taken from the staff's charge, cast, or the game's "not enough charge"), from its tip.
-#[cfg(target_arch = "x86")]
-fn cast_staff(player: usize, ev: &CombatEvent, _actors: &HashMap<u32, usize>) {
-    let entry = mem::deref(mem::deref(player + 0x58) + EQUIPPED_WEAPON);
-    if entry == 0 {
-        return;
-    }
-    tracing::info!("combat: the player's staff casts {:#x} from {:?} towards {:?}", ev.what, ev.point, ev.dir);
-    type UseStaff = unsafe extern "thiscall" fn(usize, usize);
-    launching(player, ev, || unsafe { std::mem::transmute::<usize, UseStaff>(USE_STAFF)(player, entry) });
-}
-
-#[cfg(target_arch = "x86")]
-fn cast(player: usize, spell: usize, ev: &CombatEvent, actors: &HashMap<u32, usize>) {
-    let caster = player + MAGIC_CASTER;
-    let item = spell + MAGIC_ITEM;
-    let vt = mem::deref(caster);
-    type Usable = unsafe extern "thiscall" fn(usize, usize, *mut f32, *mut u32, u8) -> u8;
-    type Cost = unsafe extern "thiscall" fn(usize, usize, u8);
-    type Cast = unsafe extern "thiscall" fn(usize, usize, usize, usize) -> usize;
-    let (mut skill, mut failure) = (0f32, 0u32);
-    let usable = unsafe { std::mem::transmute::<usize, Usable>(mem::deref(vt + VT_USABLE))(caster, item, &mut skill, &mut failure, 0) } != 0;
-    if !usable {
-        tracing::info!("combat: the game won't cast {:#x} now (failure {failure})", ev.what);
-        return;
-    }
-    unsafe { std::mem::transmute::<usize, Cost>(mem::deref(vt + VT_APPLY_COST))(caster, item, 1) };
-    let target = if ev.actor != 0 { actors.get(&ev.actor).copied().filter(|&a| is_actor(a)).unwrap_or(0) } else { 0 };
-    tracing::info!("combat: the player casts {:#x} from {:?} towards {:?}{}", ev.what, ev.point, ev.dir, if target != 0 { " on its target" } else { "" });
-    launching(player, ev, || unsafe {
-        std::mem::transmute::<usize, Cast>(CAST_IMMEDIATE)(caster, item, target, 0);
-    });
-    crate::mirror_spell::cast(spell);
 }
 
 #[cfg(not(target_arch = "x86"))]
@@ -658,7 +453,8 @@ mod tests {
 struct Known {
     actors: HashMap<u32, usize>,
     spells: HashMap<u32, usize>,
-    /// The spells as last sent (sent again when they change).
+    /// The spells as last sent (sent again when they change): each one's id, flags and cost, the
+    /// magicka, the picks.
     sent: Option<Vec<(u32, u32, u32)>>,
     frame: u64,
 }
@@ -675,7 +471,7 @@ pub fn publish() {
     if k.frame % 60 == 2 {
         log_actors(&table);
     }
-    let spells_now = (k.frame % 10 == 1).then(spells);
+    let spells_now = (k.frame % 10 == 1).then(crate::spells::table);
     crate::link::with_adapter(|a| {
         crate::weapons::publish(a);
         crate::torch::publish(a);
@@ -687,7 +483,8 @@ pub fn publish() {
         a.write_actors(&table);
         crate::grabs::publish(a, &table, &k.actors);
         if let Some((s, by_id)) = spells_now {
-            let key: Vec<(u32, u32, u32)> = s.spells[..s.count as usize].iter().map(|x| (x.id, x.flags, x.cost as u32)).collect();
+            let mut key: Vec<(u32, u32, u32)> = s.spells[..s.count as usize].iter().map(|x| (x.id, x.flags, x.cost as u32)).collect();
+            key.push((s.magicka as u32, s.magicka_max as u32, s.picks));
             if k.sent.as_ref() != Some(&key) {
                 tracing::info!(
                     "combat: spells {:?}, selected {:?}, magicka {}",
@@ -739,33 +536,3 @@ pub fn apply_pending() {
     let Some(k) = known.as_ref() else { return };
     apply(&events, &k.actors, &k.spells);
 }
-
-#[cfg(target_arch = "x86")]
-mod hook {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    static REAL: AtomicUsize = AtomicUsize::new(0);
-    type Spawn = unsafe extern "C" fn(u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) -> u32;
-
-    pub fn install() {
-        crate::hooks::install_into(super::SPAWN_PROJECTILE as *const (), spawn as *const (), "MagicProjectile spawn", &REAL);
-    }
-
-    /// While the adapter casts: the projectile leaves the palm along the hand's aim.
-    #[allow(clippy::too_many_arguments)]
-    unsafe extern "C" fn spawn(a1: u32, a2: u32, a3: u32, a4: u32, a5: u32, a6: u32, x: u32, y: u32, z: u32, ax: u32, ay: u32, az: u32) -> u32 {
-        let real: Spawn = unsafe { std::mem::transmute(REAL.load(Ordering::Acquire)) };
-        let (x, y, z, ax, ay, az) = match super::launch() {
-            Some(l) => {
-                let f = f32::from_bits;
-                tracing::info!("combat: the spell's projectile leaves the hand at {:?} (the game's {:?}), angles {:.2}, {:.2} (the game's {:.2}, {:.2})", l.pos, [f(x), f(y), f(z)], l.pitch, l.heading, f(ax), f(az));
-                (l.pos[0].to_bits(), l.pos[1].to_bits(), l.pos[2].to_bits(), l.pitch.to_bits(), 0f32.to_bits(), l.heading.to_bits())
-            }
-            None => (x, y, z, ax, ay, az),
-        };
-        unsafe { real(a1, a2, a3, a4, a5, a6, x, y, z, ax, ay, az) }
-    }
-}
-
-#[cfg(target_arch = "x86")]
-pub use hook::install;

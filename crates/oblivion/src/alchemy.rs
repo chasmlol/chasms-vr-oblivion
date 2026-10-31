@@ -913,7 +913,7 @@ mod game {
 
     /// The font the game's interface uses as its `n`th (Oblivion.ini's `SFontFile_<n>`), as a cache
     /// name.
-    fn font(n: u32) -> String {
+    pub fn font(n: u32) -> String {
         let default = ["", "Data\\Fonts\\Kingthings_Regular.fnt", "Data\\Fonts\\Kingthings_Shadowed.fnt", "Data\\Fonts\\Tahoma_Bold_Small.fnt", "Data\\Fonts\\Daedric_Font.fnt", "Data\\Fonts\\Handwritten.fnt"];
         let path = crate::game_settings::ini_value("Fonts", &format!("SFontFile_{n}")).unwrap_or_else(|| default.get(n as usize).copied().unwrap_or(default[1]).to_owned());
         format!("oblivion/{}", oblivion_assets::export::font_key(&path))

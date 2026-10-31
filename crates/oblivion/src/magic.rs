@@ -1,22 +1,23 @@
-//! The game's own casting art where the player's casting is: a spell readied in the palm, charging
-//! and charged, or a staff's enchantment at its tip, as the game shows a spell in its caster's hands
-//! (docs/research/torches.md, "Spells and their art").
+//! The game's own casting art where the player's casting is: the spell each hand holds in its palm,
+//! charging and charged, or a staff's enchantment at its tip, as the game shows a spell in its
+//! caster's hands (docs/research/torches.md, "Spells and their art"; docs/research/spells.md).
 //!
 //! The runtime says each hand's casting every frame (`rustvr_protocol::Casters`). For it the
 //! adapter does what the game's own casting art does (0x5EDCE0), with the hand where the game has
-//! its caster's `magicNode`: the spell's main effect (the costliest, 0x419B30) gives its model,
-//! which is put in the world where the art goes (`crate::scene`, set up as the game sets up its
-//! effects) playing its `SpecialIdle_Cast` sequence: the art made for the caster's hands (a fire
-//! spell's flames, a frost spell's mist, a healing spell's sparkles), with the effect's own casting
-//! light fading in over three quarters of it, as the game's does.
+//! its caster's `magicNode`: the spell's main effect (its farthest range's costliest, 0x419B30)
+//! gives its model, which is put in the world where the art goes (`crate::scene`, set up as the
+//! game sets up its effects) playing its `SpecialIdle_Cast` sequence: the art made for the caster's
+//! hands (a fire spell's flames, a frost spell's mist, a healing spell's sparkles).
 //!
 //! The game plays that sequence once, a flare as the cast animation lets go. A spell held in the
 //! hand plays its first part round and round ([`CYCLE_SHARE`] of it, where its particles are made),
-//! so the flare burns on in the palm for as long as the spell is held. Readied (the finger on the
-//! trigger) it's small; it grows to the game's own size as it charges. As the charge starts the
-//! effect's casting sound plays, as the game plays it with its casting animation (0x663520 for the
-//! player). Cast, the art goes: the game's own cast takes over (its projectile with its own art,
-//! its sounds, its impact).
+//! so the flare burns on in the palm for as long as the spell is held. Held, it's small, and smaller
+//! as the player's magicka runs down (as Magic Improvements shows it), with no light (up close in a
+//! headset a palm's light only dazzles, which is why the big Skyrim VR lists drop it). Charging, it
+//! grows to the game's own size, the effect's casting light fading in as the game's does, and the
+//! effect's casting sound plays as the charge starts, as the game plays it with its casting
+//! animation (0x663520 for the player). Cast, the art goes: the game's own cast takes over (its
+//! projectile with its own art and the casting light, its sounds, its impact).
 //!
 //! `EffectSetting`: its model's path +0x1C (`TESModel` +0x18), its light +0x70 (a LIGH), its
 //! casting sound +0x80 (a `TESSound`).
@@ -24,13 +25,16 @@
 use crate::mem;
 use rustvr_protocol::*;
 
-/// The art's size while the spell is only readied, and charged (a share of the game's own).
+/// The art's size while the spell is only held (with the player's magicka full; empty, that share of
+/// it, as Magic Improvements has it), and charged (a share of the game's own).
 pub const READIED_SIZE: f32 = 0.4;
+pub const EMPTY_SHARE: f32 = 0.35;
 pub const CHARGED_SIZE: f32 = 1.0;
 /// The sequence of a spell effect's model that is its art in the caster's hands.
 pub const CAST_SEQUENCE: &str = "SpecialIdle_Cast";
-/// The share of the art's sequence its light takes to fade in (the game's: 0.75).
-pub const LIGHT_FADE: f32 = 0.75;
+/// The casting light fades in over this long as the charge starts (seconds: about the game's own
+/// casting animation to its release).
+pub const LIGHT_FADE: f32 = 0.3;
 /// The share of the art's sequence (at least `CYCLE_MIN` seconds) played round and round while the
 /// spell is held: the flare at its start, where its particles are made.
 pub const CYCLE_SHARE: f32 = 0.25;
@@ -46,11 +50,12 @@ const MAGIC_ITEM: usize = 0x18;
 const LOOKUP_FORM: usize = 0x0046_B250;
 const PLAY_CASTING_SOUND: usize = 0x0066_3520;
 
-/// The art's size for a casting state and charge.
+/// The art's size for a casting state and its `charge` (held: the player's magicka, 0..1).
 pub fn size(state: u32, charge: f32) -> f32 {
+    let c = charge.clamp(0.0, 1.0);
     match state {
-        CAST_READIED => READIED_SIZE,
-        CAST_CHARGING => READIED_SIZE + (CHARGED_SIZE - READIED_SIZE) * charge.clamp(0.0, 1.0),
+        CAST_READIED => READIED_SIZE * (EMPTY_SHARE + (1.0 - EMPTY_SHARE) * c),
+        CAST_CHARGING => READIED_SIZE + (CHARGED_SIZE - READIED_SIZE) * c,
         _ => CHARGED_SIZE,
     }
 }
@@ -68,7 +73,7 @@ pub fn main_effect(id: u32, object: bool) -> usize {
         type Lookup = unsafe extern "C" fn(u32) -> usize;
         unsafe { std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(id) }
     } else {
-        crate::combat::spell_item(id).unwrap_or(0)
+        crate::spells::spell_item(id).unwrap_or(0)
     };
     if form == 0 {
         return 0;
@@ -91,6 +96,8 @@ mod game {
         /// What it's for: (spell, object).
         what: (u32, u32),
         node: usize,
+        /// The effect's light form (its id), and its casting light while it charges.
+        light_form: u32,
         light: Option<scene::CastingLight>,
         sequence: Option<scene::Sequence>,
         /// Where its sequence is (seconds into it).
@@ -125,14 +132,9 @@ mod game {
         let sequence = scene::play(node, CAST_SEQUENCE);
         let length = sequence.map(|s| s.length);
         let light_form = mem::deref(effect + EFFECT_LIGHT);
-        let light = (light_form != 0).then(|| scene::CastingLight::new(mem::at::<u32>(light_form + FORM_ID).unwrap_or(0), node, length.unwrap_or(1.0) * LIGHT_FADE)).flatten();
-        tracing::info!(
-            "magic: the art of {:#x} ({path}): {CAST_SEQUENCE} {length:?} s (its first {:?} s held), its light {:?}",
-            mem::at::<u32>(effect + FORM_ID).unwrap_or(0),
-            length.map(cycle),
-            light.as_ref().map(|l| format!("{:#x} radius {:?}", l.light(), mem::at::<f32>(l.light() + 0xF8)))
-        );
-        Some(Art { what, node, light, sequence, phase: 0.0, state: CAST_NONE })
+        let light_form = if light_form != 0 { mem::at::<u32>(light_form + FORM_ID).unwrap_or(0) } else { 0 };
+        tracing::info!("magic: the art of {:#x} ({path}): {CAST_SEQUENCE} {length:?} s (its first {:?} s held), its light {light_form:#x}", mem::at::<u32>(effect + FORM_ID).unwrap_or(0), length.map(cycle));
+        Some(Art { what, node, light_form, light: None, sequence, phase: 0.0, state: CAST_NONE })
     }
 
     /// The effect's casting sound, for the player (as the game's casting animation plays it).
@@ -179,8 +181,12 @@ mod game {
                 }
             }
             let art = s.arts[h].as_mut().unwrap();
-            if c.state == CAST_CHARGING && art.state != CAST_CHARGING {
+            let charging = matches!(c.state, CAST_CHARGING | CAST_READY);
+            if charging && !matches!(art.state, CAST_CHARGING | CAST_READY) {
                 casting_sound(effect);
+                art.light = scene::CastingLight::new(art.light_form, art.node, LIGHT_FADE);
+            } else if !charging && let Some(l) = art.light.take() {
+                l.remove();
             }
             art.state = c.state;
             let (pos, rot) = view.pose(&c.at);

@@ -65,7 +65,7 @@ pub fn select_spell(_id: u32) -> bool {
 /// The form id of the player's spell called `name` (as the magic menu lists their spells and
 /// powers), if they have one.
 fn spell_named(name: &str) -> Option<u32> {
-    let (table, _) = crate::combat::spells();
+    let (table, _) = crate::spells::table();
     table.spells[..table.count as usize].iter().find(|s| rustvr_protocol::name_str(&s.name).eq_ignore_ascii_case(name)).map(|s| s.id)
 }
 
