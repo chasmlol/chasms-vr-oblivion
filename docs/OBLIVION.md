@@ -87,7 +87,7 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 |---|---|
 | Left stick | Walking, where the head looks, as the game's own analog joystick walking: slow to full speed over the stick's travel, at the pace Always Run sets (pushing it clears Auto Move) |
 | Left stick click (sprint) | Run, when Always Run is off |
-| Right stick click, or its down flick, or ducking | Crouch/Sneak (kept in step with the game's sneaking) |
+| Right stick click, or its down flick, or crouching a little | Crouch/Sneak (kept in step with the game's sneaking; how far: the Comfort tab's "Stealth crouch amount", [research/stealth.md](research/stealth.md)) |
 | A (either hand) | Jump (out of the water too, at a ledge) |
 | Empty hands in the water, grip squeezed | Swim: the hands hold the water and the player is pulled past them, several times their pace, then glides; down to rise, up to dive (the stick swims too, where the head looks) |
 | Trigger, empty hand | Activate (what the head looks at); held: Rest/Wait. The off hand, with a spell ready: a finger on it readies the spell (its art in the palm), pulling it charges it, letting go (or touching, for a touch spell) casts |

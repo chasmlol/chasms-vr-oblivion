@@ -762,7 +762,13 @@ mod win {
             match (race_menu.is_some(), *stood) {
                 (true, Some(s)) => s,
                 _ => {
-                    let s = (game.eye(), game.look_yaw());
+                    // (Crouched for real, without the game's sneak drop: `camera::hold_sneak_drop`.)
+                    static HOLDING: Mutex<bool> = Mutex::new(false);
+                    let drop = hooks::guard("sneak drop", None, camera::sneak_drop).unwrap_or(glam::Vec3::ZERO);
+                    let body = link::last().is_some_and(|s| s.frame.intents.crouch > 0.0);
+                    let mut holding = HOLDING.lock().unwrap();
+                    *holding = camera::hold_sneak_drop(*holding, body, drop.length());
+                    let s = (if *holding { game.eye() - drop } else { game.eye() }, game.look_yaw());
                     if race_menu.is_none() {
                         *stood = Some(s);
                     }
@@ -774,7 +780,8 @@ mod win {
         let recenter = crate::worldmenu::take_recenter();
         // The game's own bob, as its camera sees it (none in the race menu or the main menu's place:
         // its camera isn't the player's eyes).
-        // Its posture left out: where its camera has sat lately isn't a bob (`camera::Rest`).
+        // Its posture left out: where its camera has sat lately isn't a bob (`camera::Rest`), nor is
+        // sneaking's drop, held out of the eye above for a real crouch only (so never twice).
         static REST: std::sync::Mutex<camera::Rest> = std::sync::Mutex::new(camera::Rest::new());
         let bob = (race_menu.is_none() && !hands_only).then(|| hooks::guard("view bob", None, camera::first_person_bob)).flatten();
         let (bob, rest) = REST.lock().unwrap_or_else(|e| e.into_inner()).take(bob, dt);
