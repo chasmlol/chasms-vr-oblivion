@@ -80,5 +80,5 @@ over the world), enlarged for video with the letters' edges kept crisp:
 
     python -I clips\titles\title.py "Character Customizer" clips\titles\character-customizer.png --scale 6
 
-`--scale 6` is about 250 px tall (a title on a 4K video; half that on 1080p). The PNGs stay out of git
+A `|` splits a title into centred lines (`"Automatic Zoom on Aim|for Recording"`). `--scale 6` is about 250 px tall (a title on a 4K video; half that on 1080p). The PNGs stay out of git
 (the game's font art).

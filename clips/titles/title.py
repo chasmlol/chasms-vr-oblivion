@@ -1,6 +1,7 @@
 """A title in Oblivion's own lettering, as a transparent PNG for a video.
 
     python -I title.py "Character Customizer" out.png [--scale 6] [--native]
+    python -I title.py "Automatic Zoom on Aim|for Recording" out.png     (two lines, centred)
 
 The game's `Kingthings_Shadowed` font (what it writes over the world with: white letters in a soft
 dark halo, baked into its atlas), laid out as the game lays text out (each glyph's space before
@@ -35,14 +36,17 @@ def render(text, scale, native):
     height, glyphs, px, aw, ah = gamefont.font("Kingthings_Shadowed")
     atlas = np.frombuffer(px, np.uint8).reshape(ah, aw, 4).astype(np.float32) / 255.0
     ascent = max(g["top"] for g in glyphs)
-    placed, width = layout(glyphs, text)
+    # (Lines split at "|", each centred, the game's line height apart.)
+    lines = [layout(glyphs, line) for line in text.split("|")]
+    width = max(w for _, w in lines)
+    placed = [(ch, x + (width - w) / 2, i * height) for i, (line, w) in enumerate(lines) for ch, x in line]
     s = 1 if native else scale
     pad = 8
     W = int(np.ceil((width + 2 * pad) * s))
-    H = int(np.ceil((height + 2 * pad) * s))
+    H = int(np.ceil((height * len(lines) + 2 * pad) * s))
     letter = np.zeros((H, W), np.float32)
     halo = np.zeros((H, W), np.float32)
-    for ch, x in placed:
+    for ch, x, y in placed:
         g = glyphs[ord(ch) & 0xFF]
         if g["width"] <= 0 or g["height"] <= 0:
             continue
@@ -53,7 +57,7 @@ def render(text, scale, native):
         parts = [a * lum, a * (1.0 - lum)]
         gw, gh = int(round(g["width"] * s)), int(round(g["height"] * s))
         ox = int(round((pad + x) * s))
-        oy = int(round((pad + ascent - g["top"]) * s))
+        oy = int(round((pad + y + ascent - g["top"]) * s))
         for k, (part, into) in enumerate(zip(parts, (letter, halo))):
             img = Image.fromarray(part.astype(np.float32), mode="F")
             if s != 1 or img.size != (gw, gh):
