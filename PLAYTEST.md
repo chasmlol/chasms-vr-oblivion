@@ -3,15 +3,48 @@
 Save: rustvr-base
 
 `playtest.bat` in this worktree (not committed: double-click it in Explorer) puts away any game left
-running, then boots this build into **rustvr-base** (Danwood, a Nord in iron armour, in his house)
-with the race menu open (`showracemenu`). The mirror stands in front of you and the race menu at its
-left, as before. A key in the .bat's window closes the game and puts your settings back.
+running, then starts a **new game** with this build: the main menu's New, answered yes, its film
+skipped. You're in the prison cell, and the race menu opens by itself, as it does for a player
+starting out. The mirror stands in front of you and the race menu at its left. A key in the .bat's
+window closes the game and puts your settings back. The runtime's log is kept in
+`<builds>\facesculpt\playtest-logs` as the game closes, however the window is closed (last time
+another test replaced it before it was kept).
+
+The save above (rustvr-base, a Nord in iron armour, with `showracemenu`) is the other way in:
+`tools\play.ps1 facesculpt -Commands showracemenu`.
 
 The research and the design are in `docs/research/facesculpt.md`.
+
+## What changed since the first playtest
+
+- **A pull moved the whole head.** That had three causes, all fixed:
+  - **The solve let the rest of the face move as much as it took** for the part held to follow. Now
+    the face more than 4 to 8 cm from the point is held still, as is the area round its mirror image
+    for a symmetric pull, at ten times the weight of the part held following the hand. On the game's
+    Nord head, a 1 cm pull:
+
+    | | the part held follows | the far face moves (rms) | the far face moves (most) |
+    |---|---|---|---|
+    | before | 0.69 cm | 0.22 cm | 0.88 cm |
+    | now | 0.64 cm | 0.07 cm | 0.34 cm |
+
+  - **Stroke after stroke took the face far past any the game makes.** In your run one of its
+    coordinates reached −28.6, where every part warps. The sliders' ranges barely hold some mixes of
+    the coordinates. Now every coordinate also stays within ±8 of the mean face, and what goes past
+    is taken back without moving the rest.
+  - **The copy of the head jumped half a second after you let go**, when the body was put together
+    with the new face: it was centred on the face as shaped. Now it's centred on the head with no
+    face on it, so it stays put.
+- **Some of it is FaceGen itself.** Its coordinates each move the whole face, so a change to one part
+  alone is only ever nearly one. The chin especially: FaceGen has no chin of its own (the chin
+  sliders move the jaw and mouth too). So a chin pulled down now mostly holds your hand back, where
+  before it stretched the whole face.
+- **The .bat starts a new game**, at the race menu in the prison cell.
 
 ## What to try, in order
 
 1. **The copy of your head.**
+   - The race menu opens by itself in the prison cell (with your new character's race and face).
    - A copy of your own head stands in front of you to the right, a bit under your eyes, 1.7 times
      life size, its face turned to you. It's your race's head with your face, hair and eye colour,
      lit by the room.
@@ -26,7 +59,12 @@ The research and the design are in `docs/research/facesculpt.md`.
    - You feel a fine buzz as it moves, and a harder one as you pull past what the face can do. Your
      hand stays on the nose where it got to (with ghost hands on in the RustVR menu, a see-through
      one shows where your controller is).
-   - Let go of the grip: it stays as you left it.
+   - Let go of the grip: it stays as you left it. The copy stays where it stands (it used to jump half
+     a second later).
+   - Pull the nose long: the ears, the back of the head and the top of the skull stay where they
+     were. Round the nose (its bridge, the nostrils, the upper lip) the face goes with it a little.
+   - Pull your chin down: it barely goes, and your hand is held back with a buzz. That's FaceGen
+     having no chin of its own (the Chin page's sliders move the jaw and mouth too).
    - Try more:
      - the chin forward or down;
      - the cheekbones up or out;
@@ -70,53 +108,39 @@ The research and the design are in `docs/research/facesculpt.md`.
 
 ## What was checked
 
+- **Your first run (the adapter's log):** the race menu's new buttons were made on all ten pages, the
+  game's own head was morphed with the face (9 parts), and nothing crashed. There's no click on Undo
+  or Reset in the log, so those are still untried. The runtime's log of that run was replaced by
+  another test's before it was kept.
 - **Builds and unit tests:**
   - the adapter (32-bit release);
   - the runtime, the range and xrsim (release);
-  - the solver's, the face controls' and the protocol's tests, and the audio and runtime crates';
-  - the runtime on the framework's test range with the emulated headset (50 s, 120 frames a second,
-    no warnings): it starts and draws as before. The range has no FaceGen face, so the sculpt sits
-    idle there.
-- **The live face against the composed one:** the real Nord head, ears, eyes and mouth put together
-  with a face, then drawn live from their kept shapes, land on exactly the same vertices.
-- **FaceGen's controls**, read from the game's `si.ctl` into the asset cache (`facegen.toml`): the
-  56 named controls, the age and the gender. The named controls are unit vectors and match the race
-  menu's slider names and pages, as the game's menu has them.
-- **The solver on the game's real head** (the Nord head from the cache, from the mean face, a 1 cm
-  pull with the sliders' range at ±3):
-  - the chin and a cheekbone follow 0.9 cm;
-  - the nose tip 0.66 cm (its sliders reach their end);
-  - the far side of the head moves up to 0.4 cm;
-  - the age stays exactly where it was;
-  - a nose pulled sideways doesn't go symmetric, and goes 1.05 cm asymmetric.
+  - the solver's tests (with a new one: a face pulled past its slider and the coordinates' range
+    comes back within them, its age kept, the far end where it was), and the adapter's.
+- **The solver on the game's real Nord head** (all its face parts, from the mean face): the table
+  above. Seven places were pulled: nose tip forward, chin down, cheekbone out, brow forward, jaw
+  corner out, upper lip forward, ear out. The far face is everything more than 6 cm from the point
+  and from its mirror image.
+  - A hold is taken in 1.3 to 2.8 ms.
+  - Forty random 1.5 cm strokes, one after another: every coordinate stays within 8, every slider
+    within 5, the age exactly where it was. Keeping it there takes at most 0.16 ms a frame. The first
+    version's coordinates reached 28 in the same strokes.
+- **The new game:** the game's own steps (the main menu's New, its "Start new game?" box,
+  which button is Yes), not run.
 
 ## What I couldn't check
 
-- **Nothing of it has run in the game**, nor on any headset (emulated or real). The game can't be
-  started from here. So all of these are untested:
-  - the copy of the head being drawn;
-  - its place and size;
-  - the glow;
-  - the live face;
-  - the hands holding on;
-  - the haptics;
+- **Nothing of it has run in the game since the fixes.** The game can't be started from here.
+- **The new game start.** It's never been run. Watch for:
+  - the game staying at the main menu: the log says `console: NewGame -> ...` either way;
+  - the new game's film playing anyway (it should be skipped; a click skips it in the game);
+  - the race menu opening in the cell with the copy of the head, as it did with the save.
+- **Feel:** whether the face now follows the hand enough for you, now that the rest stays still. The
+  balance (how still the rest is held against how far the part follows) is one number, easy to move
+  either way: tell me which way.
+- **Still untested from the first round:**
+  - Undo, Reset and Reset Face;
+  - the trigger's asymmetric pull;
+  - your own head in the mirror;
+  - Done, then a save and load keeping the face (a crooked one too);
   - the sounds.
-- **The race menu's new buttons.** They're made from the menu's own button template, through the
-  game's own calls, but never yet in the game. Watch for where they land in the lists, what they
-  look like, whether clicking them works (the log says "the race menu's button N clicked"), and the
-  game crashing as the race menu opens.
-- **The game's own head morphed by a pull** (as its sliders do). It isn't seen in VR. If the game
-  crashes as you first pull, this is the first suspect (the log says "the game's own heads morphed
-  with the face" once).
-- **The saved face**: whether the save keeps the pulled face as it keeps a slider's (it's the same
-  data in the same place, so it should).
-- **The asymmetric shape after loading.** The race menu has no sliders for it. The game draws and
-  saves it, but check that a crooked nose survives a save and load.
-- **Feel and tuning:**
-  - how far the face follows the hand;
-  - how wide a grab takes (2.2 cm on your face, 3.7 cm on the copy);
-  - the copy's size and place;
-  - the strength of the glow and the buzz.
-
-  These are first guesses: tell me what feels off.
-- **The sounds** (`COrganicSmall`, the game's sound of food set down) have never been heard here.
