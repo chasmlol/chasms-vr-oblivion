@@ -355,7 +355,9 @@ mod win {
             match (race_menu.is_some(), *stood) {
                 (true, Some(s)) => s,
                 _ => {
-                    let s = (game.eye(), game.look_yaw());
+                    // (Without the game's sneaking posture: `camera::sneak_drop`.)
+                    let drop = hooks::guard("sneak drop", None, camera::sneak_drop).unwrap_or(glam::Vec3::ZERO);
+                    let s = (game.eye() - drop, game.look_yaw());
                     if race_menu.is_none() {
                         *stood = Some(s);
                     }

@@ -72,6 +72,31 @@ pub fn write(camera: usize, s: &CameraState) {
     }
 }
 
+/// How far Oblivion's sneaking has lowered its first-person camera (protocol metres, the world's
+/// axes), while the camera is the first-person one. Every first-person sneak animation keys the
+/// skeleton's `Bip01 NonAccum`, the node `Camera01` hangs from, at (0, 0, -24.8) units (35 cm at a
+/// race height of 1: the eye at 79% of its standing height), crossfaded in over the animations'
+/// blend (0.1 s); the standing ones key it at 0 (`docs/research/stealth.md`). That's the flat game's
+/// sneaking posture, not where the player's head is: the headset's view leaves it out, and the real
+/// head is as low as the player has gone.
+pub fn sneak_drop() -> Option<Vec3> {
+    let player = crate::engine::player();
+    if player == 0 || mem::at::<u8>(player + crate::engine::pc::THIRD_PERSON)? != 0 || mem::at::<u8>(crate::engine::CAMERA_OFF_EYES)? != 0 {
+        return None;
+    }
+    let camera = mem::deref(crate::engine::FIRST_PERSON_CAMERA);
+    let posture = if camera != 0 { mem::deref(camera + crate::nodes::PARENT) } else { 0 };
+    let root = if posture != 0 { mem::deref(posture + crate::nodes::PARENT) } else { 0 };
+    if root == 0 || crate::nodes::name(posture) != "Bip01 NonAccum" {
+        return None;
+    }
+    let at: [f32; 3] = mem::read(unsafe { (posture as *const u8).add(av::WORLD_TRANSLATE) })?;
+    let from: [f32; 3] = mem::read(unsafe { (root as *const u8).add(av::WORLD_TRANSLATE) })?;
+    let d = Vec3::from(at) - Vec3::from(from);
+    // (Not a posture past 60 units: the skeleton's being made or taken away.)
+    (d.is_finite() && d.length() < 60.0).then(|| basis().point_from_game(d))
+}
+
 /// The camera for one headset eye: the eye's pose mapped into the world by `view`, its field of
 /// view, and the game's own near and far planes.
 pub fn eye_camera(view: &View, eye: &Pose, fov: &Fov, game: &CameraState) -> CameraState {
