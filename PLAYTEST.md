@@ -30,8 +30,9 @@ made from the game's clips.
 ## Settings
 
 RustVR's menu (the menu button) has a **Voice** tab: Voice on or off, the microphone (the headset's
-own, Virtual Desktop's, unless you pick another), their voices' volume (1.5 times the game's own
-by default), acting lines out (on: their voice follows the line's "[sneering]"; it's twice the
+own, Virtual Desktop's, unless you pick another), their voices' volume (2.5 times the game's own
+by default, up to 4: a limiter keeps them under full scale, turned down around a loud word rather
+than clipped), acting lines out (on: their voice follows the line's "[sneering]"; it's twice the
 voice server's work, so answers are slower), talking over them to cut them off (for headphones),
 and how long a pause ends what you're saying. Changing the mic or how it listens restarts the
 voice plugin (what people were told since your last save goes with it).
@@ -60,11 +61,16 @@ voice plugin (what people were told since your last save goes with it).
    keeps listening.
 5. **Walk away** more than about 8 m: they let you go.
 6. **The game's own dialogue.** Activate someone (trigger, empty hand): the game's dialogue menu
-   opens as always. While any menu is open the mic doesn't listen.
-7. **Memory.** Tell someone something ("My name is ..., I'm looking for my brother."), save (a new
+   opens as always. While any menu is open the mic doesn't listen. Flick the right stick left or
+   right in it: you turn (a step, or smoothly, as your turning setting is), the dialogue staying
+   with the speaker; up and down still go through the topics. In any other menu the stick is the
+   menu's, as before.
+7. **Their name.** Look at someone: the card with their name is under their chin now, not over
+   their face.
+8. **Memory.** Tell someone something ("My name is ..., I'm looking for my brother."), save (a new
    save), talk a bit more, then load that save and ask them what you told them: they remember what
    was said before the save, not after.
-8. **The brain page.** On the desktop, http://127.0.0.1:8090 shows the exact prompt each person
+9. **The brain page.** On the desktop, http://127.0.0.1:8090 shows the exact prompt each person
    gets, every line and how long each step took (/history keeps the session).
 
 ## What I checked, and what I couldn't
@@ -92,6 +98,9 @@ Not checked (needs you and the game):
 
 Known for now:
 
+- The game's dialogue menu speaks in 2D, centred; in the world (theirs, and the game's own greetings)
+  voices are 3D, a few dB quieter at the same loudness. If they're still quiet at 4, the game's
+  own Voice slider at full (and its effects or music a little lower) is the rest of the room.
 - Someone walking somewhere keeps walking while they talk (they look at you, they don't stop).
 - Their own greeting ("Hello", as the game has people greet you when you pass) can talk over a line.
 - The mic doesn't hear you while someone's talking, and you can't cut them off: the Quest's

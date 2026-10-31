@@ -24,6 +24,8 @@ pub const MENU_LOADING: u32 = 0x3EF;
 pub const MENU_MAIN: u32 = 0x414;
 /// The race menu (`RaceSexMenu`: a new game's character creation, or `showracemenu`).
 pub const MENU_RACE_SEX: u32 = 0x40C;
+/// Dialogue (`DialogMenu`), its pieces with the speaker ([`crate::hud`]).
+pub const MENU_DIALOG: u32 = 0x3F1;
 /// `PlayerCharacter*`, and a reference's cell (`TESObjectREFR::parentCell`).
 const PLAYER: usize = 0x00B3_33C4;
 const PARENT_CELL: usize = 0x40;
