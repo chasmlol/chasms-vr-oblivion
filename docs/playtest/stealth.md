@@ -13,7 +13,7 @@ powershell -File tools\oblivion.ps1 -Save rustvr-city -Hour 12
 It builds main, installs it beside the game and boots into the Imperial City's Market District at
 noon: people about, guards on their rounds. `powershell -File tools\oblivion.ps1 -Close` puts the
 game away and the player's settings back. `rustvr-city` is the developer's own test save, not in
-the repository; any save does, and `-At ICMarketDistrict01 -Commands "SaveGame rustvr-city"` makes
+the repository; any save does, and `-At ICMarketDistrict01`, saved as `rustvr-city`, makes
 one. The fast boot, the test saves and the game lock are in [DEVELOPING.md](../DEVELOPING.md).
 
 The framework's test range crouches the same way (framework/README.md): after a build,

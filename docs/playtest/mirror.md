@@ -18,8 +18,8 @@ the game away and the player's settings back. The fast boot, the test saves and 
 in [DEVELOPING.md](../DEVELOPING.md).
 
 `rustvr-base` is the developer's own test save, not in the repository: Danwood, a Nord in iron
-armour, in his house in Danwood. Any save does; `-At <cell> -Commands "SaveGame rustvr-base"`
-makes one. A woman to look at: `-Commands "player.sexchange"`.
+armour, in his house in Danwood. Any save does; `-At <cell>`, saved as `rustvr-base`
+([DEVELOPING.md](../DEVELOPING.md), "Test saves"), makes one. A woman to look at: `-Commands "player.sexchange"`.
 
 The heads, hair, helmets and their FaceGen morphs come from the player's own install:
 

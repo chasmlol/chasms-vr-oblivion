@@ -18,7 +18,7 @@ Elven Bow) or `-Give "00035E7C 1"` (a Daedric Bow), equipped from the inventory.
 `rustvr-archery` is the developer's own save, not in the repository. To make one, boot
 `rustvr-weye` (or any save) with `-Hour 13`, give a bow and arrows by their form ids, equip them
 (`player.equipitem <bow>`, and `EquipAll <arrows>`: the console's `EquipItem` equips a single
-arrow), and add `-Commands "SaveGame rustvr-archery"`.
+arrow), and save it as `rustvr-archery` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
 The bows and arrows come from the player's own install:
 `cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/weapons

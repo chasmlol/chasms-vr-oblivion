@@ -24,8 +24,8 @@ the test saves and the game lock are in [DEVELOPING.md](../DEVELOPING.md).
 `rustvr-npcs` is the developer's own test save, not in the repository: a room in the Imperial City
 with a Legion soldier standing a metre in front of you (friendly, AI on) and a dead bandit in fur
 armour lying at your feet, half a metre to your right. To make one from any save, in a room:
-`-At <cell> -Commands "player.placeatme 0018B118 1 70 0|SaveGame rustvr-npcs"` (a Legion soldier a
-metre ahead), with a body to drag of whoever you kill. More people: `player.placeatme 0018B118 1
+`-At <cell> -Commands "player.placeatme 0018B118 1 70 0"` (a Legion soldier a
+metre ahead), saved as `rustvr-npcs` ([DEVELOPING.md](../DEVELOPING.md), "Test saves"), with a body to drag of whoever you kill. More people: `player.placeatme 0018B118 1
 100 0` (a Legion soldier), `0003DC25` (a bandit ringleader, hostile), `0006E912` (a wolf); `tai`
 stops everyone's AI.
 

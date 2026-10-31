@@ -31,7 +31,7 @@ powershell -File tools\oblivion.ps1 -Save rustvr-gore -Commands "ff000c48.SetRes
 
 Both saves are the developer's own, not in the repository; the bandits' ids are that save's. Any
 save with people or creatures to fight will do, and one can be made with
-`-At <cell> -Commands "...|SaveGame rustvr-gore"`.
+`-At <cell> -Commands "..."`, saved as `rustvr-gore` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
 The research and the design: `docs/research/gore.md`.
 

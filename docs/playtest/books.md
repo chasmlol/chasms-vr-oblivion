@@ -18,8 +18,8 @@ puts the map on the body for this run (it isn't by default, see Settings).
 `powershell -File tools\oblivion.ps1 -Close` puts it away and the settings back.
 
 `rustvr-books` is the developer's own save, not in the repository. To make one, boot any save with
-`-At <First Edition's cell> -Hour 14`, give the books by their form ids and add
-`-Commands "SaveGame rustvr-books"`; any shop or house with books does.
+`-At <First Edition's cell> -Hour 14`, give the books by their form ids and save
+it as `rustvr-books` ([DEVELOPING.md](../DEVELOPING.md), "Test saves"); any shop or house with books does.
 
 The research and the design: `docs/research/books.md`.
 

@@ -73,9 +73,10 @@ the test saves): The Merchants Inn in the Imperial City's Market District, peopl
 market out of its door. To make one from any save:
 
 ```bat
-powershell -File tools\oblivion.ps1 -Save <any save> -At ICMarketDistrictTheMerchantsInn -Commands "SaveGame rustvr-voice"
-powershell -File tools\oblivion.ps1 -Close
+powershell -File tools\oblivion.ps1 -Save <any save> -At ICMarketDistrictTheMerchantsInn
 ```
+
+Then save it as `rustvr-voice` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
 ## What it does
 

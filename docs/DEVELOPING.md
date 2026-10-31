@@ -100,8 +100,12 @@ The test saves are a developer's own, in the game's saves folder, never the play
 (a Nord in iron armour, Danwood), `rustvr-city` (the Imperial City's Market District, noon),
 `rustvr-weye` (Weye, open ground on Lake Rumare's shore), `rustvr-ruin` (Vilverin, an Ayleid
 ruin), `rustvr-chorrol` (Chorrol, near its stables), and a feature's own (`rustvr-torches`,
-`rustvr-horse`, ...). A save for another place is made from one of these:
-`-At <cell> -Commands "SaveGame rustvr-<place>"`. `coc` takes cells, not worldspaces: the Imperial
+`rustvr-horse`, ...). A save for another place is made from one of these: boot it with
+`-At <cell>` (and `-Give` and `-Commands` for what the test needs), save from the game's pause
+menu in the headset, and rename the new save in `Documents\My Games\Oblivion\Saves` to
+`rustvr-<place>.ess` (its `.obse` too, with xOBSE), which `-Save rustvr-<place>` then loads. (A
+`SaveGame <name>` test line, saving by name from the command line, comes with the `interact`
+branch.) `coc` takes cells, not worldspaces: the Imperial
 City's districts are worldspaces, so `-At` takes one of their cells (`ICMarketDistrict01` to `04`)
 and `player.setpos` the spot.
 

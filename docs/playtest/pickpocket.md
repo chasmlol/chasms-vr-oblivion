@@ -27,8 +27,10 @@ lockpicks, a potion, two apples and a note. The inn's own patrons walk about fur
 person does; to make a save there from any other:
 
 ```bat
-powershell -File tools\oblivion.ps1 -Save rustvr-city -At ICMarketDistrictTheMerchantsInn -Hour 12 -Commands "SaveGame rustvr-pocket"
+powershell -File tools\oblivion.ps1 -Save rustvr-city -At ICMarketDistrictTheMerchantsInn -Hour 12
 ```
+
+Then save it as `rustvr-pocket` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
 The research and the design are in `docs/research/pickpocket.md`.
 

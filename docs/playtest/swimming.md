@@ -18,10 +18,10 @@ The water's a few metres deep, with a big rock and the bridge to the north (the 
 up in) and open water to the east and south.
 
 It's the developer's own test save, not in the repository (`docs/DEVELOPING.md` has the test
-saves). To make one from any save, boot it, put the player in deep water and save under that name
-with console lines, e.g. from `rustvr-weye` (Weye, on the lake's shore):
+saves). To make one from any save, boot it, put the player in deep water and save it as
+`rustvr-swim` ([DEVELOPING.md](../DEVELOPING.md), "Test saves"), e.g. from `rustvr-weye` (Weye, on the lake's shore):
 `powershell -File tools\oblivion.ps1 -Save rustvr-weye -Commands "player.setpos x <x>|player.setpos
-y <y>|SaveGame rustvr-swim"`, with a point out in the lake, then `-Close`.
+y <y>"`, with a point out in the lake.
 
 The research and the design are in `docs/research/swimming.md`; how it's wired into the game is
 the Swimming row of `docs/OBLIVION.md`. The numbers to tune are at the top of

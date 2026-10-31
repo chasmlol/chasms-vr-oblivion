@@ -23,7 +23,8 @@ powershell -File tools\oblivion.ps1 -Save rustvr-base -Commands "showracemenu"
 ```
 
 `rustvr-base` (a Nord in iron armour) is the developer's own test save, not in the repository; any
-save does, and one can be made from any save with `-At <cell> -Commands "SaveGame rustvr-base"`.
+save does, and one can be made from any save with `-At <cell>`, saved as `rustvr-base`
+([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 `tools\oblivion.ps1` turns the desktop view off: set `$env:RUSTVR_DESKTOP_VIEW = "1"` first to see
 the copy of the head on the monitor.
 

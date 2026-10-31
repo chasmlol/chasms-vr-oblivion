@@ -15,7 +15,7 @@ selected: cast it, or pull your gripped hands apart in front of your chest, to s
 front of you ([mirror.md](mirror.md)). `powershell -File tools\oblivion.ps1 -Close` puts the game
 away and the player's settings back. `rustvr-base` (a Nord in iron armour, in his house in Danwood)
 is the developer's own test save, not in the repository; any save does, and
-`-At <cell> -Commands "SaveGame rustvr-base"` makes one. The fast boot, the test saves and the game
+`-At <cell>`, saved as `rustvr-base`, makes one. The fast boot, the test saves and the game
 lock are in [DEVELOPING.md](../DEVELOPING.md).
 
 The framework's test range has the same body on its mannequin (framework/README.md): after a build,

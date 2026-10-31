@@ -20,8 +20,10 @@ on the back. It was made from `rustvr-weye`; any save does, somewhere with thing
 the sounds:
 
 ```bat
-powershell -File tools\oblivion.ps1 -Save rustvr-weye -Give "00009311 2,00098496 2,00009310 2,00098499 1,00033669 1,00033668 2,0003365D 3,00023D89 1,00017829 20,000229C1 20,0008DC78 2,0008992C 3,00019171 1,000229BC 1,0002CF9F 2" -Commands "SaveGame rustvr-holsters"
+powershell -File tools\oblivion.ps1 -Save rustvr-weye -Give "00009311 2,00098496 2,00009310 2,00098499 1,00033669 1,00033668 2,0003365D 3,00023D89 1,00017829 20,000229C1 20,0008DC78 2,0008992C 3,00019171 1,000229BC 1,0002CF9F 2"
 ```
+
+Then save it as `rustvr-holsters` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
 That gives Strong, ordinary and Weak Potions of Healing, a Potion of Sorcery, a cheese wheel and
 wedges, apples, a bread loaf, iron and steel arrows, two Strong Poisons of Severing, three Electric

@@ -18,7 +18,8 @@ later, what's on them. Everything set out is yours, so nothing there is stealing
 
 `rustvr-alchemy` is the developer's own save, not in the repository. It was made from
 `rustvr-city`, which loads in the same farmhouse, with a bench set out by `PlaceAt`. To make one,
-load a save that stands in the farmhouse's entrance and add `-Commands "SaveGame rustvr-alchemy"`.
+load a save that stands in the farmhouse's entrance and save it as `rustvr-alchemy`
+([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 The row's `Place` lines are that cell's own coordinates, so only a save in the farmhouse will do.
 The file's first lines disable the old save's own bench (references `FF000C48` to `FF000C54`, made
 in that save) and take the pack's Apple, Carrot, Boar Meat, Venison and Aloe Vera Leaves: in any

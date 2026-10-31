@@ -26,8 +26,9 @@ Imperial City across the lake, and the road along the shore. For the rain:
 
 `rustvr-weye` and `rustvr-city` are the developer's own test saves, not in the repository
 (`docs/DEVELOPING.md` has the test saves, the fast boot and the game lock). To make one from any
-save, boot it somewhere on the lake's shore and save there:
-`powershell -File tools\oblivion.ps1 -Save <any save> -At <cell> -Commands "SaveGame rustvr-weye"`.
+save, boot it somewhere on the lake's shore,
+`powershell -File tools\oblivion.ps1 -Save <any save> -At <cell>`, and save it as `rustvr-weye`
+([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
 Every fix below is on by default. Each has a testing switch that turns it off for a run (see
 "Testing switches"), to compare; set the variable in the shell before `tools\oblivion.ps1` and the

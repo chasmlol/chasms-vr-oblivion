@@ -20,7 +20,9 @@ horses in the paddock are the stable's: getting on one is stealing it.
 The save is the developer's own test save, not in the repository (`docs/DEVELOPING.md` has the test
 saves). To make one from any save:
 
-    powershell -File tools\oblivion.ps1 -Save <any save> -At ChorrolStables00 -Hour 11 -Commands "PlayerHorse 0004DE90 2|SaveGame rustvr-horse"
+    powershell -File tools\oblivion.ps1 -Save <any save> -At ChorrolStables00 -Hour 11 -Commands "PlayerHorse 0004DE90 2"
+
+Then save it as `rustvr-horse` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
 `PlayerHorse <base form id> [metres]` is the adapter's test line (`crates/oblivion/src/console.rs`,
 `riding::give_horse`): the game places a horse of that base that far from you (`placeatme`) and the

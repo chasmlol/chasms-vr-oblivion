@@ -13,10 +13,10 @@ It builds main, installs it beside the game and boots straight into the save for
 `docs/DEVELOPING.md` has the fast boot, the test saves and the game lock.
 
 `rustvr-doors` is the developer's own test save, not in the repository: Bethesda's test cell
-`TestTraps`, with 20 lockpicks in the pack. Make it from any save (here `rustvr-base`), then
-`-Close`:
+`TestTraps`, with 20 lockpicks in the pack. Make it from any save (here `rustvr-base`), and save it as `rustvr-doors`
+([DEVELOPING.md](../DEVELOPING.md), "Test saves"):
 
-    powershell -File tools\oblivion.ps1 -Save rustvr-base -At TestTraps -Give "0000000A 20" -Commands "SaveGame rustvr-doors"
+    powershell -File tools\oblivion.ps1 -Save rustvr-base -At TestTraps -Give "0000000A 20"
 
 In `TestTraps`, a row of doors that swing in place is on your right: a step ahead, a big planked
 cave door, then a double cave door, a barred prison cell gate and an Imperial dungeon door. The

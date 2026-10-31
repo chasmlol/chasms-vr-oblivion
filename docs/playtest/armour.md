@@ -13,7 +13,7 @@ powershell -File tools\oblivion.ps1 -Save rustvr-base
 It builds main, installs it, and boots the Nord in iron (and the thief's boots).
 `powershell -File tools\oblivion.ps1 -Close` puts it away. `rustvr-base` is the developer's own
 test save, not in the repository; any save with the player in armour does, and one can be made
-from any save with `-At <cell> -Commands "SaveGame rustvr-base"`.
+from any save with `-At <cell>`, saved as `rustvr-base` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
 To wear another vanilla set, give its four pieces, put them on and drop the iron they replace
 (here steel):

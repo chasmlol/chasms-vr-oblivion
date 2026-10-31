@@ -26,10 +26,11 @@ Touch and Protect.
 To make one from any save (here `rustvr-ruin`, Vilverin), with `Torch02` (`0002CF9F`) and the Staff
 of Conflagration (`000914C5`):
 
-    powershell -File tools\oblivion.ps1 -Save rustvr-ruin -Give "0002CF9F 3,000914C5 1" -Commands "player.equipitem 0002CF9F|player.modav magicka 200|player.addspell <spell id>|SaveGame rustvr-torches"
+    powershell -File tools\oblivion.ps1 -Save rustvr-ruin -Give "0002CF9F 3,000914C5 1" -Commands "player.equipitem 0002CF9F|player.modav magicka 200|player.addspell <spell id>"
 
-with a `player.addspell` line for each spell, and an enchanted weapon of your own equipped. Leave
-the Mage's Staff of Fire (`000E944B`) out: with it in the pack, `SaveGame` failed without a word.
+with a `player.addspell` line for each spell, and an enchanted weapon of your own equipped, then
+save it as `rustvr-torches` ([DEVELOPING.md](../DEVELOPING.md), "Test saves"). Leave the Mage's Staff of Fire (`000E944B`)
+out: with it in the pack, saving failed without a word.
 
 ## What it does
 

@@ -20,8 +20,10 @@ floor in front of you and Jensine at her counter to your right. To make one from
 the game's test container of every potion a metre ahead:
 
 ```bat
-powershell -File tools\oblivion.ps1 -Save rustvr-city -At ICMarketDistrictJensinesGoodasNewMerchandise -Hour 12 -Commands "PlaceAt 00187B46 1 0 0|SaveGame rustvr-menus"
+powershell -File tools\oblivion.ps1 -Save rustvr-city -At ICMarketDistrictJensinesGoodasNewMerchandise -Hour 12 -Commands "PlaceAt 00187B46 1 0 0"
 ```
+
+Then save it as `rustvr-menus` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
 ## What it does
 
