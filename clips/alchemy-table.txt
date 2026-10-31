@@ -1,0 +1,45 @@
+# Clip 04's set-out: one alchemy table in Odiil Farm's farmhouse (rustvr-alchemy), where the alchemy
+# playtest's row of tables starts (tools\alchemy-row.txt: its first table's place), on your right as
+# the save starts. The Journeyman set (mortar and pestle, alembic, calcinator, retort) at the back,
+# and two potions' ingredients at the front: Restore Magicka (Flax Seeds, Steel-Blue Entoloma Cap)
+# on the left, Restore Health (Boar Meat, Venison) on the right. The places are the row's, from its
+# tables 1 to 3 moved onto the first. Lines are console test lines (crates/oblivion/src/console.rs);
+# `Place <base> <x> <y> <z> <angle>` is in game units.
+
+# The save's own bench in the entrance out of the way, and the pack's Apple, Carrot, Boar Meat,
+# Venison and Aloe Vera Leaves with it, so the table's note lists the table's potions.
+game+2 FF000C48.disable
+game+2 FF000C49.disable
+game+2 FF000C4A.disable
+game+2 FF000C4B.disable
+game+2 FF000C4C.disable
+game+2 FF000C4D.disable
+game+2 FF000C4E.disable
+game+2 FF000C4F.disable
+game+2 FF000C50.disable
+game+2 FF000C51.disable
+game+2 FF000C52.disable
+game+2 FF000C53.disable
+game+2 FF000C54.disable
+game+2 player.removeitem 0003365D 3
+game+2 player.removeitem 00033666 3
+game+2 player.removeitem 00033665 3
+game+2 player.removeitem 0002229B 3
+game+2 player.removeitem 000A7924 3
+
+# The table first; what's on it once its collision is there.
+game+2 Place 0001F1D6 2330.0 1646.0 7121.9 90
+
+# Journeyman Mortar & Pestle, Alembic, Calcinator, Retort.
+game+4 Place 0006EE57 2328.0 1646.0 7159.5 90
+game+4 Place 0006EE52 2350.0 1667.0 7167.5 90
+game+4 Place 0006EE55 2350.0 1634.0 7160.5 90
+game+4 Place 0006EE59 2350.0 1614.0 7166.5 90
+
+# Restore Magicka on the left: Flax Seeds, Steel-Blue Entoloma Cap.
+game+4 Place 000A7927 2316.0 1665.0 7154.5 90
+game+4 Place 0008446B 2320.0 1677.0 7157.5 90
+
+# Restore Health on the right: Boar Meat, Venison.
+game+4 Place 00033665 2316.0 1627.0 7155.5 90
+game+4 Place 0002229B 2322.0 1616.0 7155.5 90
