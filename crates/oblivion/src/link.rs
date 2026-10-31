@@ -83,6 +83,9 @@ pub struct GameFrame {
     /// Face this way from this frame (a look yaw): the view recentred on it (the main menu's place
     /// faces its view).
     pub recenter: Option<f32>,
+    /// Dialogue is the menu on top: the player turns in it as out of it (its pieces stay with the
+    /// speaker).
+    pub talking: bool,
     pub now: f64,
     pub dt: f32,
 }
@@ -167,6 +170,9 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     // (The runtime keeps its crouch in step with the game's sneaking.)
     if view.is_some() && crate::player::sneaking() {
         gs.flags |= GS_CROUCHED;
+    }
+    if g.talking && view.is_some() {
+        gs.flags |= GS_MENU_TURNS;
     }
     if let (Some(uv), true) = (g.race_menu, view.is_some()) {
         gs.flags |= GS_MENU_IN_WORLD | GS_MIRROR;

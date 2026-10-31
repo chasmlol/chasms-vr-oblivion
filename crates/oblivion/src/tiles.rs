@@ -41,6 +41,8 @@ pub const ALPHA: u16 = 0xFA7;
 pub const Y: u16 = 0xFAC;
 pub const X: u16 = 0xFAD;
 pub const USER0: u16 = 0xFAE;
+/// A text tile's text (the `string` trait).
+pub const STRING: u16 = 0xFDE;
 pub const CLIP_WINDOW: u16 = 0xFA4;
 pub const JUSTIFY: u16 = 0xFD1;
 const CENTRE: f32 = 2.0;
@@ -210,6 +212,22 @@ mod win {
             let num = f32::from_le_bytes([b[4], b[5], b[6], b[7]]);
             (u16::from_le_bytes([b[0x18], b[0x19]]) == id && num.is_finite()).then_some(num)
         })
+    }
+
+    /// The text a tile shows (its `string` value: a `BSStringT` at the value's +8), if it has any.
+    pub fn text(tile: usize) -> Option<String> {
+        list(tile + VALUES)
+            .into_iter()
+            .find_map(|v| {
+                if mem::at::<u16>(v + 0x18)? != STRING {
+                    return None;
+                }
+                let (p, n) = (mem::deref(v + 8), mem::at::<u16>(v + 0xC).unwrap_or(0) as usize);
+                let bytes = (p != 0 && n != 0).then(|| mem::bytes(p as *const u8, n.min(512))).flatten()?;
+                let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+                Some(String::from_utf8_lossy(&bytes[..end]).into_owned())
+            })
+            .filter(|t| !t.trim().is_empty())
     }
 
     pub fn name(tile: usize) -> String {

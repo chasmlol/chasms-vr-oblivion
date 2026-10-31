@@ -130,6 +130,12 @@ pub fn before_update() {
             }
         }
     }
+    // Simple voice commands: a menu's words clicked, someone activated.
+    if crate::commands::before_update(&mut v)
+        && let Some(b) = bridge().as_mut()
+    {
+        b.hold("Activate", link::now() + 0.12);
+    }
     #[cfg(windows)]
     input::set(v, vr || settings::get().background);
     crate::combat::apply_pending();
