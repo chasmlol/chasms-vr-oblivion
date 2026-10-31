@@ -385,6 +385,12 @@ mod win {
         // menus goes into its world texture.)
         centre_on_camera_node();
         d3d9::rendering(true);
+        // The fog's terms for the game's own camera (a render of its own; each eye's are its own).
+        hooks::guard_void("fog", || {
+            if let (Some(dev), Some(game)) = (d3d9::device(engine::device() as *mut c_void), camera::read(engine::world_camera())) {
+                d3d9::fog_frustum(&dev, &game.frustum);
+            }
+        });
         let result = if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
             unsafe { real(this, arg) }
         } else {
@@ -476,6 +482,7 @@ mod win {
                 if per_eye {
                     SKY_CENTRE.centre(&SKY_FROM, glam::Vec3::from(s.pos));
                 }
+                d3d9::fog_frustum(&dev, &s.frustum);
                 set_lock(!hold_loader(), true);
                 SECOND_EYE.store(true, Ordering::Release);
                 result = time(Part::Eye, || unsafe { real(this, arg) });
@@ -508,6 +515,7 @@ mod win {
             if per_eye {
                 SKY_CENTRE.centre(&SKY_FROM, glam::Vec3::from(s.pos));
             }
+            d3d9::fog_frustum(&dev, &s.frustum);
             if hold_loader() {
                 set_lock(eye == 0, eye + 1 == renders);
             } else {
@@ -533,6 +541,7 @@ mod win {
         SECOND_EYE.store(false, Ordering::Release);
         camera::write(cam, &game);
         centre_on_camera_node();
+        d3d9::fog_frustum(&dev, &game.frustum);
         if let Some(f) = arms_flags {
             unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f) };
         }
@@ -651,7 +660,14 @@ mod win {
                 }
             }
         };
-        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, now, dt })?;
+        // The game's own bob, as its camera sees it (none in the race menu: its camera isn't the
+        // player's eyes).
+        // Its posture left out: where its camera has sat lately isn't a bob (`camera::Rest`).
+        static REST: std::sync::Mutex<camera::Rest> = std::sync::Mutex::new(camera::Rest::new());
+        let bob = race_menu.is_none().then(|| hooks::guard("view bob", None, camera::first_person_bob)).flatten();
+        let (bob, rest) = REST.lock().unwrap_or_else(|e| e.into_inner()).take(bob, dt);
+        camera::note_bob(bob.as_ref(), rest, &game, now);
+        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, bob, camera: race_menu.is_none().then_some(game), now, dt })?;
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);
@@ -770,7 +786,7 @@ mod win {
 
     fn menu(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32) {
         // Keeps the link alive and says the game is in its menus.
-        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, now: link::now(), dt: 0.0 });
+        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, bob: None, camera: None, now: link::now(), dt: 0.0 });
         link::with_adapter(|a| {
             let gpu = a.gpu().clone();
             if !d3d9::capture(dev, &gpu, HUD) {

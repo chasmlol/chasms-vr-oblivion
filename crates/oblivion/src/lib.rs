@@ -46,6 +46,7 @@ pub mod engine;
 pub mod families;
 #[cfg(all(windows, target_arch = "x86"))]
 pub mod entry;
+pub mod fog;
 pub mod game_settings;
 pub mod gore;
 pub mod grabs;

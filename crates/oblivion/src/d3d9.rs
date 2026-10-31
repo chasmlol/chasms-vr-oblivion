@@ -87,6 +87,8 @@ mod win {
     }
     static REAL_SET_SAMPLER: AtomicUsize = AtomicUsize::new(0);
     static REAL_CREATE_VS: AtomicUsize = AtomicUsize::new(0);
+    /// The game's vertex shaders are made to fog by distance (`crate::fog`).
+    static FOG_BY_DISTANCE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     static REAL_SET_VS: AtomicUsize = AtomicUsize::new(0);
     static REAL_SET_VS_F: AtomicUsize = AtomicUsize::new(0);
     static REAL_CREATE_VB: AtomicUsize = AtomicUsize::new(0);
@@ -264,10 +266,17 @@ mod win {
                 hooks::install_into(set_sampler as *const (), set_sampler_state as *const (), "IDirect3DDevice9::SetSamplerState", &REAL_SET_SAMPLER);
                 tracing::info!("d3d9: the game's textures are filtered anisotropically ({}x)", anisotropy());
             }
-            // IDirect3DDevice9::CreateVertexShader (slot 91): the distant trees' shader, and which
-            // shaders are the leaves' (and, testing, which kind each draws: [`crate::families`]).
+            // IDirect3DDevice9::CreateVertexShader (slot 91): the fog by distance (`crate::fog`), the
+            // distant trees' shader, and which shaders are the leaves' (and, testing, which kind each
+            // draws: [`crate::families`]). (Testing, `RUSTVR_OBLIVION_GAME_FOG=1`: the game's own fog,
+            // to compare.)
             let families = crate::families::enabled();
-            if crate::distant_trees::enabled() || crate::leaves::enabled() || families {
+            let fog = !std::env::var("RUSTVR_OBLIVION_GAME_FOG").is_ok_and(|v| v == "1");
+            if !fog {
+                tracing::info!("fog: the game's own (RUSTVR_OBLIVION_GAME_FOG)");
+            }
+            FOG_BY_DISTANCE.store(fog, Ordering::Release);
+            if fog || crate::distant_trees::enabled() || crate::leaves::enabled() || families {
                 let create_vs = unsafe { *(*(dev as *const *const usize)).add(91) };
                 hooks::install_into(create_vs as *const (), create_vertex_shader as *const (), "IDirect3DDevice9::CreateVertexShader", &REAL_CREATE_VS);
             }
@@ -498,7 +507,8 @@ mod win {
     type CreateVertexShaderFn = unsafe extern "system" fn(*mut c_void, *const u32, *mut *mut c_void) -> windows::core::HRESULT;
 
     /// The game's vertex shaders as it makes them: its distant trees' is made from
-    /// [`crate::distant_trees`] instead, the rest as they are.
+    /// [`crate::distant_trees`] instead, a vs_1_1 shader's constants indexed as its day's drivers did
+    /// ([`crate::leaves`]), and then each fogs by distance ([`crate::fog`]); else as they are.
     unsafe extern "system" fn create_vertex_shader(dev: *mut c_void, function: *const u32, out: *mut *mut c_void) -> windows::core::HRESULT {
         let real: CreateVertexShaderFn = unsafe { std::mem::transmute(REAL_CREATE_VS.load(Ordering::Acquire)) };
         // (The version and the constant table's comment token, then the table.)
@@ -536,7 +546,31 @@ mod win {
             None
         };
         let code = ours.or(floored.as_ref().map(|c| c.as_ptr())).unwrap_or(function);
-        let hr = unsafe { real(dev, code, out) };
+        // Then its fog by distance; one Direct3D 9 refuses keeps its own.
+        let rewritten = FOG_BY_DISTANCE.load(Ordering::Acquire).then(|| {
+            hooks::guard("CreateVertexShader", None, || {
+                let n = unsafe { crate::fog::length(code) }?;
+                crate::fog::rewrite(unsafe { std::slice::from_raw_parts(code, n) }).unwrap_or_else(|why| {
+                    tracing::warn!("fog: a vertex shader of the game's keeps its own fog: {why}");
+                    None
+                })
+            })
+        });
+        let mut hr = windows::core::HRESULT(-1);
+        if let Some(new) = rewritten.flatten() {
+            hr = unsafe { real(dev, new.as_ptr(), out) };
+            if hr.is_ok() {
+                let n = crate::fog::rewritten();
+                if n == 1 || n.is_multiple_of(25) {
+                    tracing::info!("fog: {n} of the game's vertex shaders made so far fog by distance");
+                }
+            } else {
+                tracing::warn!("fog: Direct3D 9 refuses a vertex shader rewritten ({hr:?}): it keeps its own fog");
+            }
+        }
+        if hr.is_err() {
+            hr = unsafe { real(dev, code, out) };
+        }
         if hr.is_ok() && !out.is_null() {
             hooks::guard_void("CreateVertexShader", || {
                 if let Some(tokens) = tokens {
@@ -680,6 +714,16 @@ mod win {
             let _ = windows::Win32::Foundation::CloseHandle(b.event);
         }
         tracing::info!("d3d9: the device is lost: our copies of its picture let go, for the game to reset it");
+    }
+
+    /// The fog's terms for the camera the game is about to render with (`frustum`: its
+    /// `NiFrustum`), in the constant register the rewritten shaders read them from.
+    pub fn fog_frustum(dev: &IDirect3DDevice9, frustum: &[f32; 6]) {
+        if REAL_CREATE_VS.load(Ordering::Acquire) == 0 || !FOG_BY_DISTANCE.load(Ordering::Acquire) {
+            return;
+        }
+        let terms = crate::fog::terms(frustum);
+        let _ = unsafe { dev.SetVertexShaderConstantF(crate::fog::REGISTER, terms.as_ptr(), 1) };
     }
 
     /// The game's device, borrowed.
