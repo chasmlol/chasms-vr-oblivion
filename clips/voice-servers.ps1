@@ -65,7 +65,7 @@ if ($clip -and (Test-Path $clip)) {
     curl.exe -s -o NUL -F "response_format=verbose_json" -F "file=@$clip;type=audio/wav" "http://127.0.0.1:$sttPort/v1/audio/transcriptions"
 }
 
-# RustVR's Voice setting (Settings, under the sounds: "Talk to the game's characters out loud").
+# RustVR's Voice setting (the menu's Voice tab: "Talk to the game's characters out loud").
 $settings = "$env:LOCALAPPDATA\RustVR\settings.toml"
 $text = if (Test-Path $settings) { Get-Content $settings -Raw } else { "" }
 if ($text -match '(?m)^\[voice\]') {

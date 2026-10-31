@@ -13,7 +13,7 @@
 # -Commands runs console lines once the save is loaded ("showracemenu", "player.setav sneak 100"):
 # in VR the real keyboard doesn't reach the game, so its console can't be typed into. -NewGame starts
 # a new game instead of loading a save (the prison cell and the race menu). -Settings adds lines to
-# the game's rustvr-oblivion.toml for this run ("menu_world = false; menu_spot = cloud-ruler").
+# the game's rustvr-oblivion.toml for this run ("menu_world = false; menu_spot = 'cloud-ruler'").
 # -KeepLogs, with -Close, copies the run's logs (%LOCALAPPDATA%\RustVR's rustvr.log, or -Logs) into
 # the next free <name>-<n> folder of the feature's build folder: the next start replaces them.
 param([string]$Feature = "", [string]$Save = "", [switch]$NewGame, [string]$At = "", [string]$Give = "", [string]$Commands = "", [string]$Settings = "", [switch]$Range, [switch]$Close, [string]$KeepLogs = "", [string]$Logs = "rustvr.log")

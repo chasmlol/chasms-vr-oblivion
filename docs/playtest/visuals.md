@@ -2,219 +2,296 @@
 
 Save: rustvr-weye
 
-`playtest.bat` boots Oblivion into `rustvr-weye`: Weye, on Lake Rumare's shore at noon, under a clear
-sky, with the water, the far forest and the Imperial City across the lake, and the road along the
-shore. `playtest-before.bat` is the same with this round's changes switched off, to compare.
-`playtest-rain.bat` is the Imperial City's Market District in the rain. Run them from Explorer
-(double-click). Each one closes a game another .bat left running, and closes the game and puts your
-settings back when you press a key.
+Oblivion draws its world once a frame from one camera, and a few things it makes once a frame for
+that camera (the sky's centre, a body's bones, a shadow's clip planes, the grass, the leaves and far
+trees facing the view) are wrong for a second eye, or for a head that never stops moving. This is
+the set of fixes for them, the game's own settings raised for a headset, and the work on the stutter
+crossing into new cells. The engine facts are in `docs/research/visuals.md`; the research on the
+game's image quality, its settings and the community's mods, in
+`docs/research/oblivion-image-quality.md`.
 
-The eye pictures are off now: each pair cost a 140 ms frame, every 10 seconds, and that was most of
-the stutter in your last run. The game's log (`rustvr-oblivion.log` in the game's folder) says how
-long the game waits for its loading, and every 10 seconds what the trees' leaves were given (below).
+## Playing it
 
-What was wrong, why, and the audit of the rest: `docs/research/visuals.md`. The research on the
-game's own image quality and stutter: `docs/research/oblivion-image-quality.md`.
+From the repository's root:
 
-## Round 5: stutter, and the research's fixes (`playtest.bat`)
+    powershell -File tools\oblivion.ps1 -Save rustvr-weye -Hour 12 -Weather 00038EEE
 
-1. **Stutter crossing cells.** Walk, or better run, along the road for a few minutes, through
-   several cells (one is about 58 m). The hitches as new land loads should be fewer and shorter
-   than before. (`playtest-before.bat` is the same with the old behaviour, if you want to compare.)
+It builds main, installs it beside the game and boots straight into the save for the headset:
+Weye, on Lake Rumare's shore at noon under a clear sky, with the water, the far forest and the
+Imperial City across the lake, and the road along the shore. For the rain:
+
+    powershell -File tools\oblivion.ps1 -Save rustvr-city -At ICMarketDistrict -Weather 00038EF2
+
+`powershell -File tools\oblivion.ps1 -Close` puts the game away and your settings back.
+
+`rustvr-weye` and `rustvr-city` are the developer's own test saves, not in the repository
+(`docs/DEVELOPING.md` has the test saves, the fast boot and the game lock). To make one from any
+save, boot it somewhere on the lake's shore and save there:
+`powershell -File tools\oblivion.ps1 -Save <any save> -At <cell> -Commands "SaveGame rustvr-weye"`.
+
+Every fix below is on by default. Each has a testing switch that turns it off for a run (see
+"Testing switches"), to compare; set the variable in the shell before `tools\oblivion.ps1` and the
+game inherits it (`$env:RUSTVR_OBLIVION_MONO_VISUALS = "1"` in PowerShell).
+
+## What it does
+
+The adapter (`crates/oblivion`):
+
+- **The sky on each eye** (`render.rs`). The world render centres the "Sky" node (the dome, the
+  clouds, the sun, the moons, the stars) and the "Weather" node (rain, snow, the sun's glare) on the
+  game's camera. Instead, the sky is centred on each eye's camera (at infinity for both, turning
+  only as the head turns) and the weather on the middle of the two eyes, so rain and snow keep their
+  depth. Every 600 frames the log says how far the sky's centre is from each eye (0 with the fix).
+- **People's bodies per eye** (`render.rs`, `engine::next_render_frame`). The renderer makes a
+  skinned model's bones relative to the first camera that draws it in a frame. Each render after
+  the first is a frame of the renderer's own, so the second eye (and the mirror) draws the bodies
+  where it sees them.
+- **People's shadows in both eyes** (`render.rs`). An actor's shadow is clipped to its light with
+  six user clip planes, made in the camera's clip space by the first draw of a frame and kept.
+  Before each render after the first, the mark on each shadow light is cleared, so the game makes
+  the planes again for that camera. The actors' shadow pass runs once a frame, with the first eye;
+  both eyes use its shadow maps.
+- **The background loader's lock per eye** (`render.rs`). The game's background thread (cells and
+  actors' 3D) changes the scene only while no render holds its lock. Two eyes and their copies held
+  it for most of the frame, so it fell behind loading the cells ahead. Each eye's render now takes
+  and gives it, so it can work while that eye's picture is copied. The game's waits for it are timed
+  ("waits for the loader" in the timing line) and one over 20 ms is logged (`render: the game waited
+  N ms for its background thread (loading)`).
+- **The far trees face the eye** (`distant_trees.rs`). The game's distant-tree shader
+  (`DISTLOD2003.vso`) turns every card to the camera's look direction, so each turn of the head
+  turned the whole far forest. When the game makes it, the adapter's own HLSL replaces it: the same
+  registers, light, fog and fade, each card turned to the direction from the eye to its tree.
+- **The near trees' leaves** (`leaves.rs`). Three fixes to SpeedTree's leaf cards:
+  - the cards stay upright and turn only as you walk round a tree, not as your head turns or leans:
+    for each draw their right is made level and square to the line from the eye to the tree;
+  - the streaks: the leaves' `vs_1_1` shaders index their corners and wind matrices by a vertex
+    value with a shade in its fraction, written for drivers that rounded it down. D3D9On12 rounds to
+    the nearest, so half the leaves took the next cluster's corner and the last cluster read past
+    the corners: a corner thrown across the view, differently in each eye. The shaders are made to
+    take the whole part of the index first;
+  - the constants the game gives a leaf shader are checked: a value that isn't finite is made 0, and
+    every 10 s the log sums up what they held (`leaves: ...`).
+- **System memory vertex buffers drawn whole** (`sysmem.rs`). D3D9On12 copies only the vertices a
+  draw's hints name from a system memory buffer, where Direct3D 9's drivers read it whole. An
+  indexed draw from one has its hints widened to the whole buffer (up to 262,144 vertices); the log
+  counts them every 10 s (`sysmem: ...`).
+- **Grass all round you** (`grass.rs`). The game grows grass only in a cone in front of its camera
+  (46 degrees either side at the flat game's field of view, built again after a 19-degree turn). The
+  adapter skips two of its checks: every patch is kept, to the game's own grass distance, and a turn
+  of the head no longer rebuilds it (a move of 64 units still does).
+- **Fog by distance** (`fog.rs`, added on main after the rounds below). The game's vertex shaders fog
+  by the length of the clip-space position, which grows towards a frustum's edges: the headset's
+  wide, off-centre eyes fogged a far hill differently, its haze changed as the head turned, the
+  overscan thinned the fog, and the land didn't meet the water. As the game makes each shader that
+  fogs, it's rewritten to fog by the view-space distance (the frustum's terms in `c255`, set for
+  each camera). A shader that can't be rewritten keeps its own fog.
+- **Anisotropic filtering** (`d3d9.rs`, `anisotropy` in `rustvr-oblivion.toml`, 16 by default).
+  Oblivion has none of its own; on a desktop players force it in the graphics driver, which doesn't
+  reach a game on D3D9On12. A pixel shader's sampler the game sets to filter linearly as it shrinks
+  a texture filters anisotropically instead; its other filters, and its image-space passes, are as
+  it sets them.
+- **The game's own settings for a headset** (`game_settings.rs`, `VR_FLOORS`). While in VR, a few of
+  `Oblivion.ini`'s values are raised to at least these; your own higher ones are kept, and all of
+  them go back when the game closes (or, after a crash, at the next start before anything else,
+  from `rustvr-oblivion-ini.txt` beside the DLL; `tools\oblivion.ps1 -Close` does it too):
+
+  | Section | Key | VR floor | Why |
+  |---|---|---|---|
+  | Display | `iShadowMapResolution` | 1024 | 256 is blocks at arm's length |
+  | SpeedTree | `fLODTreeMipMapLODBias`, `fLocalTreeMipMapLODBias` | 0 | the game's negative bias sparkles as the head moves |
+  | SpeedTree | `bForceFullLOD` | 1 | near trees don't switch detail as you move |
+  | Water | `uSurfaceFPS`, `uSurfaceFrameCount` | 36, 96 | the waves' 12-frame loop steps at 90..120 Hz (the same 2.7 s loop) |
+  | General | `iPreloadSizeLimit` | 262144000 (250 MB) | the cells ahead preloaded (the game's 25 MB loads them as you go) |
+  | LOD | `fLODFadeOutMultObjects`, `...Items`, `...Actors` | 15 | the view distance sliders' most: a head turns to what a flat screen hides |
+  | LOD | `fLODMultTrees` | 2 | the game's own limit |
+  | Grass | `fGrassEndDistance`, `fGrassStartFadeDistance` | 4000, 3000 | grass to 57 m (the `[Grass]` keys, the ones the game reads) |
+  | General | `uGridDistantCount`, `uGridDistantTreeRange` | 40, 30 | far buildings and tree cards further out |
+  | BackgroundLoad | `bLoadBackgroundFaceGen`, `bBackgroundLoadLipFiles` | 1 | faces and lip files on the game's background threads |
+  | General | `bUseThreadedMorpher`, `bUseThreadedBlood` | 1 | off the frame's thread |
+  | Pathfinding | `bBackgroundPathing` | 1 | off the frame's thread |
+
+  The log says which were raised (`game settings: for the headset: ...`).
+- **xOBSE when it's installed** (`xobse.rs`). Steam loads xOBSE's `obse_steam_loader.dll` only into a
+  game it starts; the adapter's launcher starts the exe itself. If the loader is in the game's
+  folder and nothing has loaded it, the adapter loads it on the game's main thread as its C runtime
+  starts (its one call of `GetCommandLineA`), where xOBSE's own launcher would. Then xOBSE loads its
+  plugins, Oblivion Stutter Remover among them. `obse.log` in the game's folder means it loaded.
+- **The timing line** (`timing.rs`). Every 5 s the adapter's log has the frames a second, the worst
+  frame, the time of each part of a frame (the eye renders, the picture and depth copies, the waits
+  for the loader, "between renders": the game's update, its menus, Present), the address space left
+  (`address space N of M MB free`: 4095 once the 4GB patch is in effect, 2047 without) and the video
+  memory against its budget.
+
+The runtime (`framework/crates/runtime/src/compositor.rs`):
+
+- **The game's picture averaged over each headset pixel.** A game drawn sharper than the headset
+  shows it (Supersampling above 1) has more pixels than the headset. One sample a pixel skipped the
+  ones between, so far detail (branches, fences, roofs) flickered as the head moved. Each headset
+  pixel now averages up to 4x4 samples over the game's pixels it covers.
+
+## The developer's install
+
+The developer's own game has these, set up at their request for the stutter and the distance.
+None of it is in the repository or done by its scripts; a player without them gets the fixes above
+all the same. What each is and how it was set up: `docs/research/oblivion-image-quality.md`.
+
+- **The 4GB patch** on `Oblivion.exe` (the original kept beside it as
+  `Oblivion.exe.rustvr-original`). If Steam verifies or updates the game, it puts the original back.
+- **xOBSE 22.14**, which Oblivion Stutter Remover needs (the adapter loads it, above).
+- **Oblivion Stutter Remover 4.1.37** (`Data\OBSE\Plugins`), set for VR: its locks, bigger lookup
+  tables and its heap (512 MB) kept; its frame limiter, timer and fast exit off (the headset and the
+  adapter pace and time the frames, and the fast exit would save the VR values into
+  `Oblivion.ini`); the renderer's texture lock suppressed, as its own default. Its log is
+  `sr_Oblivion_Stutter_Remover.log` beside it. If the game crashes more than before, set
+  `bReplaceHeap = 0` in its `.ini` first.
+- **The distant objects regenerated** with xEdit's TES4LODGen into `Data\DistantLOD`, keeping only
+  the tree kinds the game's own lists draw far away (unfiltered it makes every shrub a far card). A
+  few castle walls, gates and towers the game's lists miss (Skingrad's, Bravil's, Leyawiin's) stand
+  in the distance.
+- **The far land's shape regenerated** with tes4ll for the six far-land quads the game's cells cover
+  completely (the Imperial City and Weye, Chorrol, Skingrad and Cheydinhal, the land east of the
+  Niben in the south-east), in `Data\Meshes\Landscape\LOD`: about twice the detail past the loaded
+  cells. The map's edges and the far land's colours stay the game's.
+- **`uGridsToLoad=7`** in `Oblivion.ini` (cell buffer 64), a 7x7 grid of cells loaded round the player
+  instead of 5x5. It stays when the game is played flat: a save made at 7 is said to crash at 5, so
+  it can't be a VR-only value. It makes each cell crossing load 7 cells instead of 5; if the hitches
+  matter more than the pop-in, it's the one to take back.
+
+The developer's own undo script (not in the repository) puts all of it back.
+
+## What to try
+
+1. **Stutter crossing cells.** Walk, or better run, along the road for a few minutes through several
+   cells (one is about 58 m). The hitches as new land loads should be few and short. Afterwards the
+   adapter's log (`rustvr-oblivion.log` in the game's folder) has the timing line every 5 s and each
+   wait for the loader over 20 ms.
 2. **The far trees.** Look across the lake at the far forest and turn your head slowly left and
-   right. The far trees should stay put, not shimmer or swing as you turn.
-3. **The near trees.** They should sparkle less as your head moves (no sharpening bias), and switch
-   detail less as you walk (full detail).
-4. **The grass.** It should stand all round you: no grass growing in or vanishing at the edges of
-   your view as you turn your head.
-5. **The water.** The waves should move smoothly, not step.
-6. **Shadows.** Characters' shadows should be sharper up close (1024 shadow maps, not 256).
-7. **The ground.** Roads and ground at a slant should be sharp a long way out (anisotropic
-   filtering, 16x).
-8. **The frame rate.** Tell me if any of this costs too much (the runtime's log has the pictures a
-   second); each piece can be turned off.
+   right: the far trees stay put, not shimmering or swinging as you turn.
+3. **The near trees.** Their leaves don't turn or lean with your head, only as you walk round a tree.
+   They sparkle little as your head moves, keep their detail as you walk, and no streaks of leaf
+   run across the view.
+4. **The grass** stands all round you: none grows in or vanishes at the edges of your view as you
+   turn your head.
+5. **The water.** The waves move smoothly, not in steps.
+6. **The sky.** The clouds, the sun and the moons sit at infinity: no parallax between the eyes, no
+   bobbing as you walk.
+7. **People.** Their bodies are where their heads and weapons are in both eyes, and their shadows
+   are under them in both eyes, sharp up close.
+8. **The ground and the haze.** Roads and ground at a slant are sharp a long way out. A far hill is
+   hazed the same in both eyes and its haze doesn't change as you turn towards it; the land meets
+   the water.
+9. **Pop-in.** Trees, rocks, people and grass appear far out.
+10. **The far distance's detail** (with Supersampling above 1): far branches, fences and roofs hold
+    steady as your head moves.
+11. **The rain** (the rain command above; it comes in over a few seconds): drops at different depths
+    round you, near ones near, falling past as you walk; not painted on your eyes, not moving with
+    your head.
+12. **The frame rate.** Say if any of this costs too much: each piece can be turned off for a run.
+    The longer distances draw more for each eye; a headset at 120 Hz gives the game 8 ms a frame, at
+    90 Hz 11 ms, and a frame it misses repeats (judder). Virtual Desktop keeps the rate its own
+    settings have.
 
-## The game's own install (every playtest runs with it now)
+## Settings
 
-Set up in the game's folder at your request, for the stutter and the distance:
-- **The 4GB patch.** `Oblivion.exe` may use 4 GB of memory instead of 2. The original is kept beside
-  it as `Oblivion.exe.rustvr-original`. Once the patch is in effect, the timing line in the game's
-  log (`rustvr-oblivion.log`) ends "address space N of 4095 MB free"; before, it said "of 2047".
-- **xOBSE 22.14**, the script extender that Oblivion Stutter Remover needs. Steam loads it only into a
-  game Steam starts, and the playtest starts the game itself, so in your last run neither it nor
-  Stutter Remover ran. The adapter now loads it at the same point. After a run, an `obse.log` in the
-  game's folder means it loaded.
-- **Oblivion Stutter Remover 4.1.37** (`Data\OBSE\Plugins`), set for VR. Kept from it: its locks,
-  which stop the game's threads queueing behind each other; its bigger lookup tables; and its
-  replacement for the game's memory heap (512 MB). Off: its frame limiter and timer, because the
-  headset and the adapter pace and time the frames. Also off: its fast exit, which would save the VR
-  settings into your `Oblivion.ini`. One lock it normally removes is kept, because in VR the
-  game's loader runs between the eyes. Its log, `sr_Oblivion_Stutter_Remover.log` beside it, says it
-  loaded. If the game crashes more than before, set `bReplaceHeap = 0` in its `.ini` first.
-- **The distant objects, regenerated** from your game's own data (xEdit's TES4LODGen) into
-  `Data\DistantLOD`. A few castle walls, gates and towers (Skingrad's, Bravil's, Leyawiin's) that the
-  game's own lists miss now stand in the distance too. The generator also makes every shrub a far
-  card, which doubled the far cards around the Imperial City; those are left out, as the game leaves
-  them.
-- **The far land's shape, regenerated** (tes4ll) for six of the game's 36 far-land areas: the Imperial
-  City and Weye, Chorrol, Skingrad and Cheydinhal, and the land east of the Niben in the south-east
-  (`Data\Meshes\Landscape\LOD`).
-  About twice the game's detail in the land past the loaded cells, so hills and ridges hold their
-  shape further out. The edges of the map keep the game's own: there its far land shows scenery past
-  the border that the game has no land data for. Its colours are the game's own.
-- `undo-stutter-setup.bat` puts all of it back. If Steam verifies or updates the game, it puts the
-  original exe back (only the 4GB patch is lost).
+- **The runtime's menu, Display tab:**
+  - "Supersampling (the game's resolution, each way)": 0.5 to 2, default 1. Above 1 the averaging
+    over each headset pixel smooths far detail; it costs the game's frame.
+  - "Refresh rate": highest (the default), 72, 90 or 120.
+  - "Overscan: drawn past the headset's view": 0 to 20 degrees, default 0; a new value takes when
+    the game starts again.
+  - "Smooth the game's picture to every headset frame (walking and turning too)": on by default.
+- **`rustvr-oblivion.toml`** beside the game's exe (`crates/oblivion/src/settings.rs`):
+  - `anisotropy`: 1 (none, as the game has it) to 16, default 16. For one run:
+    `tools\oblivion.ps1 ... -Settings "anisotropy = 1"`.
+  - `eye_width`, `eye_height`: the size the game draws each eye at; 0 (the default) for the
+    headset's own, as the runtime last reported it.
+- **`Oblivion.ini`**: the VR floors above, raised only while in VR.
 
-9. **It starts and plays as before.** If it doesn't, or something misbehaves, run
-   `undo-stutter-setup.bat` and tell me.
-10. **The far castles.** Skingrad's castle and the walls and towers of the towns should stand in the
-    distance, not come in as you get near.
-11. **Stutter again.** With Stutter Remover in, the hitches crossing cells (check 1) should be fewer
-    again. Tell me about any new crash, and when it happened (loading, crossing cells, quitting).
-12. **The far hills.** From the shore at Weye, look out over the hills past the lake: their shape
-    should hold further out. Tell me if you see a seam, a step or a crack in the far land, and roughly
-    where (towards which town).
-13. **The streaks in the trees.** If you see them, note where and roughly when: the game's log has
-    what the leaves were given and which draws were widened, every 10 seconds.
-14. **Pop-in.** Things should appear much further out: trees, rocks, people, grass. It costs frames:
-    if the game judders (frames repeating, smooth motion going uneven), try the headset at 90 Hz in
-    Virtual Desktop. At 120 Hz the game has 8 ms a frame, and your last run made 110..135 frames a
-    second, so it missed some.
+### Testing switches
 
-## `playtest-rain.bat`
+Environment variables the adapter reads at start, each for one run:
 
-The rain comes in over a few seconds.
-- Drops should be at different depths around you: near ones near, far ones far, falling past as
-  you walk.
-- They shouldn't look painted on your eyes, or move with your head.
+| Variable | What it does |
+|---|---|
+| `RUSTVR_OBLIVION_MONO_VISUALS=1` | the sky and the weather on the game's camera, one renderer frame and one set of shadow clip planes for all the renders |
+| `RUSTVR_OBLIVION_HOLD_LOADER=1` | the loader's lock held across all the renders of a frame |
+| `RUSTVR_OBLIVION_GAME_DISTANT_TREES=1` | the game's own distant-tree shader |
+| `RUSTVR_OBLIVION_GAME_LEAF_FACING=1` | the leaf cards square to the way the head looks, as the game has them |
+| `RUSTVR_OBLIVION_GAME_LEAF_INDEX=1` | the leaves' indices as the game wrote them (the streaks) |
+| `RUSTVR_OBLIVION_LEAVES_AS_GAME=1` | the leaves' constants unchecked |
+| `RUSTVR_OBLIVION_DRAWS_AS_GAME=1` | the draws' vertex hints as the game gives them |
+| `RUSTVR_OBLIVION_GAME_GRASS=1` | the game's grass cone |
+| `RUSTVR_OBLIVION_GAME_FOG=1` | the game's own fog |
+| `RUSTVR_OBLIVION_ANISOTROPY=<n>` | the anisotropy, over the setting |
+| `RUSTVR_OBLIVION_FLAT_INI=1` | no VR floors: your `Oblivion.ini` as it is |
+| `RUSTVR_OBLIVION_INI_TEST="Section.key=value;..."` | any of the game's settings for one run, put back with the rest |
+| `RUSTVR_OBLIVION_NO_XOBSE=1` | xOBSE not loaded |
+| `RUSTVR_OBLIVION_EYE_PNG=<folder>` | both eyes' pictures saved there every 10 s from 5 s in, up to 60 pairs (each pair is a hitch: they're read back on the game's thread) |
+| `RUSTVR_OBLIVION_LEAVE_OUT=1` | with `RUSTVR_OBLIVION_EYE_PNG`: every 5 s one picture frame leaves out one kind of draw, in turn (far land, grass, leaves, branches, distant trees, shadow receivers, skinned bodies, the rest, draws without a shader) |
+| `RUSTVR_OBLIVION_PROFILE=1` | the game's thread sampled about once a millisecond; each frame over 30 ms summed up in the log (its module, the game's addresses most often on its stack) |
 
-## `playtest-before.bat`
+## Decisions
 
-Only if a difference isn't clear: the sky on the game's camera, the people's bodies and shadows
-drawn for the left eye, and no anisotropic filtering, as before this branch. (The runtime's change
-below is in both.)
+- **Every fix is on, each with a switch off for a run.** They fix what the game makes once from one
+  camera; the switches exist to compare, not as player options.
+- **The game's settings are floors, only while in VR.** Your own higher values are kept and all are
+  put back at close, so the flat game is as you left it.
+- **`uGridsToLoad` isn't a VR floor**: saves made at 7 are said to crash loaded at 5, so it can't
+  change between VR and flat play.
+- **Grass to 57 m, not 86.** All round you at 86 m it was the heaviest part of the frame.
+- **The loader's lock is given back after each eye.** The thread keeps up with the cells ahead; the
+  cost is that a thing it adds between the eyes can show in the second eye a frame before the first.
+- **The actors' shadow pass runs once a frame.** Run again for the second eye it left actors hidden
+  from it; the maps are the same for both eyes.
+- **The weather is centred on the head, the sky on each eye.** The sky is at infinity; rain and snow
+  are near and keep their depth.
+- **The leaves' index is made whole in the shader.** Given the whole number, no driver's rounding
+  can move it.
+- **The threaded particles and temporary effects stay as you have them** (not floors): those are the
+  ones reported to crash.
+- **The eye pictures are off by default.** Each pair cost a frame of 140..160 ms.
 
-## Round 12: what the hitches are (`playtest.bat`)
+## Not done / known issues
 
-The streak is gone (round 11). Your last run's hitches: 40..56 ms every 20..30 seconds as you
-moved, the game's update and its first drawing of new things spiking together: new cells coming
-in. This run samples the game's thread about once a millisecond (a cost of a few percent) and sums
-up every frame over 30 ms in the log: what code it was in. Walk or run along the road for a few
-minutes, through several cells, then close it.
+- **Hitches crossing cells remain**: in round 11's run, 40..56 ms every 20..30 s while moving, the
+  game attaching newly loaded cells and drawing new things the first time. Run with
+  `RUSTVR_OBLIVION_PROFILE=1` to see what code they're in; that run's result isn't recorded.
+- **Which shadows show, and how far away they fade,** are still worked out once a frame from the
+  first eye: a shadow at the very right edge of the right eye may be missing.
+- **The water's reflections resetting as the head moves** (the research's other VR item): not done.
+- **Ghosting on moving people**: not in the game's pictures (saved before the runtime moves them).
+  It's after: the runtime's smoothing, Virtual Desktop's spacewarp or the frames the game misses at
+  120 Hz; not yet told apart.
+- **The 250 MB preload floor** was chosen on the developer's 4GB-patched install; without the patch
+  the game has 2 GB of address space, and it isn't checked there.
+- **The far land's colours** are the game's own. TES4qLOD's colour maps at 2048 or 4096 aren't
+  sharper: it colours from one 4x4-pixel average of each ground texture, so above 1024 it only blurs.
+- **Distance and LOD settings** beyond the floors are left as yours: they cost draw calls twice over
+  in VR (the research has them).
 
-## Round 10: which kind of draw the streak is (`playtest-leaveout.bat`, one run)
+## History
 
-Neither shadow pass was it (round 8). So this run checks every kind at once. Every 5 seconds one
-frame leaves out one kind of the game's draws, in turn, and both eyes' pictures of that frame are
-saved, named after what it left out. The kinds: the far land, grass, leaves, tree branches, the
-distant trees, the ground that takes shadows, skinned bodies, everything else, and the few drawn
-without a shader. Go to where you see the streak and keep it in view for 2..3 minutes. The game
-hitches every 5 seconds (the pictures), and the left-out kind blinks out for one frame. The pictures
-with the streak gone say which kind it is.
+Newest first.
 
-## Round 8: which shadows draw the streak (two short runs)
-
-The streak is the ground drawn again with a shadow's texture laid on it. That's the game's shadow
-pass, whose texture coordinates go off to infinity at the edge of what the shadow covers, and your
-eyes see that edge differently, so it moves as your head does. Two passes do that, so one run each:
-- `playtest-nocanopy.bat`: the trees' canopy shadows off.
-- `playtest-noshadows.bat`: people's shadows off (yours too).
-
-Look where you usually see the streak and tell me which run (if either) has it gone. Each one closes
-and puts your settings back like `playtest.bat`.
-
-## What changed
-
-- **Round 11, the streak, found and fixed.** Your leave-one-out run showed it: in the frame without
-  the trees' leaves it was gone from both eyes, and in every other frame it was there. The leaves'
-  shader picks each leaf's corner by a number with a shade hidden in its fraction, written for the
-  graphics drivers of 2006, which rounded it down. The layer the game runs on now (D3D9On12) rounds
-  it to the nearest, as Microsoft's own reference says. So half the leaves took the next cluster's
-  corner, and the last cluster's read past the corners into whatever another draw had left there:
-  a corner flung across the view, different in each eye. The shader is now given the whole number
-  itself, so rounding can't move it.
-- **Round 9, the leaves.** They no longer turn or lean with your head: each tree's leaf cards face
-  your eye and stay upright, so they only turn as you walk round the tree.
-- **Round 9, stutter.** Your last run's real hitches (40..120 ms, every 10..30 s while moving) were
-  the game attaching newly loaded cells, and drawing new things the first time. Your `Oblivion.ini`
-  had the game's own background loading of people's faces and lip files off, and its threaded face
-  morpher, blood and path finding: they're on now while in VR. The 7x7 grid (round 7) makes each
-  cell crossing load 7 cells instead of 5. If the hitches matter more to you than the pop-in, that's
-  the one to take back.
-- **Round 8, frame rate.** Your last run made 75..90 frames a second, down from 110..135: the longer
-  distances doubled what the game draws for each eye. The grass, all round you at 86 m, was the
-  heaviest: it's back to 57 m (still beyond the 43 m before). The rest stays. The headset is at
-  120 Hz, which the game doesn't reach in the open now, so every frame it misses repeats (judder).
-  Setting Virtual Desktop to 90 Hz would give it 11 ms a frame instead of 8.
-- **Round 7, pop-in.** Your `Oblivion.ini` now loads a 7x7 grid of cells around you, not 5x5
-  (`uGridsToLoad=7`, its cell buffer 64; your old file is `Oblivion.ini.rustvr-before-grids`). That
-  one stays when you play flat too: a save made at 7 can crash the game if it's loaded at 5. While in
-  VR, things fade in much further out: objects, items and people at the sliders' most (15), trees
-  at the game's limit, grass out to 86 m (was 43), and the far buildings and tree cards half as far
-  again.
-- **Round 7, stutter.** Stutter Remover's log showed the 240 ms hitch: up to a dozen threads queued
-  on the renderer's texture lock, the one lock I had kept. It's off now, as Stutter Remover's own
-  default.
-- **Round 7, the streaks.** The leaves' constants were all sound in your run, so it isn't them. The
-  next suspect: vertex buffers in system memory, which D3D9On12 copies only as far as each draw's
-  hints say, where Direct3D 9 read them whole. Those draws are now widened to the whole buffer, and
-  the log counts them.
-- **Round 6, stutter.** The eye pictures every 10 seconds were the 140 ms hitches: they're off.
-  xOBSE, and with it Stutter Remover, now loads when the playtest starts the game, as it does when
-  Steam starts it.
-- **Round 6, the streaks.** They're the trees' leaf cards, with corners thrown across the view. The
-  adapter now checks what the game gives the leaves: a corner that isn't a number collapses the leaf
-  instead of streaking, and the log says what they were given.
-
-- **Round 5, stutter.** The game's background loading thread can only change the world while no
-  render holds its lock. Two eyes and their copies held it for most of each frame, so it fell behind
-  with the cells ahead and the game stood waiting for it. Now each eye gives it back, so it can load
-  while the eye's picture is copied.
-- **Round 5, the game's own settings for a headset** (only while in VR, your own higher values kept,
-  all put back when the game closes): actor shadow maps 1024, no sharpening bias on the trees, near
-  trees at full detail, the waves at 36 frames a second, and 100 MB of the cells ahead preloaded.
-- **Round 5, the distant trees.** The game turned every far tree card to the way the camera looks,
-  so every turn of your head turned the whole far forest. Its shader is now made to turn each card
-  to face your eye instead, as the game's near billboards do.
-- **Round 5, the grass.** The game grew grass only in a cone in front of its camera, sized for a
-  flat screen (46 degrees either side) and rebuilt after a 19-degree turn. Now it grows it all round
-  you, to the game's own grass distance.
-- **Round 5, anisotropic filtering** back on, 16x: the streaks across the trees were there before it.
-- **Round 3, the far distance's flicker** (the runtime). At your render scale (1.66) the game draws
-  each eye at 5099x5418, more pixels than the headset shows. The runtime took one sample of the
-  game's picture for each headset pixel, skipping the ones between, so far detail (branches, fences,
-  roofs) flickered in and out as your head moved, and the supersampling smoothed nothing. Now each
-  headset pixel averages the game's pixels it covers.
-- **Round 3, the mushy distance** (the adapter). Oblivion has no anisotropic filtering of its own;
-  on a desktop players force it in the graphics driver, which doesn't reach the game in VR (it runs
-  on D3D9On12). Without it, ground and walls at a slant blur a few metres off. The adapter now
-  filters the game's textures anisotropically, 16x (`anisotropy` in `rustvr-oblivion.toml`).
-- **Round 2, the people's shadows.** The game clips each actor's shadow to its light with six clip
-  planes, made in the camera's own space once a frame, for the left eye. The right eye used the left
-  eye's planes, which cut its shadows away. Now the game makes them again for each eye.
-- **Round 1, the sky.** The game centres the sky (the dome, the clouds, the sun, the moons, the
-  stars) and the weather (rain, snow, the sun's glare) on its camera. In VR each eye is somewhere
-  else, so the sky had parallax and bobbed against the eyes. Now the game centres the sky on each
-  eye (at infinity for both) and the weather on your head (rain keeps its depth).
-- **Round 1, the people.** The game's renderer works out a skinned body's bones relative to the
-  first camera that draws it in a frame, and keeps them for the frame. Now each eye is a frame of its
-  own for the renderer, so each eye's bodies are its own.
-
-## Not done, not checked
-
-- None of round 5 has been seen in the headset yet. The stutter's cause is inferred from the
-  timing log, not measured: this run's log measures it (the game's waits for its loading).
-- The water's reflections resetting as the head moves (the research's other VR item) is not done.
-- Your `Oblivion.ini` has the grass distance under `[Display]`, where the game doesn't read it: the
-  grass reaches 43 m (`[Grass]`'s 3000). Raising `[Grass] fGrassEndDistance` grows it further, at a
-  cost (it's now all round you).
-- The far land's colours are the game's own. TES4qLOD's colour maps at 2048 or 4096 aren't sharper:
-  it colours from one 4x4-pixel average of each ground texture, so above 1024 it only blurs between
-  the land's points.
-- The ghosting on moving people: not found in the game's picture (the saved pictures, taken before
-  the runtime moves them, show none). It's after: Virtual Desktop's spacewarp, the runtime's
-  smoothing, or the frames the game misses at 120 Hz. The tests above will tell which.
-- Which shadows show, and how far away they fade, are still worked out once a frame from the left
-  eye. A shadow at the very right edge of the right eye may be missing.
-- Distance and LOD settings in `Oblivion.ini` (how far detail goes) are left as yours: they cost
-  draw calls twice over in VR. See the research.
+- **On main, after round 12:** fog by distance, so both eyes haze a far hill alike.
+- **Round 12:** the streak gone; the remaining hitches were cells coming in. Added the sampling
+  profiler (now behind `RUSTVR_OBLIVION_PROFILE=1`).
+- **Round 11:** the leave-one-out run showed the streak gone only without the leaves: the leaves'
+  rounded index (D3D9On12 rounding to the nearest). Fixed by making the index whole.
+- **Round 10:** neither shadow pass was it; a run left out each kind of draw in turn
+  (`RUSTVR_OBLIVION_LEAVE_OUT`).
+- **Round 9:** the leaves no longer turn or lean with the head. The hitches were cells attaching and
+  first draws; the game's own background loading and threading turned on in VR.
+- **Round 8:** the frame rate fell to 75..90 from 110..135 with the longer distances; grass back to
+  57 m from 86. Two runs (canopy shadows off, people's shadows off) to tell which pass the streak was.
+- **Round 7:** pop-in: the 7x7 grid on the developer's `Oblivion.ini`, longer fades as VR floors. A
+  240 ms hitch was Stutter Remover's kept texture lock: suppressed. System memory draws widened.
+- **Round 6:** the 140 ms hitches every 10 s were the eye pictures: off. xOBSE (and Stutter Remover)
+  loaded when the adapter starts the game. The streaks were the leaf cards; their constants checked.
+- **Round 5:** the loader's lock given back after each eye; the game's settings raised for a
+  headset; the far trees face the eye; grass all round; anisotropic filtering back on.
+- **Round 3:** far detail flickered: the runtime averages the game's picture over each headset
+  pixel. The distance was mushy: anisotropic filtering, 16x.
+- **Round 2:** people's shadows were in the left eye only: clip planes made again for each eye.
+- **Round 1:** the sky had parallax and bobbed: centred on each eye, the weather on the head. The
+  right eye drew bodies where the left eye's camera saw them: a renderer frame for each eye.
