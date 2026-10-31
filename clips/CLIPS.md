@@ -71,3 +71,14 @@ about 18 for its camera's lag behind a turning head.
   places were found.
 - `coc` goes to cells only: the Imperial City's districts are worldspaces (`ICMarketDistrict`), so
   `-At` takes one of their cells (`ICMarketDistrict01` to `04`) and `player.setpos` the spot.
+
+## Titles in Oblivion's lettering
+
+`clips\titles\title.py` makes a transparent PNG of a line of text in the game's own font
+(`Kingthings_Shadowed`, read from the install's BSAs: white letters in a dark halo, as the game writes
+over the world), enlarged for video with the letters' edges kept crisp:
+
+    python -I clips\titles\title.py "Character Customizer" clips\titles\character-customizer.png --scale 6
+
+`--scale 6` is about 250 px tall (a title on a 4K video; half that on 1080p). The PNGs stay out of git
+(the game's font art).

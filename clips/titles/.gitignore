@@ -1,0 +1,3 @@
+# Made from the game's own font art (title.py reads it from the install): not committed.
+*.png
+__pycache__/
