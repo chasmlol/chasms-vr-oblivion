@@ -1050,6 +1050,8 @@ mod win {
         let run_end = s.runs.get(i + 1).map_or(s.written, |r| r.1);
         let at = first + ((play.saturating_sub(start)) / 2) as usize;
         let voice = !waiting && at < run_end;
+        // (for the plugin: how much is said, so it knows when the game is about to wait)
+        crate::link::with_adapter(|a| a.set_voice_stream_played(s.line, at.min(run_end) as u64));
         if let Some(face) = face_of(actor) {
             let hop = (s.rate / VOICE_STREAM_FPS).max(1) as f32;
             let t = (at as f32 + MOUTH_LEAD * s.rate as f32) / hop;

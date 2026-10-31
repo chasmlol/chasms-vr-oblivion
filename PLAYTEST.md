@@ -123,7 +123,8 @@ Known for now:
   own Voice slider at full (and its effects or music a little lower) is the rest of the room.
 - In the headset Breeze makes their voice a little slower than they speak it: the game's rendering
   has most of the GPU (a second of acted voice took 1.2 to 1.3 s in your last run; 0.5 s with the
-  game closed). So in a long answer they now and then wait for the rest, between two words. Acting
+  game closed). So in a long answer they now and then wait for the rest: at a pause (a comma, a
+  full stop), and then go on with a good stretch of it, not a word at a time. Acting
   isn't what slows it (a quarter more work), nor would a second Breeze help (I tried: the GPU's
   time splits between them). Less for the GPU to render (the game's resolution or supersampling)
   is what would let it keep up.
