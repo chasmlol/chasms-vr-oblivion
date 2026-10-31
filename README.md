@@ -132,7 +132,7 @@ RustVR's settings are in its in-headset menu, and saved in `%LOCALAPPDATA%\RustV
 |---|---|
 | Help | The controls, by topic |
 | Comfort | Turning (snap or smooth), the walking direction (head or off hand), roomscale, ducking to crouch and the stealth crouch amount, camera bob, vignettes and the fade in walls, riding (the view's turn, its vignette, the reins) |
-| Hands | Physics and ghost hands, grip toggles, the gravity gloves, grab reach, weight, throwing, eating, drinking and reading by hand, the holsters' editor, the quiver and the bow, interaction sounds |
+| Hands | Physics and ghost hands, grip toggles, the gravity gloves, weight, throwing, eating, drinking and reading by hand, the holsters' editor, the quiver and the bow, interaction sounds |
 | Voice | Simple voice commands, and the voice plugin's settings (its microphone, the voices' volume, acting out, streaming, talking over them) |
 | Body | Seated mode, your real height or the character's, your height and arm span (or measure them), how much body shows, the game's light on it, body tracking, hand size, the mirror |
 | Controls | The weapon hand, two-handed aiming, gestures, ability flicks, melee by swinging, the stick's dead zone, swimming with your arms |
