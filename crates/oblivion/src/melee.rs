@@ -28,7 +28,7 @@ const STRENGTH_ONE: f32 = 50.0;
 
 struct State {
     /// The rules as last sent.
-    sent: Option<(u32, i32, i32, i32)>,
+    sent: Option<MeleeRules>,
     /// The runtime's running total of the stamina spent, as last taken off.
     spent: f32,
     /// The arms' climbing now: how they move the player (the game's units a second, the game's axes).
@@ -37,35 +37,33 @@ struct State {
 
 static STATE: Mutex<State> = Mutex::new(State { sent: None, spent: f32::NAN, climb: None });
 
-/// The rules for the player now: (flags, Strength, Fatigue now, Fatigue at most).
-fn rules_now() -> Option<(u32, i32, i32, i32)> {
+/// The player's rules now, all of the game's say in one table (the adapter's only writer of
+/// [`MeleeRules`]: anything else of the game's that has a say, telekinesis say, fills its part here).
+pub fn rules() -> Option<MeleeRules> {
     let player = crate::engine::player();
     if player == 0 {
         return None;
     }
-    let flags = RULES_STAMINA | RULES_SAYS_SLOW | RULES_SAYS_CLIMB | RULES_CLIMB | RULES_SAYS_TELEKINESIS;
-    let most = crate::combat::base_actor_value(player, AV_FATIGUE);
-    Some((flags, crate::combat::actor_value(player, AV_STRENGTH), crate::combat::actor_value(player, AV_FATIGUE), most))
+    let mut r: MeleeRules = bytemuck::Zeroable::zeroed();
+    r.flags = RULES_STAMINA | RULES_SAYS_SLOW | RULES_SAYS_CLIMB | RULES_CLIMB | RULES_SAYS_TELEKINESIS;
+    r.strength = (crate::combat::actor_value(player, AV_STRENGTH) as f32 / STRENGTH_ONE).clamp(0.2, 3.0);
+    r.stamina = crate::combat::actor_value(player, AV_FATIGUE) as f32;
+    r.stamina_max = crate::combat::base_actor_value(player, AV_FATIGUE).max(1) as f32;
+    Some(r)
 }
 
-/// Once a game frame (in the world): the player's rules, when they change.
+/// Once a game frame (in the world): the player's rules, when any of them changes.
 pub fn publish(a: &rustvr_adapter::Adapter) {
-    let Some(now) = rules_now() else { return };
+    let Some(r) = rules() else { return };
     let mut s = STATE.lock().unwrap();
-    if s.sent == Some(now) {
+    if s.sent.is_some_and(|was| bytemuck::bytes_of(&was) == bytemuck::bytes_of(&r)) {
         return;
     }
-    let (flags, strength, fatigue, most) = now;
-    let mut r: MeleeRules = bytemuck::Zeroable::zeroed();
-    r.flags = flags;
-    r.strength = (strength as f32 / STRENGTH_ONE).clamp(0.2, 3.0);
-    r.stamina = fatigue as f32;
-    r.stamina_max = most.max(1) as f32;
     a.write_melee_rules(&r);
-    if s.sent.is_none_or(|(f, st, ..)| f != flags || st != strength) {
-        tracing::info!("melee: the rules: flags {flags:#x}, strength {:.2} (the game's {strength}), Fatigue {fatigue} of {most}", r.strength);
+    if s.sent.is_none_or(|was| was.flags != r.flags || was.strength != r.strength) {
+        tracing::info!("melee: the rules: flags {:#x}, strength {:.2}, Fatigue {} of {}", r.flags, r.strength, r.stamina, r.stamina_max);
     }
-    s.sent = Some(now);
+    s.sent = Some(r);
 }
 
 /// Before the game's frame: the Fatigue the swings spent since the last, off the player's; and the
