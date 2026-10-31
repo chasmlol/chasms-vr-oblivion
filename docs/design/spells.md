@@ -103,7 +103,8 @@ The facts, with addresses, are in [spells-engine-notes.md](spells-engine-notes.m
 | Skyrim VR's menu rule | On the wheel, **the trigger of the hand that should have it**. | The same rule players already know; one wheel serves both hands. |
 | ISPVR | **The charge's haptics, exactly**: 100 ms to 20 ms, the sixth power, a faint tick held ready, a full burst on release. | It answers the most repeated complaint (no felt ready). |
 | PLANCK | A **failure felt**: a long dull pulse, with the game's own message and failure sound. | Players asked for it; Oblivion has its own words and sounds for it. |
-| Magic Improvements | **Palm casting** (60 degrees from the fingers towards the palm, a setting); **aim smoothed by the spell's level** (10 to 40 frames); the held art **smaller as magicka runs down**. | What the big lists ship; weight on the harder spells; magicka you can see in the hand. |
+| Skyrim VR, made right | **The aim is the controller's own pointing ray** (OpenXR's aim pose, the ray the headset's pointer and the menus' laser use): hold the controller out and the spell goes where it points. | The user's first playtest: palm casting off the grip came out well off where the controller pointed. Skyrim VR's own `fMagicRotationPitch` (55 to 60 degrees up from its hand) exists to get this same ray; the runtime has it from the headset, made for each controller. |
+| Magic Improvements | **Palm casting** as a setting (`palm_tilt`, about 60 for it); **aim smoothed by the spell's level**, but short (40 to 120 ms, against its 10 to 40 frames); the held art **smaller as magicka runs down**. | Some lists ship palm casting, and others find it hard to aim at range; its long smoothing trails behind a quick point. The short one only takes out the trigger's jolt. Magicka you can see in the hand. |
 | Spell Auto-Aim VR | A **gentle cone** (10 degrees up or down, 15 across, 28 m), foes first for a harmful spell. | Called not cheaty at these values; it helps at range with palm casting. |
 | VRIK | A hand that takes a weapon **keeps its spell** and has it back when it lets go. | Getting back what you held. |
 | Curated lists | **No light from a spell only held**: the casting light comes with the charge. | Up close a palm's light dazzles; the lists drop hand-effect lights. |
@@ -161,7 +162,8 @@ the game, but their hands still move in VR.
 * **`crates/runtime/src/magic.rs`**: each hand's spell (either hand; at first the off hand has the
   game's selected spell and the main hand none, so its trigger stays the game's Activate); the
   trigger's charge over the spell's casting time, with ISPVR's haptics; let go when charged, a cast
-  ([`CE_CAST`]): from the palm along the palm aim (smoothed by level, onto a creature in the cone),
+  ([`CE_CAST`]): from the palm along the controller's pointing ray (smoothed a little by level, onto a
+  creature in the cone),
   a touch spell into the first creature the charged hand touches ([`CEF_TOUCHED`]) or along the aim,
   a self spell anywhere; a quick tap with nothing charged is the game's Activate; a spell the game
   won't cast now doesn't charge ([`CE_CAST_REFUSED`]); after a cast, the game's wait. Staffs
@@ -173,7 +175,8 @@ the game, but their hands still move in VR.
 * **The protocol** (v14 kept): a spell's mastery level, its charge and recovery times and its icon;
   the table's recovery, the player's own picks in the game's interface, the wheel's font and art;
   `CE_SELECT`, `CE_CAST_REFUSED`, `CEF_TOUCHED`.
-* **Settings** (`[magic]`): `palm_angle` (60), `aim_assist`, `aim_smoothing`, `charge_haptics`.
+* **Settings** (`[magic]`): `palm_tilt` (0: where the controller points), `aim_assist`,
+  `aim_smoothing`, `charge_haptics`.
 * **The range** (`crates/range/src/magic.rs`): six spells (a fire bolt, a heal, a frost bolt of a
   higher level, a shocking touch, a power, one too costly), magicka spent and coming back, bolts
   that fly and strike the dummies, bursts for a touch and a heal.
@@ -203,7 +206,7 @@ the game, but their hands still move in VR.
 | B let go with the main hand's pointer on a spell | That spell into the main hand |
 | A pick in the game's magic menu or a quick key | That spell into the off hand |
 | Trigger held, a hand with a spell | Charge it (the game's casting time); felt growing, a spike when ready |
-| Let go, charged | Cast: target spells from the palm (60 degrees from the fingers towards the palm), touch spells along it, self spells anywhere |
+| Let go, charged | Cast: target spells from the palm where the controller points, touch spells along it, self spells anywhere |
 | A charged touch spell's hand on a creature | Cast into it at once |
 | Trigger tapped, nothing charged | The game's Activate |
 | Trigger, holding a staff | Charge at its tip; let go to cast along it |

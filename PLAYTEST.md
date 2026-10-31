@@ -51,10 +51,11 @@ The design and its reasons are in `docs/research/spells.md`.
   at first, then pulses that speed up and strengthen sharply, then a spike when it's charged and a
   faint tick while you hold it. **Let go to cast**, and you feel a full burst. Let go before it's
   charged and nothing is cast; no magicka is spent.
-* **Aiming from the palm**, as in Magic Improvements' palm casting. A target spell leaves the palm
-  60° from your fingers towards the palm's face, so **turn your palm towards what you're casting
-  at**. The aim is smoothed, more for harder spells, and helped gently onto a creature (10° up or
-  down, 15° across).
+* **Aiming where the controller points.** A target spell leaves your palm along the controller's
+  own pointing ray, the same ray the menu laser uses. **Hold the controller out at what you're
+  casting at and let go.** The aim is smoothed a touch, a little more for harder spells, to take
+  out the jolt of the trigger. It's also helped gently onto a creature (10° up or down, 15°
+  across).
 
 ## What to try
 
@@ -107,8 +108,8 @@ The design and its reasons are in `docs/research/spells.md`.
     * Chameleon and Shadow Shape (invisibility) don't make your own body see-through yet.
 
 Things worth telling me about:
-* Does the 60° palm angle feel natural, or should it be more finger-pointing or more palm-out?
-  `palm_angle` is in the RustVR settings (`[magic]`).
+* Does it go where the controller points? If you'd rather cast out of your palm, `palm_tilt` in
+  the RustVR settings (`[magic]`) turns the aim towards it (about 60 for palm casting).
 * Is the aim help too strong or too weak?
 * Is the wheel in a good place and size?
 * Can you feel the charge and the ready spike clearly?
@@ -132,10 +133,13 @@ the magicka is spent and comes back.
 ## Checked, and not
 
 * **Checked:**
+  * The aim, on the emulated headset with its pointing ray 40° above its grip (as a Touch
+    controller's) and the aim help off: the controller pointed at a dummy, and the bolt went
+    exactly along the ray.
   * A bound weapon on the range: Bound sword taken from the wheel's second page and cast, and the
     range's sword is made in that hand (on the emulated headset).
   * The framework part, on the range in the headless `spell` scenario: one charged bolt cast from
-    a palm turned 60° off the line to the dummy, the aim help puts it on the dummy, it strikes, and
+    a controller pointed at the dummy, the aim help puts it on the dummy, it strikes, and
     a tap isn't a cast.
   * The wheel, on the emulated headset: it opens, both hands pick from it, and casts go from either
     hand.
