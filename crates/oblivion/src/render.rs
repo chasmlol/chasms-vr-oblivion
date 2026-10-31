@@ -274,9 +274,14 @@ mod win {
                 camera::write(cam, &s);
                 set_lock(false, true);
                 SECOND_EYE.store(true, Ordering::Release);
-                result = time(Part::Eye, || unsafe { real(this, arg) });
-                let colour = hooks::guard("capture mirror", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::MIRROR)).unwrap_or(false));
-                let depth = hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
+                // (Timed apart from the eyes: a third render of the world at the eyes' size.)
+                let (r, colour, depth) = time(Part::Mirror, || {
+                    let r = unsafe { real(this, arg) };
+                    let colour = hooks::guard("capture mirror", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::MIRROR)).unwrap_or(false));
+                    let depth = hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
+                    (r, colour, depth)
+                });
+                result = r;
                 mirror_done = (colour && depth).then_some((s.frustum[4], s.frustum[5]));
                 continue;
             }

@@ -36,6 +36,21 @@ The research and the design are in `docs/research/facesculpt.md`.
   eye's picture waited about 55 ms on the GPU before it could be handed over, where it waited under
   1 ms at 4669x5026: the GPU was full. Why so much more than 2.4 times is still open.
 
+  The likeliest cause is video memory. Other programs held 11.7 of the card's 32.6 GB with no game
+  running. At 7237x7791 a picture is 225 MB (451 MB in the HDR format), and the game, the adapter's
+  copies and the runtime's three sets of targets keep many of them. The race menu touches more of
+  them each frame: the mirror's render, its picture and depth copies, and the runtime's two
+  textures for it. Past the budget Windows gives a program, every frame's textures are copied in
+  and out of the system's memory, which would make each frame cost far more than 2.4 times. The
+  code can't settle it, so this build measures it:
+  - the adapter's `timing:` line ends with `video memory <used> of <budget> MB`, and says
+    `(over its budget)` when it is;
+  - it times the mirror's world (its render and copies) on its own: `the mirror's world`;
+  - the runtime's `pacing:` line ends with its own video memory against its budget.
+
+  One run at 1.55 with the race menu open tells which: over budget means memory; under it, with
+  `the mirror's world` large, means the third render.
+
 ## What changed since the first playtest
 
 - **A pull moved the whole head.** That had three causes, all fixed:
