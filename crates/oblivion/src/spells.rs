@@ -23,6 +23,9 @@
 //!   else the game's own touch takes what's in its reach along the aim (a creature, else what the
 //!   eyes are on: a door). The game's rule against summoning in the water is kept, as its release
 //!   keeps it.
+//! * **Bound weapons and shields** ([`conjured_into`]): a spell that makes one, cast from a hand, has
+//!   it made in that hand: the game equips it as it does, and `crate::weapons` gives it to the
+//!   runtime in the hand that cast it rather than at the hip or over the shoulder.
 //! * **A pick** ([`select`]): the game's own selection (0x664700, as the magic menu makes it, a scroll
 //!   put down first): the HUD's icon, the menu's sound.
 //! * **A failure** ([`failed`]): the trigger pulled on a spell the game won't cast now: its message
@@ -61,6 +64,13 @@ const SETTING_LIGHT: usize = 0x70;
 const LIGHT_COLOUR: usize = 0x78;
 const HOSTILE: u32 = 0x1;
 const DISABLED: u32 = 0x40_0000;
+/// An effect that makes a bound weapon, and one that makes bound armour (a bound shield is the one
+/// whose code is `BASH`).
+const BOUND_WEAPON: u32 = 0x1_0000;
+const BOUND_ARMOUR: u32 = 0x2_0000;
+const BOUND_SHIELD: u32 = u32::from_le_bytes(*b"BASH");
+/// A bound thing the hand conjured is put in it if the game equips it this soon after (seconds).
+const CONJURE_WITHIN: f64 = 3.0;
 /// The types a hand casts.
 const SPELL: u32 = 0;
 const POWER: u32 = 2;
@@ -83,6 +93,8 @@ const VT_USABLE: usize = 0x1C;
 const VT_MAGIC_NODE: usize = 0x24;
 const VT_SET_ITEM: usize = 0x34;
 const CASTER_LIGHT: usize = 0x04;
+/// `NiAVObject`'s world translation.
+const NODE_WORLD_POS: usize = 0x88;
 const CASTER_STATE: usize = 0x08;
 const CANT_CAST: u32 = 7;
 /// The checked cast (thiscall on the caster, the source object: 0), the projectile spawn (cdecl, 12
@@ -387,6 +399,46 @@ static LAUNCH: Mutex<Option<Launch>> = Mutex::new(None);
 static TOUCHED: AtomicUsize = AtomicUsize::new(0);
 /// Casts made, for the log.
 static CASTS: AtomicU32 = AtomicU32::new(0);
+/// The bound weapon and the bound shield a hand just conjured: which hand, until when.
+static CONJURED: Mutex<[Option<(u32, f64)>; 2]> = Mutex::new([None, None]);
+
+/// What a bound spell makes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Bound {
+    Weapon = 0,
+    Shield = 1,
+}
+
+/// The hand a newly equipped bound weapon or shield goes into (`ObjectDesc::into_hand`: 1 the left,
+/// 2 the right), if a hand just cast the spell that made it; 0 otherwise. Taken once.
+pub fn conjured_into(what: Bound) -> u32 {
+    let mut c = CONJURED.lock().unwrap();
+    match c[what as usize].take() {
+        Some((hand, until)) if crate::link::now() <= until => hand.min(1) + 1,
+        _ => 0,
+    }
+}
+
+/// The bound things a spell's list makes on the caster: a weapon, a shield.
+#[cfg(target_arch = "x86")]
+fn bound(list: usize) -> (bool, bool) {
+    let (mut weapon, mut shield) = (false, false);
+    let mut node = list + 4;
+    let mut n = 0;
+    while node != 0 && n < 16 {
+        n += 1;
+        let effect = mem::deref(node);
+        node = mem::deref(node + 4);
+        if effect == 0 || mem::at::<u32>(effect + EFFECT_RANGE) != Some(0) {
+            continue;
+        }
+        let setting = mem::deref(effect + EFFECT_SETTING);
+        let flags = mem::at::<u32>(setting + SETTING_FLAGS).unwrap_or(0);
+        weapon |= flags & BOUND_WEAPON != 0;
+        shield |= flags & BOUND_ARMOUR != 0 && mem::at::<u32>(effect) == Some(BOUND_SHIELD);
+    }
+    (weapon, shield)
+}
 
 /// The launch of the cast being made now, if any (for the projectile spawn hook).
 pub fn launch() -> Option<Launch> {
@@ -394,8 +446,10 @@ pub fn launch() -> Option<Launch> {
 }
 
 /// While the game casts for the hand: the projectile leaves `ev.point` along `ev.dir` (the launch
-/// the projectile spawn takes) and the player faces that way (the game aims some things by where
-/// the caster faces: its touch pick, a projectile's); `f` casts.
+/// the projectile spawn takes), the player faces that way (the game aims some things by where the
+/// caster faces: its touch pick, a projectile's), and the caster's magic node is at the palm (where
+/// the game puts what goes off in the caster's hand: a touch spell's burst with nothing touched);
+/// `f` casts.
 #[cfg(target_arch = "x86")]
 fn launching(player: usize, ev: &CombatEvent, f: impl FnOnce()) {
     let dir = Vec3::from_array(ev.dir);
@@ -408,12 +462,31 @@ fn launching(player: usize, ev: &CombatEvent, f: impl FnOnce()) {
         rot.write(pitch);
         rot.add(2).write(heading.rem_euclid(std::f32::consts::TAU));
     }
+    // (The node's world place, for the moment of the cast: the game's next update puts it back.)
+    let node = magic_node(player);
+    let at = (node + NODE_WORLD_POS) as *mut [f32; 3];
+    let old_at = (node != 0 && mem::is_readable(at as *const u8, 12)).then(|| unsafe { at.read() });
+    if old_at.is_some() {
+        unsafe { at.write(pos) };
+    }
     f();
+    if let Some(old) = old_at {
+        unsafe { at.write(old) };
+    }
     unsafe {
         rot.write(old_pitch);
         rot.add(2).write(old_heading);
     }
     *LAUNCH.lock().unwrap() = None;
+}
+
+/// The player's caster's magic node (`MagicCaster` +0x24: the skeleton's `magicNode`), or 0.
+#[cfg(target_arch = "x86")]
+fn magic_node(player: usize) -> usize {
+    type Node = unsafe extern "thiscall" fn(usize) -> usize;
+    let caster = player + MAGIC_CASTER;
+    let f = mem::deref(mem::deref(caster) + VT_MAGIC_NODE);
+    if f == 0 { 0 } else { unsafe { std::mem::transmute::<usize, Node>(f)(caster) } }
 }
 
 /// A hand's cast of `spell` (its `SpellItem`): the game's own checked cast, from the palm along the
@@ -436,9 +509,7 @@ pub fn cast(player: usize, spell: usize, ev: &CombatEvent, actors: &HashMap<u32,
     if ev.dir != [0.0; 3] && has_target_effect(list) && mem::deref(caster + CASTER_LIGHT) == 0 {
         let main = game::main_effect(item);
         let form = mem::deref(main + SETTING_LIGHT);
-        type Node = unsafe extern "thiscall" fn(usize) -> usize;
-        let f = mem::deref(mem::deref(caster) + VT_MAGIC_NODE);
-        let node = if f != 0 { unsafe { std::mem::transmute::<usize, Node>(f)(caster) } } else { 0 };
+        let node = magic_node(player);
         if let Some(l) = crate::scene::CastingLight::new(mem::at::<u32>(form + FORM_ID).filter(|_| form != 0).unwrap_or(0), node, 0.01) {
             light = l.raw();
             unsafe { ((caster + CASTER_LIGHT) as *mut usize).write(light) };
@@ -467,6 +538,20 @@ pub fn cast(player: usize, spell: usize, ev: &CombatEvent, actors: &HashMap<u32,
         tracing::info!("spells: the game wouldn't cast {:#x}", ev.what);
     } else {
         crate::mirror_spell::cast(spell);
+        // A bound weapon or shield: the game equips it, and it's made in the hand that cast it
+        // (`crate::weapons`).
+        let (weapon, shield) = bound(list);
+        let until = crate::link::now() + CONJURE_WITHIN;
+        let mut c = CONJURED.lock().unwrap();
+        if weapon {
+            c[Bound::Weapon as usize] = Some((ev.hand, until));
+        }
+        if shield {
+            c[Bound::Shield as usize] = Some((ev.hand, until));
+        }
+        if weapon || shield {
+            tracing::info!("spells: {:#x} conjures a bound {} into the {} hand", ev.what, if weapon { "weapon" } else { "shield" }, if ev.hand == 0 { "left" } else { "right" });
+        }
     }
 }
 

@@ -92,11 +92,19 @@ The design and its reasons are in `docs/research/spells.md`.
    game's own staff cast along the staff, using its charge.
 10. **Holding something.** Take the torch or the sword in your left hand: the spell's art goes.
     Let go of it: the spell is back in that hand.
-11. **The rest of the spells.** Use the wheel's pages to try the rest:
+11. **Bound weapons.** Put **Bound Sword** (or Bound Dagger) in a hand from the wheel and cast it:
+    the sword is made straight in that hand, by its grip, rather than at your hip. When the spell
+    runs out, or is dispelled, it's gone from the hand. If you let go of it, it falls like any
+    sword for now.
+12. **The rest of the spells.** Use the wheel's pages to try the rest:
     * the big ones, whose aim should feel heavier (Immolating Blast, Lightning Storm);
     * area spells (Fire Ball, Ice Storm);
-    * summons and bound weapons;
-    * Telekinesis, Turn Undead on the zombies, Paralyze, Soul Trap, and the lights.
+    * summons, which appear where you look;
+    * Turn Undead on the zombies, Paralyze, Soul Trap, Open Easy Lock on a locked door, and the
+      lights.
+    * Telekinesis only half works in VR: a quick tap takes a thing where you look, but nothing can
+      push it yet.
+    * Chameleon and Shadow Shape (invisibility) don't make your own body see-through yet.
 
 Things worth telling me about:
 * Does the 60° palm angle feel natural, or should it be more finger-pointing or more palm-out?
@@ -124,6 +132,8 @@ the magicka is spent and comes back.
 ## Checked, and not
 
 * **Checked:**
+  * A bound weapon on the range: Bound sword taken from the wheel's second page and cast, and the
+    range's sword is made in that hand (on the emulated headset).
   * The framework part, on the range in the headless `spell` scenario: one charged bolt cast from
     a palm turned 60° off the line to the dummy, the aim help puts it on the dummy, it strikes, and
     a tap isn't a cast.

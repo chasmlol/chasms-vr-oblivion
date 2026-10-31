@@ -123,6 +123,39 @@ The facts, with addresses, are in [spells-engine-notes.md](spells-engine-notes.m
 * **An aim marker**: not in Skyrim VR's best-loved setups, and a marker would be the runtime's art,
   not the game's.
 
+### Every effect, in VR
+
+Every magic effect in `Oblivion.esm` (its `MGEF` records: their codes, flags and schools), and what
+happens when a hand casts it. The game runs every effect itself; the question is whether an effect
+touches something VR has taken over (the player's body, hands, weapons, view or controls) and so
+needs the adapter to carry it across.
+
+| Effects | What the game does | In VR |
+|---|---|---|
+| Damage (fire, frost, shock, health, magicka, fatigue, attributes), Drain, Absorb (health, magicka, fatigue, attributes, skills), Weakness, Disintegrate Armour or Weapon, Sun Damage, Stunted Magicka, Vampirism | On the target, or the caster for an absorb: its numbers, hit shaders, sounds | The game's, nothing to carry: a target spell lands where the palm aimed it; on the player, its shader is drawn over the body |
+| Restore, Fortify (attributes, skills, health, magicka, fatigue, Fortify Magicka Multiplier), Resist, Cure, Dispel, Reflect Damage, Reflect Spell, Spell Absorption | On whoever it's cast on | The game's. Fortify Magicka raises the most the hand shows (the table's maximum includes the game's max modifier). Dispel takes a bound weapon away with the rest, and it leaves the hand |
+| Shield, Fire, Frost and Shock Shield | The player's armour rating and resistances, and the shield's shader on the player | The game's, with its shader over the body and hands (the overlays) |
+| Calm, Frenzy, Charm, Rally, Demoralize, Command Creature or Humanoid, Paralyze, Silence, Soul Trap, Turn Undead, Reanimate | On the target's AI or state | The game's: aimed by the palm, or a touch put into what the hand touches |
+| Burden, Feather, Water Breathing | Weight carried, breath | The game's: its walking and the swimming feature's breath meter follow it |
+| Water Walking | The player walks on water | The swimming feature reads it from the game (its `WaterState`) |
+| Detect Life | The game's shader on creatures, through walls | The game draws it in its own picture of each eye |
+| Night-Eye | The game's night-eye shader on its picture | The game's picture shows it; the body's lighting takes the game's ambient, Night-Eye's included |
+| Light (self) | A light on the player | The game's light lights the world and the runtime's body; Light (target, Illuminate) is a bolt whose light stays where it lands |
+| Open | Unlocks the door or container a bolt hits | The game's; the door's latch, tugged, then opens it (`world.rs`) |
+| Summon (every `Z...`, the Hungers, the Shambles, the Atronachs, Golden Saint, Dark Seducer) | The creature appears ahead of the caster | Ahead of where the head looks: the player is faced along the cast while the game makes it. The game's rule against summoning in the water is kept |
+| **Bound weapons** (Bound Sword, Axe, Mace, Dagger, Bow; the Order's weapons, the Priest Dagger, the Staff of Sheogorath) | The game equips a bound weapon | **Made in the hand that cast it**, by its grip, not at the hip: the game equips it, and the adapter gives it to the runtime in that hand (`ObjectDesc::into_hand`). When it ends (its time, a dispel) the game takes it, and the hand's weapon is gone with it |
+| **Bound armour** (Boots, Cuirass, Gauntlets, Greaves, Helmet; the Mythic Dawn armour and helm) | The game equips bound armour | On the body as the game equips it (the body follows what's worn). **The Bound Shield** is made in the hand that cast it, like a bound weapon |
+| Telekinesis | On the caster: for a while, Activate at a distance takes a thing, which floats where the player looks, and attacking pushes it away | **Partly**: tapping a trigger is the game's Activate, where the head looks, so a thing can be taken; pushing it needs the game's attack, which no hand sends. A follow-up: telekinesis worked by the hand (point, take, flick) |
+| Chameleon, Invisibility (on the player) | The player's own model is drawn see-through, with its refraction | **Not carried yet**: the game doesn't draw the player's body in VR, and the runtime draws it solid. A follow-up: the body and hands drawn with the game's look for them |
+| Script Effects (quests', mods') | Whatever their script does, with the look of the effect they name | The game's; their art in the palm is the effect they look like |
+| Touch spells with an area that "explode with no target" (spell flag 0x80) | The burst goes off at the caster's magic node | At the palm: the magic node is moved to the palm for the instant of the cast |
+| Powers, lesser powers | Cast like spells; a power once a day | The same as spells; a second power the same day is refused with the game's words |
+
+Not spells but nearby: **scrolls** are read at the eyes (the holsters feature) and cast the game's
+own animated way, from the hidden first-person hands along the head's look; casting them from the
+hand like a spell is a follow-up. **The player paralysed** by someone else's spell can't move in
+the game, but their hands still move in VR.
+
 ### The framework (any game with magic)
 
 * **`crates/runtime/src/magic.rs`**: each hand's spell (either hand; at first the off hand has the
@@ -158,6 +191,8 @@ The facts, with addresses, are in [spells-engine-notes.md](spells-engine-notes.m
   sound; the staff's own cast.
 * **`crates/oblivion/src/magic.rs`**: the art, small in the palm while held (smaller with the
   magicka), growing with its casting light and sound as it charges.
+* **Bound weapons and shields** (`spells.rs`, `weapons.rs`): made in the hand that cast them
+  (`ObjectDesc::into_hand`, which the rig honours as the thing arrives).
 
 ### Controls
 

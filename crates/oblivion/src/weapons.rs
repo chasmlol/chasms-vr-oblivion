@@ -9,6 +9,9 @@
 //! The equipped shield is the other: taken from over the left shoulder by its strap, it guards (it
 //! meets blows, it doesn't hit), and a block with it is the game's block with its shield.
 //!
+//! A bound weapon or shield a hand conjured (`crate::spells::conjured_into`) is made in that hand
+//! instead, by its grip.
+//!
 //! A staff casts: held in either hand, its trigger charges its enchantment at its tip and letting go
 //! casts it from there along the staff (`OBJF_CASTS`): the game's own staff cast, its charge used
 //! up (`crate::combat`). An enchanted one shimmers as the game draws it: its enchantment's own
@@ -345,6 +348,10 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             d.replaces = copy;
             tracing::info!("weapons: {} takes the place of its copy {copy:#x} in the hand", e.name);
         }
+        // (A bound bow the hand just conjured: made in that hand.)
+        if let Some(d) = descs.iter_mut().find(|d| d.id == WEAPON_ID) {
+            d.into_hand = crate::spells::conjured_into(crate::spells::Bound::Weapon);
+        }
         for d in descs {
             objects.descs[objects.count as usize] = d;
             objects.count += 1;
@@ -355,6 +362,8 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             Ok(model) => {
                 let mut d = object_desc(&model, e, &key, WEAPON_ID);
                 d.spawn_seq = seq;
+                // (A bound weapon the hand just conjured: made in that hand.)
+                d.into_hand = crate::spells::conjured_into(crate::spells::Bound::Weapon);
                 if let Some((_, copy)) = REPLACING.lock().unwrap().take_if(|(form, _)| *form == e.form) {
                     d.replaces = copy;
                     tracing::info!("weapons: {} takes the place of its copy {copy:#x} in the hand", e.name);
@@ -392,6 +401,7 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             Ok(model) => {
                 let (mut d, w) = shield(&model, &key, SHIELD_ID);
                 d.spawn_seq = seq;
+                d.into_hand = crate::spells::conjured_into(crate::spells::Bound::Shield);
                 let (i, k) = (objects.count as usize, melee.count as usize);
                 objects.descs[i] = d;
                 objects.count += 1;
