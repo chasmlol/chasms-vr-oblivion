@@ -133,6 +133,7 @@ pub fn before_update() {
     #[cfg(windows)]
     input::set(v, vr || settings::get().background);
     crate::combat::apply_pending();
+    crate::melee::apply();
     // The mirror spell on the player, and the game's effect for each summons of the mirror.
     if vr {
         crate::mirror_spell::tick();

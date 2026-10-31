@@ -22,8 +22,10 @@
 //! * **Pulled along the ground** while it stands, it's pushed after the pull (its character
 //!   controller's push, the game's knockback without a ragdoll), stumbling along.
 //! * **Choking**: the throat squeezed drains its fatigue (`DamageActorValue`, faster off its feet)
-//!   until the game knocks it out itself; it stays out while it's choked. Held up by the throat and
-//!   still conscious, it struggles: its hands go for the hand and its legs kick, weaker as it tires.
+//!   until the game knocks it out itself; it stays out while it's choked. It hurts too, as the
+//!   framework's choke does (`docs/MELEE.md`): a tenth of its health a second squeezed
+//!   fully, so a choke held long enough kills. Held up by the throat and still conscious, it
+//!   struggles: its hands go for the hand and its legs kick, weaker as it tires.
 //! * **The reaction is the game's**: a living actor choked, knocked down, thrown or held a while
 //!   has been attacked by the player (`OnAttacked`, as at the end of every blow: its disposition,
 //!   tolerance, fleeing, combat and the assault crime).
@@ -179,6 +181,7 @@ mod game {
     /// `Character`: the horse it rides (its vtable +0x380 returns it).
     const MOUNT: usize = 0xD4;
     const AV_STRENGTH: u32 = 0;
+    const AV_HEALTH: u32 = 8;
     const AV_FATIGUE: u32 = 10;
     /// The process: whether it's below the high process (vtable +8: 0 for a high one), its knock
     /// state (+0x11C: 0 standing, 1 knocked down, 2 its lead-in, 3 knocked out, 4 its lead-in,
@@ -240,6 +243,9 @@ mod game {
     const CHOKE_TIME: f32 = 6.0;
     const CHOKE_LIFTED: f32 = 1.5;
     const CHOKE_SQUEEZE: f32 = 0.15;
+    /// A choke's hurt, squeezed fully (5 a second against a human's 50),
+    /// as a share of the creature's health a second.
+    const CHOKE_HEALTH: f32 = 5.0 / rustvr_melee::body::HEALTH;
     /// The choke takes its fatigue this far below nothing (a share of its most): out cold for a while
     /// after it's let go (as long as it takes the game to bring its fatigue back up from there: a
     /// quarter of it had it up again in a second and a half), the game's own knockout from fatigue.
@@ -1197,6 +1203,8 @@ mod game {
                 let rate = most / CHOKE_TIME * g.squeeze * if state != 0 { CHOKE_LIFTED } else { 1.0 };
                 let left = combat::actor_value(h.actor, AV_FATIGUE) as f32 + most * CHOKED_OUT;
                 damage(h.actor, AV_FATIGUE, (rate * dt).min(left.max(0.0)));
+                let health = combat::base_actor_value(h.actor, AV_HEALTH).max(1) as f32;
+                damage(h.actor, AV_HEALTH, health * CHOKE_HEALTH * g.squeeze.min(1.0) * dt);
                 if !h.choking {
                     h.choking = true;
                     tracing::info!("grabs: {:#x} choked (fatigue {} of {most})", h.actor_id, combat::actor_value(h.actor, AV_FATIGUE));

@@ -111,11 +111,15 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | Sneaking, a hand into someone's pocket; grip, pull out | Feel what's there (a tick per thing as the hand moves), take one: the game's pickpocketing |
 | A thing let go in someone's pocket | Plant it (the game's rule: weightless things only) |
 | An ingredient let go over a mortar; the pestle worked round in it | Into the bowl; ground, the game makes the potion and its bottle rises out of the mortar |
-| Swing | Attack (the game's hit; a fast committed swing is a power attack) |
+| Swing | Attack, as the runtime's melee judges it (`docs/design/oblivion-melee.md`): the game's hit, as hard as the blow was, where it landed and through what's worn; a blow hard enough to stagger is the game's power attack |
+| Grip on a weapon's handle; the trigger on it | Take it by its grip (snapped into the hand, or reversed); slide the hand along it (a sword's grip on over the guard to half-sword) |
+| Let go mid-swing | Throw it (a dagger flies point first and sticks) |
+| A point pushed in, an edge drawn | Stab in (it sticks); a draw cut |
+| An empty hand gripping a ledge, pulled down | Climb |
 | Grip over the left shoulder (a bow equipped) | Take the bow by its grip, in either hand |
 | Grip in the slot the arrows are kept in (over the right shoulder to begin with), the bow on | One of the bow's arrows to nock (let go there, it goes back in) |
 | The arrow's back end to the string; pull back; let go | Nock, draw, loose: the further drawn, the faster and flatter it flies (a fifth or less: it stays on the string) |
-| Weapon or shield across a blow | Block |
+| Weapon or shield across a blow | Block (moving into it: a parry) |
 | Grip a horse's saddle | Get on (the game's own mount; someone else's horse is stealing it) |
 | Grip the reins (base of the neck) | Hold them, either hand or both |
 | One rein back, or both to one side / both back | Turn that way / slower, stop, back up |

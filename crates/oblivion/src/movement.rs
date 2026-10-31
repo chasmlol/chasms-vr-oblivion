@@ -31,6 +31,11 @@
 //!
 //! Swimming, the arms' strokes are the step ([`crate::swim::stroke_step`]): the game's own swimming
 //! moves the player at the strokes' velocity, the stick's swimming added while it's pushed.
+//!
+//! Climbing by the hands (`crate::melee`: the hands holding the world), the arms'
+//! pull is the step and the character controller's velocity, and its gravity is off while they hold
+//! (its gravity scale +0x328, which the game itself swaps for a galloping horse; its fall time +0x320
+//! kept at nothing, so a hang is no fall); let go, gravity's back.
 
 use glam::Vec3;
 
@@ -156,6 +161,11 @@ mod win {
     /// units): a person's height, the game's own for a model with no bound (64 each way of its
     /// middle, 0x895190).
     const TALL: f32 = 128.0;
+    /// `bhkCharacterController`: its velocity (Havok units, x y z), its fall time and its gravity
+    /// scale (every state's update adds the world's gravity times it).
+    const CC_VELOCITY: usize = 0x2E0;
+    const CC_FALL_TIME: usize = 0x320;
+    const CC_GRAVITY: usize = 0x328;
     const CC_JUMPING: u32 = 1;
     const CC_FALLING: u32 = 2;
     const MOVEMENT_SPEED: usize = 0x005E_65B0;
@@ -216,6 +226,50 @@ mod win {
             tracing::info!("swim: the game's step {:.2?}, the strokes' {:.2?} for {dt:.4} s (pitch {:.2}, heading {:.2}), the player at {at:.1?}, the game's camera at {eye:.1?}", [d[0], d[1], d[2]], out, rot[0], rot[2]);
         }
         *d = out;
+    }
+
+    /// Climbing: the frame's step is the arms' pull (`v`, the world's axes, game units a second), in
+    /// the actor's own space (+Y ahead, +X to its right, by its heading); and the character
+    /// controller's own velocity is it (Havok's units), which it moves by in the air too.
+    fn climb_step(this: usize, dt: f32, d: &mut [f32; 3], v: [f32; 3]) {
+        let h = mem::at::<[f32; 3]>(this + refr::ROT).map_or(0.0, |r| r[2]);
+        let (s, c) = h.sin_cos();
+        *d = [(v[0] * c - v[1] * s) * dt, (v[0] * s + v[1] * c) * dt, v[2] * dt];
+        let cc = controller(this);
+        if cc != 0 {
+            unsafe { ((cc + CC_VELOCITY) as *mut [f32; 3]).write(v.map(|x| x / HAVOK_SCALE)) };
+        }
+    }
+
+    /// While the hands hold the world (`climb`), the player's character controller has no gravity
+    /// (its gravity scale, which the game swaps itself for a galloping horse, 0) and isn't falling
+    /// (its fall time kept at nothing: no fall damage for the hang); let go, its gravity is back.
+    fn hang(this: usize, climb: Option<[f32; 3]>) {
+        static SAVED: Mutex<Option<f32>> = Mutex::new(None);
+        let cc = controller(this);
+        if cc == 0 {
+            return;
+        }
+        let mut saved = SAVED.lock().unwrap();
+        unsafe {
+            match (climb.is_some(), *saved) {
+                (true, None) => {
+                    *saved = mem::at::<f32>(cc + CC_GRAVITY);
+                    ((cc + CC_GRAVITY) as *mut f32).write(0.0);
+                    ((cc + CC_VELOCITY + 8) as *mut f32).write(0.0);
+                    tracing::info!("movement: hanging by the hands (the gravity scale {:?} put by)", *saved);
+                }
+                (false, Some(g)) => {
+                    ((cc + CC_GRAVITY) as *mut f32).write(g);
+                    *saved = None;
+                    tracing::info!("movement: let go: the gravity scale {g} back");
+                }
+                _ => {}
+            }
+            if climb.is_some() {
+                ((cc + CC_FALL_TIME) as *mut f32).write(0.0);
+            }
+        }
     }
 
     /// Where the view stands ahead of the game's body this frame (the runtime's world, metres),
@@ -387,10 +441,18 @@ mod win {
             let stick = *STICK.lock().unwrap();
             crate::hooks::guard_void("player step", || {
                 let Some(stick) = stick else { return };
+                // (Its gravity off while the hands hold the world, back as soon as they don't.)
+                let climb = crate::melee::climb();
+                hang(this, climb);
                 if crate::swim::swimming(this) {
                     if let Some(v) = *SWIM.lock().unwrap() {
                         swim_step(this, dt, unsafe { &mut *delta }, v, stick);
                     }
+                    return;
+                }
+                // Climbing by the hands: the frame's step is the arms' (`crate::melee`), up and down too.
+                if let Some(v) = climb {
+                    climb_step(this, dt, unsafe { &mut *delta }, v);
                     return;
                 }
                 // (On a horse the horse moves, and the game moves its rider with it.)

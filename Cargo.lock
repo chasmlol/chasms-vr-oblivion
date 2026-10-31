@@ -753,6 +753,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustvr-melee"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "glam",
+ "rustvr-protocol",
+]
+
+[[package]]
 name = "rustvr-oblivion"
 version = "0.1.0"
 dependencies = [
@@ -764,6 +773,7 @@ dependencies = [
  "rustvr-adapter",
  "rustvr-asset",
  "rustvr-gpu",
+ "rustvr-melee",
  "rustvr-protocol",
  "serde",
  "toml",

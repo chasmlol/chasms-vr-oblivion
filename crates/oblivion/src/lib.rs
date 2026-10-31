@@ -67,6 +67,7 @@ pub mod lock;
 pub mod log;
 pub mod magic;
 pub mod map;
+pub mod melee;
 pub mod mem;
 pub mod menus;
 pub mod mirror_spell;

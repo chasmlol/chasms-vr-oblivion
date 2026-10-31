@@ -146,6 +146,30 @@ fn extra(list: usize, kind: u8) -> usize {
     0
 }
 
+/// The armour `actor` wears (any actor's, from its inventory's changes, as the player's [`body`]):
+/// each piece's biped slots and whether it's heavy armour (`TESBipedModelForm`'s flags +0x6A, bit 7,
+/// xOBSE's `kFlags_HeavyArmor`). Clothes aren't armour.
+pub fn worn_armour(actor: usize) -> Vec<(u16, bool)> {
+    let changes = extra(actor + 0x44, EXTRA_CONTAINER_CHANGES);
+    let data = mem::deref(changes + 0x0C);
+    if actor == 0 || changes == 0 || data == 0 {
+        return Vec::new();
+    }
+    list(mem::deref(data), 512)
+        .into_iter()
+        .filter_map(|entry| {
+            let form = mem::deref(entry + 8);
+            if mem::at::<u8>(form + FORM_TYPE) != Some(ARMOR) {
+                return None;
+            }
+            let worn = list(mem::deref(entry), 64).into_iter().any(|l| extra(l, EXTRA_WORN) != 0 || extra(l, EXTRA_WORN_LEFT) != 0);
+            let slots = mem::at::<u16>(form + 0x68)?;
+            let heavy = mem::at::<u16>(form + 0x6A)? & 0x80 != 0;
+            worn.then_some((slots, heavy))
+        })
+        .collect()
+}
+
 /// What the player carries: each form in the inventory's changes and how many (their count, as the
 /// changes keep it; the player's base form starts with nothing an alchemist needs).
 pub fn carried() -> Vec<(usize, i32)> {
