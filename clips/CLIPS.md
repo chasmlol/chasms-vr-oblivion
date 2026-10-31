@@ -19,11 +19,14 @@ The bats never touch your RustVR settings (`%LOCALAPPDATA%\RustVR\settings.toml`
 view's look, its field of view and the overscan are whatever you set in the RustVR menu, and stay
 so. The looks are in the menu's Studio tab.
 
-The trailer build is main as of `d2a3a62` (protocol v15), built in `<builds>\trailer`, with the
-trailer branch's fixes: the game plays on (controls, clock, sound) with another window in front, the
+The trailer build is main as of `323bc1b` (protocol v17: stealth's crouch, voice, the framework's
+melee in the range), built in `<builds>\trailer` (`rustvr-voice.exe` too), with the trailer
+branch's fixes: the game plays on (controls, clock, sound) with another window in front, the
 desktop view opens in front of the game's window, the boot's New Game reaches the prison cell with
 the main menu in Cyrodiil, a changed overscan takes at the next start, and the overscan goes up to
-20. Shots that need a feature not in main yet boot that feature's own build (`play.ps1 <feature>`).
+20. Talking to people needs the voice servers up and `DEEPSEEK_API_KEY` set
+(`docs/playtest/voice.md`). Shots that need a feature not in main yet boot that feature's own build
+(`play.ps1 <feature>`).
 
 ## Shots
 
