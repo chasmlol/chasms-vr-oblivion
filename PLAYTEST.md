@@ -19,6 +19,8 @@ Everything is in the RustVR menu's new **Studio** tab, and it's saved with the s
   - the bob.
 - **The right stick scrolls the RustVR menu** (any tab, wherever the laser points), as it already
   scrolls the game's menus.
+- **Fixed after the third playtest:** the thinner distant fog down the side of a wide desktop view
+  with the overscan up (below).
 
 The save is Weye's open ground on Lake Rumare's shore at 1 pm, with an Iron Bow equipped and 168
 Iron Arrows. There's room to walk, run and jump, water to swim in, and a bow to aim: for the bob,
@@ -126,6 +128,31 @@ scope picture, no crop. The headset's view never changes.
 - **With a look's own lens** (Cinematic's 90 degrees), aiming still narrows to exactly the aiming
   field of view. The speed widening fades while you aim, and the bob is damped.
 
+## The fog at the sides (fixed after the third playtest)
+
+You saw less distant fog at the side of the desktop view, with the overscan up and its field of
+view wide. You were right, on the left side.
+
+- **Why:** Oblivion's shaders don't fog a thing by how far away it is.
+  - They use the length of its clip-space position, which grows towards the edges of the eye's
+    frustum. The same hill is foggier near the edge of an eye's picture than in its middle.
+  - The desktop view is the right eye's picture. Past the right eye's left edge, it fills in from
+    the left eye's. With your settings that edge is 51 degrees out: 11 degrees of overscan and a
+    128 degree desktop view.
+  - In the left eye's picture that hill sits nearer the middle of the frustum, so the game fogged
+    it about a fifth less. That made a step in the fog at the join, and thinner fog past it.
+- **Now:** where the left eye's picture fills in, the desktop view evens out the fog.
+  - From the game's depth, it works out how much fog the game gave each pixel, and how much the
+    right eye's picture would have given it.
+  - The fog carries on past the join without a step.
+  - **The headset doesn't change:** each eye only ever shows its own picture.
+  - It's for Oblivion's fog only (Gamebryo's). Metro fogs by real distance.
+  - The sky has no depth, and keeps its colour.
+- **The headset has the same quirk, unchanged:**
+  - your two eyes see a far hill off to the side fogged a little differently;
+  - more overscan thins the fog a little.
+  - Fixing those would mean changing Oblivion's shaders, and so the headset's picture.
+
 ## What to try
 
 Watch the monitor (or OBS) while you play.
@@ -191,6 +218,10 @@ Watch the monitor (or OBS) while you play.
     scrolls, wherever the laser points.
     - The Studio tab's Camera section has the desktop field of view, the aim zoom, the overscan
       and the bob.
+14. **The fog at the sides.**
+    - Set the overscan to 10 or more and the desktop field of view to 120 or more.
+    - On open ground with hills far off, the haze should be even across the desktop view.
+    - There should be no edge in it down the left side.
     - The field of view slider moves the look's own lens where it has one (and the look becomes
       custom). In Clean it's your own.
 
@@ -218,7 +249,14 @@ The unit tests cover:
 - the shake wearing off;
 - the flat HUD's layout;
 - the looks;
-- reading a `.cube` LUT.
+- reading a `.cube` LUT;
+- the fog where the other eye's picture fills in (on the GPU).
+  - It uses two eye pictures fogged as Oblivion's shaders fog them, with your playtest's frustums
+    and a 128 degree desktop view.
+  - Before the fix, the fog past the join was 0.10 off the right eye's: a tenth of the way from
+    clear to full fog.
+  - After the fix, it's 0.006 off at worst, which is 8-bit rounding. That holds for far hills (found
+    by direction) and near ones (followed through the depth).
 
 The view bob branch is merged here with no conflicts, and the aim zoom still merges cleanly with
 the result.
@@ -235,6 +273,7 @@ the result.
       own in the last 5 s: ...` in `rustvr-oblivion.log`).
     - The runtime's log says what the desktop view showed (`desktop view: bobbed ...`).
   - The headset no longer taking the game's bob, and its height standing unchanged.
+  - Its fog evened out at the desktop view's side, over its real hills, water and distant land.
 - **The real headset's timing**: whether the effects ever cost the headset a frame. They run after
   the headset's frame is handed over, and they're a third of a millisecond on this GPU.
 
