@@ -1,50 +1,113 @@
-//! Sitting and sleeping with the body (`docs/research/interact.md`, "Sitting and sleeping"):
+//! Sitting in the game's furniture (`docs/research/interact.md`, "Sitting and sleeping"). A chair,
+//! a bench or a stool is sat on as the game has it: its activation (the trigger with the reticle on
+//! it and the game's icon for it, from as far as the game reaches), the game turning the player to
+//! its marker and its sitting animation, its ownership and crime; a bed asks its own way (its sleep
+//! and wait menu). Getting up is the game's Activate while seated: the trigger again. The rest is
+//! the headset's:
 //!
-//! * **Sitting down on furniture.** The player sitting down for real (the head below [`SIT`] of
-//!   their standing eye height, held [`SIT_HOLD`]) on a chair, a bench or a bed (its collision
-//!   under the head, within [`SEAT_REACH`] along the floor) is the player's activation of it: the
-//!   game's own furniture, so a chair or bench seats them (its marker, its animation, its sit state)
-//!   and a bed asks its own way (its sleep and wait menu, with its ownership and trespass rules: "You
-//!   cannot sleep in an owned bed", its crime). Standing up again for real (the head over
-//!   [`STAND`]) is the game's own Activate while seated: it stands them up.
-//! * **The view while seated**: the game lowers its eye onto the seat; the player has sat down for
-//!   real too, so the view's anchor stays at the height the game's eye has over the feet standing
-//!   (the body's own sitting does the lowering, once).
+//! * **Dark while it moves the player.** Sitting down and getting up, the game's animation moves the
+//!   eye as the player doesn't: the view is dark meanwhile and a moment after ([`SEAT_MOVING`], as
+//!   getting on or off a horse is), and for [`SETTLE`] after any change of it.
+//! * **The view seated.** Once seated (and dark), the view is recentred on the seat facing the way
+//!   the game sat them (out of the chair), the eye over the seat at a sitting body's height
+//!   ([`SEATED_EYE`] of the game's standing eye over the feet): however the player's head is then
+//!   (standing in their room or sat on a real chair) is the seated eye. The head looks round and
+//!   leans as far as the room's limit lets the view go from it.
+//! * **The body seated.** The runtime's body sits on the seat (the furniture's own mesh under where
+//!   the game sat them, [`seat_on`]), its feet on the floor before it ([`Ride::seat`]).
+//! * **Not walked.** While the game has them sitting down, seated or getting up, the stick and the
+//!   room's walking don't move the game's player, and the head's look doesn't turn it (the game
+//!   turns them to the seat): only the trigger gets them up.
+//!
+//! [`SEAT_MOVING`]: rustvr_protocol::SEAT_MOVING
+//! [`Ride::seat`]: rustvr_protocol::Ride::seat
 
-/// The head below this share of the standing eye height: sitting (or lying); back over this:
-/// standing up.
-pub const SIT: f32 = 0.78;
-pub const STAND: f32 = 0.9;
-/// How long the head stays low (seconds) before the furniture is sat on, and high before standing.
-pub const SIT_HOLD: f64 = 0.3;
-pub const STAND_HOLD: f64 = 0.3;
-/// The furniture's collision within this of the head along the floor (metres), at a seat's height.
-pub const SEAT_REACH: f32 = 0.45;
-pub const SEAT_HEIGHT: f32 = 0.45;
+use glam::{Vec2, Vec3};
 
-/// Whether the head `height` over the floor is a sitting one for a player whose standing eye height
-/// is `standing` (and a standing one, `up`).
-pub fn sitting(height: f32, standing: f32) -> bool {
-    standing > 0.5 && height < standing * SIT
+/// The eye over the seat when seated, as a share of the game's standing eye over the feet (a sitting
+/// body's eyes are a little under half its standing eye height over what it sits on).
+pub const SEATED_EYE: f32 = 0.48;
+/// The game's standing eye over the feet (metres) until it's been seen.
+pub const STANDING_EYE: f32 = 1.65;
+/// How long after the game's sitting changes (seconds) the view is dark at least; seated, it's
+/// recentred on the seat this long after (dark by then).
+pub const SETTLE: f64 = 0.3;
+/// A seat's top is this high over the feet at the least and the most (metres).
+pub const SEAT_LOW: f32 = 0.2;
+pub const SEAT_HIGH: f32 = 0.8;
+/// A seat's height over the feet when its mesh doesn't say (metres).
+pub const SEAT_FALLBACK: f32 = 0.45;
+
+/// The view's anchor while the game has the player seated: the eye, the way the view faces when
+/// it's recentred, and whether it's recentred this frame.
+#[derive(Clone, Copy, Debug)]
+pub struct Carry {
+    pub eye: Vec3,
+    pub look_yaw: f32,
+    pub recenter: bool,
 }
 
-pub fn standing_up(height: f32, standing: f32) -> bool {
-    standing > 0.5 && height > standing * STAND
+/// The top of a seat on the furniture's triangles `tris` (the protocol's world) for a player the
+/// game has sat at `at` (their feet), facing `fwd`: straight down onto its flat tops, between
+/// [`SEAT_LOW`] and [`SEAT_HIGH`] over the feet, the highest there; under the feet, else a little
+/// behind or before them (the game's place for the feet needn't be over the seat's middle).
+pub fn seat_on(tris: &[[Vec3; 3]], at: Vec3, fwd: Vec3) -> Option<Vec3> {
+    let fwd = Vec3::new(fwd.x, 0.0, fwd.z).normalize_or(Vec3::Z);
+    for d in [0.0, -0.1, 0.1, -0.2, 0.2, -0.3] {
+        let p = at + fwd * d;
+        let top = tris.iter().filter_map(|t| down_onto(t, p)).filter(|y| (at.y + SEAT_LOW..=at.y + SEAT_HIGH).contains(y)).reduce(f32::max);
+        if let Some(y) = top {
+            return Some(p.with_y(y));
+        }
+    }
+    None
+}
+
+/// Where the upright line through `p` meets the triangle `t`, if it's flat enough to sit on.
+fn down_onto(t: &[Vec3; 3], p: Vec3) -> Option<f32> {
+    let n = (t[1] - t[0]).cross(t[2] - t[0]).normalize_or_zero();
+    if n.y.abs() < 0.7 {
+        return None;
+    }
+    let flat = |v: Vec3| Vec2::new(v.x, v.z);
+    let (a, b, c) = (flat(t[0]), flat(t[1]), flat(t[2]));
+    let (v0, v1, v2) = (c - a, b - a, flat(p) - a);
+    let den = v0.perp_dot(v1);
+    if den.abs() < 1e-9 {
+        return None;
+    }
+    // p = a + u (c - a) + v (b - a), on the floor's plane.
+    let u = v2.perp_dot(v1) / den;
+    let v = v0.perp_dot(v2) / den;
+    (u >= 0.0 && v >= 0.0 && u + v <= 1.0).then(|| t[0].y + u * (t[2].y - t[0].y) + v * (t[1].y - t[0].y))
+}
+
+/// The eye seated on `seat`, for a player whose standing eye is `standing` over their feet.
+pub fn seated_eye(seat: Vec3, standing: Option<f32>) -> Vec3 {
+    seat + Vec3::Y * standing.unwrap_or(STANDING_EYE) * SEATED_EYE
 }
 
 #[cfg(all(windows, target_arch = "x86"))]
 pub use game::*;
 
 #[cfg(not(all(windows, target_arch = "x86")))]
-pub fn anchor_eye(eye: glam::Vec3) -> glam::Vec3 {
-    eye
+pub fn carry(_eye: Vec3, _now: f64) -> Option<Carry> {
+    None
 }
+
+#[cfg(not(all(windows, target_arch = "x86")))]
+pub fn seated() -> bool {
+    false
+}
+
+#[cfg(not(all(windows, target_arch = "x86")))]
+pub fn publish(_view: &rustvr_adapter::View, _ride: &mut rustvr_protocol::Ride, _now: f64) {}
 
 #[cfg(all(windows, target_arch = "x86"))]
 mod game {
     use super::*;
     use crate::{camera, engine, mem};
-    use glam::Vec3;
+    use glam::Quat;
     use rustvr_protocol::*;
     use std::sync::Mutex;
 
@@ -55,24 +118,28 @@ mod game {
     const FURNITURE: u8 = 0x20;
     const REFR_BASE: usize = 0x1C;
     const REFR_NODE: usize = 0x3C;
-    /// The player's sit and sleep state (`BaseProcess::GetSitSleepState`): 0 normal, 4 seated.
+    /// The player's sit and sleep state (`BaseProcess::GetSitSleepState`): 0 normal, 1 loading the
+    /// sit idle, 2 wanting to sit, 3 waiting for the sit animation, 4 sitting, 5 wanting to stand;
+    /// past it, the sleep's own.
     const NORMAL: u32 = 0;
     const SEATED: u32 = 4;
-    /// Furniture within this of the player (metres) is looked at.
+    const STANDING_UP: u32 = 5;
+    /// Furniture within this of the player (metres) is looked at for the seat.
     const NEAR: f32 = 2.5;
 
     #[derive(Default)]
     struct State {
-        /// The head low since when; already sat (not again until it's up).
-        low_since: Option<f64>,
-        high_since: Option<f64>,
-        sat: bool,
-        sit_on: Option<usize>,
-        stand: bool,
+        /// The game's sitting now (0 to 5), the one before it, and since when.
+        sit: u32,
+        was: u32,
+        since: f64,
         /// The game's eye over the feet standing (metres), as last seen standing.
         standing_eye: Option<f32>,
-        furniture: Vec<(usize, Vec<[Vec3; 3]>)>,
-        next_scan: f64,
+        /// Seated: the seat (the world), the way the game sat them facing (its heading), the floor's
+        /// height; once found.
+        seat: Option<(Vec3, f32, f32)>,
+        /// The view recentred on it.
+        recentred: bool,
     }
     static STATE: Mutex<Option<State>> = Mutex::new(None);
 
@@ -84,25 +151,30 @@ mod game {
         mem::at::<[f32; 3]>(engine::player() + engine::refr::POS).map(|p| camera::basis().point_from_game(Vec3::from(p)))
     }
 
-    /// The view's anchor for the game's eye `eye`: seated in furniture, at the game's standing eye
-    /// height over the feet (the player has sat down for real); else the game's eye as it is.
-    pub fn anchor_eye(eye: Vec3) -> Vec3 {
-        let Some(feet) = feet() else { return eye };
-        let state = crate::riding::sit_state(engine::player());
-        with_state(|s| {
-            if state == NORMAL && !crate::riding::mounted() && !crate::player::sneaking() {
-                s.standing_eye = Some(eye.y - feet.y);
-            }
-            match s.standing_eye {
-                Some(up) if state == SEATED && !crate::riding::mounted() => eye.with_y(feet.y + up),
-                _ => eye,
-            }
-        })
+    /// The game's sitting for the player: 0 to 5 (not on a horse, which is riding's; not the sleep's).
+    fn sitting() -> u32 {
+        let p = engine::player();
+        if p == 0 || crate::riding::mounted() {
+            return NORMAL;
+        }
+        let s = crate::riding::sit_state(p);
+        if s <= STANDING_UP { s } else { NORMAL }
     }
 
-    fn scan(s: &mut State) {
+    /// The game has the player sitting down, seated or getting up in furniture: the stick, the
+    /// room's walking and the head's look aren't its player's then.
+    pub fn seated() -> bool {
+        sitting() != NORMAL
+    }
+
+    /// Dark: sitting down or getting up, or just after the sitting changed either way.
+    fn moving(s: &State, now: f64) -> bool {
+        matches!(s.sit, 1..=3 | STANDING_UP) || (now - s.since < SETTLE && (s.sit == SEATED || s.was != NORMAL))
+    }
+
+    /// The furniture near the player's feet `at`.
+    fn furniture_near(at: Vec3) -> Vec<usize> {
         let b = camera::basis();
-        let Some(me) = feet() else { return };
         let mut found = Vec::new();
         for cell in crate::items::cells() {
             let mut entry = cell + 0x48;
@@ -116,77 +188,96 @@ mod game {
                     continue;
                 }
                 let Some(p) = mem::at::<[f32; 3]>(r + engine::refr::POS).map(|p| b.point_from_game(Vec3::from(p))) else { continue };
-                if p.distance(me) < NEAR {
-                    found.push((r, crate::lock::triangles_of(r)));
+                if p.distance(at) < NEAR {
+                    found.push(r);
                 }
             }
         }
-        s.furniture = found;
+        found
     }
 
-    /// Before the eyes are drawn: the player sitting down by furniture, or standing up from it.
-    pub fn place(view: &rustvr_adapter::View, f: &RtFrame, now: f64) {
-        if crate::menus::menu_mode() || crate::riding::mounted() {
-            return;
-        }
-        let Some(body) = crate::link::with_adapter(|a| a.read_body()).flatten() else { return };
-        let (height, standing) = (f.hmd.pos[1], body.eye_height);
-        let Some(feet) = feet() else { return };
-        let state = crate::riding::sit_state(engine::player());
-        with_state(|s| {
-            if now >= s.next_scan {
-                s.next_scan = now + 0.5;
-                scan(s);
-            }
-            if state == SEATED {
-                // Seated: standing up for real is the game's own Activate, which stands them up.
-                s.low_since = None;
-                if standing_up(height, standing) {
-                    let since = *s.high_since.get_or_insert(now);
-                    if now - since > STAND_HOLD && !s.stand {
-                        s.stand = true;
-                        tracing::info!("rest: standing up from the furniture");
-                    }
-                } else {
-                    s.high_since = None;
+    /// The seat the game has sat the player on (the top of the furniture under where it put their
+    /// feet), the way it faces them, and the floor's height there.
+    fn find_seat() -> Option<(Vec3, f32, f32)> {
+        let at = feet()?;
+        let heading = mem::at::<f32>(engine::player() + engine::refr::ROT + 8).filter(|h| h.is_finite())?;
+        let fwd = Vec3::new(heading.sin(), 0.0, heading.cos());
+        let mut best: Option<(f32, usize, Vec3)> = None;
+        for r in furniture_near(at) {
+            if let Some(top) = seat_on(&crate::lock::triangles_of(r), at, fwd) {
+                let d = Vec3::new(top.x - at.x, 0.0, top.z - at.z).length();
+                if best.is_none_or(|b| d < b.0) {
+                    best = Some((d, r, top));
                 }
-                return;
             }
-            s.high_since = None;
-            if !sitting(height, standing) {
-                s.low_since = None;
-                s.sat = false;
-                return;
+        }
+        let seat = match best {
+            Some((d, r, top)) => {
+                tracing::info!("rest: seated on {:08X}: its seat {:.2} m over the feet, {d:.2} m from them along the floor", mem::at::<u32>(r + FORM_ID).unwrap_or(0), top.y - at.y);
+                top
             }
-            if s.sat || state != NORMAL {
-                return;
+            None => {
+                tracing::info!("rest: seated, no seat found under the feet: {SEAT_FALLBACK} m over them");
+                at + Vec3::Y * SEAT_FALLBACK
             }
-            let since = *s.low_since.get_or_insert(now);
-            if now - since < SIT_HOLD {
-                return;
+        };
+        Some((seat, heading, at.y))
+    }
+
+    /// Before the frame's view (with the game's eye): the view's anchor while seated (recentred on
+    /// the seat once it's dark), else None (the game's eye).
+    pub fn carry(eye: Vec3, now: f64) -> Option<Carry> {
+        let sit = sitting();
+        let feet = feet();
+        with_state(|s| {
+            if sit == NORMAL && s.was == NORMAL && !crate::riding::mounted() && !crate::player::sneaking() {
+                if let Some(f) = feet {
+                    s.standing_eye = Some(eye.y - f.y);
+                }
             }
-            // Under the head, at a seat's height over the feet.
-            let seat = view.head_pos.with_y(feet.y + SEAT_HEIGHT);
-            let under = s.furniture.iter().filter_map(|(r, tris)| crate::lock::nearest(tris, seat).map(|n| (*r, (n.0 - seat).with_y(0.0).length()))).filter(|n| n.1 < SEAT_REACH).min_by(|a, b| a.1.total_cmp(&b.1));
-            if let Some((r, d)) = under {
-                tracing::info!("rest: sitting down on {:08X} ({d:.2} m from the head along the floor)", mem::at::<u32>(r + FORM_ID).unwrap_or(0));
-                s.sat = true;
-                s.sit_on = Some(r);
+            if sit != s.sit {
+                tracing::info!("rest: the game's sitting {} -> {sit}", s.sit);
+                s.was = s.sit;
+                s.sit = sit;
+                s.since = now;
+                if sit != SEATED {
+                    s.seat = None;
+                    s.recentred = false;
+                }
+            }
+            // (Standing again for good: its eye is a standing one from here.)
+            if sit == NORMAL && now - s.since > SETTLE {
+                s.was = NORMAL;
+            }
+            if sit != SEATED || now - s.since < SETTLE {
+                return None;
+            }
+            if s.seat.is_none() {
+                s.seat = find_seat();
+            }
+            let (seat, heading, _) = s.seat?;
+            let at = seated_eye(seat, s.standing_eye);
+            let recenter = !std::mem::replace(&mut s.recentred, true);
+            if recenter {
+                tracing::info!("rest: the view recentred on the seat, facing {:.0} degrees: the eye {:.2} m over it (the game's eye {:.2} m off it)", heading.to_degrees(), at.y - seat.y, at.distance(eye));
+            }
+            Some(Carry { eye: at, look_yaw: heading, recenter })
+        })
+    }
+
+    /// For the runtime, every game frame (with this frame's mapping): sitting down or getting up,
+    /// and the seat once the view is on it.
+    pub fn publish(view: &rustvr_adapter::View, ride: &mut Ride, now: f64) {
+        with_state(|s| {
+            if moving(s, now) {
+                ride.sitting |= SEAT_MOVING;
+            }
+            if let (SEATED, true, Some((seat, heading, floor))) = (s.sit, s.recentred, s.seat) {
+                ride.sitting |= SEAT_SEATED;
+                ride.seat = Pose { pos: view.to_tracking(seat).to_array(), valid: 1, rot: Quat::from_rotation_y(heading - view.body_yaw).to_array() };
+                ride.floor = view.to_tracking(seat.with_y(floor)).y;
             }
         });
-    }
-
-    /// Each game frame: the furniture sat on (its activation: sat in, or its bed's own asking), or
-    /// stood up from (the game's Activate while seated).
-    pub fn frame() {
-        let (sit, stand) = with_state(|s| (s.sit_on.take(), std::mem::take(&mut s.stand)));
-        if let Some(r) = sit {
-            let ok = crate::world::activate(r);
-            tracing::info!("rest: the furniture's activation ({ok})");
-        }
-        if stand {
-            crate::player::press("Activate");
-        }
     }
 }
 
@@ -194,11 +285,38 @@ mod game {
 mod tests {
     use super::*;
 
+    /// A seat's top, a square `size` across at `height`, round (0, 0), as two triangles.
+    fn square(height: f32, size: f32) -> Vec<[Vec3; 3]> {
+        let h = size / 2.0;
+        let c = |x: f32, z: f32| Vec3::new(x, height, z);
+        vec![[c(-h, -h), c(h, -h), c(h, h)], [c(-h, -h), c(h, h), c(-h, h)]]
+    }
+
     #[test]
-    fn sitting_and_standing_by_the_heads_height() {
-        assert!(sitting(1.0, 1.6));
-        assert!(!sitting(1.5, 1.6));
-        assert!(standing_up(1.5, 1.6));
-        assert!(!standing_up(1.2, 1.6), "half up");
+    fn the_seat_under_the_feet() {
+        let tris = square(0.45, 0.4);
+        let top = seat_on(&tris, Vec3::ZERO, Vec3::Z).unwrap();
+        assert!((top.y - 0.45).abs() < 1e-5 && top.x.abs() < 1e-5 && top.z.abs() < 1e-5, "{top}");
+        // Sat a little before it: the seat just behind the feet.
+        let top = seat_on(&tris, Vec3::new(0.0, 0.0, 0.25), Vec3::Z).unwrap();
+        assert!((top.z - 0.15).abs() < 1e-5, "{top}");
+    }
+
+    #[test]
+    fn not_the_floor_nor_the_back() {
+        // The floor itself, a chair's back's top over the band, an upright side: none of them a seat.
+        let mut tris = square(0.05, 2.0);
+        tris.extend(square(0.95, 0.4));
+        tris.push([Vec3::new(-0.2, 0.0, 0.0), Vec3::new(0.2, 0.0, 0.0), Vec3::new(0.0, 0.6, 0.0)]);
+        assert_eq!(seat_on(&tris, Vec3::ZERO, Vec3::Z), None);
+        // With the seat there too, the seat.
+        tris.extend(square(0.5, 0.4));
+        assert!((seat_on(&tris, Vec3::ZERO, Vec3::Z).unwrap().y - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn the_eye_seated() {
+        let eye = seated_eye(Vec3::new(1.0, 0.45, 2.0), Some(1.7));
+        assert!((eye.y - (0.45 + 1.7 * SEATED_EYE)).abs() < 1e-5 && eye.x == 1.0 && eye.z == 2.0);
     }
 }

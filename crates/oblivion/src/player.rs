@@ -109,6 +109,11 @@ pub fn before_update() {
             if let Some(c) = &riding {
                 ride(b, &mut v, c);
             }
+            // Sitting in furniture the stick doesn't walk the game's player (nor the room's walking,
+            // which is the stick's too): the trigger gets them up (crate::rest).
+            if crate::rest::seated() {
+                v.stick = [0, 0];
+            }
         }
         #[cfg(target_arch = "x86")]
         if v.back {
@@ -137,8 +142,9 @@ pub fn before_update() {
         if let Some(view) = s.view.filter(|_| !crate::menus::menu_open(crate::menus::MENU_RACE_SEX)) {
             log_once(view.look_yaw);
             first_person();
-            // (A rider looks round freely: the horse goes where the reins say.)
-            if riding.is_none() {
+            // (A rider looks round freely: the horse goes where the reins say. Sitting down, seated
+            // or getting up, the game turns the player to the seat: the head looks round freely.)
+            if riding.is_none() && !crate::rest::seated() {
                 set_look(view.look_yaw, view.look_pitch);
             }
         }

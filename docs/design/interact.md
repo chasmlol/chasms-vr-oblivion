@@ -409,20 +409,36 @@ Calls made:
 
 ### Design
 
-* **Sitting down for real on a chair, a bench or a bed** (the head below 78% of the standing eye
-  height for 0.3 s, with the furniture's collision under the head within 45 cm along the floor, at a
-  seat's height) is the player's activation of it: the game's furniture as ever (a seat seats them,
-  a bed asks for sleep or wait with its own ownership and trespass rules and crime).
-* **Standing up for real** (the head back over 90% for 0.3 s) while seated is the game's Activate,
-  which stands them up.
-* **The view seated**: the anchor stays at the game's standing eye height over the feet while the
-  game has the player seated in furniture, so the real sitting lowers the view once, not twice.
+The player's playtest of the first design (sitting down for real on the chair, standing up for real
+to get up) asked for the game's way instead: the trigger at the seat, dark as they're sat down, the
+body sat in the chair, the head free to look round, the trigger again to get up. The first design
+also stood a player who'd used the trigger straight up again (their real head was still a standing
+one), and turned the game's player to the head's look as the game turned them to the seat.
+
+* **Sitting down is the game's activation of the furniture**: the trigger with the reticle on it
+  (the game's own icon for it, from as far as the game reaches), so the game walks and turns them to
+  its marker and plays its sitting; a bed asks its own way (sleep or wait, its ownership, trespass
+  and crime).
+* **Dark while the game moves them**: sitting down (states 1 to 3), getting up (5), and a moment
+  after either (the runtime's fade for getting on and off a horse, `SEAT_MOVING`).
+* **The view seated**: recentred on the seat once it's dark, facing the way the game sat them, the
+  eye over the seat at 48% of the game's standing eye height over the feet (a sitting body's): the
+  player's head as it is then is the seated eye, so it's right whether they stand in their room or
+  sit on a real chair. They look round and lean freely; the room's limit holds the view near the
+  seat.
+* **The body seated**: the runtime's body sits on the seat (the top of the furniture's mesh under
+  where the game put the feet, or just behind or before them), its thighs along it and its feet on
+  the floor before it (`Ride::seat`, `Ride::floor`; the IK's saddle with a floor).
+* **Not walked**: while the game has them sitting, the stick and the room's walking don't move the
+  game's player, and the head's look doesn't turn it (the game turns them to the seat).
+* **Getting up is the trigger again**: the game's Activate while seated (5).
 
 Calls made:
 
-* The player sits down in their room (a real chair, or the floor); the game's seat follows. A
-  player who activates a chair standing (the trigger at it) is seated by the game, and their view
-  stays where their head is.
+* The game's own reach for the trigger (about 2 m): the reticle shows the seat's icon as far as the
+  game would activate it.
+* The body sitting by the head's height is gone: a player crouching by a chair to pick something up
+  isn't sat in it, and one sitting on a real chair isn't stood up by the game.
 * Lying down isn't asked for: sitting on the bed is enough for the game's own sleep question.
 
 ## 7. Surrendering and yielding

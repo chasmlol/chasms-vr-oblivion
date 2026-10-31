@@ -176,24 +176,27 @@ editor), or pick the offering up off the ground as here.
 ## 6. Sitting and sleeping — `playtest-rest.bat`
 
 Chorrol's Grey Mare at night (its chairs and benches; its beds upstairs, owned); saves as
-`rustvr-rest`. Have a real chair behind you.
+`rustvr-rest`. Play standing.
 
-1. **Sit**: stand with your back to one of the inn's chairs or benches (close to it) and sit down on
-   your real chair. After a moment the game seats you in it (its own sitting). Your view should drop
-   once, as you sat, not twice.
-2. **Stand up**: stand up for real: the game stands you up.
-3. **A bed**: go upstairs, stand by a bed and sit down on it the same way: the game's own answer (an
-   owned bed: "You cannot sleep in an owned bed."). Rent a room from the innkeeper and the bed opens
-   its sleep and wait menu instead (sleep with the laser).
+1. **Sit**: look at one of the inn's chairs or benches from a step or two away: the game's icon for
+   it shows at the reticle. Pull the trigger (an empty hand). The view goes dark while the game sits
+   you down, and comes back with you in the seat, facing out of it, at a sitting eye height.
+2. **Seated**: look round and lean: the head is free, the view stays at the seat. Look down: your
+   body is sat on the seat, its feet on the floor. The stick and walking in your room don't move you.
+3. **Get up**: pull the trigger again. Dark while the game stands you up, then back on your feet.
+4. **A bed**: go upstairs, look at a bed and pull the trigger: the game's own answer (an owned bed:
+   "You cannot sleep in an owned bed."). Rent a room from the innkeeper and the bed opens its sleep
+   and wait menu instead (sleep with the laser).
 
-Tell me especially: does the view stay right when seated (not sunk into the chair, not floating)?
-Does it sit you too eagerly (crouching to pick things up near a chair)?
+Tell me especially: is the seated eye too high or too low? Are you facing out of the chair? Does the
+body sit on the seat (not in front of it, not inside it)? Is the dark too long or too short?
 
-What I checked: builds; unit tests (sitting and standing by the head's height). The sitting, the
-standing up and the bed's checks are the game's own (its activation of the furniture, its Activate).
+What I checked: builds; unit tests (a seat's top found on a furniture's mesh, not its floor or back;
+the seated eye; the IK's legs on a chair, the feet on the floor).
 
-What I couldn't: anything in the game: the view's anchor while seated (the game's standing eye height
-kept over the feet) is untested.
+What I couldn't: anything in the game: where the game puts the player's feet when it sits them
+(the seat is looked for under them, then a little behind and before), how long its sitting down
+takes, and whether its first-person eye stays where it was.
 
 ## 7. Surrendering and yielding — `playtest-yield.bat`, `playtest-surrender.bat`
 

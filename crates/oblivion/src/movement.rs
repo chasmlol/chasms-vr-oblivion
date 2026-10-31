@@ -393,8 +393,9 @@ mod win {
                     }
                     return;
                 }
-                // (On a horse the horse moves, and the game moves its rider with it.)
-                if !on_ground_walking(this) || crate::riding::mounted() {
+                // (On a horse the horse moves, and the game moves its rider with it; in furniture the
+                // game has them where it sat them.)
+                if !on_ground_walking(this) || crate::riding::mounted() || crate::rest::seated() {
                     return;
                 }
                 type Speed = unsafe extern "thiscall" fn(usize) -> f32;

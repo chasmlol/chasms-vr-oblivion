@@ -64,6 +64,8 @@ pub struct GameFrame {
     /// The race menu is open: the player stays in the world for it, before the mirror, its menu
     /// the part of the picture `menu_uv` says.
     pub race_menu: Option<[f32; 4]>,
+    /// Seated in furniture: the view's anchor on the seat (`crate::rest`).
+    pub seat: Option<crate::rest::Carry>,
     pub now: f64,
     pub dt: f32,
 }
@@ -90,14 +92,21 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
                 adapter.tracking.recenter();
             }
         }
+        // Seated in furniture, the view is on the seat: recentred on it as the player is sat there,
+        // facing out of it.
+        let seat = g.seat.filter(|_| ride.is_none());
+        if seat.is_some_and(|s| s.recenter) {
+            adapter.tracking.recenter();
+        }
         // (Up against something the game's body is held up on, the view goes on: crate::movement.
-        // Not on a horse: the view is the rider's eye over the saddle.)
+        // Not on a horse: the view is the rider's eye over the saddle; nor seated.)
         #[cfg(all(windows, target_arch = "x86"))]
-        adapter.tracking.set_lead(if ride.is_some() { Vec3::ZERO } else { crate::movement::lead(eye, g.dt, g.now) });
+        adapter.tracking.set_lead(if ride.is_some() || seat.is_some() { Vec3::ZERO } else { crate::movement::lead(eye, g.dt, g.now) });
+        let (eye, look_yaw) = seat.map_or((eye, g.look_yaw), |s| (s.eye, s.look_yaw));
         let anchor = Anchor {
             eye: ride.as_ref().map_or(eye, |c| c.eye),
             base_eye: ride.as_ref().map_or(eye, |c| c.base_eye),
-            look_yaw: ride.as_ref().map_or(g.look_yaw, |c| c.look_yaw),
+            look_yaw: ride.as_ref().map_or(look_yaw, |c| c.look_yaw),
             scripted: false,
         };
         adapter.tracking.update(&frame, &anchor, g.now, g.dt)

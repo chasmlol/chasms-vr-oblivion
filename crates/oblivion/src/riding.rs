@@ -545,6 +545,8 @@ pub fn publish(view: &rustvr_adapter::View, now: f64) {
         }
     }
     *OFFERED.lock().unwrap() = Some(offered);
+    // (The furniture the player sits in, if any: its seat for the body.)
+    crate::rest::publish(view, &mut ride, now);
     static FRAME: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     ride.frame = FRAME.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     crate::link::with_adapter(|a| a.write_ride(&ride));

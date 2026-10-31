@@ -199,7 +199,6 @@ mod win {
             crate::sigil::frame(link::now());
             crate::ayleid::frame();
             crate::shrines::frame(link::now());
-            crate::rest::frame();
             crate::surrender::frame();
             crate::plants::frame(link::now());
             crate::keys::frame(link::now());
@@ -373,10 +372,9 @@ mod win {
                 }
             }
         };
-        // (Seated in furniture, the anchor stays at the standing eye's height: the player sat down for
-        // real, crate::rest.)
-        let eye = crate::rest::anchor_eye(eye);
-        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, now, dt })?;
+        // (Seated in furniture, the view is on the seat: crate::rest.)
+        let seat = crate::rest::carry(eye, now);
+        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, seat, now, dt })?;
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);
@@ -403,7 +401,6 @@ mod win {
             time(Part::Items, || hooks::guard_void("sigil", || crate::sigil::place(view, now)));
             time(Part::Items, || hooks::guard_void("ayleid", || crate::ayleid::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("shrines", || crate::shrines::place(view, &snap.frame, now)));
-            time(Part::Items, || hooks::guard_void("rest", || crate::rest::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("surrender", || crate::surrender::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("plants", || crate::plants::place(view, &snap.frame, now)));
             time(Part::Items, || hooks::guard_void("keys", || crate::keys::place(view, &snap.frame, now)));
@@ -506,7 +503,7 @@ mod win {
 
     fn menu(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32) {
         // Keeps the link alive and says the game is in its menus.
-        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, now: link::now(), dt: 0.0 });
+        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, seat: None, now: link::now(), dt: 0.0 });
         link::with_adapter(|a| {
             let gpu = a.gpu().clone();
             if !d3d9::capture(dev, &gpu, HUD) {
