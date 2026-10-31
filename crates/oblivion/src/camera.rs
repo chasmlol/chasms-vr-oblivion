@@ -76,9 +76,7 @@ pub fn write(camera: usize, s: &CameraState) {
 /// axes), while the camera is the first-person one. Every first-person sneak animation keys the
 /// skeleton's `Bip01 NonAccum`, the node `Camera01` hangs from, at (0, 0, -24.8) units (35 cm at a
 /// race height of 1: the eye at 79% of its standing height), crossfaded in over the animations'
-/// blend (0.1 s); the standing ones key it at 0 (`docs/research/stealth.md`). That's the flat game's
-/// sneaking posture, not where the player's head is: the headset's view leaves it out, and the real
-/// head is as low as the player has gone.
+/// blend (0.1 s); the standing ones key it at 0 (`docs/research/stealth.md`).
 pub fn sneak_drop() -> Option<Vec3> {
     let player = crate::engine::player();
     if player == 0 || mem::at::<u8>(player + crate::engine::pc::THIRD_PERSON)? != 0 || mem::at::<u8>(crate::engine::CAMERA_OFF_EYES)? != 0 {
@@ -95,6 +93,14 @@ pub fn sneak_drop() -> Option<Vec3> {
     let d = Vec3::from(at) - Vec3::from(from);
     // (Not a posture past 60 units: the skeleton's being made or taken away.)
     (d.is_finite() && d.length() < 60.0).then(|| basis().point_from_game(d))
+}
+
+/// Whether the headset's view leaves the game's sneak drop out: from when the player crouches for
+/// real (`body_crouched`, the runtime's `Intents::crouch`: their head is already as low as they
+/// went) until the game's camera is back up (`drop`, metres). A sneak from the button is the game's
+/// own, its camera down as the flat game has it.
+pub fn hold_sneak_drop(holding: bool, body_crouched: bool, drop: f32) -> bool {
+    body_crouched || (holding && drop > 0.01)
 }
 
 /// The camera for one headset eye: the eye's pose mapped into the world by `view`, its field of
@@ -140,5 +146,15 @@ mod tests {
         assert!(s.look_yaw().abs() < 1e-6);
         assert!(s.eye().abs_diff_eq(Vec3::new(1.0, 0.1, 2.0), 1e-5));
         assert!(rotation(&s).abs_diff_eq(Quat::IDENTITY, 1e-5));
+    }
+
+    #[test]
+    fn the_sneak_drop_is_held_out_only_for_a_real_crouch() {
+        // The button's sneak: the game's camera goes down.
+        assert!(!hold_sneak_drop(false, false, 0.35));
+        // Crouched for real: held out, and still while standing up, until the camera's back up.
+        assert!(hold_sneak_drop(false, true, 0.35));
+        assert!(hold_sneak_drop(true, false, 0.2));
+        assert!(!hold_sneak_drop(true, false, 0.0));
     }
 }

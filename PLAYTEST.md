@@ -5,14 +5,15 @@ Save: rustvr-city
 Crouch down a little in real life and you're in Oblivion's own Sneak: its sneak eye, its detection,
 sneak attacks, Sneak training, pickpocketing. Stand back up and you're out of it.
 
-- **How far:** the RustVR menu's Comfort tab, **Stealth crouch amount**: 12 cm by default (it was a
+- **How far:** the RustVR menu's Comfort tab, **Stealth crouch amount**: 8 cm by default (it was a
   35 cm duck, called "Crouch depth"). "Duck to crouch" still turns it on and off.
-- **The view stays where your head is.** Oblivion's sneak lowers its own camera 35 cm. Before,
-  that pulled your view down on top of your own crouch (and a deep duck threw the view 1.8 m up);
-  now it doesn't.
+- **Crouched for real, the view stays where your head is.** Oblivion's sneak lowers its own camera
+  35 cm; that no longer pulls your view down on top of your own crouch (and a deep duck no longer
+  throws the view 1.8 m up).
+- **The button's crouch is Oblivion's own**, as before: the view goes down with the game's.
 - **The less you crouch, the faster you sneak.** Crouched as low as the game's own sneak camera
   (35 cm), you walk at the game's sneak pace (60% of walking). Higher than that you're faster:
-  12 cm down is about 86% of walking.
+  8 cm down is about 91% of walking, 20 cm about 77%.
 - **The right stick** still toggles Sneak by hand (at the game's own sneak pace).
 
 `playtest.bat` boots into the Imperial City's Market District at noon: people about, guards on
@@ -27,7 +28,8 @@ their rounds. `range.bat` starts the framework's test range.
 4. Stand up: you're out of it.
 5. Look down at your hands, read a book: that shouldn't sneak.
 6. Sneak up behind someone, reach into a pocket.
-7. Try the slider if 12 cm is too little or too much.
+7. Press the stick: Oblivion's own crouch, the view going down with it, as before.
+8. Try the slider if 8 cm is too little or too much.
 
 ## Look for
 

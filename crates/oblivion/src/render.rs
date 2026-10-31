@@ -355,9 +355,13 @@ mod win {
             match (race_menu.is_some(), *stood) {
                 (true, Some(s)) => s,
                 _ => {
-                    // (Without the game's sneaking posture: `camera::sneak_drop`.)
+                    // (Crouched for real, without the game's sneak drop: `camera::hold_sneak_drop`.)
+                    static HOLDING: Mutex<bool> = Mutex::new(false);
                     let drop = hooks::guard("sneak drop", None, camera::sneak_drop).unwrap_or(glam::Vec3::ZERO);
-                    let s = (game.eye() - drop, game.look_yaw());
+                    let body = link::last().is_some_and(|s| s.frame.intents.crouch > 0.0);
+                    let mut holding = HOLDING.lock().unwrap();
+                    *holding = camera::hold_sneak_drop(*holding, body, drop.length());
+                    let s = (if *holding { game.eye() - drop } else { game.eye() }, game.look_yaw());
                     if race_menu.is_none() {
                         *stood = Some(s);
                     }
