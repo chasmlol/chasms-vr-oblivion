@@ -10,8 +10,9 @@
 #
 # -Commands runs console lines once the save is loaded ("showracemenu", "player.setav sneak 100"):
 # in VR the real keyboard doesn't reach the game, so its console can't be typed into. -NewGame starts
-# a new game instead of loading a save (the prison cell and the race menu).
-param([string]$Feature = "", [string]$Save = "", [switch]$NewGame, [string]$At = "", [string]$Give = "", [string]$Commands = "", [switch]$Range, [switch]$Close)
+# a new game instead of loading a save (the prison cell and the race menu). -Settings adds lines to
+# the game's rustvr-oblivion.toml for this run ("menu_world = false; menu_spot = cloud-ruler").
+param([string]$Feature = "", [string]$Save = "", [switch]$NewGame, [string]$At = "", [string]$Give = "", [string]$Commands = "", [string]$Settings = "", [switch]$Range, [switch]$Close)
 $ErrorActionPreference = "Continue"
 $worktrees = "<worktrees>"
 $builds = "<builds>"
@@ -55,7 +56,7 @@ if (-not (Get-ItemProperty "HKCU:\Software\Valve\Steam\ActiveProcess" -ErrorActi
 Stop-Ranges
 if ($NewGame) {
     "$Feature : a new game"
-    & "$wt\tools\oblivion.ps1" -NoBuild -NewGame -At $At -Give $Give -Commands $Commands
+    & "$wt\tools\oblivion.ps1" -NoBuild -NewGame -At $At -Give $Give -Commands $Commands -Settings $Settings
     exit 0
 }
 if (-not $Save) {
@@ -64,4 +65,4 @@ if (-not $Save) {
     $Save = if ($named) { $named.Matches[0].Groups[1].Value.Trim('`', '"') } else { "rustvr-city" }
 }
 "$Feature : $Save$(if ($At) { " at $At" })"
-& "$wt\tools\oblivion.ps1" -NoBuild -Save $Save -At $At -Give $Give -Commands $Commands
+& "$wt\tools\oblivion.ps1" -NoBuild -Save $Save -At $At -Give $Give -Commands $Commands -Settings $Settings

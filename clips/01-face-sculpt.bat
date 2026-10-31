@@ -8,9 +8,14 @@ rem Cinematic: a 90 degree lens, the focus pulled to the head you're pulling at,
 rem soft (your own RustVR settings come back when this closes).
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0studio.ps1" -Look cinematic
 rem Installs the trailer build (main, <builds>\trailer) and starts a new game, its film skipped:
-rem the prison cell, the race menu opening by itself, as a player starting out has it.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -NewGame
+rem the prison cell, the race menu opening by itself, as a player starting out has it. The main menu
+rem stays flat (menu_world = false): in its place in Cyrodiil it takes the player there in the same
+rem frame the boot's New starts the new game, and the new game never comes.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -NewGame -Settings "menu_world = false"
 if errorlevel 1 goto failed
+echo.
+echo Connect the headset in Virtual Desktop if it isn't: RustVR waits for it, and the desktop view
+echo opens on the monitor once it's there.
 echo.
 echo Put the headset on: a new game is starting. In the prison cell the race menu opens by itself,
 echo the mirror in front of you, the menu at its left and a big copy of your head to your right.

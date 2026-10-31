@@ -11,6 +11,9 @@ rem ground on Lake Rumare's shore, at 1 pm in clear weather.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-weye -Commands "set gamehour to 13|fw 00038EEE"
 if errorlevel 1 goto failed
 echo.
+echo Connect the headset in Virtual Desktop if it isn't: RustVR waits for it, and the desktop view
+echo opens on the monitor once it's there.
+echo.
 echo Put the headset on and watch the monitor: the desktop view should be up, in the Cinematic look
 echo (a 90 degree lens, warm glow, teal shadows, a little grain). Turn, walk, run. Other looks are in
 echo the RustVR menu's Studio tab; whatever you change there goes back when this closes.
