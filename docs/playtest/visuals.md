@@ -20,7 +20,7 @@ It builds main, installs it beside the game and boots straight into the save for
 Weye, on Lake Rumare's shore at noon under a clear sky, with the water, the far forest and the
 Imperial City across the lake, and the road along the shore. For the rain:
 
-    powershell -File tools\oblivion.ps1 -Save rustvr-city -At ICMarketDistrict -Weather 00038EF2
+    powershell -File tools\oblivion.ps1 -Save rustvr-city -At ICMarketDistrict01 -Weather 00038EF2
 
 `powershell -File tools\oblivion.ps1 -Close` puts the game away and your settings back.
 

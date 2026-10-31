@@ -10,7 +10,7 @@
 #   (neither)            leaves the game for the real headset (a playtest); -Close puts it away later.
 # Closing puts back everything it changed (Oblivion.ini, rustvr-oblivion.toml) and gives the lock back.
 #
-#   powershell -File tools\oblivion.ps1 [-Save rustvr-city | -NewGame] [-At ICMarketDistrict] [-Give "0000000A 5,0000000F 100"]
+#   powershell -File tools\oblivion.ps1 [-Save rustvr-city | -NewGame] [-At ICMarketDistrict01] [-Give "0000000A 5,0000000F 100"]
 #       [-Hour 14] [-Weather 00038EEE] [-Commands "tgm|player.setav marksman 100"]
 #       [-Sim tools\xrsim\x.toml | -Hold 30] [-Out captures\run] [-Settings "eye_width = 2048; eye_height = 2048"] [-NoBuild]
 #   powershell -File tools\oblivion.ps1 -Close

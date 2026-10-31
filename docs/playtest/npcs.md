@@ -1,227 +1,192 @@
-# Grabbing NPCs: playtest
+# Playtest: grabbing people and creatures
 
 Save: rustvr-npcs
 
-`tools\play.ps1 npcs` boots into **rustvr-npcs**: a room in the Imperial City with a Legion soldier
-standing a metre in front of you (friendly, AI on) and a dead bandit (fur armour) lying at your feet,
-half a metre to your right. To get more people: `player.placeatme 0018B118 1 100 0` (another Legion
-soldier), `player.placeatme 0003DC25 1 100 0` (a hostile bandit boss),
-`player.placeatme 0006E912 1 100 0` (a wolf); `tgm` keeps you alive, `tai` stops everyone's AI.
+## Playing it
 
-On the real headset the keyboard doesn't reach the game, so two .bat files in the worktree (not
-committed) boot it with the console lines already run, each in god mode (`tgm`): `playtest.bat` is the
-save as it is (steps 1 to 6 and 8), `playtest-fight.bat` adds a hostile bandit boss 4 m in front and a
-living wolf 4 m behind (step 7, and a living creature that isn't a person). Each keeps the run's
-runtime log in `<builds>\npcs\playtest-<n>\` once the game is closed.
+From the repository root, in god mode (`tgm`):
 
-The flat game's crosshair is hidden in VR (from the riding branch): only the icon of what you can
-activate shows where you look.
+```bat
+powershell -File tools\oblivion.ps1 -Save rustvr-npcs -Commands "tgm"
+```
 
-## What to try, in order
+For a fight, with a hostile bandit ringleader 4 m in front and a living wolf 4 m behind:
 
-1. **The dead bandit.** Reach down, put a hand on any part of him (an arm, a leg, the head, the
-   torso) and squeeze the grip. The hand stays exactly where it touched him and the fingers close
-   round the limb. Lift: that part comes up and the rest of him hangs from it. Lift by a leg and he
-   hangs upside down; take a second hand on another part and he comes up between them. Walk away
-   holding him: he's dragged along the floor (and stays where you leave him, even after a reload).
-   Swing and let go: he flies, as fast as your swing, as far as your strength can throw his weight.
-   Push him with an open hand: he moves where you push.
-2. **The soldier's arm.** Take his forearm or wrist and lift it: it goes up over his head while the
-   rest of him keeps standing (his animation goes on). Pull it out to the side: it follows to where
-   his shoulder lets it. Let go: it eases back into his animation in a moment. Pull it along the
-   ground and he's pushed after your hand, stumbling along; yank it away from him (55 cm past where
-   his body lets it go) and he falls. Take a leg and pull: he trips sooner (35 cm).
-3. **The throat.** Put a hand round his neck (the lower part of the head, or the top of the torso)
-   and squeeze: the fingers close round the neck. Lift: once you've pulled his head up past where he
-   can stand, his legs go and he hangs from your hand, his feet off the floor. Keep squeezing: his
-   fatigue drains, faster while he's off his feet; his hands clutch at yours (his arms are his own
-   while he's choked), and held up his legs kick, weaker as he tires, until the game knocks him
-   out. Let go, or throw him: he lies there and gets up when the game says (a few seconds after a
-   knockdown, longer after a choke-out). Choked while he's standing, he sags from your hand (or out
-   of it) when the game knocks him out.
-4. **The law.** Choking him, knocking him over, throwing him, or holding him for more than four
-   seconds is an assault, the game's own: you get the game's bounty (40 gold) and his reaction (a
-   Legion soldier comes to arrest you, or fights). One assault a hold.
-5. **Touch and shove.** Without grabbing, push the soldier's face, an arm, his chest: the part gives
-   under your hand and springs back with a little wobble once you let it be. His head turns on his
-   neck, loosely: push his cheek and he turns his face away, push his forehead and his head tips
-   back; an arm swings from the shoulder, loosely; pushed in the chest, his head and arms swing
-   with it; a leg hardly gives (he's standing on it). Slap an arm or his face and it swings away
-   and back. Push him fast with an open hand (1.5 m/s or more) and he's shoved back
-   as well.
-6. **Heavy and strong.** Holding a body that holds your hand back, you feel a low rumble in the
-   controller, harder the further back it's held. Past an arm's reach (60 cm between your hand and
-   the controller) your grip slips. Your strength is the game's: Strength 50 lifts a person
-   one-handed by the throat; a weaker character sags more, a stronger one throws further. A goblin
-   weighs nearly three people in Oblivion's own masses: one hand hardly moves it, two might. The
-   Hands tab has "Strength on creatures" (1500 N a hand at Strength 50).
-7. **A fight.** Place a bandit boss and grab him while he attacks: his held arm is yours (it goes
-   where your hand takes it), the rest of him keeps fighting.
-8. **Letting go.** Your hand stays a free hand on his body where it let go, and comes back to the
-   controller from there (it doesn't pass through him). A hand resting on someone still has the
-   trigger: touch a shoulder and pull it to talk.
+```bat
+powershell -File tools\oblivion.ps1 -Save rustvr-npcs -Commands "tgm|player.placeatme 0003DC25 1 280 0|player.placeatme 0006E912 1 280 1"
+```
 
-## Playtest 1 (real headset)
+Each builds main, installs it beside the game and boots straight into the save for the headset.
+`powershell -File tools\oblivion.ps1 -Close` puts the game away and the player's settings back.
+The real keyboard doesn't reach the game in VR, so console lines go in `-Commands`. The fast boot,
+the test saves and the game lock are in [DEVELOPING.md](../DEVELOPING.md).
 
-It works. Asked for:
+`rustvr-npcs` is the developer's own test save, not in the repository: a room in the Imperial City
+with a Legion soldier standing a metre in front of you (friendly, AI on) and a dead bandit in fur
+armour lying at your feet, half a metre to your right. To make one from any save, in a room:
+`-At <cell> -Commands "player.placeatme 0018B118 1 70 0|SaveGame rustvr-npcs"` (a Legion soldier a
+metre ahead), with a body to drag of whoever you kill. More people: `player.placeatme 0018B118 1
+100 0` (a Legion soldier), `0003DC25` (a bandit ringleader, hostile), `0006E912` (a wolf); `tai`
+stops everyone's AI.
 
-* **Soft bodies without grabbing:** push a face, an arm, a chest and it should give and wobble.
-  Now a standing person's bones about a touch go partly physical, through the game's own blend
-  between animation and ragdoll (a heir and a velocity gain below 1: a spring that overshoots, read
-  from its blend code). The arms hang loose (a lean moves them most of the way, and they wobble
-  back over about a second), the spine and the neck are firm (a third of the way, back in a
-  quarter of a second), the legs stiff. Left alone for 1.5 s, the bones blend back to the animation
-  in 0.4 s. (Step 5.)
-* **The hitboxes didn't cover armour:** they were fixed-size capsules of a bare body. Now each part
-  is fitted to the models the game draws on that person (the skinned body, armour and clothes, the
-  head, hair and helmet): as thick as nine in ten of its vertices reach, the torso as deep as its
-  front and back, and reaching to the crown, the fingertips, the heel and the toes. Hands and feet
-  are hitboxes of their own now (14 parts a person). Fitted again whenever what they wear changes.
-  The adapter log has a line per person fitted (`shapes: ... fitted to N models`): each part's
-  thickness and how far its ends reach.
+The framework's test range has dummies that take grabs too (`framework/crates/range`): after a
+build, `target\release\rustvr-play.exe` is the runtime with the range (framework/README.md). Close
+the game first: they share the runtime's link.
 
-Look out for: a hand stopping short of someone or sinking into them (and where), a part that
-flops too much or too little when pushed, the face and arms coming back too slowly or too fast,
-anything twitching while you hold someone.
+## What it does
 
-## Playtest 2 (real headset)
+A hand on any part of a person or creature (an arm, a leg, the head, the throat, the torso; a dead
+body by anything) takes hold where it touched, and the game moves the body with its own Havok
+ragdoll (`crate::grabs`; the runtime's side is `rig::creatures`).
 
-The touches and the hitboxes worked, except the head: it couldn't be moved. The log shows each
-person fitted (the soldier's head 0.15 m thick with his helmet, reaching 0.10 m past the head bone)
-and touches arriving. The head was firm (half its body's turn drawn, and that a third of a lean),
-and a push moved its body without turning it, while the game draws only the head bone's turn (at
-the animated place). Now:
+- **The hand is the runtime's, the body the game's.** The hand is drawn on the part where it took
+  hold, wherever the game has the part, so the body's weight holds it back and it never goes into
+  the body. The game moves the body by its own grab (`bhkMouseSpringAction` on the Havok body of the
+  bone held), with its own joints, masses, gravity and collision.
+- **A dead or knocked-down body** is all Havok's: any part drags the whole body. Lift it by a leg and
+  it hangs upside down; a second hand on another part holds it between them. Walk away holding it
+  and it drags along the floor, staying where you leave it. Let go mid-swing and it flies with
+  what the pull could give its mass.
+- **A living actor keeps animating.** The bones from the one held out to the limb's end go physical,
+  the spine partly: the limb follows the hand while the rest stands, and blends back to the
+  animation over 0.4 s once let go.
+- **Off its feet.** Pulling the head, neck or torso 12 cm above where the standing body has it for
+  an eighth of a second knocks it down (the game's `KnockbackActor`), and the whole body hangs from
+  the hand. So does a yank 55 cm away from where its body has the point (a leg: 35 cm), or a let-go
+  faster than 2.5 m/s. While held it can't get up; let go, it gets up when the game says.
+- **Pulled along the ground** while it stands, past 12 cm it's pushed after the hand by its
+  character controller (the game's knockback without a ragdoll), up to 2.5 m/s, stumbling along.
+- **Choking.** A hand squeezing the throat drains its fatigue: a full squeeze empties it in 6 s, 4 s
+  off its feet, until the game knocks it out itself, and on below nothing so it stays out a while.
+  Held up and still conscious, it struggles: its hands clutch at yours and its legs kick, weaker as
+  it tires.
+- **The law.** Choking, knocking down, throwing, or holding a living actor more than 4 s is an
+  attack by the player (the game's `OnAttacked`): its disposition, fleeing or combat, and the
+  assault crime with its bounty (40 gold). One assault a hold.
+- **Touch and shove.** Without grabbing, a standing person gives under the hand and springs back,
+  wobbling: the bones about the touch go partly physical through the game's own blend between
+  animation and ragdoll. Arms and the head are loose, the spine firm, the legs stiff; the pelvis
+  stays the animation's. A push is an impulse at the point pushed (Havok's `applyPointImpulse`), so
+  off its middle it turns the part: a cheek pushed turns the head away, a forehead tips it back.
+  Left alone 1.5 s, the bones blend back. An open hand coming in at 1.5 m/s or more shoves the
+  person too, a firm push about 40 cm. Dead bodies are pushed the same way.
+- **The head keeps looking at you.** While a hand has a person's head, the game's head tracking
+  holds its look and the push is laid on top of it (hooks on its measure, its look and the bone's
+  blend update), so the head gives under your hand and the face keeps its expression. About two
+  seconds after the last touch it follows you again.
+- **Hitboxes fit what they wear.** Each of a person's 14 parts (hands and feet their own) is fitted
+  to the models the game draws on them (the skinned body, armour and clothes, the head, hair and
+  helmet): as thick as nine in ten of its vertices reach, the torso as deep as its front and back,
+  reaching to the crown, the fingertips, the heel and the toes (`crate::shapes`). Fitted again when
+  what they wear changes.
+- **Heavy and strong.** Holding a body that holds your hand back, a low rumble in the controller,
+  harder the further back. Past 60 cm between the hand and its controller the grip slips. Your
+  strength is the game's: at Strength 50 one hand lifts a person by the throat; weaker sags more,
+  stronger throws further. Every body weighs in proportion to the player's own ragdoll taken as a
+  75 kg person: a goblin weighs nearly three people.
+- **Letting go.** The hand stays a free hand on the body where it let go and comes back to the
+  controller from there, never through the body. A hand only resting on someone isn't holding them:
+  its trigger uses what you look at as ever (look at them and pull it to talk).
+- **While you sneak**, a hand at a person's hips is in their pockets, not on them
+  ([pickpocket.md](pickpocket.md)).
 
-* **A push is an impulse at the point pushed** (Havok's own `applyPointImpulse`, as the game's grab
-  pulls), as much as the point lacks of the push by the body's own mass and inertia. Off its middle
-  it turns the body as well as moving it: a cheek pushed turns the head away, a forehead tips it
-  back. Dead bodies are pushed the same way.
-* **The head is loose** when it's touched (as the arms): leant on, it gives most of the way.
-* Which bone a touch is on is logged (`grabs: ... touched on its bone N`: 1 is the head).
+## What to try
 
-## Playtest 3 (real headset)
+1. **The dead bandit.** Put a hand on any part of him and squeeze: the hand stays where it touched,
+   the fingers round the limb. Lift by a leg (upside down), add a second hand, walk away dragging
+   him, swing and let go, push him with an open hand.
+2. **The soldier's arm.** Lift his forearm over his head while he keeps standing; pull it out to the
+   side; let go and it eases back. Pull it along the ground: he's pushed after it, then over when you
+   yank it 55 cm away. A leg trips him sooner.
+3. **The throat.** Hand round his neck, squeeze, lift: his legs go and he hangs from your hand. Keep
+   squeezing: his hands clutch at yours, his legs kick weaker, until the game knocks him out. Let go
+   or throw him. Choked standing, he sags from your hand when he's out.
+4. **The law.** Any of that, or holding him more than four seconds: the game's 40 gold bounty and
+   his reaction.
+5. **Touch and shove.** Push his face, cheek, forehead, an arm, his chest, a leg; slap an arm or his
+   face; push fast. His head should give and he should keep looking at you.
+6. **Heavy and strong.** Feel the rumble; pull past an arm's reach and the grip slips. Try a goblin
+   or the wolf.
+7. **A fight** (the second command). Grab the ringleader while he attacks: his held arm goes where
+   your hand takes it, the rest of him fights on. Grab the wolf, alive.
+8. **Letting go.** The hand comes back from his body, not through it. Rest a hand on his shoulder
+   and pull the trigger to talk.
 
-The head still didn't move at all. The log shows the touches reaching it (its bone, 1, pushed at up
-to 2 m/s), so the game was undoing them: its head tracking. Each frame it measures where the head
-bone points now (its world turn, the push in it) and turns it on to what the actor looks at (you,
-a metre away), rate-limited, so a push is gone within a few frames. Now, while a hand has his head
-(touching it, the chest's touch that swings it, or a hold on it while he stands), his head tracking
-is off, by the game's own switch (`BSFaceGenAnimationData`'s, the one it uses itself): he stops
-looking at you, his face eases to rest, and his head is the push's. Let be, it's back on and he
-looks at you again. The log says when (`grabs: ...'s head tracking off` / `back on`).
+Look out for a hand stopping short of someone or sinking into them (and where), a part that flops
+too much or too little, anything twitching while you hold someone.
 
-## Playtest 4 (real headset)
+## Settings
 
-The head moves now, but he should keep looking at you. So his head tracking stays on, and while a
-hand has his head the game measures his head from where his animation has it, not from where your
-push left it (a hook on its measure: for that one bone, the turn its animation gives it
-while it measures, then the pushed one back). It turns his head to look at you as far as it would
-anyway, and your push sits on top of that. His face keeps its expression. The log says which heads
-(`grabs: the heads the hands have` and `the head tracking measures the head ... from its animation`).
-
-## Playtest 5 (real headset)
-
-The head didn't move again. The log shows the hook working on his head bone, so its "animated" turn
-wasn't: once a bone's body is dynamic, its blend object writes the bone's own turn as well (flag 8,
-set by the game as the body's motion changes), so the push was in it too and the head
-tracking still turned it back. Now, while a hand has his head, the head tracking holds its look as
-it was (its measure skipped for that head): he keeps looking where he looked (at you), with the
-push on top, and his face keeps its expression. Let be (about two seconds after the last touch),
-it measures again and follows you. The log says `the head tracking holds its look on the head ...`.
-
-## Playtest 6 (real headset)
-
-Still no movement. Its look turned out not to turn the head on from where it is: it undoes the head
-bone's turn and puts its own in place (its reference bone's turn by the look's angles), so
-while it's on, nothing the physics does to the head shows, however it measures. Now, for a head a
-hand has, the head's turn as its animation has it is kept just as the bone's blend begins (a hook on
-the blend update), and the head tracking's look is given the push on top (the physics'
-turn from that animated one, in the head's frame, a hook on the look). He looks where the head
-tracking has him look, and his head gives under your hand. His measure stays held while you have
-his head (as playtest 5).
-
-Found while looking (not changed): Oblivion turns the upper spine itself (its look-at twist, a
-`bhkBlendCollisionObject` of its own kind on Spine, Spine1, Spine2), drawing those bones from their
-own turn and the twist. A spine bone pushed still bends: while its body is dynamic its own turn is
-the blend's (see playtest 5).
-
-## What was checked in the game (emulated headset, captures and logs)
-
-* A dead soldier taken by the foot: the foot follows the hand within 2 to 6 cm as it's lifted
-  0.7 m, the leg hangs from it; thrown at 3 m/s.
-* Two hands on a dead soldier (a thigh and a foot): lifted together, held within 3 cm, dragged as
-  the player walked backwards, dropped.
-* The playtest save's dead bandit taken by the forearm (lifted, hanging head down) and by the upper
-  arm (dragged 2.7 m: the game moved his reference with his body).
-* A standing soldier's forearm lifted over his head and pulled out to the side, the rest of him
-  standing (the capture shows his arm out straight in the hand); let go, back to his animation.
-* With his AI on, his arm pulled back towards the player: he was pushed 40 cm after it, then yanked
-  over; the game got him up again.
-* The throat: a standing soldier lifted by the neck is knocked down by the game and hangs about
-  10 cm below the hand; the choke takes his fatigue from 280 to nothing; he struggles; thrown
-  aside; 7 s later the game queues his get-up, he gets up and stands (knock states 1, 5, 6, 0).
-  Choked standing, his arms come up at the hand, the game knocks him out (knock states 4, 3) and
-  he sags from the hand (or falls out of it).
-* With his AI on, the choke is an assault: the player's bounty went from 0 to 40.
-* A shove at 1.7 to 2.8 m/s (his character controller took the push); a dead body pushed by an open
-  hand moved.
-* A dead wolf (37 kg by the game's masses) taken by its leg and lifted, splayed; a goblin is
-  published at 210 kg.
-* The strain is felt (haptic pulses counted by the emulated headset).
-* The adapter's creatures part of the frame stays at 0.4 ms.
-
-**Not checked in the game:** a living creature that isn't a person (a wolf alive, a goblin), grabbing
-someone mid-attack (the test bandit kept out of reach), how far a shove carries a person (it moved
-him a little in the test room), a body pinned against a wall, a real headset's feel (only the
-emulated one). The framework's test range now takes grabs too (its dummies), built but not run (the
-range wasn't to be started tonight).
+| Setting | Where | Default (range) |
+|---|---|---|
+| Strength on creatures (a hand's pull) (`interaction.creature_strength`, times the game's own strength: Strength 50 is 1) | Hands tab | 1500 N (400 to 4000) |
+| Physics hands, Ghost hands (`interaction.physics_hands`, `ghost_hands`) | Hands tab | on, off |
 
 ## Decisions
 
-* **A touch is the game's blend, not a spring of ours.** The bones about a touch get a heir and a
-  velocity gain below 1 (loose 0.2 and 0.1, firm 0.5 and 0.3, stiff 0.7 and 0.5); Oblivion has no
-  value for how much a body gives, so these are ours. The head touched is loose, the spine above
-  it stiff. The pelvis stays the animation's: it holds him up. A held person isn't touched (the
-  grab moves him).
-* **The torso's thickness is its depth.** A capsule as wide as the shoulders would stop a hand
-  in front of the chest; as deep as the chest, a hand on the waist's side sinks in a little (the
-  arms hang there).
-
-* **The game simulates the body; the runtime has the hand.** The hand is drawn on the part where
-  the game has it (so its weight holds the hand back, the way HIGGS draws it);
-  the game moves the body with its own Havok ragdoll, by its own grab (`bhkMouseSpringAction`), so
-  the body has the game's joints, masses, gravity and collision.
-* **Oblivion's ragdolls weigh about eight times a person** (a man is 605 of its units). The game's
-  own scale is taken from the player's own ragdoll (a person, 75 kg) and every body weighs in
-  proportion, so a hand's pull in newtons means the same in the game.
-* **The spring is stiffer than the game's own grab** (elasticity 0.7 against its 0.2): the game's
+- **The game simulates the body; the runtime has the hand.** The hand is drawn where the game has
+  the part, so its weight holds the hand back (as HIGGS draws it).
+- **Oblivion's ragdolls weigh about eight times a person** (a man about 600 of its units), so the
+  player's own ragdoll is taken as a 75 kg person and every body weighs in proportion: a hand's
+  pull in newtons means the same in the game.
+- **The spring is stiffer than the game's own grab** (elasticity 0.7 against its 0.2). The game's
   drags a body a bone at a time, measured against the bone alone, so a whole body hanging from one
   bone sank 30 cm below the hand; now it hangs a hand's breadth below.
-* **A choke knocks out, it doesn't kill.** It drains fatigue as far below nothing as it had (the
-  game's knockout lasts until it's back). Nothing in Oblivion says how hard a choke is, so the rate
-  is ours: a full squeeze empties a person in 6 s, 4 s off his feet.
-* **Lifting knocks down** when the hand pulls the head, neck or torso 12 cm above where the
-  standing body has it for an eighth of a second; a yank is
-  55 cm away from it (a leg 35 cm); a throw that knocks down is over 2.5 m/s. The struggle (claws
-  and kicks) is ours too: Oblivion has no animation for it.
-* **A standing actor pulled is pushed, not walked**: his character controller's push (the game's
-  own knockback without a ragdoll) after the pull past 12 cm, up to 2.5 m/s. He slides rather than
-  steps (Oblivion has no step-to-follow); PLANCK makes Skyrim's actors walk, which needs its
-  behaviour graph.
-* One assault a hold, whatever it comes to (the game's own counts each call).
-* No new protocol version: the new regions sit in unused space and a push's new field in its
-  padding, so older adapters and runtimes still agree.
+- **A touch is the game's blend, not a spring of ours.** The bones about a touch get a heir and a
+  velocity gain below 1 (loose 0.2 and 0.1, firm 0.5 and 0.3, stiff 0.7 and 0.5): a spring that
+  overshoots, read from the game's blend code. Oblivion has no value for how much a body gives, so
+  these are ours. A held person isn't touched (the grab moves them).
+- **The torso's thickness is its depth.** A capsule as wide as the shoulders would stop a hand in
+  front of the chest; as deep as the chest, a hand on the waist's side sinks in a little (the arms
+  hang there).
+- **A choke knocks out, it doesn't kill.** Nothing in Oblivion says how hard a choke is, so the rate
+  is ours.
+- **The knockdown thresholds are ours** (12 cm of the head, neck or torso). The struggle is ours
+  too: Oblivion has no animation for it.
+- **A standing actor pulled is pushed, not walked:** he slides rather than steps. Oblivion has no
+  step-to-follow; PLANCK makes Skyrim's actors walk, which needs its behaviour graph.
+- **The head's look is held while a hand has it**, rather than the head tracking switched off, so
+  he keeps looking at you (playtests 3 to 6).
+- **One assault a hold**, whatever it comes to: the game's own counts each call.
 
-## Not done
+## Not done / known issues
 
-* Landing doesn't hurt (Oblivion's ragdolls take no damage from impacts; a throw into a wall is
-  harmless).
-* A pin is only the world's (a body pushed into a wall or the floor stays there while held); a
-  blade through a body into a wall is the melee and gore features' (not this branch).
-* Holding someone doesn't tire you (PLANCK drains stamina; Oblivion has no value for it).
-* The gravity gloves don't pull bodies.
+- **Landing doesn't hurt:** Oblivion's ragdolls take no damage from impacts; a throw into a wall is
+  harmless.
+- **A pin is only the world's:** a body pushed into a wall or the floor stays there while held. A
+  blade through a body into a wall isn't this feature's.
+- **Holding someone doesn't tire you** (PLANCK drains stamina; Oblivion has no value for it).
+- **The gravity gloves don't pull bodies.**
+- **Not seen in a playtest record:** a living creature that isn't a person (a wolf alive, a goblin),
+  grabbing someone mid-attack, how far a shove carries a person, a body pinned against a wall.
 
-## Branches
+## History
 
-* chasms-vr-oblivion: `overnight/npcs`
-* chasms-vr-framework: `overnight/npcs`
+Newest first. Every round from playtest 2 on was about the head.
+
+- **Playtest 6.** Still no head movement: the head tracking's look undoes the head bone's turn and
+  puts its own in place, so nothing the physics does to the head shows while it's on. Now the head's
+  animated turn is kept as the bone's blend begins, and the look is given the push on top.
+- **Playtest 5.** The head didn't move: once a bone's body is dynamic its blend object writes the
+  bone's own turn too (flag 8), so the "animated" turn had the push in it. The head tracking's
+  measure was then held for a head a hand has.
+- **Playtest 4.** The head moved, but he should keep looking at you. Head tracking stayed on and was
+  made to measure the head from its animation.
+- **Playtest 3.** The head still didn't move: the game's head tracking turned it back within a few
+  frames. It was switched off while a hand had the head (which stopped him looking at you).
+- **Playtest 2.** The head couldn't be moved. Pushes became impulses at the point pushed, the head
+  loose when touched; which bone a touch is on is logged.
+- **Playtest 1.** It worked. Asked for soft bodies without grabbing (the touch through the game's
+  blend), and hitboxes that cover armour (the fitted parts, hands and feet their own).
+- **Before playtest 1**, on the emulated headset: a dead soldier taken by the foot and by two hands,
+  lifted, dragged and thrown; the save's dead bandit lifted and dragged; a standing soldier's arm
+  lifted and pulled, then him yanked over; the throat (knock states 1, 5, 6, 0 and 4, 3, fatigue
+  280 to nothing, the bounty 0 to 40); a shove at 1.7 to 2.8 m/s; a dead wolf (37 kg) lifted; the
+  strain felt; the adapter's creatures' part of the frame at 0.4 ms.
+
+## Logs
+
+The adapter's log (`rustvr-oblivion.log` in the game's folder): `shapes: ... fitted to N models`
+(each part's thickness and reach), `grabs: ... touched on its bone N` (1 is the head),
+`grabs: the heads the hands have: ...` and `grabs: the head tracking holds its look on the head
+...`.
