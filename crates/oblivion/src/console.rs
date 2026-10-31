@@ -118,6 +118,18 @@ pub fn new_game() -> bool {
     false
 }
 
+/// The main menu is closing: New answered (a new game's film and prison cell coming), or a load
+/// under way.
+#[cfg(target_arch = "x86")]
+pub fn main_menu_closing() -> bool {
+    crate::mem::at::<u32>(crate::tiles::menu(crate::menus::MENU_MAIN) + MENU_STATE) == Some(MENU_CLOSING)
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn main_menu_closing() -> bool {
+    false
+}
+
 /// A test command due that the game isn't ready for waits a frame: `NewGame` for a main menu a
 /// player could click.
 fn waits(cmd: &str) -> bool {

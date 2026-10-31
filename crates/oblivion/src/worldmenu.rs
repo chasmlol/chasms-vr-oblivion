@@ -304,7 +304,9 @@ mod win {
             // (The main menu is open with a game only over its place: open from Idle, there's no
             // game, whatever cell the player was last in.)
             State::Idle if main => {
-                if crate::console::pending_at_menu() {
+                // (Nor for a main menu already closing: New answered before the place came (the
+                // boot's -NewGame, the same frame), whose new game the place's `coc` undid.)
+                if crate::console::pending_at_menu() || crate::console::main_menu_closing() {
                     return;
                 }
                 // (A different one of the named spots each time the game starts.)
