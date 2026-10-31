@@ -2,195 +2,148 @@
 
 Save: rustvr-base
 
-`playtest.bat` in this worktree (not committed: double-click it in Explorer) puts away any game left
-running, then starts a **new game** with this build: the main menu's New, answered yes, its film
-skipped. You're in the prison cell, and the race menu opens by itself, as it does for a player
-starting out. The mirror stands in front of you and the race menu at its left. A key in the .bat's
-window closes the game and puts your settings back. The runtime's log is kept in
-`<builds>\facesculpt\playtest-logs` as the game closes, however the window is closed (last time
-another test replaced it before it was kept).
+## Playing it
 
-The save above (rustvr-base, a Nord in iron armour, with `showracemenu`) is the other way in:
-`tools\play.ps1 facesculpt -Commands showracemenu`.
+From the repository's root, a new game:
 
-The research and the design are in `docs/research/facesculpt.md`.
+```
+powershell -File tools\oblivion.ps1 -NewGame
+```
 
-## What changed since the second playtest
+It builds main, installs it, and starts a new game as a player starting out has it: the main
+menu's New, answered yes, its film skipped. You're in the prison cell, the race menu opens by
+itself, the mirror stands in front of you and the race menu at its left.
+`powershell -File tools\oblivion.ps1 -Close` puts it away and your settings back. The adapter's
+log says whether the main menu began to close for New (`console: NewGame -> ran`, or `-> failed`).
 
-- **The .bat left you at the main menu.** It answered New on the menu's very first frame, while the
-  game was still fading the menu in, and the game's close does nothing to a menu not yet shown. So
-  the menu stayed, with the rest of the answer done: the character generation quest started and a
-  new game's loading flagged. That half-started game is likely what crashed the save you then loaded
-  from the menu (the crash was in its loading screen). Now the .bat waits until the menu is shown,
-  done fading in and not showing a box of its own, as it is when a player clicks it, and the log
-  says whether the menu began to close (`console: NewGame -> ran`, or `-> failed`). In the third
-  run it did: the main menu closed and the race menu opened in the prison cell 8 s later.
-- **The third and fourth runs went at 3 to 5 frames a second**, with the runtime's Supersampling
-  at 1.55: the game drew each eye at 7237x7791 rather than 4669x5026, 2.4 times the pixels. Other
-  features run fine at 1.55 (interact's runs that hour: 100 to 140 frames a second), but none of
-  them opens the race menu, and no run before these had the race menu open at that size. In the
-  race menu the game draws the world a third time, at the eyes' full size, for the mirror's view
-  (here the prison cell, with its 20 lights). The first playtest had the race menu, the mirror and
-  this feature at 4669x5026 and ran at 70 to 95. Nothing this feature adds grows with the eyes'
-  size (the face is a buffer rewritten as it changes, the copy of the head one small model). Each
-  eye's picture waited about 55 ms on the GPU before it could be handed over, where it waited under
-  1 ms at 4669x5026: the GPU was full. Why so much more than 2.4 times is still open.
+The other way in is a save and the console's `showracemenu`:
 
-  The likeliest cause is video memory. Other programs held 11.7 of the card's 32.6 GB with no game
-  running. At 7237x7791 a picture is 225 MB (451 MB in the HDR format), and the game, the adapter's
-  copies and the runtime's three sets of targets keep many of them. The race menu touches more of
-  them each frame: the mirror's render, its picture and depth copies, and the runtime's two
-  textures for it. Past the budget Windows gives a program, every frame's textures are copied in
-  and out of the system's memory, which would make each frame cost far more than 2.4 times. The
-  code can't settle it, so this build measures it:
-  - the adapter's `timing:` line ends with `video memory <used> of <budget> MB`, and says
-    `(over its budget)` when it is;
-  - it times the mirror's world (its render and copies) on its own: `the mirror's world`;
-  - the runtime's `pacing:` line ends with its own video memory against its budget.
+```
+powershell -File tools\oblivion.ps1 -Save rustvr-base -Commands "showracemenu"
+```
 
-  One run at 1.55 with the race menu open tells which: over budget means memory; under it, with
-  `the mirror's world` large, means the third render.
+`rustvr-base` (a Nord in iron armour) is the developer's own test save, not in the repository; any
+save does, and one can be made from any save with `-At <cell> -Commands "SaveGame rustvr-base"`.
+`tools\oblivion.ps1` turns the desktop view off: set `$env:RUSTVR_DESKTOP_VIEW = "1"` first to see
+the copy of the head on the monitor.
 
-  The fifth run (14:50, 1.55, the race menu open) didn't slow: 60 frames a second, the game's video
-  memory 9.9 of a 31.4 GB budget, the mirror's world 3 ms a frame. Whatever slowed the third and
-  fourth runs came from outside the game then (another program on the GPU, or its memory); if it
-  comes back, these lines say which.
-- **The desktop view showed no copy of the head.** The eyes drew it with the held things; the
-  desktop view made its own list of those and left it out. It's in now. (The .bat turns the
-  desktop view on: `RUSTVR_DESKTOP_VIEW=1`.)
-- **The menu button in the race menu paused the game with no RustVR settings.** The race menu was
-  told to the runtime as the menu shown in the world while it was open, the pause menu over it
-  too, and the runtime keeps its settings away from such a menu. Paused, the pause menu is the
-  menu shown now, as anywhere else, with the settings beside it.
-- **The squish of taking and letting go of the face is half as loud** (the sound pack's gains for
-  them halved: `oblivion-extract sounds` makes the pack again).
+The research and the design: `docs/research/facesculpt.md`.
 
-## What changed since the first playtest
+## What it does
 
-- **A pull moved the whole head.** That had three causes, all fixed:
-  - **The solve let the rest of the face move as much as it took** for the part held to follow. Now
-    the face more than 4 to 8 cm from the point is held still, as is the area round its mirror image
-    for a symmetric pull, at ten times the weight of the part held following the hand. On the game's
-    Nord head, a 1 cm pull:
+The runtime's `framework/crates/runtime/src/sculpt.rs` and its solver
+(`framework/crates/avatar/src/sculpt.rs`), and the adapter's `crates/oblivion/src/facesculpt.rs`.
 
-    | | the part held follows | the far face moves (rms) | the far face moves (most) |
-    |---|---|---|---|
-    | before | 0.69 cm | 0.22 cm | 0.88 cm |
-    | now | 0.64 cm | 0.07 cm | 0.34 cm |
+- **A copy of your head** stands in front of you to the right, a bit under your eyes, 1.7 times
+  life size, its face turned to you: your race's head with your face, hair and eye colour, lit by
+  the room. It's centred on the head with no face on it, so it stays put as the face changes.
+- **Taking hold.** A palm near the face shows what its grip would take: the vertices round the
+  nearest point glow the game's cursor gold, most where they'd move most, brighter the closer the
+  hand. The grip takes it. Nothing snaps: the hand stays where it is, its fingers closing on the
+  point.
+- **Pulling** is the hand's move against the head: the face is solved for it every frame, live on
+  the copy and on you in the mirror. The part taken goes as far with the hand as the face can take
+  it (its FaceGen coordinates, the sliders' ranges); the hand is drawn holding it where it got to,
+  a fine buzz as it moves and a harder one when held back. The face more than 4 to 8 cm from the
+  point is held still (and round its mirror image, for a symmetric pull), at ten times the weight
+  of the part following the hand; every coordinate also stays within 8 of the mean face, what goes
+  past taken back without moving the rest.
+- **Symmetric by default:** one cheek pulled out widens both; a nose pulled sideways doesn't go.
+  Squeeze that hand's trigger while pulling and the pull goes asymmetric (a crooked nose, one ear
+  out); let go of the trigger and it eases back to symmetric. Both hands can pull at once.
+- **Your own head** can be taken too, where the headset doesn't sit (chin, jaw, ears, mouth): it
+  glows in the mirror where the grip would take.
+- **The sliders follow.** The page on show is refreshed from the face as you pull, and a page shown
+  later as it comes up; a slider moved moves the copy and the mirror. The sliders' range is the
+  race's (the general page's sliders to the race's face clamp, 3 by default; the rest its main
+  clamp, 5). Age and complexion don't move with a pull.
+- **Undo and reset,** buttons made from the race menu's own button template: on the Main page,
+  Undo and Reset Face (the race's own face, age and complexion kept); on each Shape page (General,
+  Brow, Cheeks, Chin, Eyes, Forehead, Jaw, Mouth, Nose), Undo and Reset (that page's features back
+  to the race's own). Undo goes back to the face before the last pull or reset, again and again;
+  the menu closing forgets them.
+- **The game keeps the face:** each face is put into the character as the sliders would (its own
+  coordinates, the game's FaceGen heads morphed), so it's the one the game saves and its people
+  see.
+- **Sounds:** a squish taking hold and letting go (the sound pack's; `oblivion-extract sounds`
+  makes the pack).
 
-  - **Stroke after stroke took the face far past any the game makes.** In your run one of its
-    coordinates reached −28.6, where every part warps. The sliders' ranges barely hold some mixes of
-    the coordinates. Now every coordinate also stays within ±8 of the mean face, and what goes past
-    is taken back without moving the rest.
-  - **The copy of the head jumped half a second after you let go**, when the body was put together
-    with the new face: it was centred on the face as shaped. Now it's centred on the head with no
-    face on it, so it stays put.
-- **Some of it is FaceGen itself.** Its coordinates each move the whole face, so a change to one part
-  alone is only ever nearly one. The chin especially: FaceGen has no chin of its own (the chin
-  sliders move the jaw and mouth too). So a chin pulled down now mostly holds your hand back, where
-  before it stretched the whole face.
-- **The .bat starts a new game**, at the race menu in the prison cell.
+## What to try
 
-## What to try, in order
+1. **The copy:** the race menu opens by itself in the cell; the copy stands to the right, the
+   mirror ahead, the race menu at its left.
+2. **The nose:** bring a hand to it and watch the glow; squeeze; pull it out (longer), push it in
+   (shorter), up and down (it tilts). Let go: it stays, and the copy doesn't jump. Pull it long: the
+   ears, the back and the top of the skull stay where they were; the bridge, nostrils and upper lip
+   go with it a little.
+3. **The chin:** pull it down: it barely goes and your hand is held back with a buzz (FaceGen has
+   no chin of its own: the Chin page's sliders move the jaw and mouth too). Then the chin forward,
+   the cheekbones up or out, the jaw wider, the brow lower, the eyes apart, the lips fuller, the ears
+   out.
+4. **Symmetry:** one cheek out; the nose sideways (it won't); the nose sideways with the trigger
+   squeezed (it bends), then the trigger let go while still holding.
+5. **Your own head:** your chin down or your ears out, watching the mirror.
+6. **The sliders:** Face, then Shape, then a page (Nose, Chin...) with the laser; pull that feature
+   and watch the sliders; move one and pull again from there; open another page after pulling.
+7. **Undo, Reset, Reset Face.**
+8. **Done:** the copy goes. Look in a mirror (pull your gripped hands apart in front of your chest,
+   or the Body tab): your face is the one you made. Save, load, and look again; talk to someone.
+9. **The pause menu** in the race menu: the RustVR settings are beside it.
 
-1. **The copy of your head.**
-   - The race menu opens by itself in the prison cell (with your new character's race and face).
-   - A copy of your own head stands in front of you to the right, a bit under your eyes, 1.7 times
-     life size, its face turned to you. It's your race's head with your face, hair and eye colour,
-     lit by the room.
-   - The mirror still shows you, and the race menu still stands at its left.
-2. **Grab the nose and pull.**
-   - Bring a hand to the copy's nose. Before you squeeze, the part your grip would take glows a soft
-     gold (the game's cursor colour), brightest at the middle, brighter the closer your hand is.
-   - Squeeze the grip. Nothing jumps: your hand stays where it is, and its fingers close on the point
-     you took.
-   - Pull it out towards you: the nose gets longer. Push it in: shorter. Up and down tilts it.
-   - The face changes live, on the copy and on you in the mirror.
-   - You feel a fine buzz as it moves, and a harder one as you pull past what the face can do. Your
-     hand stays on the nose where it got to (with ghost hands on in the RustVR menu, a see-through
-     one shows where your controller is).
-   - Let go of the grip: it stays as you left it. The copy stays where it stands (it used to jump half
-     a second later).
-   - Pull the nose long: the ears, the back of the head and the top of the skull stay where they
-     were. Round the nose (its bridge, the nostrils, the upper lip) the face goes with it a little.
-   - Pull your chin down: it barely goes, and your hand is held back with a buzz. That's FaceGen
-     having no chin of its own (the Chin page's sliders move the jaw and mouth too).
-   - Try more:
-     - the chin forward or down;
-     - the cheekbones up or out;
-     - the jaw wider;
-     - the brow lower;
-     - the eyes apart (take an eye or beside it and pull outward);
-     - the lips fuller;
-     - the ears out.
-3. **Symmetric versus asymmetric.**
-   - Pull one cheek outward: both cheeks widen together (symmetric, the default).
-   - Pull the nose sideways: it doesn't go. A symmetric face can't have a crooked nose.
-   - Now take the nose again and squeeze the **trigger** of that hand while you pull it sideways. It
-     bends to that side. Let the trigger go while still holding and it eases back to symmetric.
-   - Both hands can pull at once.
-4. **Your own head.**
-   - Reach up to your own chin, jaw, ears or mouth (the headset is where your nose and eyes are, so
-     those you do on the copy). It glows in the mirror where your grip would take.
-   - Squeeze and pull your chin down or your ears out, and watch it in the mirror.
-5. **The sliders follow.**
-   - Open Face, then Shape, then a page (Nose, Chin...) with the laser.
-   - Pull that feature on the copy: the page's sliders move as you pull.
-   - Move one of those sliders: the copy and the mirror follow it. Then pull again from there.
-   - Open another page after pulling: its sliders show the new face.
-   - The Age and Complexion sliders (Main page) don't move when you pull.
-6. **Undo and reset.**
-   - New buttons in the race menu, made like its own:
-     - on the Main page, at the bottom of the list: **Undo** and **Reset Face**;
-     - on each Shape page (General, Brow, Cheeks, Chin, Eyes, Forehead, Jaw, Mouth, Nose), at the
-       bottom: **Undo** and **Reset**.
-   - **Undo** puts the face back as it was before your last pull (or reset). Click it again to go
-     back further.
-   - **Reset** on a page puts that page's features back to your race's own (e.g. the Nose page's
-     Reset gives you your race's nose and leaves the rest).
-   - **Reset Face** puts the whole face back to your race's own, keeping your age and complexion.
-7. **Done, and the saved face.**
-   - Press the race menu's Done.
-   - The copy goes. Look in a mirror (the hands-apart gesture, or the Body tab): your face is the one
-     you made.
-   - Save, load that save, and look again: it should be the same face.
-   - Talk to someone close (or wait): your face should be the same from the game's side too.
+## Settings
 
-## What was checked
+| Where | Setting | Default | What it does |
+|---|---|---|---|
+| Hands tab | Ghost hands (a see-through hand where your real one is when it's held back), `interaction.ghost_hands` | off | Shows the controller while the hand holds the face where it got to. |
+| Body tab | Pull your gripped hands apart in front of your chest to call it up or put it away, `mirror.gesture` | on | The mirror, to see your face after Done. |
+| Body tab | The game's world in the mirror (off: you alone, on dark glass), `mirror.game_world` | on | |
 
-- **Your first run (the adapter's log):** the race menu's new buttons were made on all ten pages, the
-  game's own head was morphed with the face (9 parts), and nothing crashed. There's no click on Undo
-  or Reset in the log, so those are still untried. The runtime's log of that run was replaced by
-  another test's before it was kept.
-- **Builds and unit tests:**
-  - the adapter (32-bit release);
-  - the runtime, the range and xrsim (release);
-  - the solver's tests (with a new one: a face pulled past its slider and the coordinates' range
-    comes back within them, its age kept, the far end where it was), and the adapter's.
-- **The solver on the game's real Nord head** (all its face parts, from the mean face): the table
-  above. Seven places were pulled: nose tip forward, chin down, cheekbone out, brow forward, jaw
-  corner out, upper lip forward, ear out. The far face is everything more than 6 cm from the point
-  and from its mirror image.
-  - A hold is taken in 1.3 to 2.8 ms.
-  - Forty random 1.5 cm strokes, one after another: every coordinate stays within 8, every slider
-    within 5, the age exactly where it was. Keeping it there takes at most 0.16 ms a frame. The first
-    version's coordinates reached 28 in the same strokes.
-- **The new game:** the game's own steps (the main menu's New, its "Start new game?" box,
-  which button is Yes, and when a menu fading in can be closed). The second playtest's log shows
-  the first try ran on the menu's first frame and left it up; the third shows the fixed one start
-  the new game, the race menu open in the cell and the face ready to be shaped by hand.
+## Decisions
 
-## What I couldn't check
+- **On a copy of the head as well as your own:** every feature can be reached on it (the headset
+  sits where your nose and eyes are), it's big enough to take a nostril or a lip, and the hands on
+  it don't hide the mirror.
+- **Through FaceGen's own coordinates,** so the face is one the game makes, saves and shows. Each
+  coordinate moves the whole face, so a change to one part alone is only ever nearly one; the chin
+  especially, since FaceGen has none of its own.
+- **The rest of the face held still** against the part held, at ten times its weight: the balance
+  (how still the rest, against how far the part follows) is one number, easy to move either way.
+- **Coordinates kept within 8 of the mean face:** stroke after stroke took one to -28.6, where every
+  part warps, and the sliders' ranges barely hold some mixes of them.
+- **New game from the main menu as a player clicks it:** the boot waits until the main menu is
+  shown, done fading in and not showing a box of its own. The game's close does nothing to a menu
+  not yet shown, so New answered on its first frame left the menu up, half a new game started; a
+  save then loaded from the menu crashed in its loading screen.
+- **The race menu is the menu shown while it's open,** and the pause menu over it is the one shown
+  then, with the RustVR settings beside it.
 
-- **Nothing of it has run in the game since the fixes.** The game can't be started from here.
-- **The new game's film:** whether it was skipped (the race menu came 8 s after the main menu
-  closed, loading included).
-- **Feel:** whether the face now follows the hand enough for you, now that the rest stays still. The
-  balance (how still the rest is held against how far the part follows) is one number, easy to move
-  either way: tell me which way.
-- **Still untested from the first round:**
-  - Undo, Reset and Reset Face;
-  - the trigger's asymmetric pull;
-  - your own head in the mirror;
-  - Done, then a save and load keeping the face (a crooked one too);
-  - the sounds.
+## Not done / known issues
+
+- **Never checked on the headset since the second round's fixes:** whether the face now follows the
+  hand enough (tell which way the balance should move); Undo, Reset and Reset Face; the trigger's
+  asymmetric pull; your own head in the mirror; Done, then a save and load keeping the face (a
+  crooked one too); the sounds; whether the new game's film is skipped.
+- **Slow frames at high supersampling, once:** two runs with the runtime's Supersampling at 1.55
+  (each eye 2.4 times the pixels) ran at 3 to 5 frames a second with the race menu open, the GPU
+  full; a later run at the same size ran at 60, so the cause was likely outside the game. In the
+  race menu the game draws the world a third time, at the eyes' size, for the mirror. If it comes
+  back, the adapter's `timing:` line ends with `video memory <used> of <budget> MB` (and
+  `(over its budget)` when it is) and times `the mirror's world` on its own, and the runtime's
+  `pacing:` line ends with its own video memory: over budget means memory; under it, with the
+  mirror's world large, the third render.
+
+## History
+
+Newest first.
+
+- **Playtest 2:** the boot left the game at the main menu (New answered on its very first frame);
+  two runs went at 3 to 5 frames a second at 1.55 supersampling; the desktop view showed no copy of
+  the head; the menu button in the race menu paused the game with no RustVR settings; the squish of
+  taking and letting go was loud. Now the boot waits for a main menu a player could click, the
+  timing lines report video memory and the mirror's world, the desktop view draws the copy, the
+  pause menu has the settings, and the squish is half as loud.
+- **Playtest 1:** a pull moved the whole head, for three reasons: the solve let the rest of the
+  face move as much as it took (now held still past 4 to 8 cm: on the game's Nord head a 1 cm pull
+  moved the far face 0.07 cm rms, not 0.22), stroke after stroke took the face far past any the
+  game makes (now kept within 8), and the copy jumped half a second after letting go (now centred
+  on the head with no face). The boot became a new game at the race menu.

@@ -2,333 +2,208 @@
 
 Save: rustvr-archery
 
-The desktop view (the window on the monitor, for recording and streaming) gets a studio of
-effects only it shows. They'd make you sick in a headset, and they make footage look filmed. The
-headset's view never changes.
+## Playing it
 
-Everything is in the RustVR menu's new **Studio** tab, and it's saved with the settings.
+From the repository's root:
 
-- **No black bars:** the letterbox is gone, as you asked after the first look.
-- **The view bob branch is merged in here:** the desktop view bobs as you walk (below).
-- **The aim zoom branch is merged in here too:** the desktop view zooms in while you aim a bow or a
-  gun (below).
-- **The desktop camera's own settings** sit at the top of the Studio tab's Camera section:
-  - its field of view;
-  - its zoom while you aim;
-  - the overscan;
-  - the bob.
-- **The right stick scrolls the RustVR menu** (any tab, wherever the laser points), as it already
-  scrolls the game's menus.
-- **Fixed after the third playtest:** Oblivion's fog now goes by how far away things are, in the
-  headset and on the monitor. There's no thinner haze down the side of a wide desktop view (below).
+```
+$env:RUSTVR_DESKTOP_VIEW = "1"
+powershell -File tools\oblivion.ps1 -Save rustvr-archery
+```
 
-The save is Weye's open ground on Lake Rumare's shore at 1 pm, with an Iron Bow equipped and 168
-Iron Arrows. There's room to walk, run and jump, water to swim in, and a bow to aim: for the bob,
-the zoom and the effects.
+`tools\oblivion.ps1` turns the desktop view off unless `RUSTVR_DESKTOP_VIEW` says otherwise, so
+set it first in the same PowerShell window. It builds main, installs it, and boots into Weye's
+open ground on Lake Rumare's shore at 1 pm, an Iron Bow equipped with 168 Iron Arrows: room to
+walk, run and jump, water to swim in, and a bow to aim. `powershell -File tools\oblivion.ps1
+-Close` puts it away. Watch the monitor (or OBS) while you play.
+
+`rustvr-archery` is the developer's own save, not in the repository (`docs/playtest/archery.md`
+says how to make one); any outdoor save does.
 
 How the studio's built and why: `framework/docs/research/desktop-fx.md`. The bob's research:
 `docs/research/view-bob.md`.
 
-## The looks
+## What it does
 
-Pick one at the top of the Studio tab. Change anything by hand and it becomes "custom".
+The desktop view (the window on the monitor, for recording and streaming) has effects only it
+shows, all in the RustVR menu's **Studio** tab and saved with the settings
+(`framework/crates/runtime/src/spectator_fx.rs`, `spectator.rs`, `view_bob.rs`). They'd be
+sickening in a headset and they make footage look filmed. The headset's view never takes them; it
+changed in two ways only, both below: it no longer takes the game's camera animation, and the fog
+goes by distance.
+
+**The looks,** picked at the top of the tab; change anything by hand and it becomes "custom".
 
 | Look | What it is |
 |---|---|
-| **Clean** | The game's picture as it is: no effects. Snap turns still glide. |
-| **Cinematic** | A film's look, through a 90 degree lens. |
-| **Hyper-real** | A body camera's look (Unrecord, Bodycam): a wide lens bent towards a fisheye, worn on the chest. |
-| **Action** | Every shot and blow felt; the view widens at a run; punchy colour. |
+| **Clean** (the default) | The game's picture as it is: no effects. Snap turns still glide. |
+| **Cinematic** | A film's: a 90 degree lens, 24 frames at a 180 degree shutter's motion blur, focus pulled to what you look at, aim at or hold up, warm glowing highlights, fine grain, teal shadows. |
+| **Hyper-real** | A body camera's (Unrecord, Bodycam): a wide lens bent towards a fisheye, worn on the chest (it turns after your body, a little down, swaying), a slow shutter's smear, hard sharpening, fringes and dark corners, a cold flat colour. |
+| **Action** | Every shot and blow felt, the view widening at a run, punchy colour. |
 | **Vintage** | Old film: heavy grain, a strong glow, faded warm colour. |
 
-- **Cinematic** also has:
-  - 24 frames at a 180 degree shutter's motion blur;
-  - focus pulled to what you look at, aim at or hold up;
-  - warm glowing highlights, fine grain, teal shadows.
-- **Hyper-real** also has:
-  - the chest-worn camera turns after your body, a little down, swaying;
-  - a slow shutter's smear;
-  - hard sharpening, fringes and dark corners;
-  - a cold, flat colour.
+Below the looks every effect has its own switch and strengths: motion blur, wider at speed, shake,
+handheld sway, worn on the chest, depth of field, the lens (fisheye, colour fringes, vignette,
+glow, grain, sharpen), and colour (exposure, contrast, saturation, temperature, tint, the grades
+teal and orange, bleach bypass, warm film, body cam and noir, and `.cube` LUTs put in
+`%LOCALAPPDATA%\RustVR\luts`). There's no letterbox.
 
-**For viewers**, whatever the look:
+**For viewers,** whatever the look:
+- **Snap turns, snap crouches and recentres turn as a head would** instead of cutting: the turn
+  gathers speed, swings through and lands with a little overshoot, at 160 degrees a second at its
+  fastest (a 45 degree snap settles in about 0.6 s). Two quick snaps become one longer turn. A step
+  to the side dissolves rather than pans.
+- **No black at the edges:** where a fast turn makes the desktop view see past the game's picture,
+  the picture's edge is stretched over the gap.
+- **The game's HUD where a flat player has it** (off by default): the bars, the compass and the
+  subtitles at the screen's edges, from the game's own picture of them; the same pieces then stop
+  floating in the world on the desktop, and the headset keeps them where they float.
 
-- **Snap turns, snap crouches and recentres turn as a head would** instead of cutting. On by
-  default.
-  - The turn gathers speed, swings through, and lands with a little overshoot.
-  - It turns at 160 degrees a second at its fastest: half the speed it had at first, so a 45 degree
-    snap settles in about 0.7 s.
-  - "Snap turn speed on the desktop view" in the Studio tab sets it (60 to 500).
-- **No black at the edges**: where a fast turn makes the desktop view see past the game's picture,
-  the picture's edge is stretched out over the gap. It's a smear, but not black. On by default.
-- **The game's HUD where a flat player has it**: the bars, the compass and the subtitles at the
-  screen's edges, from the game's own picture of them. It's off by default.
-  - The headset keeps the HUD where the menus feature floats it.
-  - On the desktop, the same pieces stop floating in the world.
+**The bob as you walk** ("Bobs as you walk (never the headset)"):
+- **off:** the camera glides;
+- **the runtime's:** the framework's own, the same for every game: about 2 steps a second walking
+  and 3 running, a drop at each footfall and a little sway over each foot, a soft dip landing from
+  a jump or a fall, smaller crouched, a slow float swimming;
+- **the game's own** (the default): Oblivion's first-person bob, read from its first-person
+  animations moving the camera (`crates/oblivion/src/camera.rs`), the runtime's where the game
+  gives none (third person). Walking is 5 mm a stride, running 1.9 cm a step, landing a jump a
+  20 cm dip, swimming a slow float of up to 5 cm; with a weapon or fists out, walking and running
+  don't bob at all (Oblivion's own data).
 
-## The bob as you walk (merged from the view bob branch)
+Only the camera's movement off where it has sat for the last 1.5 s counts as bob: standing still,
+Oblivion holds its camera 9.5 cm up and 3 cm to the side, its posture, not a bob. The bob turns the
+view by as much as it would move what's 2.5 m away, so the world bobs and your hands stay with the
+camera, as a flat game's arms do. The headset no longer takes the game's camera animation (a
+landing used to dip your view 20 cm); the Comfort tab's "Camera bob / shake" brings it back.
 
-It's in the Studio tab, under Camera: "Bobs as you walk (never the headset)", and "Bob strength"
-(1 by default, up to 3).
+**The zoom as you aim:** the desktop view eases down to the aiming field of view (65 degrees) and
+back out when you stop. It's the same view narrowed, no scope picture or crop.
+- Aiming is a gun with its sights lined up at your aiming eye (up to 75 cm ahead of it), or a bow
+  drawn past half with the string hand at your cheek or the corner of your mouth and the bow arm
+  out, in both cases where your head looks.
+- Not a gun sweeping past your face, a gun at your eye with your head looking well away, a half
+  draw, or a full draw at your chest.
+- A burst keeps it zoomed through the magazine and for half a second after.
+- Zoomed, the desktop camera is steadied more, as far as the view is narrowed. With a look's own
+  lens (Cinematic's 90 degrees) it still narrows to exactly the aiming field of view; the speed
+  widening fades and the bob is damped while you aim.
 
-- **Off**: the camera glides.
-- **The runtime's**: the framework's own bob, the same for every game.
-  - About 2 steps a second walking and 3 running.
-  - The view drops at each footfall and sways a little over each foot.
-  - A soft dip landing from a jump or a fall; smaller crouched; a slow float swimming.
-- **The game's own** (the default): Oblivion's own first-person bob, read from the game. Where the
-  game gives none (third person), the runtime's.
+**The fog by distance** (headset and monitor, `crates/oblivion/src/fog.rs`). Oblivion's vertex
+shaders fog by the length of the clip-space position, which grows towards the frustum's edges: on a
+flat 75 degrees it barely shows, but in the headset's wide, off-centre, mirrored eyes the two eyes
+fogged a far hill to the side differently, its haze changed as you turned, overscan thinned it,
+and the land didn't meet the water (whose shader does use the distance). As the game makes its
+vertex shaders, the adapter rewrites the ones that fog (112 of the 329 in `shaderpackage004.sdp`,
+the 15 older `vs_1_1` ones among them: the trees' leaves and fronds) so they fog by the distance;
+each camera it draws with (each eye, the mirror) gives them its frustum. The fog's colour, start and
+end are the game's own; far things to the side are a little foggier than before, the same in both
+eyes and at any overscan. The desktop view's own evening-out of the fog where the other eye's
+picture fills in stays off unless the game's shaders keep their own fog (a shader the adapter
+couldn't rewrite, or `RUSTVR_OBLIVION_GAME_FOG=1` to compare).
 
-Oblivion's own bob comes from its first-person animations moving the camera:
-
-- **Walking:** 5 mm a stride, very subtle.
-- **Running:** 1.9 cm a step.
-- **Landing a jump:** a 20 cm dip.
-- **Swimming:** a slow float of up to 5 cm.
-- **With a weapon or fists out:** walking and running don't bob at all. That's Oblivion's own data.
-
-**The headset changes too:** it no longer takes the game's camera animation. Before, a landing dipped
-your view 20 cm. The Comfort tab's "Camera bob / shake" brings it back if you want it.
-
-**Fixed after the second playtest** ("something behind me getting stuck in the camera" on the
-desktop view):
-
-- **Standing still, Oblivion holds its camera 9.5 cm up and 3 cm to the side** of where the bob was
-  measured from. That's its posture, not a bob.
-  - The merged branch passed it on as one, which lifted the desktop camera off your eye. From there
-    it could see into what the runtime draws behind your head.
-  - It also sat the headset 10 cm lower than before.
-  - Now only the camera's movement off where it has sat for the last second and a half counts as
-    bob: the steps, a landing's dip and a swim's float.
-- **The bob now moves the world, not your body.**
-  - Before, moving the desktop camera only moved the body the runtime draws, the wrong way. The
-    game's picture is looked up by direction, so the world never moved with the camera.
-  - Now the bob turns the view by as much as it would move what's 2.5 m away, so the world bobs
-    and your hands stay with the camera, as a flat game's arms do.
-  - A landing's dip no longer drops the camera into your chest.
-
-## The zoom as you aim (merged from the aim zoom branch)
-
-The desktop view keeps its field of view until you aim. Then it eases down to the **aiming field of
-view (65 degrees by default)**, and eases back out when you stop. It's the same view narrowed: no
-scope picture, no crop. The headset's view never changes.
-
-- **What counts as aiming:**
-  - a gun with its sights lined up at your aiming eye (up to 75 cm ahead of it);
-  - a bow drawn past half, with the string hand at your cheek or the corner of your mouth and the
-    bow arm out.
-- **It doesn't zoom:**
-  - when a gun sweeps past your face;
-  - when you hold a gun at your eye but look well away from it;
-  - for a half draw, or a full draw at your chest.
-- **A burst keeps it zoomed** through the whole magazine, and for half a second after.
-- **While zoomed**, the desktop camera is steadied more, as far as the view is narrowed.
-- **In the Studio tab**, under Camera: "Zooms in while you aim" (on), "Aiming field of view" (65),
-  "Aiming zoom: in over" (0.25 s) and "out over" (0.33 s).
-- **With a look's own lens** (Cinematic's 90 degrees), aiming still narrows to exactly the aiming
-  field of view. The speed widening fades while you aim, and the bob is damped.
-
-## The fog (fixed after the third playtest)
-
-You saw less distant fog at the side of the desktop view, with the overscan up and its field of
-view wide. You were right, and the headset had the same quirk.
-
-- **Why:** Oblivion's shaders don't fog a thing by how far away it is.
-  - They use the length of its clip-space position, which grows towards the edges of the eye's
-    frustum. On a flat screen's 75 degrees that barely shows.
-  - The headset's eyes are wide, off-centre and mirrored, and the overscan widens them more. So in
-    the headset:
-    - your two eyes fogged a far hill off to the side differently;
-    - a hill's haze changed as you turned your head towards it;
-    - more overscan thinned the fog;
-    - the land's fog didn't match the water's (the water's shader does use the distance).
-  - The desktop view is the right eye's picture. Past the right eye's left edge, it fills in from
-    the left eye's. With your settings that edge is 51 degrees out (11 degrees of overscan, a 128
-    degree desktop view).
-  - In the left eye's picture that hill sits nearer the middle of the frustum, so the game fogged
-    it about a fifth less. That made a step in the fog at the join, and thinner fog past it.
-- **Now the game's fog goes by distance**, in the headset and on the monitor.
-  - As the game makes its vertex shaders, the adapter rewrites the 112 that fog (of 329), so the
-    distance they fog by is how far away the thing is.
-  - Each camera the adapter draws with (each eye, the mirror) gives the shaders its frustum.
-  - The fog's colour, start and end are the game's own. Only where it falls changes, and it's the
-    same at any overscan.
-  - **The headset's picture changes:** far things off to the sides are a little foggier than
-    before (the game measured them short), and the same in both eyes.
-- **The desktop view's own evening-out of the fog** (made first, for the monitor alone) now stays
-  off. It comes back only if the game's shaders keep their own fog: a shader the adapter couldn't
-  rewrite, or `RUSTVR_OBLIVION_GAME_FOG=1` set to compare.
+The right stick scrolls the RustVR menu, any tab, wherever the laser points.
 
 ## What to try
 
-Watch the monitor (or OBS) while you play.
+1. **Snap turns:** flick the right stick: the headset snaps, the desktop turns through it, no cut
+   and no black edge. Flick twice quickly. Try the speed slider, and Clean against Cinematic (whose
+   pan is motion-blurred).
+2. **Recentre** (the menu's Recenter, or after a load): it glides.
+3. **Turning your head fast** with motion blur on (Cinematic, Hyper-real, Action): a camera pan's
+   smear, more at the edges; a stretched edge, never a black band.
+4. **Walking, running, a horse** in Cinematic and Action: the view widens with speed (galloping
+   most) and things passing close smear.
+5. **A sword or a mace** swung fast: the blade and hand streak, the rest sharp.
+6. **A bow:** loose an arrow: the camera kicks a little.
+7. **Hard hits and a high jump:** a blow that lands shakes the camera (Action most); a hard landing
+   dips it.
+8. **Depth of field** (Cinematic, Vintage): near then far; a potion or a book held up close.
+9. **The bob:** walk, run, sneak, jump and swim with each of its three choices. Nothing should get
+   in the desktop camera's face; the world bobs, not your hands; your standing height in the
+   headset is unchanged, and the headset never bobs.
+10. **The zoom:** the bow off your back (left hand over the left shoulder), an arrow over the right
+    shoulder, nock and draw to your cheek: the desktop narrows; loose, and it eases out. Draw
+    without your hand at your face: no zoom. Again in Cinematic.
+11. **The flat HUD:** the bars, compass and effects at the bottom at about the flat game's size,
+    subtitles low in the middle, the activate icon in the middle, all crisp over any effects; open
+    a menu and the HUD goes, the menus floating as before.
+12. **Your own mix** and the LUTs.
+13. **The menu:** push the right stick forward and back on any tab. The field of view slider moves
+    the look's own lens where it has one (the look becomes custom); in Clean it's your own.
+14. **The fog** on open ground with hills far off: one eye then the other, a far hill to the side
+    as hazy in each; its haze staying put as you turn; the overscan changed and the fog the same;
+    the land and the lake far off fogged alike; on the monitor, with overscan at 10 or more and the
+    desktop field of view at 120 or more, the haze even across.
 
-1. **Snap turns.** Flick the right stick.
-   - The headset snaps.
-   - The desktop view should turn through it as your head would: it gathers speed, swings, and
-     settles with a slight overshoot. The world turns round your body, with no cut and no black
-     edge.
-   - Flick twice quickly: it should become one longer turn that keeps its speed.
-   - The slider "Snap turn speed on the desktop view" sets how fast it turns. **Tell me** the
-     speed you like and I'll make it the default.
-   - Try it in Clean and in Cinematic: in Cinematic the pan is motion-blurred.
-2. **Recentre** (the menu's Recenter button, or after a load). It should glide, not cut. A step to
-   the side dissolves rather than pans.
-3. **Turning your head fast.**
-   - With motion blur on (Cinematic, Hyper-real, Action), the view should smear as a camera's pan
-     does, more at the edges than the middle.
-   - On the side you turn towards, the desktop view runs past the game's picture for a moment. It
-     should show a stretched smear of the picture's edge there, never a black band.
-4. **Walking, running, a horse.** In Cinematic and Action, the view widens as you go faster and
-   eases back as you stop.
-   - Galloping should widen it most.
-   - Things passing close by smear.
-5. **A sword or a mace.** Swing it fast. The blade and your hand should streak along their swing,
-   the rest of the picture staying sharp.
-6. **A bow.** Loose an arrow: the camera kicks a little.
-7. **Hitting things hard, and jumping off something high.**
-   - A blow that lands shakes the camera (Action most).
-   - A hard landing dips it.
-   - Oblivion doesn't tell the runtime when you're hit, so taking damage doesn't shake it yet.
-8. **Depth of field** (Cinematic, Vintage):
-   - Look at something near, then far: the focus pulls between them.
-   - Hold a potion or a book up close to your face: it comes into focus and the world behind
-     blurs.
-9. **The bob.** Walk, run, sneak, jump and swim with each of its three choices.
-   - Nothing should get in the desktop camera's face any more, standing or moving.
-   - The world should bob, not your hands.
-   - Your height in the headset standing should be as it was before the bob was merged.
-   - Watch the recording, and check the headset never bobs.
-   - With the game's own, walking is barely there; running, landing and swimming show it.
-   - **Tell me** how each looks, and whether the strength should be different by default.
-10. **The zoom.**
-    - Take the bow off your back (left hand over the left shoulder) and an arrow over the right
-      shoulder. Nock it and draw to your cheek: the desktop view narrows.
-    - Hold it, look round, and loose: the view eases back out after the shot.
-    - Draw without bringing your hand to your face: no zoom.
-    - Try it in Cinematic too: it zooms to the same aiming field of view.
-    - **Tell me** whether 65 feels right for Oblivion's bows, or you'd rather have more or less.
-11. **The flat HUD.** Studio tab, "The game's HUD on the screen where a flat player has it".
-   - The health bars, the compass and the effects should sit at the bottom of the desktop view, at
-     about the size Oblivion has them on a flat screen.
-   - Subtitles should sit low in the middle.
-   - The activate icon should be in the middle when you look at something.
-   - All of them are crisp, over any effects.
-   - Open a menu: the HUD goes and the menus float in the world as before.
-   - **Tell me** if anything is the wrong size or in the wrong place.
-12. **Your own mix.** Every effect has its own switch and strengths below the looks.
-    - Colour grades: teal and orange, bleach bypass, warm film, body cam, noir.
-    - LUTs: put `.cube` files in `%LOCALAPPDATA%\RustVR\luts` and they show in the tab.
+## Settings
 
-13. **The menu.** Open the RustVR menu and push the right stick forward and back: the tab
-    scrolls, wherever the laser points.
-    - The Studio tab's Camera section has the desktop field of view, the aim zoom, the overscan
-      and the bob.
-    - The field of view slider moves the look's own lens where it has one (and the look becomes
-      custom). In Clean it's your own.
-14. **The fog.** On open ground with hills far off:
-    - In the headset, close one eye and then the other: a far hill off to the side should be as
-      hazy in each.
-    - Turn your head towards the hill and away: its haze should stay put.
-    - Change the overscan: the fog should stay the same.
-    - Where the land meets the lake far off, the fog on each should match.
-    - On the monitor, with the overscan at 10 or more and the desktop field of view at 120 or more,
-      the haze should be even across, with no edge down the left side.
-    - **Tell me** if the distance looks foggier or clearer than you're used to.
+The Studio tab (`framework/crates/runtime/src/spectator_fx.rs`'s `panel`; the keys in
+`settings.toml`'s `[studio]`, `[spectator]`, `[desktop_bob]` and `[vr]`):
 
-**Tell me** which looks you'd keep and what you'd change in each: they're my picks, tuned on the
-test range, not in Oblivion.
+| Setting | Key | Default | Range |
+|---|---|---|---|
+| Look: Clean, Cinematic, Hyper-real, Action, Vintage | `studio.look` | Clean | |
+| Snap turns, snap crouches and recentres turn as a head would, instead of cutting | `studio.smooth_snaps` | on | |
+| Snap turn speed on the desktop view (its fastest) | `studio.snap_speed` | 160 deg/s | 60 to 500 |
+| Stretch the picture's edges over the gaps a fast turn leaves (instead of black) | `studio.fill_edges` | on | |
+| The game's HUD on the screen where a flat player has it | `studio.flat_hud` | off | |
+| HUD size | `studio.flat_hud_size` | 1 | 0.5 to 2 |
+| Desktop field of view (a look's own lens where it has one) | `spectator.fov` | 105 deg | 60 to 140 |
+| Zooms in while you aim (a gun's sights at your eye, a bow drawn to your cheek) | `spectator.aim_zoom` | on | |
+| Aiming field of view | `spectator.aim_fov` | 65 deg | 30 to 100 |
+| Aiming zoom: in over | `spectator.aim_in` | 0.25 s | 0.05 to 1 |
+| Aiming zoom: out over | `spectator.aim_out` | 0.33 s | 0.05 to 1 |
+| Overscan: the game drawn past the headset's view (also on the Display tab; a change takes at the next start) | `vr.overscan` | 0 deg | 0 to 20 |
+| Bobs as you walk (never the headset): off, the runtime's, the game's own | `desktop_bob.mode` | the game's own | |
+| Bob strength | `desktop_bob.strength` | 1 | 0 to 3 |
 
-## What I checked, and what I couldn't
+Elsewhere: the Display tab's "Game picture from the left eye / right eye (your aiming eye)"
+(`spectator.eye`, right), the desktop camera's smoothing and lag, a level horizon and fullscreen;
+the Comfort tab's "Camera bob / shake" (`comfort.head_bob`, off), which gives the headset the game's
+camera animation. Testing: `RUSTVR_OBLIVION_GAME_FOG=1` keeps the game's own fog.
 
-**Checked** in the framework's test range, on the emulated headset, with the desktop window
-captured:
+## Decisions
 
-- each look;
-- a fast head turn (with the edge stretch off and on);
-- two snap turns (captured frame by frame through the turn);
-- a walk and a sprint, a sword swung across the body, the rifle fired in bursts;
-- the flat HUD, over Clean and over Cinematic;
-- the RustVR menu scrolled by the right stick, with the laser on the pause panel.
+- **Only the desktop view, never the headset:** the effects would make you sick. The fog by
+  distance changes the headset's picture too, at the user's word after the third playtest.
+- **No black bars** (asked after the first look).
+- **Snap turns at 160 degrees a second:** twice that, the first playtest's, was quicker than the
+  player liked.
+- **The bob and the aim zoom live in the Studio tab's Camera section,** merged in from their own
+  branches at the user's word; the Display tab points there.
+- **The game's own bob by default,** what its flat game shows; its posture left out, and turned
+  into a turn of the world's camera so nothing behind your head comes into view.
+- **The zoom only for a real aim,** held through a burst: the zoom pumping in and out with each kick
+  would be worse than its staying.
+- **The fog's distance only:** its colour, start and end stay the game's.
+- **The protocol** carries the view bob (`GameState::view_bob`) and, in `GameLighting::fog_fade`'s
+  spare `z`, 1 when the game's shaders fog by distance.
 
-The view bob branch checked its runtime's bob on the range (walking, running, landings) before the
-merge; the merged build passes its tests and the studio's.
+## Not done / known issues
 
-The unit tests cover:
+- **Taking damage doesn't shake the camera:** Oblivion doesn't tell the runtime when you're hit.
+- **Never checked in Oblivion on the headset** (the studio was tuned on the test range): the flat
+  HUD laid out from the game's picture of it; the game's depth for focus and blur; a real snap
+  turn, recentre and horse; Oblivion's own bob in play (the adapter's log says every 5 s how far
+  it went, `view bob: the game's own in the last 5 s: ...`, and the runtime's what the desktop
+  showed, `desktop view: bobbed ...`); the headset no longer taking the game's bob; the fog by
+  distance over the real hills, water, trees and distant land, and the game's other fog (its sky,
+  interiors, water's reflections).
+- **The headset's timing:** the effects run after the headset's frame is handed over, about a third
+  of a millisecond on the GPU; the desktop view logs its GPU time in `rustvr.log` (`desktop view:
+  ... ms on the GPU for its picture, ... ms for its effects and HUD`). Whether they ever cost the
+  headset a frame is unchecked.
 
-- what's a jump and what isn't: a snap, a crouch, a load, a game's hitch;
-- the shake wearing off;
-- the flat HUD's layout;
-- the looks;
-- reading a `.cube` LUT;
-- the fog by distance, on Oblivion's own shader package (`shaderpackage004.sdp`, the one its
-  `RendererInfo.txt` names):
-  - all 112 of its 329 vertex shaders that fog are rewritten (the 15 older `vs_1_1` ones too, the
-    trees' leaves and fronds among them);
-  - each is the same as before but for four instructions, checked instruction by instruction;
-  - Direct3D 9 makes every one;
-  - the frustum's terms give the distance back from the clip position, for both your eyes'
-    frustums and a flat screen's.
-- the desktop view's own evening-out of the fog where the other eye's picture fills in (on the
-  GPU), kept for when the shaders aren't rewritten. It uses two eye pictures fogged as Oblivion's
-  shaders fog them, with your playtest's frustums and a 128 degree desktop view. Before, the fog
-  past the join was 0.10 off the right eye's (a tenth of the way from clear to full fog); after,
-  0.006 at worst, which is 8-bit rounding.
+## History
 
-The view bob branch is merged here with no conflicts, and the aim zoom still merges cleanly with
-the result.
+Newest first.
 
-**Couldn't check:**
-
-- **Oblivion itself**, above all:
-  - Its HUD laid out flat. Its picture of the HUD is the eye's shape; the pieces are re-anchored
-    and sized from its text.
-  - Its depth for the focus and the blur.
-  - How a real snap turn, a real recentre and a real horse look.
-  - Oblivion's own bob in play.
-    - The adapter's log says every 5 seconds how far the game's bob went (`view bob: the game's
-      own in the last 5 s: ...` in `rustvr-oblivion.log`).
-    - The runtime's log says what the desktop view showed (`desktop view: bobbed ...`).
-  - The headset no longer taking the game's bob, and its height standing unchanged.
-  - Its fog by distance, in the headset and on the monitor, over its real hills, water, trees and
-    distant land.
-  - That nothing else of the game's own fog looks wrong: its sky, its interiors, its water's
-    reflections.
-- **The real headset's timing**: whether the effects ever cost the headset a frame. They run after
-  the headset's frame is handed over, and they're a third of a millisecond on this GPU.
-
-## GPU times
-
-On the test range, RTX 5090, at 2227x1252 (the window fitted to the monitor), with the runtime at
-120 Hz. These are medians of ten seconds, three runs each. The desktop view logs them every ten
-seconds in `rustvr.log` ("desktop view: ... ms on the GPU").
-
-| Look | The desktop picture (before the headset's frame) | Effects and HUD (after it) |
-|---|---|---|
-| Clean | 0.16-0.18 ms | none |
-| Cinematic | 0.15-0.17 ms | 0.30-0.35 ms |
-| Hyper-real | 0.17-0.18 ms | 0.30-0.34 ms |
-| Action | 0.16-0.18 ms | 0.28-0.33 ms |
-| Vintage | 0.09-0.10 ms | 0.30-0.35 ms |
-
-What the studio adds before the headset's frame (the body's depth for the blur and focus, the copy
-kept for smoothed snaps, the HUD's copy) is lost in the run-to-run spread.
-
-## For the merge
-
-Notes for merging this branch:
-
-- **The view bob is merged in** (framework and adapter), at your word. Its bob settings moved from
-  the Display tab to the Studio tab's Camera section. The desktop field of view and the overscan are
-  on both tabs (the Display tab's field of view stays where the aim zoom's lines follow it).
-- **The aim zoom is merged in too** (framework and adapter), at your word.
-  - Its settings and the desktop field of view moved from the Display tab to the Studio tab's
-    Camera section.
-  - With a look's lens, aiming still reaches the aiming field of view.
-  - Its range has the bow on your back.
-- **The protocol** has the view bob's `GameState::view_bob`, and nothing of the studio's but a
-  meaning for `GameLighting::fog_fade`'s spare `z`: 1 when the game's shaders fog by distance. Its
-  layout and version are unchanged.
-- **The adapter's fog** (`crates/oblivion/src/fog.rs`) hooks `IDirect3DDevice9::CreateVertexShader`
-  (slot 91) in `d3d9.rs`, and sets each camera's frustum in `render.rs`. It changes the headset's
-  picture: at your word, after the third playtest.
+- **Playtest 3:** less distant fog down the side of the desktop view with the overscan up and its
+  field of view wide; the headset had the same quirk. The game's fog now goes by distance.
+- **Playtest 2:** "something behind me getting stuck in the camera" on the desktop view. The merged
+  view bob passed the game's standing posture on as bob, lifting the desktop camera off the eye
+  (and sitting the headset 10 cm lower); moving the camera moved the body the runtime draws, the
+  wrong way, not the world. Now only movement off the last 1.5 s counts, and the bob turns the
+  world's camera.
+- **Playtest 1:** the letterbox went, and the snap turn's speed was halved. The view bob and aim
+  zoom branches were merged in.

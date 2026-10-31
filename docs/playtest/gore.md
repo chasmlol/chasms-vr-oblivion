@@ -2,106 +2,92 @@
 
 Save: rustvr-gore
 
-`powershell -File tools\play.ps1 gore` boots it. `-Save rustvr-gore-undead` has a zombie and a
-skeleton instead. `-Close` puts it away. On the real headset, `playtest.bat` and
-`playtest-undead.bat` in the worktree do the same from Explorer, and keep each run's runtime log in
-`<builds>\gore\playtest-<n>`. `playtest-still.bat` boots `rustvr-gore` with its three bandits
-(`ff000c48`, `ff000c49`, `ff000c4c`) restrained (`SetRestrained 1`, the game's own prisoner hold:
-they don't move or fight back but still die and fall), one put 1 m in front on 5 health, so the
-first good blow across its neck takes the head.
+## Playing it
 
-The flat game's crosshair is hidden in VR (`reticle.rs`, from the riding branch); its activate
-icons stay.
+From the repository's root:
 
-## The saves
+```
+powershell -File tools\oblivion.ps1 -Save rustvr-gore
+powershell -File tools\oblivion.ps1 -Save rustvr-gore-undead
+```
 
-* **rustvr-gore**: inside the house at Weye. Three bandits stand round the room; they don't
-  attack until hit, and each has 20-25 health, so two or three good blows kill one. You carry a
-  steel longsword (equipped, at the left hip), a Daedric claymore, a steel battle axe and an iron
-  dagger. Your health is 1000, so you can take your time.
-* **rustvr-gore-undead**: the same room with a zombie and a skeleton. They have their normal
-  health and do attack.
+It builds main, installs it, and boots the save; `powershell -File tools\oblivion.ps1 -Close` puts
+it away.
 
-## What to try, in order
+- **rustvr-gore:** inside the house at Weye. Three bandits stand round the room (`ff000c48`,
+  `ff000c49`, `ff000c4c`); they don't attack until hit, and each has 20-25 health, so two or three
+  good blows kill one. You carry a steel longsword (equipped, at the left hip), a Daedric claymore,
+  a steel battle axe and an iron dagger, and have 1000 health to take your time.
+- **rustvr-gore-undead:** the same room with a zombie and a skeleton, at their normal health, who
+  do attack.
 
-1. **Hit a bandit.** Draw the sword and cut one. Blood should spray from where the blade met the
-   body, as hard as you hit:
-   * a slash fans out along the blade's way and out of the cut;
-   * a stab jets back out of the hole;
-   * a blunt blow spatters.
+To cut a head off a bandit that stands still, hold all three with the game's own prisoner hold
+(they don't move or fight back, but still die and fall) and put one 1 m in front of you on 5
+health, so the first good blow across its neck takes the head:
 
-   Fine mist goes with each spray. The wound keeps bleeding for a few seconds, and it moves with
-   the body part. The game's own hit blood (its spray and its decals) still happens too.
-2. **Watch where it lands.** Drops fly with gravity and land on the floor and walls as the game's
-   own blood art:
-   * splats from its blood decal;
-   * long splatters where a fast drop strikes at a slant;
-   * stains that grow into pools where a lot lands;
-   * runs that creep down walls and drop off edges.
+```
+powershell -File tools\oblivion.ps1 -Save rustvr-gore -Commands "ff000c48.SetRestrained 1|ff000c49.SetRestrained 1|ff000c4c.SetRestrained 1|PlaceInFront ff000c48 1|ff000c48.setav health 5"
+```
 
-   Blood darkens as it dries over a few minutes. Nothing vanishes after a few seconds; the oldest
-   goes only once 640 decals are down. The game's own blood decals now last 10 minutes in VR
-   instead of 10 seconds.
-3. **Look at your sword and hands.** The blade is bloody along the part that went through:
-   * after a cut, along the edge;
-   * after a stab, back from the point.
+Both saves are the developer's own, not in the repository; the bandits' ids are that save's. Any
+save with people or creatures to fight will do, and one can be made with
+`-At <cell> -Commands "...|SaveGame rustvr-gore"`.
 
-   It drips by itself from its lowest wet point while it's wet, and a shake or a flick throws
-   wet blood off it. Tilt it and blood runs down the blade towards the lower end as a streak, and
-   drips from there. It dries over about 90 s, stays dry for a while, and wears away 3-4 minutes
-   after blood last got there; so does blood on your hands and arms. Drops that land on your
-   hands, or on the blade in the air, stay on them.
-4. **Take a head.** Swing across the neck, anywhere from its base up to the jaw, with the edge
-   leading, as the killing blow. The head should come off **with its neck**, wearing the NPC's own
-   face, hair and helmet.
-   * It flies off a little along your swing and drops with physics.
-   * The body falls with a capped stump in its collar.
-   * The stump pumps blood at a heartbeat for about 14 s, weakening, then flows for about half a
-     minute, then drips. Each beat is a jet whose pressure rises and falls, so it lands in a line
-     out from the stump. With each strong pulse it also sprays the game's own blood effect.
-   * The hand that struck feels a heavy thump as the limb goes.
-   * Pools form under it.
-   * The severed head's cut bleeds too, more weakly.
+The research and the design: `docs/research/gore.md`.
 
-   A blow on the skull above the jaw doesn't take the head.
-5. **Arms and legs.** A killing blow on a limb cuts it at the nearest joint:
-   * an upper arm: the shoulder or the elbow;
-   * a forearm: the elbow or the wrist;
-   * a thigh: the hip or the knee;
-   * a calf: the knee or the ankle.
+## What it does
 
-   Heavier blades cut more easily. The claymore and the axe take legs; the iron dagger hardly takes
-   anything.
-6. **Corpses.** Hit a dead bandit's limbs or neck with a good blow: they come off (a corpse gives
-   way a little more easily).
-7. **Pick up the pieces.** A severed head or limb is a physical prop: grip it, or pull it with the
-   gloves, and throw it. It stays until the body goes (the cell unloads or a save loads).
-8. **rustvr-gore-undead.**
-   * The zombie bleeds the game's red blood and has flesh stumps.
-   * The skeleton bleeds no blood, only its bone-dust puffs, and its stumps are bone.
+The adapter's `crates/oblivion/src/gore.rs`, the framework's rule (`rustvr_protocol::severs`,
+`framework/crates/protocol/src/gore.rs`) and the runtime's blood (`framework/crates/runtime/src/
+gore.rs`).
 
-## The rule (the framework's `rustvr_protocol::severs`, with Oblivion's numbers)
+- **Blood from the hit,** as hard as you hit: a slash fans out along the blade's way and out of
+  the cut, a stab jets back out of the hole, a blunt blow spatters, fine mist with each. The wound
+  keeps bleeding a few seconds and moves with its body part. The game's own hit blood (its spray
+  and decals) still happens too.
+- **Where it lands:** drops fly with gravity and land on the floor and walls as the game's own blood
+  art: splats from its blood decal, long splatters where a fast drop strikes at a slant, stains
+  growing into pools where a lot lands, runs creeping down walls and dropping off edges. Decals dry
+  darker over a few minutes (pools longer) and never vanish on a timer: the oldest goes once 640
+  are down. The game's own blood decals last 600 s in VR instead of its 10.
+- **On the blade and hands:** a cut bloodies the edge in a band where it met the body, a stab back
+  from the point, never past the blade's ends. Wet blood drips from the blade's lowest wet point.
+  Where the blade's acceleration at the blood passes 45 m/s² (a shake or a flick; a hand held still
+  is under 15) it flies off with the blade's own velocity, more the harder. Tilted more than about
+  17° along its length, wet blood starts runs (about one every 1.25 s, at most 3 at once and 8 on a
+  blade): thin streaks growing towards the lower end at up to 5 cm/s, pausing while the blade is
+  level. Blood on the blade, the hands and the arms dries over 90 s and wears away 3 to 4 minutes
+  after blood last got there. Drops that land on the hands, or on the blade in the air, stay; a
+  drip never lands back on the blade it came from.
+- **The cut.** Right after the game's own hit has landed, the adapter asks the framework's rule.
+  A hit cuts a limb off when it's an edge (a slash, or an axe's chop), clean (not glancing, not a
+  stab, not blunt), it kills or the body was already dead, and its power reaches the limb's
+  toughness. It cuts at the nearest joint the blade crossed.
+- **A head goes with its neck,** cut at the neck's base (`Bip01 Neck1`), anywhere from there up to
+  the jaw, as the killing blow; a blow on the skull above the jaw doesn't take it. The head wears
+  the NPC's own face, hair and helmet, flies off a little along your swing and drops with physics.
+  The body falls with a capped stump in its collar.
+- **The stump** pumps at a heartbeat for about 14 s, weakening, each beat a jet whose pressure rises
+  and falls so it lands in a line out from the stump, with the game's own blood effect on the
+  strong pulses (every 1.6 s for 10 s); then it flows for about half a minute, then drips. Pools
+  form under it. The severed piece's cut bleeds too, shorter and weaker. The hand that struck feels
+  a heavy thump as the limb goes.
+- **Limbs:** an upper arm at the shoulder or the elbow, a forearm at the elbow or the wrist, a thigh
+  at the hip or the knee, a calf at the knee or the ankle. A corpse gives way a little more easily.
+- **The pieces** are the runtime's props: grip one or pull it with the gloves, and throw it. Each
+  stays until its body goes (the cell unloads or a save loads).
+- **Each creature bleeds what the game says it does:** the zombie the game's red blood with flesh
+  stumps, the skeleton no blood, only its bone-dust puffs, and bone stumps; the lich's is black,
+  the will-o'-the-wisp's glows.
+- **The flat game's crosshair** is hidden in VR (`crates/oblivion/src/reticle.rs`); its activate
+  icons stay.
 
-A hit cuts a limb off when all of these hold:
+**The rule's numbers.** Power = the hit's strength x (the weapon's damage / 10) x the weapon's kind.
+The damage is the game's own for the weapon; strength 1 is a full-strength slash, at about 7 m/s.
+Kinds: a one-handed blade 0.55 to 1.0 by reach (a dagger less), a two-handed blade 1.35, a war axe
+1.15, a battle axe 1.45. A corpse needs 0.8 of the toughness.
 
-* it's an edge: a slash, or an axe's chop;
-* it's clean: not glancing, not a stab, not blunt;
-* it kills, or the body was already dead (as Fallout does it);
-* the cut's power is at least the limb's toughness.
-
-**Power** = the hit's strength × (the weapon's damage ÷ 10) × the weapon's kind. Damage is the
-game's own number for the weapon. Kinds:
-
-* one-handed blade: 0.55-1.0 by reach (a dagger less);
-* two-handed blade: 1.35;
-* war axe: 1.15;
-* battle axe: 1.45.
-
-**Strength** comes from the swing: 1 is a full-strength hit, at about 7 m/s.
-
-**Toughness:**
-
-| Limb | Toughness |
+| Joint | Toughness |
 |---|---|
 | Wrist | 0.45 |
 | Neck | 0.55 |
@@ -111,192 +97,96 @@ game's own number for the weapon. Kinds:
 | Shoulder | 0.9 |
 | Hip | 1.3 |
 
-A corpse needs 0.8 of the toughness. So:
+So a steel longsword swung moderately takes a head on a killing blow, a hip needs a heavy blade
+swung hard, and a dagger doesn't get through a thigh at all.
 
-* a steel longsword swung moderately takes a head on a killing blow;
-* a hip needs a heavy blade swung hard;
-* a dagger doesn't get through a thigh at all.
+## What to try
 
-## What was checked in the game (emulated headset, `tools/oblivion.ps1`)
+1. **Hit a bandit:** draw the sword and cut one; watch the spray follow the blow and the wound go
+   on bleeding.
+2. **Where it lands:** splats, splatters, pools, runs down the walls; blood darkening as it dries.
+3. **Your sword and hands:** the bloody band; drips; a shake or a flick; tilt it and watch the
+   streaks run down and drip from the end.
+4. **Take a head:** swing across the neck, edge leading, as the killing blow (the restrained boot
+   above makes it the first good blow). Then the skull above the jaw: nothing comes off.
+5. **Arms and legs** at each joint; the claymore and the axe take legs, the iron dagger hardly
+   anything.
+6. **Corpses:** a good blow on a dead bandit's limbs or neck.
+7. **The pieces:** grip a head or a limb, pull one with the gloves, throw it.
+8. **rustvr-gore-undead:** the zombie and the skeleton.
 
-* **A real swing took a head.** A steel longsword swept across a bandit's neck as the killing blow
-  (health 5 → −2) gave power 1.47 against 0.55: "cut off". The head was cloned from the NPC's own
-  3D: its face, hair and armour pieces.
-* **A real swing took a forearm.** The same sweep at elbow height cut the bandit's left forearm at
-  the elbow (power 1.47 against 0.65).
-* **A severed head was pulled and thrown.** The gloves pulled it from the floor (point, grip, flick
-  back) into the hand, where the NPC's face hangs from the fist, then threw it.
-* **Cuts at every joint looked right.** The `GoreCut` test command took the head, a forearm, a
-  calf, an upper arm and a thigh off a bandit, a zombie and a skeleton. The pieces fell and rolled
-  on the floor, drawn with their own meshes.
-* **The stumps looked right.**
-  * The headless body standing (AI off) shows a closed collar with a stump.
-  * The severed head lies on the carpet with its face.
-  * The zombie's neck is capped with flesh.
-  * The skeleton's arm is capped with bone and puffs dust.
-* **Blood:**
-  * sprays from wounds and stumps, landing as splats, splatters and pools;
-  * the neck's spurts, seen as a fountain going up and coming down round the body;
-  * blood that came down on the player, seen on the glove;
-  * pools under a decapitated body;
-  * blood on the blade along the edge that cut, seen in captures;
-  * red splats on the hand from drops.
-* **A save loaded with severed bodies and pieces**: no crash; the pieces go with their bodies.
-* **The game's own blood decals** are set to last 600 s (the log says so).
-* **Frame rate**, below.
-* **Blood dust from a skeleton**: the cut puffed grey dust.
+## Settings
 
-## What wasn't checked
-
-* **A real swing that cuts a leg, or cuts into a corpse.** These go through the same code as the
-  neck and the forearm. The checks used `GoreCut` for legs.
-* **Taking a piece by its hand grip** (not the gloves).
-* **Blood running down a wall.** Runs started in the logs (13 at once in the frame-rate run). None
-  was seen in a capture.
-* **The game's own blood spray at the stumps.** It's made every 1.6 s for 10 s (the log says the
-  first one is). It wasn't picked out in a capture.
-* **The thump in the hand** when a limb comes off: it's sent, but the emulated headset can't feel it.
-* **The real headset**, lighting outdoors, and fog.
-* **Creatures without the people's skeleton.** Wolves, bears and rats can't lose limbs: their
-  combat body is one capsule. Zombies, skeletons and other `Bip01`-limbed creatures can.
-
-## Real headset
-
-### Playtest 1: the game crashed as a head came off
-
-(`playtest-still.bat`; logs in `<builds>\gore\playtest-1`.)
-
-* **The restraint held.** The three bandits stood where they were.
-* **The first bandit** (on 5 health) died to a blow that struck its head capsule 3.0 of the way from
-  the neck to the head bone, that is on top of the skull. By the rule, a blow above the jaw doesn't
-  take the head, so nothing came off.
-* **The second bandit** (`ff000c49`) was hit once lightly on the chest (5 → 1), then across the
-  neck (power 1.25 against 0.55): the head came off, and the game crashed in its own renderer
-  (in the decal shader's pass).
-* **Why:** the first hit had left the game's blood decal on the bandit's skin. That decal is a
-  geometry over the mesh (`BSTempEffectGeometryDecal`), drawn by a `GeometryDecalShaderProperty`
-  from the decals listed on it. `NiObject::Clone` copies the property without its list, and the
-  decal shader draws the first decal on the list without checking that there is one. The
-  emulated-headset checks never cut a creature that already had a decal on it.
-* **The fix:** each decal on the body's decal geometries is copied onto the clone's, as the game's
-  decal makes its own, through the game's calls: its texture and property held, added to the list
-  as the game adds one, and, when the piece goes, taken off, let go of and freed. So a
-  severed head keeps the blood that was on it.
-
-### Playtest 2: drips from past the sword's point
-
-* **Heads came off without a crash.**
-* **The sword dripped a little past its point, from nothing.** A cut bloodies the edge in a band
-  either side of where it met the body, as far as it went in (up to 11 cm each way). Nothing stopped
-  that band at the point, and a drip falls from the lowest wet blood, so a cut near the point left
-  blood, and drips, in the air past it.
-* **The fix (the runtime):** the band stops at the blade's ends, its splats spread over what's left
-  of it. A drop that lands on the blade in the air leaves its blood on the blade's line where it
-  met it, not where the drop was. So every drip falls from blood that is on the blade.
-
-### Playtest 3: a crash 16 s after a head came off; the sword dripped only when shaken
-
-(Logs in `<builds>\gore\playtest-3`.)
-
-* **The crash** was in the adapter's own `combat::bones`, which walks each creature's tree for its
-  bones every frame (reading an address that was ASCII text). Near the root it went into every child,
-  not just nodes, and read a mesh's fields as if they were a node's children: its effect state as
-  the array and the top half of its data pointer as the count. Then it followed what it found
-  there. The reads are guarded, but the guard remembers readable regions for 50 ms, and one of
-  those garbage pointers led into memory freed in the meantime. The game's blood decals on a
-  body are meshes near its root, so a body that had been hit gave it more garbage to follow.
-  **Fix:** it goes only into nodes (by the game's RTTI). The check moved from `gore.rs` to
-  `engine.rs` for both. This is in `combat.rs`, which the melee and NPC branches also edit.
-* **It dripped only when shaken.** A drip started 5 mm under the blade's line, and a drop within
-  2 cm of a held blade is caught by it, so the blade caught its own drips at once. Only a shake
-  moved the blade away fast enough. **Fix:** a drop doesn't land back on the blade it came from.
-* **Asked for:**
-  * **More when shaken:** where the blade's acceleration at the blood passes 45 m/s² (a shake or
-    a flick; a hand held still is under 15), wet blood flies off with the blade's own velocity
-    there, more the harder it is, and the blood there gets thinner.
-  * **Down the blade:** while the blade is tilted more than about 17° along its length, wet blood
-    starts runs now and then (about one every 1.25 s, at most 3 at once and 8 on a blade). Each
-    is a thin streak (5-8 mm) that grows along the blade's line towards the lower end, at up to
-    5 cm/s when upright and fresh, for 6-22 cm of blood. A streak stops at the end, or when it
-    has spent its blood or dried; it pauses while the blade is held level. A streak is drawn as
-    a capsule: the body's shader takes each splat's other end. The lowest wet point, often a
-    streak's end, is where it drips.
-  * **Wearing away:** blood on the blade and on the player dries over 90 s as before, then fades
-    out between 3 and 4 minutes after blood last got there (it was kept 20 minutes). The world's
-    decals still stay.
-
-## Frame rate (same scene, your eye size 4147×4406, emulated headset at 120 Hz)
-
-The scene: the bandit room, one bandit killed. **Before** with no gore. **After** with five limbs
-cut off one bandit at once (head, a forearm, a calf, an upper arm, a thigh). That gives 640
-decals (half of them pools), 13 runs down the walls at once, five stumps spurting, five severed
-pieces, and up to 300 drops in the air while it sprays. The After numbers are from the final
-build, with the spurts at full strength.
-
-| | Before | After (spraying, then at rest) |
-|---|---|---|
-| Game frames/s (unthrottled) | 207–224 | 182–209 |
-| Game's two eye renders, ms/frame | 2.3–2.4 | 2.6–3.0 |
-| Runtime frames (120 Hz) | 120.0/s, 0 late | 120.0/s, 0 late |
-| Runtime CPU, ms/frame | 0.4 (95% under 0.5–0.6) | 0.5 (95% under 0.6–0.7) |
-
-* **The game:** the extra 0.4 ms is the five pieces' clones. Each draws only the meshes that show
-  its limb. Before that fix the five cost 1.4 ms.
-* **The runtime:** blood costs about 0.1 ms of CPU, under 160 world ray casts a frame, and no
-  dropped frames. Decals, caps and drops are a few instanced draws per kind of blood (one per texture).
-* **The cap:** 3072 drops, 640 decals, 96 runs and 48 splats on the player, the oldest recycled.
+None. For tests, `GoreCut <bone> [standing]` (a console test line,
+`crates/oblivion/src/console.rs`) cuts a limb off the nearest creature as a killing blow would
+(`standing`: leaves it alive, to look at the stump on a body that stands).
 
 ## Decisions
 
-* **The game decides the cut.** The adapter asks the framework's rule right after the game's own
-  hit has landed. It needs the game's damage and whether the blow killed. Damage and power attacks
-  stay the melee agent's.
-* **Limbs come off only on a killing blow or a corpse.** This is Fallout's rule, and the one in
-  your spec. Oblivion's AI can't fight on with a missing arm. Severing without killing (VR
-  players love it; mods add it) isn't done.
-* **A head goes with its neck.** It's cut at the neck's base (`Bip01 Neck1`). Oblivion's head mesh
-  is skinned down to the clavicles, so a cut at the head bone left a cone of neck on the body.
-  Creatures without `Neck1` are cut at the head.
-* **How a limb is hidden:**
-  * on the body, every node under the cut bone is shrunk to nothing at the joint, written before
-    each eye's render (hands and feet are meshes of their own: they go whole);
-  * the piece is a clone of the creature's whole 3D (`NiObject::Clone`, controllers and collision
-    taken off for the copy), with every other bone shrunk away and only the meshes that show the
-    limb drawn.
-
-  So the piece wears exactly what the NPC wore, with its own face.
-* **The pieces are simulated by the runtime's physics,** not Havok. It's the same world collision
-  the game's Havok has, and it makes them grabbable for free, as Metro's props are.
-  Havok-simulated pieces would need Havok bodies made at runtime; that isn't worked out
-  yet.
-* **The stump caps** are a dome the runtime draws, textured with the game's own neck stump from
-  the Kvatch head pike (`clutter\kvatch\neck.dds`, the zombie's bone for dust). Oblivion has no
+- **The game decides the cut:** the adapter asks the rule right after the game's own hit, which
+  gives the damage and whether the blow killed. Damage and power attacks stay the game's.
+- **Limbs come off only on a killing blow or a corpse:** Fallout's rule, and the one in the spec.
+  Oblivion's AI can't fight on with a missing arm. Severing without killing (mods add it) isn't
+  done.
+- **A head goes with its neck:** Oblivion's head mesh is skinned down to the clavicles, so a cut at
+  the head bone left a cone of neck on the body. Creatures without `Neck1` are cut at the head.
+- **How a limb is hidden:** on the body, every node under the cut bone is shrunk to nothing at the
+  joint, written before each eye's render (hands and feet are meshes of their own: they go whole).
+  The piece is a clone of the creature's whole 3D (the game's own clone, controllers and collision
+  taken off the copy), every other bone shrunk away and only the meshes that show the limb drawn. So
+  it wears exactly what the NPC wore, with its own face.
+- **The clone keeps the body's blood decals:** each decal on the body's decal geometries is copied
+  onto the clone's through the game's own calls (and when the piece goes, taken off, let go of and
+  freed), since the game's clone copies the decal shader's property without its list and the shader
+  draws the first decal without checking.
+- **The pieces are the runtime's physics,** not Havok: the same world collision the game's Havok
+  has, and grabbable for free. Havok pieces would need Havok bodies made at run time, which the
+  adapter doesn't do.
+- **The stump caps** are a dome the runtime draws, textured with the game's own neck stump from the
+  Kvatch head pike (`clutter\kvatch\neck.dds`; the zombie's bone for dust): Oblivion has no
   gore-cap meshes.
-* **The blood art is all the game's:**
-  * splats: its blood decal atlas;
-  * splatters: the dungeons' `bloodsplatter01`;
-  * pools: `bloodstain01`;
-  * runs: the arena's drip streaks;
-  * drops: the spray's `blood01`;
-  * mist: `blood06`.
+- **The blood art is all the game's:** splats its blood decal atlas, splatters the dungeons'
+  `bloodsplatter01`, pools `bloodstain01`, runs the arena's drip streaks, drops the spray's
+  `blood01`, mist `blood06`.
+- **The torso's combat capsule ends at the chest** (`Spine2`) instead of the neck: its round end
+  covered the whole neck, so no blade could reach it.
+- **Body part ids are the capsule table's index,** so a hit says which bones it struck.
+- **Wolves, bears and rats can't lose limbs:** their combat body is one capsule. Zombies, skeletons
+  and other `Bip01`-limbed creatures can.
+- **Caps:** 3072 drops, 640 decals, 96 runs, 20 splats on the body and 28 on each held thing, the
+  oldest recycled. Blood costs the runtime about 0.1 ms of CPU a frame and at most 160 world ray
+  casts; decals, caps and drops are a few instanced draws per kind of blood.
 
-  Each creature's kind comes from what the game says it bleeds: its decal and spray. The lich's
-  is black, the will-o'-the-wisp's glows, the skeleton's is dust.
-* **The torso's combat capsule now ends at the chest** (`Spine2`) instead of the neck. Its round
-  end covered the whole neck, so no blade could reach it.
-* **Body part ids are now the capsule table's index**, so a hit says which bones it struck. This
-  touches `crates/oblivion/src/combat.rs`, which the melee agent also edits: merge with care.
-* **Test command:** `GoreCut <bone> [standing]` in the console test file. It cuts a limb off the
-  nearest creature: kills it first, or leaves it standing.
+## Not done / known issues
 
-## Not done
-
-* Severing without a kill, and a hand that drops its weapon (the game's disarm) when cut.
-* Bisection, gibs from blunt weapons, and wounds painted onto NPCs' skin. The game's own
-  hit decals on their meshes still appear.
-* Wiping or washing blood off a blade. It only dries and fades.
-* Severed pieces don't persist across loads or cell changes. They go with the body; the body's
+- Severing without a kill, and a hand dropping its weapon (the game's disarm) when cut.
+- Bisection, gibs from blunt weapons, and wounds painted onto NPCs' skin (the game's own hit decals
+  on their meshes still appear).
+- Wiping or washing blood off a blade: it only dries and fades.
+- Severed pieces don't persist across loads or cell changes: they go with the body, and the body's
   limbs come back when its 3D reloads.
-* Blood doesn't collide with NPCs or props in the air (only the world's static collision and the
-  player).
-* Blood isn't drawn into the game's HDR or bloom: the runtime draws it as it draws the body.
+- Blood doesn't collide with NPCs or props in the air, only the world's static collision and the
+  player.
+- Blood isn't drawn into the game's HDR or bloom: the runtime draws it as it draws the body.
+- **Never checked:** a real swing that cuts a leg or into a corpse (`GoreCut` did the legs); taking
+  a piece by its hand grip; blood running down a wall in a capture; the game's own spray at the
+  stumps in a capture; lighting outdoors and fog.
+
+## History
+
+Newest first.
+
+- **Playtest 3:** a crash 16 s after a head came off, and the sword dripped only when shaken. The
+  crash was in the adapter's own `combat::bones`, which walked into every child near a body's root,
+  meshes too (the game's blood decals among them), and read a mesh's fields as a node's children;
+  it now goes only into nodes, by the game's RTTI (the check in `engine.rs`). A drip started under
+  the blade's line and was caught by the blade at once; a drop no longer lands back on its own
+  blade. Asked for: more blood thrown off with a shake, runs down a tilted blade, and blood on the
+  blade and the player wearing away (it was kept 20 minutes).
+- **Playtest 2:** heads came off without a crash; the sword dripped a little past its point, from
+  nothing. The bloody band now stops at the blade's ends, and a drop landing on the blade leaves
+  its blood on the blade's line.
+- **Playtest 1** (the bandits restrained): the restraint held. A blow on top of the first bandit's
+  skull took nothing, by the rule. The second bandit's head came off and the game crashed in its
+  renderer (in the decal shader's pass): an earlier hit's blood decal was on its skin, and the clone
+  had the decal shader without its list. The clone now copies the decals.
