@@ -290,6 +290,8 @@ mod win {
     struct Pending {
         speaker: u32,
         line: u32,
+        /// Its voice's length.
+        ms: u32,
         how: String,
         text: String,
     }
@@ -897,7 +899,7 @@ mod win {
                         v.listener = Some((id, now + ENGAGED));
                     }
                 }
-                VL_SAY => v.queue.push_back(Pending { speaker: line.speaker, line: line.line, how: line.how().to_string(), text: line.text().to_string() }),
+                VL_SAY => v.queue.push_back(Pending { speaker: line.speaker, line: line.line, ms: line.duration_ms, how: line.how().to_string(), text: line.text().to_string() }),
                 VL_STOP => {
                     v.queue.clear();
                     if let Some(actor) = v.talking.take().and_then(|(id, _)| find(id)) {
@@ -908,8 +910,10 @@ mod win {
             }
         }
 
-        // The plugin's sentences, one after another as each ends.
-        if v.talking.is_none_or(|(_, until)| now >= until - 0.05)
+        // The plugin's sentences, one after another as each ends: by its voice's own length (the
+        // game's is a tenth of a second longer, its lip file's end padded), so a sentence cut in
+        // two at a pause joins up again with that pause as it was.
+        if v.talking.is_none_or(|(_, until)| now >= until)
             && let Some(next) = v.queue.pop_front()
         {
             v.talking = None;
@@ -918,7 +922,8 @@ mod win {
                     tracing::warn!("voice: no mouth shapes for line {}: the game's own flapping mouth", next.line);
                 }
                 let seconds = speak(actor, player, next.line, &next.how, &next.text);
-                v.talking = Some((next.speaker, now + seconds.max(0.2)));
+                let length = if seconds <= 0.0 { 0.2 } else if next.ms > 0 { next.ms as f64 / 1000.0 } else { seconds };
+                v.talking = Some((next.speaker, now + length));
                 v.listener = Some((next.speaker, now + seconds + ENGAGED));
             }
         }

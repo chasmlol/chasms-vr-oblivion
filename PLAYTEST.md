@@ -66,7 +66,7 @@ voice plugin (what people were told since your last save goes with it).
    with the speaker; up and down still go through the topics. In any other menu the stick is the
    menu's, as before.
 7. **Their name.** Look at someone: the card with their name is under their chin now, not over
-   their face.
+   their face, and the talk icon sits just over the card, where it was before.
 8. **Memory.** Tell someone something ("My name is ..., I'm looking for my brother."), save (a new
    save), talk a bit more, then load that save and ask them what you told them: they remember what
    was said before the save, not after.
@@ -101,6 +101,15 @@ Known for now:
 - The game's dialogue menu speaks in 2D, centred; in the world (theirs, and the game's own greetings)
   voices are 3D, a few dB quieter at the same loudness. If they're still quiet at 4, the game's
   own Voice slider at full (and its effects or music a little lower) is the rest of the room.
+- With acting lines out on, Breeze makes their voice a little slower than they speak it while the
+  game renders (your last run: 1.0 to 1.6 times as long as the voice lasts). So in a long answer
+  they now and then wait for the rest. They wait at a pause (a comma, a full stop), and no word is
+  cut in two any more. With acting off (the Voice tab), Breeze runs about twice as fast: no waits,
+  and they start sooner.
+- From the end of what you say to their first word is about 3 s (2.8 to 4.9 s in your last run):
+  the mic's pause 0.3 s, speech to text 0.05 to 0.15 s, DeepSeek's first sentence 0.5 to 0.8 s,
+  Breeze's first sound 0.5 to 0.8 s (1.4 to 2.4 s for a voice it hasn't made since it started),
+  and the first piece of voice made whole, a second or so, before the game can play it.
 - Someone walking somewhere keeps walking while they talk (they look at you, they don't stop).
 - Their own greeting ("Hello", as the game has people greet you when you pass) can talk over a line.
 - The mic doesn't hear you while someone's talking, and you can't cut them off: the Quest's
