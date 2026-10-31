@@ -5,8 +5,9 @@ Save: rustvr-city
 Crouch down a little in real life and you're in Oblivion's own Sneak: its sneak eye, its detection,
 sneak attacks, Sneak training, pickpocketing. Stand back up and you're out of it.
 
-- **How far:** the RustVR menu's Comfort tab, **Stealth crouch amount**: 8 cm by default (it was a
-  35 cm duck, called "Crouch depth"). "Duck to crouch" still turns it on and off.
+- **How far:** the RustVR menu's Comfort tab, **Stealth crouch amount**: 8 cm by default, 5 to
+  40 cm (it was a 35 cm duck, called "Crouch depth"). Drag along the slider itself; the value is in
+  its label. "Duck to crouch" still turns it on and off.
 - **Crouched for real, the view stays where your head is.** Oblivion's sneak lowers its own camera
   35 cm; that no longer pulls your view down on top of your own crouch (and a deep duck no longer
   throws the view 1.8 m up).
