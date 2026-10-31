@@ -507,6 +507,7 @@ pub fn publish() {
         }
         a.write_actors(&table);
         crate::grabs::publish(a, &table, &k.actors);
+        crate::spells::publish_rules(a);
         if let Some((s, by_id)) = spells_now {
             let mut key: Vec<(u32, u32, u32)> = s.spells[..s.count as usize].iter().map(|x| (x.id, x.flags, x.cost as u32)).collect();
             key.push((s.magicka as u32, s.magicka_max as u32, s.picks));

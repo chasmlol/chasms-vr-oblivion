@@ -30,6 +30,12 @@
 //!   put down first): the HUD's icon, the menu's sound.
 //! * **A failure** ([`failed`]): the trigger pulled on a spell the game won't cast now: its message
 //!   and its school's failure sound, as the start of its casting animation gives them.
+//! * **Telekinesis** ([`telekinesis_rules`]): while the game's Telekinesis is on the player (its
+//!   actor value, its magnitude in feet), the hands' telekinesis takes the gravity gloves' place
+//!   (the runtime's own): point an open hand at a thing within the spell's
+//!   reach, grip to catch it, and it floats where the hand points; the trigger pulls it in, a flick
+//!   throws it. Things only, not creatures, as the game's own moves no one. When the spell ends,
+//!   what's held falls and the gloves are back.
 //! * **A staff** ([`cast_staff`]): the game's staff cast (0x5E4920: the enchantment's cost from the
 //!   staff's charge, cast, or "not enough charge"), from its tip.
 
@@ -140,6 +146,10 @@ const QUICK_KEYS: usize = 0x00B3_B440;
 const AV_MAGICKA: u32 = 9;
 const MAX_MODIFIERS: usize = 0x204;
 const GET_BASE_AV: usize = 0x005F_1910;
+/// The player's Telekinesis (an actor value: the spell's magnitude in feet while it's on), and a
+/// foot in metres.
+const AV_TELEKINESIS: u32 = 60;
+const FOOT: f32 = 0.3048;
 /// The game's cast animations to their release (Hit) and on to their end, by range: self
 /// (`castself.kf`), touch, target (seconds).
 const CAST_TIME: [f32; 3] = [0.367, 0.267, 0.400];
@@ -155,6 +165,36 @@ struct Known {
 }
 
 static KNOWN: Mutex<Option<Known>> = Mutex::new(None);
+
+/// The game's say on the hands' telekinesis, into `rules` (the game's melee rules for the runtime):
+/// on while its Telekinesis is on the player, as far as the spell reaches, things only.
+pub fn telekinesis_rules(rules: &mut MeleeRules) {
+    let player = engine::player();
+    let feet = if player != 0 { crate::combat::actor_value(player, AV_TELEKINESIS) } else { 0 };
+    rules.flags |= RULES_SAYS_TELEKINESIS | RULES_TK_THINGS | if feet > 0 { RULES_TELEKINESIS } else { 0 };
+    rules.tk_reach = if feet > 0 { feet as f32 * FOOT } else { 0.0 };
+}
+
+/// Once a game frame: the game's melee rules for the runtime, written when they change (only
+/// telekinesis's so far: whoever writes the rest folds [`telekinesis_rules`] in).
+pub fn publish_rules(a: &rustvr_adapter::Adapter) {
+    static SENT: Mutex<Option<(u32, u32)>> = Mutex::new(None);
+    let mut rules: MeleeRules = bytemuck::Zeroable::zeroed();
+    telekinesis_rules(&mut rules);
+    let key = (rules.flags, rules.tk_reach.to_bits());
+    let mut sent = SENT.lock().unwrap();
+    if *sent == Some(key) {
+        return;
+    }
+    if a.write_melee_rules(&rules) {
+        if rules.flags & RULES_TELEKINESIS != 0 {
+            tracing::info!("spells: the game's Telekinesis is on the player: the hands' telekinesis, {:.1} m", rules.tk_reach);
+        } else if sent.is_some() {
+            tracing::info!("spells: the game's Telekinesis is off: the gravity gloves again");
+        }
+        *sent = Some(key);
+    }
+}
 
 /// The player's spell with form id `id` (its `SpellItem`), as last published.
 pub fn spell_item(id: u32) -> Option<usize> {

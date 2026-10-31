@@ -104,8 +104,11 @@ The design and its reasons are in `docs/research/spells.md`.
     * summons, which appear where you look;
     * Turn Undead on the zombies, Paralyze, Soul Trap, Open Easy Lock on a locked door, and the
       lights.
-    * Telekinesis only half works in VR: a quick tap takes a thing where you look, but nothing can
-      push it yet.
+    * **Telekinesis by hand.** Cast Telekinesis (it's on you for a while). Point an open hand at
+      something lying about within the spell's reach (about 9 m for the 30-foot one), grip to catch
+      it, and it floats where your hand points. The trigger pulls it in, and a flick of the hand
+      while letting go throws it. It moves things, not people, like the game's own. When the spell
+      runs out, what you hold falls and the gravity gloves are back.
     * Chameleon and Shadow Shape (invisibility) don't make your own body see-through yet.
 
 Things worth telling me about:
