@@ -34,8 +34,12 @@ Pick one at the top of the Studio tab. Change anything by hand and it becomes "c
 
 **For viewers**, whatever the look:
 
-- **Snap turns, snap crouches and recentres glide** over a quarter of a second instead of cutting.
-  This is on by default.
+- **Snap turns, snap crouches and recentres turn as a head would** instead of cutting. On by
+  default.
+  - The turn gathers speed, swings through, and lands with a little overshoot.
+  - A 45 degree snap settles in about a third of a second.
+- **No black at the edges**: where a fast turn makes the desktop view see past the game's picture,
+  the picture's edge is stretched out over the gap. It's a smear, but not black. On by default.
 - **The game's HUD where a flat player has it**: the bars, the compass and the subtitles at the
   screen's edges, from the game's own picture of them. It's off by default.
   - The headset keeps the HUD where the menus feature floats it.
@@ -47,13 +51,20 @@ Watch the monitor (or OBS) while you play.
 
 1. **Snap turns.** Flick the right stick.
    - The headset snaps.
-   - The desktop view should pan through the turn smoothly, the world turning round your body,
-     with no cut and no black edge.
+   - The desktop view should turn through it as your head would: it gathers speed, swings, and
+     settles with a slight overshoot. The world turns round your body, with no cut and no black
+     edge.
+   - Flick twice quickly: it should become one longer turn that keeps its speed.
+   - The slider "A 45 degree snap settles in" sets how long it takes. **Tell me** if it's too quick
+     or too lazy.
    - Try it in Clean and in Cinematic: in Cinematic the pan is motion-blurred.
 2. **Recentre** (the menu's Recenter button, or after a load). It should glide, not cut. A step to
    the side dissolves rather than pans.
-3. **Turning your head fast.** With motion blur on (Cinematic, Hyper-real, Action), the view should
-   smear as a camera's pan does, more at the edges than the middle.
+3. **Turning your head fast.**
+   - With motion blur on (Cinematic, Hyper-real, Action), the view should smear as a camera's pan
+     does, more at the edges than the middle.
+   - On the side you turn towards, the desktop view runs past the game's picture for a moment. It
+     should show a stretched smear of the picture's edge there, never a black band.
 4. **Walking, running, a horse.** In Cinematic and Action, the view widens as you go faster and
    eases back as you stop.
    - Galloping should widen it most.
@@ -90,7 +101,8 @@ test range, not in Oblivion.
 captured:
 
 - each look;
-- a fast head turn, two snap turns (captured frame by frame through the glide);
+- a fast head turn (with the edge stretch off and on);
+- two snap turns (captured frame by frame through the turn);
 - a walk and a sprint, a sword swung across the body, the rifle fired in bursts;
 - the flat HUD, over Clean and over Cinematic.
 
