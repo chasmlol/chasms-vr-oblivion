@@ -74,6 +74,29 @@ const EFFECT_SETTINGS: usize = 0x00B3_3508;
 /// A script effect's code.
 pub const SCRIPT_EFFECT: u32 = u32::from_le_bytes(*b"SEFF");
 
+/// Every one of the game's magic effects (`EffectSetting`s).
+pub fn effect_settings() -> Vec<usize> {
+    let buckets = mem::at::<u32>(EFFECT_SETTINGS + 4).unwrap_or(0) as usize;
+    let table = mem::deref(EFFECT_SETTINGS + 8);
+    let mut out = Vec::new();
+    if table == 0 {
+        return out;
+    }
+    for b in 0..buckets.min(4096) {
+        let mut entry = mem::deref(table + b * 4);
+        let mut guard = 0;
+        while entry != 0 && guard < 256 {
+            guard += 1;
+            let e = mem::deref(entry + 8);
+            if e != 0 {
+                out.push(e);
+            }
+            entry = mem::deref(entry);
+        }
+    }
+    out
+}
+
 /// The game's magic effect (`EffectSetting`) with this code, or 0.
 pub fn effect_setting(code: u32) -> usize {
     let buckets = mem::at::<u32>(EFFECT_SETTINGS + 4).unwrap_or(0) as usize;

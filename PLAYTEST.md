@@ -94,9 +94,10 @@ The design and its reasons are in `docs/research/spells.md`.
 10. **Holding something.** Take the torch or the sword in your left hand: the spell's art goes.
     Let go of it: the spell is back in that hand.
 11. **Bound weapons.** Put **Bound Sword** (or Bound Dagger) in a hand from the wheel and cast it:
-    the sword is made straight in that hand, by its grip, rather than at your hip. When the spell
-    runs out, or is dispelled, it's gone from the hand. If you let go of it, it falls like any
-    sword for now.
+    the sword is made straight in that hand, by its grip, rather than at your hip. Squeeze the grip
+    to take hold of it. Let go of it anywhere but a slot and it **goes back to your hip** (a bound
+    bow to your back, a bound shield over your shoulder), since the game never drops a bound item.
+    Draw it again from there as normal. When the spell runs out, or is dispelled, it's gone.
 12. **The rest of the spells.** Use the wheel's pages to try the rest:
     * the big ones, whose aim should feel heavier (Immolating Blast, Lightning Storm);
     * area spells (Fire Ball, Ice Storm);
@@ -136,8 +137,9 @@ the magicka is spent and comes back.
   * The aim, on the emulated headset with its pointing ray 40° above its grip (as a Touch
     controller's) and the aim help off: the controller pointed at a dummy, and the bolt went
     exactly along the ray.
-  * A bound weapon on the range: Bound sword taken from the wheel's second page and cast, and the
-    range's sword is made in that hand (on the emulated headset).
+  * A bound weapon on the range, on the emulated headset: Bound sword taken from the wheel's second
+    page and cast, and the range's sword is made in that hand. Squeezed and let go in front, it went
+    back to the left hip.
   * The framework part, on the range in the headless `spell` scenario: one charged bolt cast from
     a controller pointed at the dummy, the aim help puts it on the dummy, it strikes, and
     a tap isn't a cast.

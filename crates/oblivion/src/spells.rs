@@ -71,6 +71,8 @@ const BOUND_ARMOUR: u32 = 0x2_0000;
 const BOUND_SHIELD: u32 = u32::from_le_bytes(*b"BASH");
 /// A bound thing the hand conjured is put in it if the game equips it this soon after (seconds).
 const CONJURE_WITHIN: f64 = 3.0;
+/// `EffectSetting`'s data: a bound effect's item (the weapon or armour it equips).
+const SETTING_ITEM: usize = 0x60;
 /// The types a hand casts.
 const SPELL: u32 = 0;
 const POWER: u32 = 2;
@@ -417,6 +419,30 @@ pub fn conjured_into(what: Bound) -> u32 {
         Some((hand, until)) if crate::link::now() <= until => hand.min(1) + 1,
         _ => 0,
     }
+}
+
+/// Whether `form` (a weapon or an armour) is a bound one: the item a bound effect of the game's
+/// equips (its `EffectSetting` data, as a form or its id).
+pub fn is_bound_item(form: usize) -> bool {
+    static ITEMS: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+    if form == 0 {
+        return false;
+    }
+    let mut items = ITEMS.lock().unwrap();
+    if items.is_empty() {
+        for e in crate::combat::effect_settings() {
+            if mem::at::<u32>(e + SETTING_FLAGS).unwrap_or(0) & (BOUND_WEAPON | BOUND_ARMOUR) != 0
+                && let Some(item) = mem::at::<u32>(e + SETTING_ITEM).filter(|&i| i != 0)
+            {
+                items.push(item);
+            }
+        }
+        if !items.is_empty() {
+            tracing::info!("spells: {} bound weapons and armour among the game's effects", items.len());
+        }
+    }
+    let id = mem::at::<u32>(form + FORM_ID).unwrap_or(0);
+    items.iter().any(|&i| i == form as u32 || (id != 0 && i == id))
 }
 
 /// The bound things a spell's list makes on the caster: a weapon, a shield.

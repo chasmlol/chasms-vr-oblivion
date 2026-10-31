@@ -10,7 +10,8 @@
 //! meets blows, it doesn't hit), and a block with it is the game's block with its shield.
 //!
 //! A bound weapon or shield a hand conjured (`crate::spells::conjured_into`) is made in that hand
-//! instead, by its grip.
+//! instead, by its grip. A bound one is kept (`OBJF_KEPT`): let go anywhere but a slot, it goes back
+//! to where it hangs (the game never drops a bound item).
 //!
 //! A staff casts: held in either hand, its trigger charges its enchantment at its tip and letting go
 //! casts it from there along the staff (`OBJF_CASTS`): the game's own staff cast, its charge used
@@ -348,9 +349,12 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             d.replaces = copy;
             tracing::info!("weapons: {} takes the place of its copy {copy:#x} in the hand", e.name);
         }
-        // (A bound bow the hand just conjured: made in that hand.)
+        // (A bound bow: made in the hand that just conjured it, kept on the back when let go.)
         if let Some(d) = descs.iter_mut().find(|d| d.id == WEAPON_ID) {
             d.into_hand = crate::spells::conjured_into(crate::spells::Bound::Weapon);
+            if crate::spells::is_bound_item(e.form) {
+                d.flags |= OBJF_KEPT;
+            }
         }
         for d in descs {
             objects.descs[objects.count as usize] = d;
@@ -362,8 +366,12 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
             Ok(model) => {
                 let mut d = object_desc(&model, e, &key, WEAPON_ID);
                 d.spawn_seq = seq;
-                // (A bound weapon the hand just conjured: made in that hand.)
+                // (A bound weapon: made in the hand that just conjured it, and kept, back to where it
+                // hangs when it's let go: the game won't drop it.)
                 d.into_hand = crate::spells::conjured_into(crate::spells::Bound::Weapon);
+                if crate::spells::is_bound_item(e.form) {
+                    d.flags |= OBJF_KEPT;
+                }
                 if let Some((_, copy)) = REPLACING.lock().unwrap().take_if(|(form, _)| *form == e.form) {
                     d.replaces = copy;
                     tracing::info!("weapons: {} takes the place of its copy {copy:#x} in the hand", e.name);
@@ -402,6 +410,9 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
                 let (mut d, w) = shield(&model, &key, SHIELD_ID);
                 d.spawn_seq = seq;
                 d.into_hand = crate::spells::conjured_into(crate::spells::Bound::Shield);
+                if shield_now.as_ref().is_some_and(|(form, _)| crate::spells::is_bound_item(*form)) {
+                    d.flags |= OBJF_KEPT;
+                }
                 let (i, k) = (objects.count as usize, melee.count as usize);
                 objects.descs[i] = d;
                 objects.count += 1;
