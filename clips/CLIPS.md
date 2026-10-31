@@ -27,6 +27,7 @@ until then.
 | Bat | Shot | Build | Look |
 |---|---|---|---|
 | `00-check.bat` | Check the build and the desktop view: Lake Rumare's shore at 1 pm | trailer | Cinematic |
+| `01-face-sculpt.bat` | Shaping your face by hand: a new game, the prison cell's race menu, the big copy of your head and the mirror; pull the nose long, the ears out | trailer | Cinematic |
 
 ## The looks (Studio tab)
 
