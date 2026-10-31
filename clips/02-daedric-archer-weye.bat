@@ -10,7 +10,8 @@ rem game puts you coming out of it, facing down into the hamlet (its houses, the
 rem guard, people about) at 1 pm in clear weather. The Daedric cuirass, greaves, boots and gauntlets
 rem are put on (the iron taken off), the Daedric Bow goes on your back and 100 Daedric Arrows in your
 rem quiver; Strength 100 so the armour never weighs you down. Your RustVR settings are left as they are.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-archery -At WawnetInnExterior -Give "0003635B 1,0003635A 1,00036359 1,00036358 1,00035E7C 1,0001EFD3 100" -Commands "player.setpos x -459|player.setpos y 63928|player.setpos z 1125|player.setangle z 179|set gamehour to 13|fw 00038EEE|player.setav strength 100|player.removeitem 0001C6D1 1|player.removeitem 0001C6D2 1|player.removeitem 0001C6D0 1|player.equipitem 0003635B|player.equipitem 0003635A|player.equipitem 00036359|player.equipitem 00036358|player.equipitem 00035E7C|EquipAll 0001EFD3"
+rem Every spell and power is taken away (RemoveAllSpells): nothing in your hands but what you take.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-archery -At WawnetInnExterior -Give "0003635B 1,0003635A 1,00036359 1,00036358 1,00035E7C 1,0001EFD3 100" -Commands "player.setpos x -459|player.setpos y 63928|player.setpos z 1125|player.setangle z 179|set gamehour to 13|fw 00038EEE|player.setav strength 100|player.removeitem 0001C6D1 1|player.removeitem 0001C6D2 1|player.removeitem 0001C6D0 1|player.equipitem 0003635B|player.equipitem 0003635A|player.equipitem 00036359|player.equipitem 00036358|player.equipitem 00035E7C|EquipAll 0001EFD3|RemoveAllSpells"
 if errorlevel 1 goto failed
 echo.
 echo Connect the headset in Virtual Desktop if it isn't: RustVR waits for it, and the desktop view

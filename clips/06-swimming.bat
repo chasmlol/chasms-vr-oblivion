@@ -8,7 +8,8 @@ rem Installs the trailer build (main, <builds>\trailer) and boots rustvr-swim: f
 rem Rumare just south of the Imperial Bridge, east of Weye, at 1 pm, the weather held clear (the save's
 rem can turn to rain). The rocks and the bridge are to the north, open water east and south. Your
 rem RustVR settings are left as they are.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-swim -Commands "set gamehour to 13|fw 00038EEE"
+rem Every spell and power is taken away (RemoveAllSpells): nothing in your hands but what you take.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-swim -Commands "set gamehour to 13|fw 00038EEE|RemoveAllSpells"
 if errorlevel 1 goto failed
 echo.
 echo Connect the headset in Virtual Desktop if it isn't: RustVR waits for it, and the desktop view

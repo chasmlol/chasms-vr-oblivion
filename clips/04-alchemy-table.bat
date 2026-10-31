@@ -9,7 +9,8 @@ rem farmhouse, standing in its entrance), then sets out one table on your right 
 rem the Journeyman mortar and pestle, alembic, calcinator and retort, Flax Seeds and Steel-Blue
 rem Entoloma Cap for Restore Magicka on the left, Boar Meat and Venison for Restore Health on the
 rem right. Your RustVR settings are left as they are.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-alchemy -Commands "RunFile %~dp0alchemy-table.txt"
+rem Every spell and power is taken away (RemoveAllSpells): nothing in your hands but what you take.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-alchemy -Commands "RunFile %~dp0alchemy-table.txt|RemoveAllSpells"
 if errorlevel 1 goto failed
 echo.
 echo Connect the headset in Virtual Desktop if it isn't: RustVR waits for it, and the desktop view

@@ -7,7 +7,8 @@ set RUSTVR_DESKTOP_VIEW=1
 rem Installs the trailer build (main, <builds>\trailer) and starts a new game, its film skipped:
 rem the prison cell, the race menu opening by itself, as a player starting out has it. Your RustVR
 rem settings are left as they are.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -NewGame
+rem Every spell and power is taken away (RemoveAllSpells): nothing in your hands but what you take.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -NewGame -Commands "RemoveAllSpells"
 if errorlevel 1 goto failed
 echo.
 echo Connect the headset in Virtual Desktop if it isn't: RustVR waits for it, and the desktop view

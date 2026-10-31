@@ -8,7 +8,8 @@ rem Installs the trailer build (main, <builds>\trailer) and boots rustvr-horse: 
 rem outside its stables, your own horse (My Chestnut Horse, yours) about two metres behind you, a
 rem little to the left; the paddock's two are the stable's. The hour set to 7 pm, the weather held
 rem clear. Your RustVR settings are left as they are.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-horse -Commands "set gamehour to 19|fw 00038EEE"
+rem Every spell and power is taken away (RemoveAllSpells): nothing in your hands but what you take.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-horse -Commands "set gamehour to 19|fw 00038EEE|RemoveAllSpells"
 if errorlevel 1 goto failed
 echo.
 echo Connect the headset in Virtual Desktop if it isn't: RustVR waits for it, and the desktop view

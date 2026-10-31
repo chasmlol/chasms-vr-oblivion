@@ -6,7 +6,8 @@ rem The trailer is recorded from the desktop view: tools\oblivion.ps1 turns it o
 set RUSTVR_DESKTOP_VIEW=1
 rem Installs the trailer build (main, <builds>\trailer) and boots Oblivion into rustvr-weye: open
 rem ground on Lake Rumare's shore, at 1 pm in clear weather. Your RustVR settings are left as they are.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-weye -Commands "set gamehour to 13|fw 00038EEE"
+rem Every spell and power is taken away (RemoveAllSpells): nothing in your hands but what you take.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-weye -Commands "set gamehour to 13|fw 00038EEE|RemoveAllSpells"
 if errorlevel 1 goto failed
 echo.
 echo Connect the headset in Virtual Desktop if it isn't: RustVR waits for it, and the desktop view
