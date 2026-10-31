@@ -1,6 +1,6 @@
-# Playtest: the desktop view's effects studio, and its bob as you walk
+# Playtest: the desktop view's effects studio, its bob as you walk, its zoom as you aim
 
-Save: rustvr-weye
+Save: rustvr-archery
 
 The desktop view (the window on the monitor, for recording and streaming) gets a studio of
 effects only it shows. They'd make you sick in a headset, and they make footage look filmed. The
@@ -10,15 +10,19 @@ Everything is in the RustVR menu's new **Studio** tab, and it's saved with the s
 
 - **No black bars:** the letterbox is gone, as you asked after the first look.
 - **The view bob branch is merged in here:** the desktop view bobs as you walk (below).
+- **The aim zoom branch is merged in here too:** the desktop view zooms in while you aim a bow or a
+  gun (below).
 - **The desktop camera's own settings** sit at the top of the Studio tab's Camera section:
   - its field of view;
+  - its zoom while you aim;
   - the overscan;
   - the bob.
 - **The right stick scrolls the RustVR menu** (any tab, wherever the laser points), as it already
   scrolls the game's menus.
 
-The save is Weye's open ground on Lake Rumare's shore: room to walk, run and jump, and water to
-swim in, for the bob as well as the effects.
+The save is Weye's open ground on Lake Rumare's shore at 1 pm, with an Iron Bow equipped and 168
+Iron Arrows. There's room to walk, run and jump, water to swim in, and a bow to aim: for the bob,
+the zoom and the effects.
 
 How the studio's built and why: `framework/docs/research/desktop-fx.md`. The bob's research:
 `docs/research/view-bob.md`.
@@ -101,6 +105,27 @@ desktop view):
     and your hands stay with the camera, as a flat game's arms do.
   - A landing's dip no longer drops the camera into your chest.
 
+## The zoom as you aim (merged from the aim zoom branch)
+
+The desktop view keeps its field of view until you aim. Then it eases down to the **aiming field of
+view (65 degrees by default)**, and eases back out when you stop. It's the same view narrowed: no
+scope picture, no crop. The headset's view never changes.
+
+- **What counts as aiming:**
+  - a gun with its sights lined up at your aiming eye (up to 75 cm ahead of it);
+  - a bow drawn past half, with the string hand at your cheek or the corner of your mouth and the
+    bow arm out.
+- **It doesn't zoom:**
+  - when a gun sweeps past your face;
+  - when you hold a gun at your eye but look well away from it;
+  - for a half draw, or a full draw at your chest.
+- **A burst keeps it zoomed** through the whole magazine, and for half a second after.
+- **While zoomed**, the desktop camera is steadied more, as far as the view is narrowed.
+- **In the Studio tab**, under Camera: "Zooms in while you aim" (on), "Aiming field of view" (65),
+  "Aiming zoom: in over" (0.25 s) and "out over" (0.33 s).
+- **With a look's own lens** (Cinematic's 90 degrees), aiming still narrows to exactly the aiming
+  field of view. The speed widening fades while you aim, and the bob is damped.
+
 ## What to try
 
 Watch the monitor (or OBS) while you play.
@@ -143,7 +168,14 @@ Watch the monitor (or OBS) while you play.
    - Watch the recording, and check the headset never bobs.
    - With the game's own, walking is barely there; running, landing and swimming show it.
    - **Tell me** how each looks, and whether the strength should be different by default.
-10. **The flat HUD.** Studio tab, "The game's HUD on the screen where a flat player has it".
+10. **The zoom.**
+    - Take the bow off your back (left hand over the left shoulder) and an arrow over the right
+      shoulder. Nock it and draw to your cheek: the desktop view narrows.
+    - Hold it, look round, and loose: the view eases back out after the shot.
+    - Draw without bringing your hand to your face: no zoom.
+    - Try it in Cinematic too: it zooms to the same aiming field of view.
+    - **Tell me** whether 65 feels right for Oblivion's bows, or you'd rather have more or less.
+11. **The flat HUD.** Studio tab, "The game's HUD on the screen where a flat player has it".
    - The health bars, the compass and the effects should sit at the bottom of the desktop view, at
      about the size Oblivion has them on a flat screen.
    - Subtitles should sit low in the middle.
@@ -151,13 +183,14 @@ Watch the monitor (or OBS) while you play.
    - All of them are crisp, over any effects.
    - Open a menu: the HUD goes and the menus float in the world as before.
    - **Tell me** if anything is the wrong size or in the wrong place.
-11. **Your own mix.** Every effect has its own switch and strengths below the looks.
+12. **Your own mix.** Every effect has its own switch and strengths below the looks.
     - Colour grades: teal and orange, bleach bypass, warm film, body cam, noir.
     - LUTs: put `.cube` files in `%LOCALAPPDATA%\RustVR\luts` and they show in the tab.
 
-12. **The menu.** Open the RustVR menu and push the right stick forward and back: the tab
+13. **The menu.** Open the RustVR menu and push the right stick forward and back: the tab
     scrolls, wherever the laser points.
-    - The Studio tab's Camera section has the desktop field of view, the overscan and the bob.
+    - The Studio tab's Camera section has the desktop field of view, the aim zoom, the overscan
+      and the bob.
     - The field of view slider moves the look's own lens where it has one (and the look becomes
       custom). In Clean it's your own.
 
@@ -229,6 +262,9 @@ Notes for merging this branch:
 - **The view bob is merged in** (framework and adapter), at your word. Its bob settings moved from
   the Display tab to the Studio tab's Camera section. The desktop field of view and the overscan are
   on both tabs (the Display tab's field of view stays where the aim zoom's lines follow it).
-- **The aim zoom isn't merged.** It still merges cleanly. Its settings belong in the Studio tab's
-  Camera section too; on its branch they're on the Display tab.
+- **The aim zoom is merged in too** (framework and adapter), at your word.
+  - Its settings and the desktop field of view moved from the Display tab to the Studio tab's
+    Camera section.
+  - With a look's lens, aiming still reaches the aiming field of view.
+  - Its range has the bow on your back.
 - **The protocol** has the view bob's `GameState::view_bob`, and nothing of the studio's.
