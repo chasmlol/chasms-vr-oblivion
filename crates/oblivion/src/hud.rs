@@ -45,8 +45,8 @@
 //! | the health, magicka and fatigue bars, the weapon and the spell | `hud_main_menu.xml` | over the inside of the off-hand wrist while its palm is turned up |
 //! | the compass | `hud_main_menu.xml` | over the bars |
 //! | the spells and potions working on the player | `hud_main_menu.xml` | over the compass |
-//! | what the reticle can activate (its crosshair is hidden, [`crate::reticle`]; nothing for a thing that can be taken until a hand has it), the sneak eye | `hud_reticle.xml` | where the head looks |
-//! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing, for a person, a door, a container (not a thing that can be taken); over each hand's thing while hands have them (a picture of the card for each, `HudLayout::card_of`; a thing under the fingers in a pocket too) |
+//! | what the reticle can activate (its crosshair is hidden, [`crate::reticle`]; nothing for a thing that can be taken until a hand has it), the sneak eye | `hud_reticle.xml` | where the head looks (on a person, lower with their card) |
+//! | the card of what it's on (name and numbers) | `hud_info_menu.xml` ([`crate::hud_info`]) | under that, just in front of the thing, for a person (lower, under their chin), a door, a container (not a thing that can be taken); over each hand's thing while hands have them (a picture of the card for each, `HudLayout::card_of`; a thing under the fingers in a pocket too) |
 //! | a foe's health | `hud_reticle.xml` | over the foe |
 //! | spoken lines | `hud_subtitle_menu.xml` | the caption strip |
 //! | the breath meter, under water | `breath_menu.xml` ([`crate::swim`]) | where the game has it, at the top of the view |
@@ -95,6 +95,10 @@ pub const LIFT: f32 = 0.02;
 pub const GAP: f32 = 0.018;
 /// A margin round each piece's box (the game's units), so nothing it draws is cut at its edge.
 pub const MARGIN: f32 = 3.0;
+
+/// How much lower a person's card, and the talk icon over it, float than a thing's (lines of the
+/// game's text): under their chin at talking distance, not over the face looked at.
+pub const PERSON_CARD_DROP: f32 = 6.0;
 
 /// The pieces' places in their group from their boxes on the screen (`[x0, y0, x1, y1]`, the game's
 /// units, `screen` wide and high): the first in the middle, the others where the game has them
@@ -182,7 +186,7 @@ mod win {
     const MENU_STATS: u32 = 0x3EB;
     const MENU_HUD: u32 = 0x3EC;
     const MENU_CONTAINER: u32 = 0x3F0;
-    const MENU_DIALOG: u32 = 0x3F1;
+    const MENU_DIALOG: u32 = crate::menus::MENU_DIALOG;
     const MENU_SUBTITLES: u32 = 0x3F2;
     const MENU_PAUSE: u32 = 0x3F5;
     const MENU_LOCKPICK: u32 = 0x3F6;
@@ -885,8 +889,12 @@ mod win {
         let quiet = crate::hud_info::quiet();
         let icons: &'static [From] = if quiet { &[From::Drawn("hudreticle_sneak")] } else { &[From::Drawn("hudreticle_reticle"), From::Drawn("hudreticle_sneak")] };
         let reticle = piece_box(trees.get(RETICLE), &Piece::of(icons, false)).filter(|b| !under(*b));
+        // (A person's card a few lines lower, under their chin: not over the face looked at; the
+        // talk icon over it as ever, with it.)
+        let chin = if crosshair != 0 && is_actor(crosshair) { PERSON_CARD_DROP * l.text_height } else { 0.0 };
         if let Some((b, uv)) = reticle.and_then(|b| Some((b, tiles::uv_of(b, screen, MARGIN)?))) {
-            l.push(HudElement { role: HUD_GAZE, uv, offset: offset(b), ..Default::default() });
+            let [x, y, _] = offset(b);
+            l.push(HudElement { role: HUD_GAZE, uv, offset: [x, y - chin, 0.0], ..Default::default() });
         }
         // (What they're about: they float just in front of it, a person's head or a thing's bound.)
         if crosshair != 0
@@ -903,7 +911,7 @@ mod win {
             } else if quiet {
                 // (Its card comes once a hand has it: a card for every thing looked at is too much.)
             } else {
-                let below = reticle.map_or(0.0, |r| (r[3] - r[1]) * 0.5 / h) + (uv[3] - uv[1]) * 0.5 + 0.01;
+                let below = reticle.map_or(0.0, |r| (r[3] - r[1]) * 0.5 / h) + (uv[3] - uv[1]) * 0.5 + 0.01 + chin;
                 let above_middle = reticle.map_or([0.0; 3], offset);
                 l.push(HudElement { role: HUD_GAZE, uv, offset: [0.0, above_middle[1] - below, 0.0], ..Default::default() });
             }

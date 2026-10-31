@@ -762,7 +762,13 @@ mod win {
             match (race_menu.is_some(), *stood) {
                 (true, Some(s)) => s,
                 _ => {
-                    let s = (game.eye(), game.look_yaw());
+                    // (Crouched for real, without the game's sneak drop: `camera::hold_sneak_drop`.)
+                    static HOLDING: Mutex<bool> = Mutex::new(false);
+                    let drop = hooks::guard("sneak drop", None, camera::sneak_drop).unwrap_or(glam::Vec3::ZERO);
+                    let body = link::last().is_some_and(|s| s.frame.intents.crouch > 0.0);
+                    let mut holding = HOLDING.lock().unwrap();
+                    *holding = camera::hold_sneak_drop(*holding, body, drop.length());
+                    let s = (if *holding { game.eye() - drop } else { game.eye() }, game.look_yaw());
                     if race_menu.is_none() {
                         *stood = Some(s);
                     }
@@ -774,7 +780,8 @@ mod win {
         let recenter = crate::worldmenu::take_recenter();
         // The game's own bob, as its camera sees it (none in the race menu or the main menu's place:
         // its camera isn't the player's eyes).
-        // Its posture left out: where its camera has sat lately isn't a bob (`camera::Rest`).
+        // Its posture left out: where its camera has sat lately isn't a bob (`camera::Rest`), nor is
+        // sneaking's drop, held out of the eye above for a real crouch only (so never twice).
         static REST: std::sync::Mutex<camera::Rest> = std::sync::Mutex::new(camera::Rest::new());
         let bob = (race_menu.is_none() && !hands_only).then(|| hooks::guard("view bob", None, camera::first_person_bob)).flatten();
         let (bob, rest) = REST.lock().unwrap_or_else(|e| e.into_inner()).take(bob, dt);
@@ -782,7 +789,14 @@ mod win {
         // (Paused over it, the race menu isn't the menu shown: the pause menu is, as anywhere else,
         // with the runtime's own settings beside it. The player still stands where they stood.)
         let shown = race_menu.filter(|_| !crate::menus::paused());
-        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu: shown, bob, camera: race_menu.is_none().then_some(game), loading: loading(), hands_only, recenter, now, dt })?;
+        let talking = menu && crate::tiles::top_menu() == crate::menus::MENU_DIALOG;
+        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu: shown, talking, bob, camera: race_menu.is_none().then_some(game), loading: loading(), hands_only, recenter, now, dt })?;
+        // (people look at the headset: in the dialogue menu, aimed here)
+        crate::look::publish(snap.view.as_ref());
+        crate::commands::frame(now);
+        if talking {
+            crate::look::aim_in_dialogue();
+        }
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);
@@ -802,6 +816,7 @@ mod win {
             hooks::guard_void("riding", || crate::riding::publish(view, now));
             hooks::guard_void("map", || crate::map::place(now));
             time(Part::Items, || hooks::guard_void("alchemy", || crate::alchemy::place(view, now)));
+            crate::voice::frame(view, now);
         }
         time(Part::Combat, || crate::gore::frame(snap.view.as_ref(), now));
         Some((snap, game, cam))
@@ -837,7 +852,7 @@ mod win {
             // new, the runtime keeps what it shows, until the loading bar alone. Not a menu to the
             // runtime, so its own settings don't come up in its room meanwhile.)
             _ if crate::worldmenu::waiting() && !crate::menus::menu_open(crate::menus::MENU_LOADING) || crate::menus::menu_open(crate::menus::MENU_LOADING) && !d3d9::ui_pass_on() => {
-                let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: false, race_menu: None, bob: None, camera: None, loading: false, hands_only: true, recenter: None, now, dt: 0.0 });
+                let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: false, race_menu: None, talking: false, bob: None, camera: None, loading: false, hands_only: true, recenter: None, now, dt: 0.0 });
             }
             // (Loading with no place to hold, the first time: its bar floats in the runtime's room.)
             _ => menu(&dev, aspect, d3d9::ui_pass_on() && crate::menus::menu_open(crate::menus::MENU_LOADING)),
@@ -857,7 +872,7 @@ mod win {
     fn held(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32) {
         let Some(last) = *LAST_WORLD.lock().unwrap() else { return };
         let alpha_ui = d3d9::ui_pass_on();
-        let snap = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: crate::menus::menu_mode(), race_menu: None, bob: None, camera: None, loading: true, hands_only: last.menu_world, recenter: None, now: link::now(), dt: 0.0 });
+        let snap = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: crate::menus::menu_mode(), race_menu: None, talking: false, bob: None, camera: None, loading: true, hands_only: last.menu_world, recenter: None, now: link::now(), dt: 0.0 });
         {
             static SAID: Mutex<bool> = Mutex::new(false);
             let mut said = SAID.lock().unwrap();
@@ -994,7 +1009,7 @@ mod win {
     /// as over the world) its menus' pieces floating in the runtime's room.
     fn menu(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32, floating: bool) {
         // Keeps the link alive and says the game is in its menus.
-        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, bob: None, camera: None, loading: loading(), hands_only: false, recenter: None, now: link::now(), dt: 0.0 });
+        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, talking: false, bob: None, camera: None, loading: loading(), hands_only: false, recenter: None, now: link::now(), dt: 0.0 });
         link::with_adapter(|a| {
             let gpu = a.gpu().clone();
             if !d3d9::capture(dev, &gpu, HUD) {
