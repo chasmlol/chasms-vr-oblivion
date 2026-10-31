@@ -8,6 +8,15 @@
 //! Outside the world (the main menu, loading screens) the render isn't called: the whole picture
 //! goes to the runtime as a menu panel.
 //!
+//! **Loading doesn't leave the world** (`docs/research/worldmenu.md`). While the game loads another
+//! place it can't draw one: the runtime is given the last picture of the world again ([`held`]: the
+//! bridge's last copies of the eyes and their depth, with the poses they were drawn from,
+//! `SLOT_HELD`), and holds the place round the player while the game's loading bar floats in it
+//! (its UI drawn with its alpha, as over the world). The game's own fade after a load (its fader 2)
+//! is the handover: each picture says how much of it there still is (`SlotInfo::held_over`), and the
+//! fader's quad isn't drawn (the runtime fades). While the loading screen is open a thread beats for
+//! the adapter, so a load that blocks the game for seconds doesn't count it gone.
+//!
 //! **Under the game's menus the world goes on.** Opening most menus, the game renders the world once
 //! into a texture and from then on draws that frozen picture behind them ([`world_picture`]); in VR
 //! the head goes on moving, so the picture isn't taken and the world is rendered for both eyes every
@@ -27,7 +36,7 @@ mod win {
     use crate::d3d9::{self, HUD};
     use crate::link::{self, GameFrame, Snapshot};
     use crate::{engine, hooks, mem};
-    use rustvr_protocol::{DEPTH_LINEAR, MIR_RENDER, SLOT_AUX, SLOT_DEPTH, SLOT_HUD, SLOT_MENU, SLOT_MIRROR, SLOT_STEREO, SlotInfo};
+    use rustvr_protocol::{DEPTH_LINEAR, MIR_RENDER, SLOT_AUX, SLOT_DEPTH, SLOT_HELD, SLOT_HUD, SLOT_MENU, SLOT_MIRROR, SLOT_STEREO, SlotInfo};
     use std::ffi::c_void;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -48,6 +57,89 @@ mod win {
     }
     static EYES: Mutex<Option<Eyes>> = Mutex::new(None);
     static LAST: Mutex<f64> = Mutex::new(0.0);
+
+    /// The last picture of the world given to the runtime: how it was drawn, to give it again while
+    /// the game can't draw one ([`held`]).
+    #[derive(Clone, Copy)]
+    struct LastWorld {
+        /// Its eyes' poses, fields of view, world mappings and depth.
+        info: SlotInfo,
+        /// The projection's near and far planes (game units), for its depth again.
+        near_far: (f32, f32),
+        /// It was of the main menu's place: the player has no body yet.
+        menu_world: bool,
+    }
+    static LAST_WORLD: Mutex<Option<LastWorld>> = Mutex::new(None);
+
+    /// The game's fader 2 (of three full-screen faders at 0xB12DC4, 24 bytes each: name, active, its
+    /// node, its alpha 0..1, its time): the black a cell or a save load starts, held for ten frames
+    /// under the new place once it's loaded, then faded back.
+    const FADER_NODE: usize = 0x00B1_2E00;
+    const FADER_ALPHA: usize = 0x00B1_2E04;
+    /// The film playing, and its state (2: drawn by the menus' render).
+    const FILM: usize = 0x00B3_3428;
+    const FILM_STATE: usize = 0x20;
+    const FILM_SHOWN: u32 = 2;
+
+    /// How much of the game's fade after a load there is now, if it's there.
+    fn fader() -> Option<f32> {
+        let node = mem::deref(FADER_NODE);
+        (node != 0).then(|| mem::at::<f32>(FADER_ALPHA).filter(|a| a.is_finite()).unwrap_or(1.0).clamp(0.0, 1.0))
+    }
+
+    /// The fader's quad isn't drawn: the runtime fades (from the place held, or from black).
+    fn fade_in_runtime() {
+        let node = mem::deref(FADER_NODE);
+        let Some(flags) = (node != 0).then(|| mem::at::<u16>(node + engine::av::FLAGS)).flatten() else { return };
+        if flags & engine::av::APP_CULLED == 0 {
+            unsafe { ((node + engine::av::FLAGS) as *mut u16).write(flags | engine::av::APP_CULLED) };
+            static SAID: std::sync::Once = std::sync::Once::new();
+            SAID.call_once(|| tracing::info!("render: the game's fade after a load is the runtime's (from the place held), its black quad not drawn"));
+        }
+    }
+
+    /// A film is on the screen (the new game's intro): shown as it is, not held over.
+    fn film() -> bool {
+        let f = mem::deref(FILM);
+        f != 0 && mem::at::<u32>(f + FILM_STATE) == Some(FILM_SHOWN)
+    }
+
+    /// The game is loading another place: its loading screen, or its fade after one.
+    fn loading() -> bool {
+        crate::menus::menu_open(crate::menus::MENU_LOADING) || fader().is_some()
+    }
+
+    /// The game can't draw its world now, and the place the player was in is held: loading, or the
+    /// main menu waiting for its place.
+    fn holding() -> bool {
+        LAST_WORLD.lock().unwrap().is_some() && !film() && (loading() || crate::worldmenu::waiting())
+    }
+
+    /// While the loading screen is open: since when, and the game's last Present ([`beat`]).
+    static LOADING_SINCE: Mutex<Option<f64>> = Mutex::new(None);
+    static LAST_PRESENT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    /// How long the adapter is said to be alive for the game while it loads (s).
+    const BEAT_FOR: f64 = 60.0;
+
+    /// The adapter's heartbeat while the game loads, from a thread of its own: a load can block the
+    /// game's thread between two Presents longer than the runtime waits before counting the adapter
+    /// gone (and letting go of the place it holds).
+    fn beat() {
+        let mut said = false;
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            let Some(since) = *LOADING_SINCE.lock().unwrap() else {
+                said = false;
+                continue;
+            };
+            let now = link::now();
+            let last = f64::from_bits(LAST_PRESENT.load(Ordering::Acquire));
+            if now - since < BEAT_FOR && now - last > 0.5 && link::try_with_adapter(|a| a.heartbeat()).is_some() && !said {
+                said = true;
+                tracing::info!("render: the game is busy loading ({:.1} s since its last frame): the adapter beats for it", now - last);
+            }
+        }
+    }
 
     static REAL_FRAME: AtomicUsize = AtomicUsize::new(0);
     type FrameFn = unsafe extern "thiscall" fn(*mut c_void) -> i32;
@@ -286,8 +378,6 @@ mod win {
     /// grid (`TES` +8).
     const GRID_CELL: usize = 0x0048_2150;
     const TES: usize = 0x00B3_33A0;
-    /// The texture the game draws the world into behind its menus (`Main::Render`'s argument then).
-    const WORLD_TEXTURE: usize = 0x00B3_33E8;
     /// A reference's 3D (`TESObjectREFR` +0x3C): the player's third-person body.
     const PLAYER_3D: usize = 0x3C;
     static REAL_GRID_REDRAW: AtomicUsize = AtomicUsize::new(0);
@@ -308,19 +398,29 @@ mod win {
         unsafe { real(this) }
     }
 
-    /// The world's frozen picture behind the game's menus (0x40D160, thiscall on `OSGlobals`), which
-    /// the frame takes on opening a menu (the call at 0x40DA62; at 0x40DEF5 for sleep and wait):
-    /// rendered once into a texture (0xB333E8), it's what 0x40D4D0 draws behind the menus from
-    /// then on (while 0xB33397 says it's there) instead of rendering the world. In VR it isn't
-    /// taken: with it never there, 0x40D4D0 renders the world, both eyes, every frame. (Its other
-    /// callers, a door's or a save's picture, are the game's as ever.)
+    /// The world's frozen picture (0x40D160, thiscall on `OSGlobals`): rendered once into a texture
+    /// (0xB333E8), it's what 0x40D4D0 draws from then on (while 0xB33397 says it's there)
+    /// instead of rendering the world. The frame takes it on opening a menu (the call at 0x40DA62; at
+    /// 0x40DEF5 for sleep and wait), a cell's load as it starts (0x4455FF indoors, 0x445A32 outdoors:
+    /// the picture behind the loading screen's fade), a question box over the load's fade (0x5BCB78)
+    /// and 0x44E789. In VR it's never taken: with it never there, 0x40D4D0 renders the world, both
+    /// eyes, every frame it can, and while it can't the runtime holds the last picture of it. (Taken,
+    /// it went into the game's texture while the eyes were read from the back buffer, black: the
+    /// place held through a door was black.)
     const WORLD_PICTURE: usize = 0x0040_D160;
-    const WORLD_PICTURE_CALLS: [(usize, [u8; 5]); 2] = [(0x0040_DA62, [0xE8, 0xF9, 0xF6, 0xFF, 0xFF]), (0x0040_DEF5, [0xE8, 0x66, 0xF2, 0xFF, 0xFF])];
+    const WORLD_PICTURE_CALLS: [(usize, [u8; 5]); 6] = [
+        (0x0040_DA62, [0xE8, 0xF9, 0xF6, 0xFF, 0xFF]),
+        (0x0040_DEF5, [0xE8, 0x66, 0xF2, 0xFF, 0xFF]),
+        (0x0044_55FF, [0xE8, 0x5C, 0x7B, 0xFC, 0xFF]),
+        (0x0044_5A32, [0xE8, 0x29, 0x77, 0xFC, 0xFF]),
+        (0x0044_E789, [0xE8, 0xD2, 0xE9, 0xFB, 0xFF]),
+        (0x005B_CB78, [0xE8, 0xE3, 0x05, 0xE5, 0xFF]),
+    ];
 
     unsafe extern "thiscall" fn world_picture(this: *mut c_void) {
         if link::last().is_some_and(|s| s.view.is_some()) {
             static SAID: std::sync::Once = std::sync::Once::new();
-            SAID.call_once(|| tracing::info!("render: a menu opened: the world goes on being rendered under it (no frozen picture)"));
+            SAID.call_once(|| tracing::info!("render: the game's frozen picture of the world skipped (a menu, a load): the world goes on being rendered, or held"));
             return;
         }
         let real: unsafe extern "thiscall" fn(*mut c_void) = unsafe { std::mem::transmute(WORLD_PICTURE) };
@@ -335,10 +435,11 @@ mod win {
             let rel = (ours as i32).wrapping_sub(at as i32 + 5).to_le_bytes();
             done += mem::patch_code(at, &expect, &[0xE8, rel[0], rel[1], rel[2], rel[3]]) as u32;
         }
-        tracing::info!("render: the menus' frozen picture of the world is skipped in VR ({done} of 2 calls)");
+        tracing::info!("render: the game's frozen picture of the world is skipped in VR ({done} of {} calls)", WORLD_PICTURE_CALLS.len());
     }
 
     pub fn install() {
+        std::thread::spawn(beat);
         set_lock(true, true);
         patch_lock();
         patch_world_picture();
@@ -358,6 +459,7 @@ mod win {
         FIRST.call_once(|| tracing::info!("render: the game's frames run"));
         hooks::guard_void("Frame", || {
             crate::console::tick();
+            crate::worldmenu::frame();
             crate::player::before_update();
             crate::items::frame(link::now());
             crate::archery::frame(link::now());
@@ -380,9 +482,9 @@ mod win {
         GAME_THREAD.store(thread, Ordering::Release);
         crate::profile::frame_start(thread);
         // A picture of the world into a texture of the game's own making (a save's picture, taken
-        // as an autosave goes through a door) is the game's, drawn as it draws it: two eyes drawn
-        // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
-        // menus goes into its world texture.)
+        // as an autosave goes through a door; the frozen picture, out of VR) is the game's, drawn as
+        // it draws it: two eyes drawn into it, read back at its size, crashed it, and the eyes read
+        // from the back buffer then aren't the world's. (The frame's own render passes 0.)
         centre_on_camera_node();
         d3d9::rendering(true);
         // The fog's terms for the game's own camera (a render of its own; each eye's are its own).
@@ -391,7 +493,7 @@ mod win {
                 d3d9::fog_frustum(&dev, &game.frustum);
             }
         });
-        let result = if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
+        let result = if arg != 0 {
             unsafe { real(this, arg) }
         } else {
             crate::timing::render_start();
@@ -651,7 +753,10 @@ mod win {
         // The race menu puts the game's camera in front of the player's face, looking back at them:
         // the player stays where they stood (the eye and its look before it opened), so the world
         // doesn't jump forward and back as it opens and closes.
-        let (eye, look_yaw) = {
+        let (eye, look_yaw) = if let Some(eye) = crate::worldmenu::eye() {
+            // (The main menu's place: on its spot, whatever the game's camera says.)
+            (eye, game.look_yaw())
+        } else {
             static STOOD: Mutex<Option<(glam::Vec3, f32)>> = Mutex::new(None);
             let mut stood = STOOD.lock().unwrap();
             match (race_menu.is_some(), *stood) {
@@ -665,17 +770,19 @@ mod win {
                 }
             }
         };
-        // The game's own bob, as its camera sees it (none in the race menu: its camera isn't the
-        // player's eyes).
+        let hands_only = crate::worldmenu::up();
+        let recenter = crate::worldmenu::take_recenter();
+        // The game's own bob, as its camera sees it (none in the race menu or the main menu's place:
+        // its camera isn't the player's eyes).
         // Its posture left out: where its camera has sat lately isn't a bob (`camera::Rest`).
         static REST: std::sync::Mutex<camera::Rest> = std::sync::Mutex::new(camera::Rest::new());
-        let bob = race_menu.is_none().then(|| hooks::guard("view bob", None, camera::first_person_bob)).flatten();
+        let bob = (race_menu.is_none() && !hands_only).then(|| hooks::guard("view bob", None, camera::first_person_bob)).flatten();
         let (bob, rest) = REST.lock().unwrap_or_else(|e| e.into_inner()).take(bob, dt);
         camera::note_bob(bob.as_ref(), rest, &game, now);
         // (Paused over it, the race menu isn't the menu shown: the pause menu is, as anywhere else,
         // with the runtime's own settings beside it. The player still stands where they stood.)
         let shown = race_menu.filter(|_| !crate::menus::paused());
-        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu: shown, bob, camera: race_menu.is_none().then_some(game), now, dt })?;
+        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu: shown, bob, camera: race_menu.is_none().then_some(game), loading: loading(), hands_only, recenter, now, dt })?;
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);
@@ -713,13 +820,96 @@ mod win {
             link::set_size(w, h);
         }
         let aspect = d3d9::backbuffer_size(&dev).map(|(w, h)| w as f32 / h.max(1) as f32).unwrap_or(1.0);
+        let now = link::now();
+        LAST_PRESENT.store(now.to_bits(), Ordering::Release);
+        {
+            let mut since = LOADING_SINCE.lock().unwrap();
+            let open = crate::menus::menu_open(crate::menus::MENU_LOADING);
+            *since = if open { Some(since.unwrap_or(now)) } else { None };
+        }
+        hooks::guard_void("the game's fade", fade_in_runtime);
         let eyes = EYES.lock().unwrap().take();
         match eyes {
             Some(e) if e.captured == [true, true] => stereo(&dev, &e, aspect),
-            _ => menu(&dev, aspect),
+            _ if holding() => held(&dev, aspect),
+            // (The main menu waiting for its place with nothing to hold, as the game starts, or a
+            // loading screen's first pictures, drawn before its UI goes in with its alpha: nothing
+            // new, the runtime keeps what it shows, until the loading bar alone. Not a menu to the
+            // runtime, so its own settings don't come up in its room meanwhile.)
+            _ if crate::worldmenu::waiting() && !crate::menus::menu_open(crate::menus::MENU_LOADING) || crate::menus::menu_open(crate::menus::MENU_LOADING) && !d3d9::ui_pass_on() => {
+                let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: false, race_menu: None, bob: None, camera: None, loading: false, hands_only: true, recenter: None, now, dt: 0.0 });
+            }
+            // (Loading with no place to hold, the first time: its bar floats in the runtime's room.)
+            _ => menu(&dev, aspect, d3d9::ui_pass_on() && crate::menus::menu_open(crate::menus::MENU_LOADING)),
         }
         d3d9::ui_pass(&dev, false);
         hooks::guard_void("menu 3D", || crate::menus::hide_menu_3d(false));
+        // While the game loads, the UI it draws next goes into the HUD copy with its alpha, as over
+        // the world: its loading bar alone floats (`crate::hud`). (A world rendered first turns it
+        // off for the eyes.)
+        if crate::menus::menu_open(crate::menus::MENU_LOADING) {
+            d3d9::ui_pass(&dev, true);
+        }
+    }
+
+    /// The last picture of the world again, held while the game can't draw one (see the module's
+    /// notes), with the game's UI of the moment (once it's drawn with its alpha: its loading bar).
+    fn held(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32) {
+        let Some(last) = *LAST_WORLD.lock().unwrap() else { return };
+        let alpha_ui = d3d9::ui_pass_on();
+        let snap = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: crate::menus::menu_mode(), race_menu: None, bob: None, camera: None, loading: true, hands_only: last.menu_world, recenter: None, now: link::now(), dt: 0.0 });
+        {
+            static SAID: Mutex<bool> = Mutex::new(false);
+            let mut said = SAID.lock().unwrap();
+            if !*said {
+                *said = true;
+                let why = if crate::menus::menu_open(crate::menus::MENU_LOADING) {
+                    "it's loading"
+                } else if crate::worldmenu::waiting() {
+                    "its main menu is waiting for its place"
+                } else {
+                    "it's fading in"
+                };
+                tracing::info!("render: the game can't draw its world ({why}): the last picture of it is held round the player");
+            }
+        }
+        link::with_adapter(|a| {
+            let gpu = a.gpu().clone();
+            let hud = d3d9::capture(dev, &gpu, HUD);
+            let mut have_hud = false;
+            let mut have_depth = false;
+            {
+                let Some(slot) = a.begin_slot() else { return };
+                for eye in 0..2 {
+                    if !d3d9::deliver(&gpu, eye, &slot.eyes[eye].tex) {
+                        return;
+                    }
+                }
+                if let (true, Some(dst)) = (hud, slot.hud.as_ref()) {
+                    have_hud = d3d9::deliver(&gpu, HUD, &dst.tex);
+                }
+                if let (true, Some(d)) = (last.info.flags & SLOT_DEPTH != 0, slot.depth.as_ref()) {
+                    have_depth = (0..2).all(|eye| d3d9::deliver_depth(&gpu, eye, &d[eye], last.near_far.0, last.near_far.1));
+                }
+            }
+            let mut info = last.info;
+            // (Paced as this frame's picture: the runtime waits for the one it asked for.)
+            if let Some(s) = snap {
+                info.frame_index = s.frame.frame_index;
+            }
+            info.flags = SLOT_STEREO | SLOT_HELD | if have_hud { SLOT_HUD } else { 0 } | if have_depth { SLOT_DEPTH } else { 0 };
+            info.hud_aspect = aspect;
+            info.held_over = 0.0;
+            if have_hud {
+                // (Nothing floats until the UI is drawn with its alpha: the flat screen's isn't cut.)
+                let layout = if alpha_ui { crate::hud::layout() } else { crate::hud::nothing() };
+                if let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(layout)) {
+                    a.write_hud_layout(&layout);
+                }
+                info.hud_layout = a.hud_layout_seq();
+            }
+            a.submit(info);
+        });
     }
 
     fn stereo(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, e: &Eyes, aspect: f32) {
@@ -766,6 +956,14 @@ mod win {
                 info.depth_flags = DEPTH_LINEAR;
             }
             info.hud_aspect = aspect;
+            // How much of the game's fade after a load there still is: the runtime draws the place
+            // it held over this one that much.
+            info.held_over = fader().unwrap_or(0.0);
+            // (What's given again while the game can't draw its world.)
+            let mut kept = info;
+            kept.flags &= SLOT_STEREO | SLOT_DEPTH;
+            kept.held_over = 0.0;
+            *LAST_WORLD.lock().unwrap() = Some(LastWorld { info: kept, near_far: e.near_far, menu_world: crate::worldmenu::up() });
             // The game's card of the things on the hands: which it's of now (`crate::hud_info`).
             hooks::guard_void("hud info", || {
                 crate::hud_info::moved();
@@ -792,9 +990,11 @@ mod win {
         });
     }
 
-    fn menu(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32) {
+    /// No world: the game's whole picture as a panel, or (`floating`: its UI drawn with its alpha,
+    /// as over the world) its menus' pieces floating in the runtime's room.
+    fn menu(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, aspect: f32, floating: bool) {
         // Keeps the link alive and says the game is in its menus.
-        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, bob: None, camera: None, now: link::now(), dt: 0.0 });
+        let _ = link::game_frame(&GameFrame { eye: None, look_yaw: 0.0, menu: true, race_menu: None, bob: None, camera: None, loading: loading(), hands_only: false, recenter: None, now: link::now(), dt: 0.0 });
         link::with_adapter(|a| {
             let gpu = a.gpu().clone();
             if !d3d9::capture(dev, &gpu, HUD) {
@@ -808,9 +1008,10 @@ mod win {
                 }
             }
             let mut info: SlotInfo = bytemuck::Zeroable::zeroed();
-            info.flags = SLOT_MENU | SLOT_HUD;
+            info.flags = if floating { SLOT_HUD } else { SLOT_MENU | SLOT_HUD };
             info.hud_aspect = aspect;
-            if let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(crate::hud::outside())) {
+            let layout = if floating { crate::hud::layout() } else { crate::hud::outside() };
+            if let Some(layout) = hooks::guard("hud layout", None, || crate::hud::changed(layout)) {
                 a.write_hud_layout(&layout);
             }
             info.hud_layout = a.hud_layout_seq();

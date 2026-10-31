@@ -257,6 +257,10 @@ mod win {
             // IDirect3DDevice9::SetRenderState (slot 57): the UI's alpha follows its blending.
             let set_state = unsafe { *(*(dev as *const *const usize)).add(57) };
             hooks::install_into(set_state as *const (), set_render_state as *const (), "IDirect3DDevice9::SetRenderState", &REAL_SET_STATE);
+            // IDirect3DDevice9::Clear (slot 43): a frame the UI begins itself while it goes into ours
+            // (the loading screen drawing itself as the game loads) clears ours to nothing.
+            let clear = unsafe { *(*(dev as *const *const usize)).add(43) };
+            hooks::install_into(clear as *const (), clear_target as *const (), "IDirect3DDevice9::Clear", &REAL_CLEAR);
             // IDirect3DDevice9::TestCooperativeLevel (slot 3): the game skips its frames while it fails.
             let tcl = unsafe { *(*(dev as *const *const usize)).add(3) };
             hooks::install_into(tcl as *const (), test_cooperative_level as *const (), "IDirect3DDevice9::TestCooperativeLevel", &REAL_TCL);
@@ -332,6 +336,21 @@ mod win {
 
     type SetTargetFn = unsafe extern "system" fn(*mut c_void, u32, *mut c_void) -> windows::core::HRESULT;
     static REAL_SET_TARGET: AtomicUsize = AtomicUsize::new(0);
+    static REAL_CLEAR: AtomicUsize = AtomicUsize::new(0);
+    type ClearFn = unsafe extern "system" fn(*mut c_void, u32, *const c_void, u32, u32, f32, u32) -> windows::core::HRESULT;
+
+    /// The UI draws over nothing in ours: a clear of the target while it does (a frame the game
+    /// begins for a loading screen alone, with its background colour) is to clear.
+    unsafe extern "system" fn clear_target(dev: *mut c_void, count: u32, rects: *const c_void, flags: u32, color: u32, z: f32, stencil: u32) -> windows::core::HRESULT {
+        let real: ClearFn = unsafe { std::mem::transmute(REAL_CLEAR.load(Ordering::Acquire)) };
+        let color = if UI_PASS.load(Ordering::Acquire) && flags & D3DCLEAR_TARGET as u32 != 0 { 0 } else { color };
+        unsafe { real(dev, count, rects, flags, color, z, stencil) }
+    }
+
+    /// The UI is going into ours, with its alpha, now.
+    pub fn ui_pass_on() -> bool {
+        UI_PASS.load(Ordering::Acquire)
+    }
     /// In the UI pass: the game's back buffer (its first target before the pass), and ours that the
     /// UI goes into instead (both surfaces, held for the pass).
     static UI_TARGETS: Mutex<Option<UiTargets>> = Mutex::new(None);

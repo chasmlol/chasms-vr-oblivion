@@ -96,4 +96,5 @@ pub mod torch;
 pub mod weapons;
 pub mod window;
 pub mod world;
+pub mod worldmenu;
 pub mod xobse;

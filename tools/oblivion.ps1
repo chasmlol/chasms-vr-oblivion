@@ -19,9 +19,10 @@
 # up Oblivion's launcher. Builds go to $env:CARGO_TARGET_DIR (a worktree's own), else target\.
 # Test saves: rustvr-base (a Nord in iron armour), rustvr-city (Imperial City market), rustvr-weye
 # (open ground on Lake Rumare's shore), rustvr-ruin (Vilverin, an Ayleid ruin), rustvr-chorrol
-# (Chorrol, its stables); `-Save "Skip Tutorial"` and the player's own saves load too. -NewGame
-# starts a new game instead (the main menu's New, answered yes, its film skipped): the prison cell
-# and the race menu, as a player starting out has them.
+# (Chorrol, its stables); `-Save "Skip Tutorial"` and the player's own saves load too. `-Save none`
+# loads nothing: the game stays at its main menu (in its place in Cyrodiil, crates/oblivion's worldmenu).
+# -NewGame starts a new game instead (the main menu's New, answered yes, its film skipped): the
+# prison cell and the race menu, as a player starting out has them.
 param(
     [string]$Save = "rustvr-city",
     [switch]$NewGame,
@@ -135,7 +136,7 @@ try {
 
     # The console lines: the save as soon as the main menu is up, then the rest once in the game.
     $lines = @()
-    if ($NewGame) { $lines += "menu NewGame"; $Save = "a new game" } elseif ($Save) { $lines += "menu LoadGame `"$Save`"" }
+    if ($NewGame) { $lines += "menu NewGame"; $Save = "a new game" } elseif ($Save -and $Save -ne "none") { $lines += "menu LoadGame `"$Save`"" }
     if ($At) { $lines += "game+0.5 coc $At" }
     $t = if ($At) { 4 } else { 1 }
     # (From the Bash tool a list arrives as one string: items split on commas, commands on "|".)
