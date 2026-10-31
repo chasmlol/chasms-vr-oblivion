@@ -11,6 +11,10 @@
 //!   before ([`KNEEL_HOLD`]), is the player's activation of it: its own script's blessing (the god's
 //!   spell, the pilgrimage, the cure at the chapel altars, "Seek not the Dragon's blessing,
 //!   sinner!").
+//! * **A Doomstone or a rune stone**, a palm on it ([`TOUCH_HOLD`]), is the player's activation of
+//!   it (`docs/research/interact.md`, "Doomstones and runestones"): its own script's words and
+//!   question ("Do you choose to steer by the stars of the Atronach?", "The stone stirs under your
+//!   hand..."), which the player answers: a Doomstone's power takes the place of the one they have.
 
 /// How long things are held to give them (seconds).
 pub const OFFER_HOLD: f64 = 0.5;
@@ -37,6 +41,8 @@ pub enum Kind {
     Daedric,
     Wayshrine,
     Altar,
+    /// A Doomstone or a rune stone (the standing stones of the ruins outside).
+    Stone,
 }
 
 pub fn kind_of(model: &str) -> Option<Kind> {
@@ -47,6 +53,8 @@ pub fn kind_of(model: &str) -> Option<Kind> {
         Some(Kind::Wayshrine)
     } else if m.contains("cathedral\\cathedralstenintaltar") {
         Some(Kind::Altar)
+    } else if m.contains("ruinstonesexterior\\runestone") {
+        Some(Kind::Stone)
     } else {
         None
     }
@@ -77,12 +85,6 @@ mod game {
     const ACTI_MODEL: usize = 0x34;
     const ACTI_SCRIPT: usize = 0x4C;
     const SCRIPT_REFS: usize = 0x40;
-    /// The message box (`kMenuType_Message`): its buttons (+0x34, ten tiles), its `HandleClick`
-    /// (thiscall: id, tile; its vtable's fourth: the first button is id 4).
-    const MESSAGE: u32 = 0x3E9;
-    const BUTTONS: usize = 0x34;
-    const MESSAGE_CLICK: usize = 0x005B_CDD0;
-    const FIRST_BUTTON: u32 = 4;
     /// Shrines within this of the player (metres) are looked at.
     const NEAR: f32 = 3.0;
     /// Seconds after a shrine's activation its question may come.
@@ -160,6 +162,10 @@ mod game {
                     continue;
                 }
                 let Some(kind) = kind_of(&crate::combat::read_str(mem::deref(base + ACTI_MODEL))) else { continue };
+                // (A standing stone that's only a stone, with no script, has nothing to answer.)
+                if kind == Kind::Stone && mem::deref(base + ACTI_SCRIPT) == 0 {
+                    continue;
+                }
                 let Some(at) = mem::at::<[f32; 3]>(r + engine::refr::POS).map(|p| b.point_from_game(Vec3::from(p))) else { continue };
                 if at.distance(me) > NEAR {
                     continue;
@@ -218,11 +224,11 @@ mod game {
                             now_giving = Some((sh.refr, Giving::Offering(form, lying), hand));
                         }
                     }
-                    Kind::Wayshrine | Kind::Altar => {
+                    Kind::Wayshrine | Kind::Altar | Kind::Stone => {
                         let empty = |i: usize| body.is_none_or(|b| b.hands[i].flags & HAND_HOLDING == 0);
                         if let Some(i) = (0..2).find(|&i| empty(i) && near(&sh.triangles, view.point(Vec3::from_array(f.hands[i].grip.pos)))) {
                             now_giving = Some((sh.refr, Giving::Touch(i), i));
-                        } else if body.is_some_and(|b| kneels_before(head, look, sh.at, f.hmd.pos[1], b.eye_height)) {
+                        } else if sh.kind != Kind::Stone && body.is_some_and(|b| kneels_before(head, look, sh.at, f.hmd.pos[1], b.eye_height)) {
                             now_giving = Some((sh.refr, Giving::Kneel, 2));
                         }
                     }
@@ -299,17 +305,12 @@ mod game {
             with_state(|s| s.answer_until = None);
             return;
         }
-        let menu = crate::tiles::menu(MESSAGE);
-        if menu == 0 {
-            return;
-        }
+        let Some((menu, buttons)) = crate::menus::message_box() else { return };
         with_state(|s| s.answer_until = None);
         // A question (two buttons or more): its yes, the first. A message alone is the player's to read.
-        let buttons = (0..10).filter(|k| mem::deref(menu + BUTTONS + 4 * k) != 0).count();
         if buttons >= 2 {
-            type Click = unsafe extern "thiscall" fn(usize, u32, usize);
             tracing::info!("shrines: the offering's question answered yes by the laying");
-            unsafe { std::mem::transmute::<usize, Click>(MESSAGE_CLICK)(menu, FIRST_BUTTON, 0) };
+            crate::menus::click_message(menu, 0);
         }
     }
 }
@@ -324,6 +325,7 @@ mod tests {
         assert_eq!(kind_of("Architecture\\DaedricStatues\\DaedricShrineAzura01.NIF"), Some(Kind::Daedric));
         assert_eq!(kind_of("Architecture\\Wayshrine\\WayshrineAltar01.NIF"), Some(Kind::Wayshrine));
         assert_eq!(kind_of("Architecture\\Cathedral\\CathedralStenIntAltar02.NIF"), Some(Kind::Altar));
+        assert_eq!(kind_of("Dungeons\\FortRuins\\Exterior\\RuinStonesExterior\\RuneStoneExt01Glyph02.NIF"), Some(Kind::Stone));
         assert_eq!(kind_of("Clutter\\LecternWorkstation1.NIF"), None);
     }
 

@@ -269,3 +269,20 @@ key first).
 
 What I couldn't: anything in the game: where a key's tip is on its model (the far end of its
 longest side from the grip), and whether the game's Ok box is answered the frame it opens.
+
+## 10. Doomstones and runestones — `playtest-stones.bat`
+
+Three metres south of the Atronach Stone, facing it, at ten at night (its stars shine). Saves as
+`rustvr-stones`. (Moved there by coordinates: if you arrive in the air or in rock, step clear.)
+
+1. **A palm on the stone**: put an open hand flat on the standing stone and hold it there (a
+   building buzz, 0.6 s). Its own question: "Marked by a special fate, you rule your destiny. Do you
+   choose to steer by the stars of the Atronach?" No / Yes, answered with the laser (Yes replaces the
+   Doomstone power you have).
+2. **By day**: wait until morning and touch it again: "No stars shine upon the doomstone."
+3. **Not by accident**: brush past it, or touch it with a hand holding something: nothing.
+
+What I checked: builds; unit tests (the stones known by their models).
+
+What I couldn't: anything in the game: the stone's collision is the surface touched, as at the
+wayshrines.
