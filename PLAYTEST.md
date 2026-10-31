@@ -15,6 +15,16 @@ The save above (rustvr-base, a Nord in iron armour, with `showracemenu`) is the 
 
 The research and the design are in `docs/research/facesculpt.md`.
 
+## What changed since the second playtest
+
+- **The .bat left you at the main menu.** It answered New on the menu's very first frame, while the
+  game was still fading the menu in, and the game's close does nothing to a menu not yet shown. So
+  the menu stayed, with the rest of the answer done: the character generation quest started and a
+  new game's loading flagged. That half-started game is likely what crashed the save you then loaded
+  from the menu (the crash was in its loading screen). Now the .bat waits until the menu is shown,
+  done fading in and not showing a box of its own, as it is when a player clicks it, and the log
+  says whether the menu began to close (`console: NewGame -> ran`, or `-> failed`).
+
 ## What changed since the first playtest
 
 - **A pull moved the whole head.** That had three causes, all fixed:
@@ -126,13 +136,16 @@ The research and the design are in `docs/research/facesculpt.md`.
     within 5, the age exactly where it was. Keeping it there takes at most 0.16 ms a frame. The first
     version's coordinates reached 28 in the same strokes.
 - **The new game:** the game's own steps (the main menu's New, its "Start new game?" box,
-  which button is Yes), not run.
+  which button is Yes, and when a menu fading in can be closed), not run. The second playtest's log
+  shows the first try ran on the menu's first frame and left it up.
 
 ## What I couldn't check
 
 - **Nothing of it has run in the game since the fixes.** The game can't be started from here.
-- **The new game start.** It's never been run. Watch for:
-  - the game staying at the main menu: the log says `console: NewGame -> ...` either way;
+- **The new game start.** The fixed one has never run. Watch for:
+  - the game staying at the main menu: the log says `console: NewGame -> ran` when the menu began
+    to close for it, `-> failed` when it didn't, and nothing at all while it's still waiting for the
+    menu;
   - the new game's film playing anyway (it should be skipped; a click skips it in the game);
   - the race menu opening in the cell with the copy of the head, as it did with the save.
 - **Feel:** whether the face now follows the hand enough for you, now that the rest stays still. The
