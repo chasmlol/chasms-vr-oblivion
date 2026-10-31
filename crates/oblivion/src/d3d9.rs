@@ -85,6 +85,16 @@ mod win {
     pub fn rendering(now: bool) {
         RENDERING.store(now, Ordering::Release);
     }
+    static REAL_SET_SAMPLER: AtomicUsize = AtomicUsize::new(0);
+    static REAL_CREATE_VS: AtomicUsize = AtomicUsize::new(0);
+    static REAL_SET_VS: AtomicUsize = AtomicUsize::new(0);
+    static REAL_SET_VS_F: AtomicUsize = AtomicUsize::new(0);
+    static REAL_CREATE_VB: AtomicUsize = AtomicUsize::new(0);
+    static REAL_DRAW_INDEXED: AtomicUsize = AtomicUsize::new(0);
+    static REAL_SET_STREAM: AtomicUsize = AtomicUsize::new(0);
+    static REAL_DRAW: AtomicUsize = AtomicUsize::new(0);
+    static REAL_DRAW_UP: AtomicUsize = AtomicUsize::new(0);
+    static REAL_DRAW_INDEXED_UP: AtomicUsize = AtomicUsize::new(0);
 
     thread_local! {
         static MAKING: Cell<bool> = const { Cell::new(false) };
@@ -248,6 +258,57 @@ mod win {
             // IDirect3DDevice9::TestCooperativeLevel (slot 3): the game skips its frames while it fails.
             let tcl = unsafe { *(*(dev as *const *const usize)).add(3) };
             hooks::install_into(tcl as *const (), test_cooperative_level as *const (), "IDirect3DDevice9::TestCooperativeLevel", &REAL_TCL);
+            // IDirect3DDevice9::SetSamplerState (slot 69): the textures' anisotropic filtering.
+            if anisotropy() > 1 {
+                let set_sampler = unsafe { *(*(dev as *const *const usize)).add(69) };
+                hooks::install_into(set_sampler as *const (), set_sampler_state as *const (), "IDirect3DDevice9::SetSamplerState", &REAL_SET_SAMPLER);
+                tracing::info!("d3d9: the game's textures are filtered anisotropically ({}x)", anisotropy());
+            }
+            // IDirect3DDevice9::CreateVertexShader (slot 91): the distant trees' shader, and which
+            // shaders are the leaves' (and, testing, which kind each draws: [`crate::families`]).
+            let families = crate::families::enabled();
+            if crate::distant_trees::enabled() || crate::leaves::enabled() || families {
+                let create_vs = unsafe { *(*(dev as *const *const usize)).add(91) };
+                hooks::install_into(create_vs as *const (), create_vertex_shader as *const (), "IDirect3DDevice9::CreateVertexShader", &REAL_CREATE_VS);
+            }
+            // IDirect3DDevice9::SetVertexShader (slot 92) and SetVertexShaderConstantF (94): the
+            // leaves' constants checked ([`crate::leaves`]).
+            if crate::leaves::enabled() || families {
+                let set_vs = unsafe { *(*(dev as *const *const usize)).add(92) };
+                hooks::install_into(set_vs as *const (), set_vertex_shader as *const (), "IDirect3DDevice9::SetVertexShader", &REAL_SET_VS);
+            }
+            if crate::leaves::enabled() {
+                let set_vs_f = unsafe { *(*(dev as *const *const usize)).add(94) };
+                hooks::install_into(set_vs_f as *const (), set_vertex_shader_constant_f as *const (), "IDirect3DDevice9::SetVertexShaderConstantF", &REAL_SET_VS_F);
+            } else {
+                tracing::info!("d3d9: testing: the leaves' constants as the game sets them (RUSTVR_OBLIVION_LEAVES_AS_GAME)");
+            }
+            // IDirect3DDevice9::CreateVertexBuffer (slot 26), DrawIndexedPrimitive (82) and
+            // SetStreamSource (100): system memory vertex buffers drawn whole ([`crate::sysmem`]).
+            // (The draw also turns the leaves' cards to the eye: [`crate::leaves::facing_now`].)
+            if crate::sysmem::enabled() || crate::leaves::enabled() || families {
+                let draw = unsafe { *(*(dev as *const *const usize)).add(82) };
+                hooks::install_into(draw as *const (), draw_indexed_primitive as *const (), "IDirect3DDevice9::DrawIndexedPrimitive", &REAL_DRAW_INDEXED);
+            }
+            // Testing: DrawPrimitive (81) and the two drawn from the game's memory (83, 84), to
+            // leave a kind out ([`crate::families`]).
+            if families {
+                let draw = unsafe { *(*(dev as *const *const usize)).add(81) };
+                hooks::install_into(draw as *const (), draw_primitive as *const (), "IDirect3DDevice9::DrawPrimitive", &REAL_DRAW);
+                let draw_up = unsafe { *(*(dev as *const *const usize)).add(83) };
+                hooks::install_into(draw_up as *const (), draw_primitive_up as *const (), "IDirect3DDevice9::DrawPrimitiveUP", &REAL_DRAW_UP);
+                let draw_indexed_up = unsafe { *(*(dev as *const *const usize)).add(84) };
+                hooks::install_into(draw_indexed_up as *const (), draw_indexed_primitive_up as *const (), "IDirect3DDevice9::DrawIndexedPrimitiveUP", &REAL_DRAW_INDEXED_UP);
+                tracing::info!("d3d9: testing: a kind of draw left out of the eye pictures' frames, in turn (RUSTVR_OBLIVION_LEAVE_OUT)");
+            }
+            if crate::sysmem::enabled() {
+                let create_vb = unsafe { *(*(dev as *const *const usize)).add(26) };
+                hooks::install_into(create_vb as *const (), create_vertex_buffer as *const (), "IDirect3DDevice9::CreateVertexBuffer", &REAL_CREATE_VB);
+                let stream = unsafe { *(*(dev as *const *const usize)).add(100) };
+                hooks::install_into(stream as *const (), set_stream_source as *const (), "IDirect3DDevice9::SetStreamSource", &REAL_SET_STREAM);
+            } else {
+                tracing::info!("d3d9: testing: the draws' vertex hints as the game gives them (RUSTVR_OBLIVION_DRAWS_AS_GAME)");
+            }
             match Gpu::new() {
                 Ok(gpu) => {
                     let (w, h) = if params.is_null() { (0, 0) } else { unsafe { ((*params).BackBufferWidth, (*params).BackBufferHeight) } };
@@ -396,7 +457,191 @@ mod win {
     unsafe extern "system" fn present_hook(dev: *mut c_void, src: *const c_void, dst: *const c_void, wnd: HWND, dirty: *const c_void) -> windows::core::HRESULT {
         let real: PresentFn = unsafe { std::mem::transmute(REAL_PRESENT.load(Ordering::Acquire)) };
         hooks::guard_void("Present", || crate::render::on_present(dev));
+        if crate::sysmem::enabled() {
+            hooks::guard_void("Present", crate::sysmem::tick);
+        }
         unsafe { real(dev, src, dst, wnd, dirty) }
+    }
+
+    /// The anisotropic filtering of the game's textures: `anisotropy` in the settings (testing,
+    /// `RUSTVR_OBLIVION_ANISOTROPY` over it), within what Direct3D 9 takes (16).
+    fn anisotropy() -> u32 {
+        static A: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+        *A.get_or_init(|| {
+            let env = std::env::var("RUSTVR_OBLIVION_ANISOTROPY").ok().and_then(|v| v.parse().ok());
+            env.unwrap_or(crate::settings::get().anisotropy).clamp(1, 16)
+        })
+    }
+
+    type SetSamplerFn = unsafe extern "system" fn(*mut c_void, u32, D3DSAMPLERSTATETYPE, u32) -> windows::core::HRESULT;
+
+    /// The game's texture filtering, made anisotropic ([`crate::settings::Settings::anisotropy`]):
+    /// a sampler the game sets to filter linearly as it shrinks a texture filters anisotropically
+    /// instead, as far as the settings say. The game's other filters (point sampling, its
+    /// magnification, its mip filter) are as it sets them, and a picture of its own sampled one
+    /// texel to a pixel (its image space passes) comes out as it did.
+    unsafe extern "system" fn set_sampler_state(dev: *mut c_void, sampler: u32, kind: D3DSAMPLERSTATETYPE, value: u32) -> windows::core::HRESULT {
+        let real: SetSamplerFn = unsafe { std::mem::transmute(REAL_SET_SAMPLER.load(Ordering::Acquire)) };
+        // (The pixel shaders' samplers only, not the vertex shaders', 257 on.)
+        if sampler < 16 {
+            if kind == D3DSAMP_MINFILTER && value == D3DTEXF_LINEAR.0 as u32 {
+                let _ = unsafe { real(dev, sampler, D3DSAMP_MAXANISOTROPY, anisotropy()) };
+                return unsafe { real(dev, sampler, kind, D3DTEXF_ANISOTROPIC.0 as u32) };
+            }
+            if kind == D3DSAMP_MAXANISOTROPY {
+                return unsafe { real(dev, sampler, kind, anisotropy()) };
+            }
+        }
+        unsafe { real(dev, sampler, kind, value) }
+    }
+
+    type CreateVertexShaderFn = unsafe extern "system" fn(*mut c_void, *const u32, *mut *mut c_void) -> windows::core::HRESULT;
+
+    /// The game's vertex shaders as it makes them: its distant trees' is made from
+    /// [`crate::distant_trees`] instead, the rest as they are.
+    unsafe extern "system" fn create_vertex_shader(dev: *mut c_void, function: *const u32, out: *mut *mut c_void) -> windows::core::HRESULT {
+        let real: CreateVertexShaderFn = unsafe { std::mem::transmute(REAL_CREATE_VS.load(Ordering::Acquire)) };
+        // (The version and the constant table's comment token, then the table.)
+        let tokens = hooks::guard("CreateVertexShader", None, || {
+            if function.is_null() {
+                return None;
+            }
+            let comment = unsafe { function.add(1).read() };
+            let len = (comment >> 16) as usize;
+            if comment & 0xFFFF != 0xFFFE || len > 0x4000 {
+                return None;
+            }
+            Some(unsafe { std::slice::from_raw_parts(function, 2 + len) })
+        });
+        let ours = hooks::guard("CreateVertexShader", None, || {
+            if !crate::distant_trees::enabled() || !crate::distant_trees::is_distant_trees(tokens?) {
+                return None;
+            }
+            let code = crate::distant_trees::replacement()?;
+            tracing::info!("d3d9: the distant trees' cards face the eye, not the way it looks");
+            Some(code.as_ptr())
+        });
+        // A vs_1_1 shader indexing its constants straight by a vertex's data: the whole part, as the
+        // game's drivers took it ([`crate::leaves::floor_indices`]).
+        let floored = if ours.is_none() && crate::leaves::floors_indices() {
+            hooks::guard("CreateVertexShader", None, || {
+                // (The whole code: up to its end token, within vs_1_1's size.)
+                let n = (0..0x4000).find(|&i| unsafe { function.add(i).read() } == 0x0000_FFFF)?;
+                let code = crate::leaves::floor_indices(unsafe { std::slice::from_raw_parts(function, n + 1) })?;
+                let names: Vec<String> = tokens.map(crate::leaves::constants).unwrap_or_default().into_iter().map(|(n, _, _)| n).collect();
+                tracing::info!("d3d9: a vs_1_1 shader's constants indexed by the whole part of its vertex data, as the drivers of its day did ({})", names.join(", "));
+                Some(code)
+            })
+        } else {
+            None
+        };
+        let code = ours.or(floored.as_ref().map(|c| c.as_ptr())).unwrap_or(function);
+        let hr = unsafe { real(dev, code, out) };
+        if hr.is_ok() && !out.is_null() {
+            hooks::guard_void("CreateVertexShader", || {
+                if let Some(tokens) = tokens {
+                    if crate::leaves::enabled() {
+                        crate::leaves::created(unsafe { *out } as usize, tokens);
+                    }
+                    if crate::families::enabled() {
+                        crate::families::created(unsafe { *out } as usize, tokens);
+                    }
+                }
+            });
+        }
+        hr
+    }
+
+    type CreateVertexBufferFn = unsafe extern "system" fn(*mut c_void, u32, u32, u32, u32, *mut *mut c_void, *mut c_void) -> windows::core::HRESULT;
+    type DrawIndexedFn = unsafe extern "system" fn(*mut c_void, u32, i32, u32, u32, u32, u32) -> windows::core::HRESULT;
+    type SetStreamSourceFn = unsafe extern "system" fn(*mut c_void, u32, *mut c_void, u32, u32) -> windows::core::HRESULT;
+
+    unsafe extern "system" fn create_vertex_buffer(dev: *mut c_void, length: u32, usage: u32, fvf: u32, pool: u32, out: *mut *mut c_void, shared: *mut c_void) -> windows::core::HRESULT {
+        let real: CreateVertexBufferFn = unsafe { std::mem::transmute(REAL_CREATE_VB.load(Ordering::Acquire)) };
+        let hr = unsafe { real(dev, length, usage, fvf, pool, out, shared) };
+        if hr.is_ok() && !out.is_null() {
+            hooks::guard_void("CreateVertexBuffer", || crate::sysmem::created(unsafe { *out } as usize, length, pool));
+        }
+        hr
+    }
+
+    unsafe extern "system" fn set_stream_source(dev: *mut c_void, stream: u32, buffer: *mut c_void, offset: u32, stride: u32) -> windows::core::HRESULT {
+        let real: SetStreamSourceFn = unsafe { std::mem::transmute(REAL_SET_STREAM.load(Ordering::Acquire)) };
+        hooks::guard_void("SetStreamSource", || crate::sysmem::bind(stream, buffer as usize, offset, stride));
+        unsafe { real(dev, stream, buffer, offset, stride) }
+    }
+
+    unsafe extern "system" fn draw_indexed_primitive(dev: *mut c_void, kind: u32, base: i32, min: u32, count: u32, start: u32, prims: u32) -> windows::core::HRESULT {
+        let real: DrawIndexedFn = unsafe { std::mem::transmute(REAL_DRAW_INDEXED.load(Ordering::Acquire)) };
+        if crate::families::skip() {
+            return windows::core::HRESULT(0);
+        }
+        let (min, count) = if crate::sysmem::bound() { hooks::guard("DrawIndexedPrimitive", None, || crate::sysmem::draw(base, min, count)).unwrap_or((min, count)) } else { (min, count) };
+        let facing = if crate::leaves::bound() { hooks::guard("DrawIndexedPrimitive", None, crate::leaves::facing_now) } else { None };
+        let Some((reg, ours, game)) = facing else {
+            return unsafe { real(dev, kind, base, min, count, start, prims) };
+        };
+        // (Straight to the device: these aren't the game's to check again. Its own go back after.)
+        let set: SetVertexShaderConstantFFn = unsafe { std::mem::transmute(REAL_SET_VS_F.load(Ordering::Acquire)) };
+        let _ = unsafe { set(dev, reg, ours.as_ptr(), 2) };
+        let hr = unsafe { real(dev, kind, base, min, count, start, prims) };
+        let _ = unsafe { set(dev, reg, game.as_ptr(), 2) };
+        hr
+    }
+
+    type DrawFn = unsafe extern "system" fn(*mut c_void, u32, u32, u32) -> windows::core::HRESULT;
+    type DrawUpFn = unsafe extern "system" fn(*mut c_void, u32, u32, *const c_void, u32) -> windows::core::HRESULT;
+    type DrawIndexedUpFn = unsafe extern "system" fn(*mut c_void, u32, u32, u32, u32, *const c_void, u32, *const c_void, u32) -> windows::core::HRESULT;
+
+    unsafe extern "system" fn draw_primitive(dev: *mut c_void, kind: u32, start: u32, prims: u32) -> windows::core::HRESULT {
+        let real: DrawFn = unsafe { std::mem::transmute(REAL_DRAW.load(Ordering::Acquire)) };
+        if crate::families::skip() {
+            return windows::core::HRESULT(0);
+        }
+        unsafe { real(dev, kind, start, prims) }
+    }
+
+    unsafe extern "system" fn draw_primitive_up(dev: *mut c_void, kind: u32, prims: u32, data: *const c_void, stride: u32) -> windows::core::HRESULT {
+        let real: DrawUpFn = unsafe { std::mem::transmute(REAL_DRAW_UP.load(Ordering::Acquire)) };
+        if crate::families::skip() {
+            return windows::core::HRESULT(0);
+        }
+        unsafe { real(dev, kind, prims, data, stride) }
+    }
+
+    unsafe extern "system" fn draw_indexed_primitive_up(dev: *mut c_void, kind: u32, min: u32, count: u32, prims: u32, indices: *const c_void, format: u32, data: *const c_void, stride: u32) -> windows::core::HRESULT {
+        let real: DrawIndexedUpFn = unsafe { std::mem::transmute(REAL_DRAW_INDEXED_UP.load(Ordering::Acquire)) };
+        if crate::families::skip() {
+            return windows::core::HRESULT(0);
+        }
+        unsafe { real(dev, kind, min, count, prims, indices, format, data, stride) }
+    }
+
+    type SetVertexShaderFn = unsafe extern "system" fn(*mut c_void, *mut c_void) -> windows::core::HRESULT;
+    type SetVertexShaderConstantFFn = unsafe extern "system" fn(*mut c_void, u32, *const f32, u32) -> windows::core::HRESULT;
+
+    unsafe extern "system" fn set_vertex_shader(dev: *mut c_void, shader: *mut c_void) -> windows::core::HRESULT {
+        let real: SetVertexShaderFn = unsafe { std::mem::transmute(REAL_SET_VS.load(Ordering::Acquire)) };
+        hooks::guard_void("SetVertexShader", || {
+            crate::leaves::bind(shader as usize);
+            if crate::families::enabled() {
+                crate::families::bind(shader as usize);
+            }
+        });
+        unsafe { real(dev, shader) }
+    }
+
+    unsafe extern "system" fn set_vertex_shader_constant_f(dev: *mut c_void, start: u32, data: *const f32, count: u32) -> windows::core::HRESULT {
+        let real: SetVertexShaderConstantFFn = unsafe { std::mem::transmute(REAL_SET_VS_F.load(Ordering::Acquire)) };
+        let fixed = if crate::leaves::bound() && !data.is_null() && count > 0 && count <= 256 {
+            hooks::guard("SetVertexShaderConstantF", None, || crate::leaves::set(start, unsafe { std::slice::from_raw_parts(data, count as usize * 4) }))
+        } else {
+            None
+        };
+        match &fixed {
+            Some(values) => unsafe { real(dev, start, values.as_ptr(), count) },
+            None => unsafe { real(dev, start, data, count) },
+        }
     }
 
     unsafe extern "system" fn test_cooperative_level(dev: *mut c_void) -> windows::core::HRESULT {
@@ -804,6 +1049,68 @@ mod win {
                 }),
             },
         }
+    }
+
+    /// `kind`'s latest capture on the CPU, made `max_width` wide at most (each pixel the average of
+    /// the square it stands for), as its size and tightly packed BGRA8 pixels (testing: the eyes'
+    /// pictures, [`crate::render`]). It's read back a strip of rows at a time: an eye at the
+    /// headset's size is over 100 MB, more than the game's 32-bit address space has to spare in
+    /// one piece (reading it whole crashed the game).
+    pub fn read_bgra(gpu: &Gpu, kind: usize, max_width: u32) -> anyhow::Result<(u32, u32, Vec<u8>)> {
+        use windows::Win32::Graphics::Direct3D11::{D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_MAP_READ, D3D11_MAPPED_SUBRESOURCE, D3D11_TEXTURE2D_DESC, D3D11_USAGE_STAGING};
+        let bridge = BRIDGE.lock().unwrap();
+        let b = bridge.as_ref().context("no bridge")?;
+        anyhow::ensure!(b.ready[kind] != 0, "nothing captured");
+        let ctx4: ID3D11DeviceContext4 = gpu.ctx.cast()?;
+        let mut d = D3D11_TEXTURE2D_DESC::default();
+        unsafe { b.shared11[kind].GetDesc(&mut d) };
+        let f = d.Width.div_ceil(max_width.max(1)).max(1) as usize;
+        let (w, h) = (d.Width as usize / f, d.Height as usize / f);
+        // (A strip is whole squares of rows.)
+        let strip = f * 32;
+        d.Height = strip as u32;
+        d.MipLevels = 1;
+        d.Usage = D3D11_USAGE_STAGING;
+        d.BindFlags = 0;
+        d.CPUAccessFlags = D3D11_CPU_ACCESS_READ.0 as u32;
+        d.MiscFlags = 0;
+        let mut out = Vec::new();
+        out.try_reserve_exact(w * h * 4)?;
+        out.resize(w * h * 4, 0u8);
+        let mut sums = vec![0u32; w * 4];
+        unsafe {
+            ctx4.Wait(&b.fence11, b.ready[kind])?;
+            let mut staging = None;
+            gpu.device.CreateTexture2D(&d, None, Some(&mut staging))?;
+            let staging = staging.context("no staging texture")?;
+            for top in (0..h * f).step_by(strip) {
+                let rows = strip.min(h * f - top);
+                let region = D3D11_BOX { left: 0, top: top as u32, front: 0, right: (w * f) as u32, bottom: (top + rows) as u32, back: 1 };
+                gpu.ctx.CopySubresourceRegion(&staging, 0, 0, 0, 0, &b.shared11[kind], 0, Some(&region));
+                let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+                gpu.ctx.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))?;
+                for r in 0..rows / f {
+                    sums.fill(0);
+                    for k in 0..f {
+                        let src = std::slice::from_raw_parts((mapped.pData as *const u8).add((r * f + k) * mapped.RowPitch as usize), w * f * 4);
+                        for (sum, px) in sums.chunks_exact_mut(4).zip(src.chunks_exact(4 * f)) {
+                            for p in px.chunks_exact(4) {
+                                sum[0] += p[0] as u32;
+                                sum[1] += p[1] as u32;
+                                sum[2] += p[2] as u32;
+                                sum[3] += p[3] as u32;
+                            }
+                        }
+                    }
+                    let y = top / f + r;
+                    for (o, s) in out[y * w * 4..(y + 1) * w * 4].iter_mut().zip(&sums) {
+                        *o = (*s / (f * f) as u32) as u8;
+                    }
+                }
+                gpu.ctx.Unmap(&staging, 0);
+            }
+        }
+        Ok((w as u32, h as u32, out))
     }
 
     /// Copies `kind`'s latest capture into `dst` on the adapter's device (after the copy into the

@@ -1,6 +1,7 @@
-//! The DLL's entry point. On load: the log, the settings, Oblivion.ini set for VR, and a thread that
-//! hooks `Direct3DCreate9` straight away (the game makes its device seconds later) and the engine
-//! once Steam's DRM has decrypted the game's code.
+//! The DLL's entry point. On load: the log, the settings, Oblivion.ini set for VR, xOBSE's loader
+//! readied (if it's installed: [`crate::xobse`]), and a thread that hooks `Direct3DCreate9` straight
+//! away (the game makes its device seconds later) and the engine once Steam's DRM has decrypted the
+//! game's code.
 
 use crate::{console, d3d9, engine, game_settings, launcher, log, mem, render, settings, window};
 use std::path::PathBuf;
@@ -39,6 +40,8 @@ fn startup() {
     #[cfg(target_arch = "x86")]
     crate::clock::install();
     #[cfg(target_arch = "x86")]
+    crate::grass::install();
+    #[cfg(target_arch = "x86")]
     crate::movement::install();
     crate::books::install();
     #[cfg(target_arch = "x86")]
@@ -66,6 +69,7 @@ pub extern "system" fn DllMain(inst: HMODULE, reason: u32, _reserved: *mut core:
         game_settings::apply(&dir, (s.eye_width > 0 && s.eye_height > 0).then_some((s.eye_width, s.eye_height)));
         console::load_test(&dir);
         window::install_early();
+        crate::xobse::install_early(&dir);
         std::thread::spawn(startup);
     } else if reason == DLL_PROCESS_DETACH
         && let Some(dir) = MOD_DIR.get()

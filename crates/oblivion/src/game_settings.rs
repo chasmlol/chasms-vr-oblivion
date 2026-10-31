@@ -1,7 +1,8 @@
 //! Oblivion's own settings (`My Games\Oblivion\Oblivion.ini`) while it's in VR: it renders each eye
-//! at the size the headset wants (`iSize W`/`iSize H`) in a window. The player's own values are
-//! kept in `rustvr-oblivion-ini.txt` beside the DLL and put back when the game closes (or, after a
-//! crash, the next time it starts, before anything else).
+//! at the size the headset wants (`iSize W`/`iSize H`) in a window, and a few of its own settings
+//! are at least what a headset needs ([`VR_FLOORS`]). The player's own values are kept in
+//! `rustvr-oblivion-ini.txt` beside the DLL and put back when the game closes (or, after a crash,
+//! the next time it starts, before anything else).
 
 use std::path::{Path, PathBuf};
 
@@ -43,6 +44,60 @@ pub fn get_key(text: &str, section: &str, key: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// The game's own settings a headset needs at least (section, key, value): the player's own higher
+/// values are kept. Seen up close and from a head that never stops moving, the flat game's values
+/// show (`docs/research/oblivion-image-quality.md`):
+/// * the actors' shadow maps at 256 pixels are blocks at arm's length;
+/// * the trees' textures are sharpened by a negative mip bias, which sparkles as the head moves;
+/// * the near trees switch detail as you move (full detail always: the game's own option);
+/// * the water's waves are a 12-frames-a-second loop, which steps at 90..120 Hz (the same 2.7 s
+///   loop at 36);
+/// * the files of the cells ahead are preloaded only up to 25 MB, so crossing into new cells
+///   loads more of them as you go (250 MB: the game is large-address-aware on the playtester's
+///   install, and loads a 7x7 grid there);
+/// * things fade in close: the view distance sliders' objects, items and actors at their most (15),
+///   trees at the game's own limit (`fTreeLODMax`, 2), the grass out to 57 m (its `[Grass]` keys,
+///   the ones it reads; at 86 m, all round, it cost too much of the frame), and the distant
+///   buildings and tree cards half as far again (40 and 30 cells). A head turns to all of it, so
+///   what a flat screen hides past its edges pops in;
+/// * people's faces (FaceGen) and lip files load on the game's own background threads, and its
+///   morpher, blood and path finding run on theirs, not on the frame's (off in the player's file:
+///   the hitches as people came into view). The threaded particles and temporary effects stay as
+///   they are: those are the ones reported to crash.
+const VR_FLOORS: [(&str, &str, &str); 20] = [
+    ("Display", "iShadowMapResolution", "1024"),
+    ("SpeedTree", "fLODTreeMipMapLODBias", "0.0000"),
+    ("SpeedTree", "fLocalTreeMipMapLODBias", "0.0000"),
+    ("SpeedTree", "bForceFullLOD", "1"),
+    ("Water", "uSurfaceFPS", "36"),
+    ("Water", "uSurfaceFrameCount", "96"),
+    ("General", "iPreloadSizeLimit", "262144000"),
+    ("LOD", "fLODFadeOutMultObjects", "15.0000"),
+    ("LOD", "fLODFadeOutMultItems", "15.0000"),
+    ("LOD", "fLODFadeOutMultActors", "15.0000"),
+    ("LOD", "fLODMultTrees", "2.0000"),
+    ("Grass", "fGrassEndDistance", "4000.0000"),
+    ("Grass", "fGrassStartFadeDistance", "3000.0000"),
+    ("General", "uGridDistantCount", "40"),
+    ("General", "uGridDistantTreeRange", "30"),
+    ("BackgroundLoad", "bLoadBackgroundFaceGen", "1"),
+    ("BackgroundLoad", "bBackgroundLoadLipFiles", "1"),
+    ("General", "bUseThreadedMorpher", "1"),
+    ("General", "bUseThreadedBlood", "1"),
+    ("Pathfinding", "bBackgroundPathing", "1"),
+];
+
+/// `Section.key=value;...` as (section, key, value)s.
+pub fn test_values(spec: &str) -> Vec<(String, String, String)> {
+    spec.split(';')
+        .filter_map(|item| {
+            let (name, value) = item.split_once('=')?;
+            let (section, key) = name.trim().split_once('.')?;
+            Some((section.trim().to_owned(), key.trim().to_owned(), value.trim().to_owned()))
+        })
+        .collect()
 }
 
 /// Sets `section`'s `key` in INI text (adding it if missing); returns the old value.
@@ -109,6 +164,14 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
             Err(_) => return,
         },
     };
+    // (Which of the floors are above the player's values, read before anything is set. Testing,
+    // `RUSTVR_OBLIVION_FLAT_INI=1`: none, the player's values as they are.)
+    let flat = std::env::var("RUSTVR_OBLIVION_FLAT_INI").is_ok_and(|v| v == "1");
+    let floors: Vec<_> = VR_FLOORS
+        .into_iter()
+        .filter(|_| !flat)
+        .filter(|(s, k, v)| get_key(&text, s, k).and_then(|o| o.parse::<f64>().ok()).is_none_or(|o| o < v.parse::<f64>().unwrap_or(0.0)))
+        .collect();
     let mut backup = String::new();
     let mut set = |s: &str, k: &str, v: String| {
         let old = set_key(&mut text, s, k, &v);
@@ -128,6 +191,19 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
     if let Some((w, h)) = eye {
         set("Display", "iSize W", w.to_string());
         set("Display", "iSize H", h.to_string());
+    }
+    for (s, k, v) in &floors {
+        set(s, k, (*v).to_owned());
+    }
+    if !floors.is_empty() {
+        let raised: Vec<String> = floors.iter().map(|(_, k, v)| format!("{k}={v}")).collect();
+        tracing::info!("game settings: for the headset: {}", raised.join(", "));
+    }
+    // Testing, `RUSTVR_OBLIVION_INI_TEST="Section.key=value;..."`: any of the game's settings for one
+    // run (put back with the rest), to tell which of its systems a fault is in.
+    for (s, k, v) in test_values(&std::env::var("RUSTVR_OBLIVION_INI_TEST").unwrap_or_default()) {
+        tracing::info!("game settings: testing: [{s}] {k}={v}");
+        set(&s, &k, v);
     }
     if !backup.is_empty() && !dir.join(BACKUP).exists() {
         let _ = std::fs::write(dir.join(BACKUP), &backup);
