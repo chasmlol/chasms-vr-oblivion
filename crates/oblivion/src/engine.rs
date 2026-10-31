@@ -19,6 +19,13 @@ pub const SCENE_GRAPH_CAMERA: usize = 0xDC;
 pub const PLAYER: usize = 0x00B3_33C4;
 /// `OSGlobals*`: its window at +8.
 pub const OS_GLOBALS: usize = 0x00B3_3398;
+/// The first-person skeleton's `Camera01` (`NiNode*`): in first person the world camera is put
+/// where it is (`PlayerCharacter::UpdateCamera`, 0x66B710), and the first-person animations move it
+/// (set when the first-person model loads, 0x667BE0).
+pub const FIRST_PERSON_CAMERA: usize = 0x00B3_BB0C;
+/// Set while `UpdateCamera` has the camera off the player's eyes in first person too, orbiting them
+/// as it does in third person (the player's own camera controls set it, 0x671620).
+pub const CAMERA_OFF_EYES: usize = 0x00B3_BB04;
 
 /// `NiAVObject` fields.
 pub mod av {
