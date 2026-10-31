@@ -28,6 +28,7 @@ until then.
 |---|---|---|---|
 | `00-check.bat` | Check the build and the desktop view: Lake Rumare's shore at 1 pm | trailer | Cinematic |
 | `01-face-sculpt.bat` | Shaping your face by hand: a new game, the prison cell's race menu, the big copy of your head and the mirror; pull the nose long, the ears out | trailer | Cinematic |
+| `02-daedric-archer-weye.bat` | Daedric armour, the Daedric Bow on your back and Daedric Arrows, outside the Wawnet Inn in Weye at 1 pm (the hamlet across the bridge from the Imperial City, its houses and people) | trailer | Cinematic |
 
 ## The looks (Studio tab)
 
