@@ -1222,4 +1222,21 @@ mod win {
         }
         true
     }
+
+    /// The game's video memory (MB): what it has on the GPU now, and how much Windows lets it have
+    /// there before it moves some out to the system's memory, every use of it then a copy back
+    /// (`IDXGIAdapter3::QueryVideoMemoryInfo`, the GPU's own memory, on the adapter the game's
+    /// Direct3D 12 runs on). The budget shrinks as other programs take the GPU's memory.
+    pub fn video_memory() -> Option<(u64, u64)> {
+        use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, DXGI_QUERY_VIDEO_MEMORY_INFO, IDXGIAdapter3, IDXGIFactory4};
+        let luid = {
+            let d12 = D3D12.lock().unwrap();
+            unsafe { d12.as_ref()?.device.GetAdapterLuid() }
+        };
+        let factory: IDXGIFactory4 = unsafe { CreateDXGIFactory1() }.ok()?;
+        let adapter: IDXGIAdapter3 = unsafe { factory.EnumAdapterByLuid(luid) }.ok()?;
+        let mut info = DXGI_QUERY_VIDEO_MEMORY_INFO::default();
+        unsafe { adapter.QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &mut info) }.ok()?;
+        Some((info.CurrentUsage >> 20, info.Budget >> 20))
+    }
 }

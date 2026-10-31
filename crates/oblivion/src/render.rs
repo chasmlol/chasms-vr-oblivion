@@ -485,12 +485,17 @@ mod win {
                 d3d9::fog_frustum(&dev, &s.frustum);
                 set_lock(!hold_loader(), true);
                 SECOND_EYE.store(true, Ordering::Release);
-                result = time(Part::Eye, || unsafe { real(this, arg) });
-                if log_shadows {
-                    tracing::info!("render: the mirror: {}", shadow_lights_state());
-                }
-                let colour = hooks::guard("capture mirror", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::MIRROR)).unwrap_or(false));
-                let depth = hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
+                // (Timed apart from the eyes: a third render of the world at the eyes' size.)
+                let (r, colour, depth) = time(Part::Mirror, || {
+                    let r = unsafe { real(this, arg) };
+                    if log_shadows {
+                        tracing::info!("render: the mirror: {}", shadow_lights_state());
+                    }
+                    let colour = hooks::guard("capture mirror", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::MIRROR)).unwrap_or(false));
+                    let depth = hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
+                    (r, colour, depth)
+                });
+                result = r;
                 mirror_done = (colour && depth).then_some((s.frustum[4], s.frustum[5]));
                 continue;
             }
@@ -667,7 +672,10 @@ mod win {
         let bob = race_menu.is_none().then(|| hooks::guard("view bob", None, camera::first_person_bob)).flatten();
         let (bob, rest) = REST.lock().unwrap_or_else(|e| e.into_inner()).take(bob, dt);
         camera::note_bob(bob.as_ref(), rest, &game, now);
-        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, bob, camera: race_menu.is_none().then_some(game), now, dt })?;
+        // (Paused over it, the race menu isn't the menu shown: the pause menu is, as anywhere else,
+        // with the runtime's own settings beside it. The player still stands where they stood.)
+        let shown = race_menu.filter(|_| !crate::menus::paused());
+        let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu: shown, bob, camera: race_menu.is_none().then_some(game), now, dt })?;
         snap.view?;
         log_camera_once(&game);
         crate::player::trace_frame(now, &snap, &game);

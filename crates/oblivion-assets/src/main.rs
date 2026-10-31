@@ -2,6 +2,7 @@
 //!
 //!     oblivion-extract [--game <Oblivion folder>] check <prefix>...
 //!     oblivion-extract export [--out <folder>] <prefix>...
+//!     oblivion-extract facegen [<folder>]
 //!     oblivion-extract sounds [--out <folder>]
 //!     oblivion-extract preview <model> <png>
 //!     oblivion-extract anims <prefix>...
@@ -12,7 +13,7 @@
 //! model reader against the real files). `export` writes every model under the prefixes, and the
 //! textures they use, into the runtime's cache (`local_assets/oblivion`, see
 //! `oblivion_assets::export`; a `textures/...` prefix brings every texture under it, e.g. the races'
-//! skins). `sounds` writes the game's own sounds as the runtime's sound pack
+//! skins), and FaceGen's controls (`facegen.toml`); `facegen` writes those alone. `sounds` writes the game's own sounds as the runtime's sound pack
 //! (`local_assets/oblivion/sounds`, see `oblivion_assets::sounds`). `preview` draws one converted
 //! model from three sides. `anims` lists each model's animations and what each moves (a door's leaf
 //! turned about its hinge, a lever's handle, a gate slid up). `bench` splits each mortar and pestle
@@ -108,6 +109,10 @@ fn main() -> Result<()> {
             }
         }
         Some("export") => export(&archives, &args[1..])?,
+        Some("facegen") => {
+            let out = args.get(1).map(PathBuf::from).unwrap_or_else(|| rustvr_asset::default_root().join("oblivion"));
+            facegen(&archives, &out);
+        }
         Some("sounds") => {
             let out = match args.get(1).map(String::as_str) {
                 Some("--out") if args.len() > 2 => PathBuf::from(&args[2]),
@@ -198,11 +203,7 @@ fn export(archives: &Archives, args: &[String]) -> Result<()> {
     }
     let names: Vec<String> = archives.names().filter(|n| n.ends_with(".nif") && prefixes.iter().any(|p| n.starts_with(p.as_str()))).map(str::to_owned).collect();
     let (mut models, mut failed, mut faces) = (0, 0, 0);
-    // FaceGen's age control, which picks a face's age map (the adapter's).
-    match archives.read("facegen\\si.ctl").and_then(|d| oblivion_assets::facegen::parse_age(&d)) {
-        Ok((age, offset)) => std::fs::write(out.join("facegen.toml"), toml::to_string(&FaceGenFile { age, age_offset: offset })?)?,
-        Err(e) => eprintln!("facegen\\si.ctl: {e:#}"),
-    }
+    facegen(archives, &out);
     for path in names {
         if path.ends_with("\\skeleton.nif") || path.ends_with("\\skeletonbeast.nif") {
             continue;
@@ -353,12 +354,14 @@ fn head_part(archives: &Archives, nif: &Nif, path: &str) -> bool {
     !skinned && (on_head || (export::normalise(path, "meshes\\").starts_with("characters\\") && archives.contains(&egm)))
 }
 
-/// FaceGen's controls the adapter needs (`facegen.toml`): the age, from the symmetric geometry
-/// coordinates (`age = Σ age[i]·gs[i] + age_offset`).
-#[derive(serde::Serialize)]
-struct FaceGenFile {
-    age: Vec<f32>,
-    age_offset: f32,
+/// FaceGen's controls (`facegen.toml`, `rustvr_asset::FaceControls`): the age, which picks a face's
+/// age map (the adapter's), and the named controls and the gender, which a face reshaped by hand
+/// moves within (the runtime's).
+fn facegen(archives: &Archives, out: &std::path::Path) {
+    match archives.read("facegen\\si.ctl").and_then(|d| oblivion_assets::facegen::parse_controls(&d)).and_then(|c| rustvr_asset::save_face_controls(out, &c).map(|_| c)) {
+        Ok(c) => println!("FaceGen: {} named controls, the age and the gender", c.controls.len()),
+        Err(e) => eprintln!("facegen\\si.ctl: {e:#}"),
+    }
 }
 
 /// A head part's FaceGen morphs (its `.egm`, and the `.egt` when it has one) on its converted

@@ -4,13 +4,14 @@
 # (whichever worktree has it) and the player's settings back.
 #
 #   powershell -File tools\play.ps1                      the features there are
-#   powershell -File tools\play.ps1 archery [-Save rustvr-weye] [-At <cell>] [-Give "<id> <n>,..."] [-Commands "a|b"]
+#   powershell -File tools\play.ps1 archery [-Save rustvr-weye | -NewGame] [-At <cell>] [-Give "<id> <n>,..."] [-Commands "a|b"]
 #   powershell -File tools\play.ps1 archery -Range
 #   powershell -File tools\play.ps1 -Close
 #
 # -Commands runs console lines once the save is loaded ("showracemenu", "player.setav sneak 100"):
-# in VR the real keyboard doesn't reach the game, so its console can't be typed into.
-param([string]$Feature = "", [string]$Save = "", [string]$At = "", [string]$Give = "", [string]$Commands = "", [switch]$Range, [switch]$Close)
+# in VR the real keyboard doesn't reach the game, so its console can't be typed into. -NewGame starts
+# a new game instead of loading a save (the prison cell and the race menu).
+param([string]$Feature = "", [string]$Save = "", [switch]$NewGame, [string]$At = "", [string]$Give = "", [string]$Commands = "", [switch]$Range, [switch]$Close)
 $ErrorActionPreference = "Continue"
 $worktrees = "<worktrees>"
 $builds = "<builds>"
@@ -52,6 +53,11 @@ if (-not (Get-ItemProperty "HKCU:\Software\Valve\Steam\ActiveProcess" -ErrorActi
     exit 1
 }
 Stop-Ranges
+if ($NewGame) {
+    "$Feature : a new game"
+    & "$wt\tools\oblivion.ps1" -NoBuild -NewGame -At $At -Give $Give -Commands $Commands
+    exit 0
+}
 if (-not $Save) {
     # The save the feature's PLAYTEST.md names first (a line "Save: rustvr-..."), else the city.
     $named = Select-String -Path "$wt\PLAYTEST.md" -Pattern 'Save:\s*(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1

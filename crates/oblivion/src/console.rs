@@ -40,6 +40,87 @@ pub fn load_game(_name: &str) -> bool {
     false
 }
 
+/// The main menu's New, answered: `InterfaceManager*` (`*0xB3A6E0`), the button its message box had
+/// pressed (+0xB0; the game counts them from 1, and its "Start new game?" box puts "Yes" first), and
+/// the main menu's answer to that box (0x5B5DF0, thiscall, `this` unused: on a 1 it starts the new
+/// game, as xOBSE's `OnNewGame` catches at 0x5B5EFD).
+const INTERFACE_MANAGER: usize = 0x00B3_A6E0;
+const BUTTON_PRESSED: usize = 0xB0;
+const NEW_GAME_ANSWERED: usize = 0x005B_5DF0;
+/// The interface's menu fades under way (`InterfaceManager` +0x130: its first at +0x10; each is the
+/// menu, the time, the length, the previous and the next, at +0x10), and a `Menu`'s state (+0x24: 8
+/// fading in, 1 shown, 2 closing; 0x583F40 moves them on as their fades end) and busy byte (+0x4D:
+/// the main menu's clicks wait while it's set, a box of its own up).
+const FADES: usize = 0x130;
+const FADES_FIRST: usize = 0x10;
+const FADE_NEXT: usize = 0x10;
+const MENU_STATE: usize = 0x24;
+const MENU_CLOSING: u32 = 2;
+const MENU_BUSY: usize = 0x4D;
+
+/// The main menu is there to be clicked: shown, done fading in, and not busy with a box of its own.
+/// The game opens a menu hidden and fades it in, and its close does nothing to a menu not yet shown
+/// (0x584740 checks its `visible`): New answered on the menu's first frame left the menu up and the
+/// rest of the answer done (the character generation quest started, a new game's loading flagged:
+/// a save loaded from the menu then crashed in its loading screen).
+#[cfg(target_arch = "x86")]
+fn main_menu_settled() -> bool {
+    use crate::{mem, menus::MENU_MAIN, tiles};
+    let im = mem::deref(INTERFACE_MANAGER);
+    let menu = tiles::menu(MENU_MAIN);
+    if im == 0
+        || menu == 0
+        || tiles::value(tiles::menu_tile(MENU_MAIN), tiles::VISIBLE) != Some(tiles::TRUE)
+        || mem::at::<u8>(menu + MENU_BUSY) != Some(0)
+    {
+        return false;
+    }
+    let mut fade = mem::deref(mem::deref(im + FADES) + FADES_FIRST);
+    for _ in 0..64 {
+        if fade == 0 {
+            return true;
+        }
+        if mem::deref(fade) == menu {
+            return false;
+        }
+        fade = mem::deref(fade + FADE_NEXT);
+    }
+    false
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn main_menu_settled() -> bool {
+    false
+}
+
+/// Starts a new game, as the main menu's New answered "Yes" does: its film, then the character
+/// generation quest (the prison cell, and the race menu). Only at a main menu a player could click
+/// (the test waits for one); true if the main menu has begun to close for it.
+#[cfg(target_arch = "x86")]
+pub fn new_game() -> bool {
+    let im = crate::mem::deref(INTERFACE_MANAGER);
+    if im == 0 || !main_menu_settled() {
+        return false;
+    }
+    type Answered = unsafe extern "thiscall" fn(usize);
+    unsafe {
+        *((im + BUTTON_PRESSED) as *mut u8) = 1;
+        std::mem::transmute::<usize, Answered>(NEW_GAME_ANSWERED)(0);
+    }
+    crate::mem::at::<u32>(crate::tiles::menu(crate::menus::MENU_MAIN) + MENU_STATE) == Some(MENU_CLOSING)
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn new_game() -> bool {
+    false
+}
+
+/// A test command due that the game isn't ready for waits a frame: `NewGame` for a main menu a
+/// player could click.
+fn waits(cmd: &str) -> bool {
+    cmd.trim() == "NewGame" && !main_menu_settled()
+}
+
 /// `LookupFormByID` (cdecl) and `PlayerCharacter::SetActiveSpell` (thiscall, a `MagicItem*`).
 const LOOKUP_FORM: usize = 0x0046_B250;
 const SET_ACTIVE_SPELL: usize = 0x0066_4700;
@@ -93,7 +174,8 @@ pub fn equip_all(_id: u32) -> bool {
     false
 }
 
-/// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <name or hex id>` selects one
+/// Runs a console line: `LoadGame <save>` loads a save, `NewGame` starts a new game (at the main
+/// menu: a boot straight into the character creator), `SelectSpell <name or hex id>` selects one
 /// of the player's spells by its name, or any spell by its id (a spell the game makes, as the mirror
 /// spell, has no id to know beforehand), `EquipAll <hex id>` equips all the player has of a thing (a
 /// stack of arrows), `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in
@@ -120,6 +202,9 @@ pub fn run(line: &str) -> bool {
     }
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
+    }
+    if line.trim() == "NewGame" {
+        return new_game();
     }
     if let Some(spell) = line.strip_prefix("SelectSpell ") {
         let spell = spell.trim().trim_matches('"');
@@ -456,7 +541,7 @@ pub fn tick() {
         };
         let mut due = Vec::new();
         test.lines.retain(|(from, at, cmd)| {
-            let ready = since(*from).is_some_and(|s| now.duration_since(s).as_secs_f32() >= *at);
+            let ready = since(*from).is_some_and(|s| now.duration_since(s).as_secs_f32() >= *at) && !waits(cmd);
             if ready {
                 due.push(cmd.clone());
             }

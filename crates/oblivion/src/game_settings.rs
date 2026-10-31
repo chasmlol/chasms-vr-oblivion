@@ -182,11 +182,13 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
         }
     };
     set("Display", "bFull Screen", "0".into());
-    // Straight to the main menu: the intro films only play flat (and the logo before the menu, for
-    // a boot straight into a save: `tools/oblivion.ps1`).
+    // Straight to the main menu: the intro films only play flat (and the logo before the menu, and a
+    // new game's film before the prison cell, for a boot straight into a save or the character
+    // creator: `tools/oblivion.ps1`).
     set("General", "SIntroSequence", String::new());
     if dir.join("rustvr-console-test").exists() {
         set("General", "SMainMenuMovieIntro", String::new());
+        set("General", "SOblivionIntro", String::new());
     }
     if let Some((w, h)) = eye {
         set("Display", "iSize W", w.to_string());

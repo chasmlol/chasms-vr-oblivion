@@ -373,8 +373,19 @@ fn age_control() -> Option<&'static AgeControl> {
     .as_ref()
 }
 
+/// The player's FaceGen coordinate sets, as the race menu edits them: the NPC's own (the set the
+/// game's 0x521A10 picks) and its race's, with the NPC and the race: (npc set, race set, npc, race).
+pub fn face_sets() -> Option<(usize, usize, usize, usize)> {
+    let (base, race) = npc()?;
+    #[cfg(target_arch = "x86")]
+    let npc_set = unsafe { std::mem::transmute::<usize, unsafe extern "thiscall" fn(usize) -> usize>(NPC_FACE_COORDS)(base) };
+    #[cfg(not(target_arch = "x86"))]
+    let npc_set = base + 0x108;
+    (npc_set != 0).then_some((npc_set, race + RACE_FACE_COORDS, base, race))
+}
+
 /// One of a coordinate set's four vectors: its floats.
-fn coords(set: usize, which: usize) -> Vec<f32> {
+pub(crate) fn coords(set: usize, which: usize) -> Vec<f32> {
     let v = set + which * COORDS_SIZE;
     let n = mem::at::<u32>(v).unwrap_or(0).min(64) as usize;
     let first = mem::deref(v + 0x0C);
@@ -413,6 +424,11 @@ pub fn face() -> Option<FaceDesc> {
         if !model.is_empty() {
             set_name(&mut f.eyes[side], &format!("oblivion/{}", model_key(&model)));
         }
+    }
+    // In the race menu the face may be shaped by hand (`crate::facesculpt`), within its sliders.
+    if crate::menus::menu_open(crate::menus::MENU_RACE_SEX) {
+        f.flags |= FACE_SCULPT;
+        f.limits = crate::facesculpt::limits(race);
     }
     let rgb = mem::at::<[u8; 3]>(base + NPC_HAIR_COLOR).unwrap_or([128; 3]);
     f.hair_color = [rgb[0] as f32 / 255.0, rgb[1] as f32 / 255.0, rgb[2] as f32 / 255.0, 1.0];

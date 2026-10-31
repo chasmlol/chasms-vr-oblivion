@@ -43,6 +43,7 @@ pub mod d3d9;
 pub mod depth;
 pub mod distant_trees;
 pub mod engine;
+pub mod facesculpt;
 pub mod families;
 #[cfg(all(windows, target_arch = "x86"))]
 pub mod entry;

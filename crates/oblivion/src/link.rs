@@ -61,8 +61,8 @@ pub struct GameFrame {
     pub eye: Option<Vec3>,
     pub look_yaw: f32,
     pub menu: bool,
-    /// The race menu is open: the player stays in the world for it, before the mirror, its menu
-    /// the part of the picture `menu_uv` says.
+    /// The race menu is open (and not paused over): the player stays in the world for it, before
+    /// the mirror, its menu the part of the picture `menu_uv` says.
     pub race_menu: Option<[f32; 4]>,
     /// The game's own first-person bob ([`crate::camera::first_person_bob`]): in `eye`, and held
     /// out of the headset's view.
