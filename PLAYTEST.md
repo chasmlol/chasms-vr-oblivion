@@ -73,9 +73,12 @@ from any start; the fighters only come once you step into the arena.
    the edge on and draw it along (a draw cut). Shallow, the blade rocks where it went in; twist it
    and the body turns with it; pull it back out (blood follows). Stab the first of the two dummies
    past the table hard and push on: it runs through into the second.
-9. Dismemberment at the joints: a hard, square cut across an elbow, a wrist, a knee, an ankle or
-   the neck (a head blow can take the neck); never through a thigh or the torso. The arming sword
-   needs about 19 m/s; the blade carries on through.
+9. Dismemberment: cut into an arm, a hand, a shin, a foot or the head with an edge (any sword, the
+   dagger, the axe, the spear's blade) and it comes off, at its joint (the head by its neck): the range's
+   Easy Dismemberment, on by default. A thigh or the torso never comes off, a stab still sticks, and
+   armour that stops the edge (the bench's chainmail and plate) stops the cut.
+   For the strict cut instead (a hard, square cut within 4 cm of a joint, 12 m/s for the arming
+   sword), add `[melee]` / `easy_dismemberment = false` to `%LOCALAPPDATA%\RustVR\settings.toml`.
 10. Knockouts: the mace on a bare head (the chainmail dummy's) knocks it out for 6 s, out cold on
     its feet (eyes shut).
 11. Feedback: hits sound by what hit what (flesh, wood, metal clashing), sparks off metal, the
