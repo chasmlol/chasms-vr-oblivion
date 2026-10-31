@@ -34,6 +34,7 @@ pub mod camera;
 pub mod clock;
 pub mod collision;
 pub mod combat;
+pub mod commands;
 pub mod console;
 pub mod d3d9;
 pub mod depth;

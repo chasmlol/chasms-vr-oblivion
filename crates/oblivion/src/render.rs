@@ -361,6 +361,7 @@ mod win {
         let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, talking, now, dt })?;
         // (people look at the headset: in the dialogue menu, aimed here)
         crate::look::publish(snap.view.as_ref());
+        crate::commands::frame(now);
         if talking {
             crate::look::aim_in_dialogue();
         }

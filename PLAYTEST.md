@@ -4,7 +4,8 @@ Save: rustvr-voice
 
 `playtest.bat` in this worktree (not committed: double-click it in Explorer) puts away any game left
 running, starts the voice servers if they aren't up (speech to text and Breeze, waiting for both:
-Breeze's first start takes about 4 minutes), turns RustVR's Voice setting on, then boots this build
+Breeze is the C++ one now, Breeze-TTS-2.cpp built for CUDA, up in about 10 seconds), turns RustVR's
+Voice setting on, then boots this build
 into **rustvr-voice**: The Merchants Inn in the Imperial City's Market District, with people about
 (a copy of the pickpocket feature's `rustvr-pocket`; `rustvr-city` is at Odiil Farm, outside the
 city). The market is out of the inn's door. A key in the .bat's
@@ -22,9 +23,11 @@ longer: their voice is being made from the game's clips.
    Explorer window (the .bat stops and says so if it isn't set). The key stays in your environment:
    it's in no file and no repository.
 2. Nothing else: the plugin's config is already written, `%LOCALAPPDATA%\RustVR\voice.toml`
-   (DeepSeek's `deepseek-flash`, thinking off; Parakeet on 8083; Breeze on 7860; the Virtual
-   Desktop mic; Kev off). Your m8 setup is used where it is, `<voice models>` (Parakeet's and
-   Silero's models, Breeze in WSL with your patch). The voices made from the game's clips go in
+   (DeepSeek's `deepseek-flash`, thinking off; Parakeet on 8083; Breeze on 7880, the C++ one in
+   `<builds>\voice\breeze-cpp` with its Q8_0 model; the Virtual Desktop mic; Kev off). Your m8
+   setup is used where it is, `<voice models>` (Parakeet's and Silero's models; the Python Breeze in
+   WSL is still there, on 7860, if `server` in `voice.toml` goes back to it). The voices made from
+   the game's clips go in
    `%LOCALAPPDATA%\RustVR\voice\oblivion\voices`, each character's memory in `...\oblivion\saves.json`.
 
 ## Settings
@@ -83,6 +86,16 @@ restarts the voice plugin (what people were told since your last save goes with 
    was said before the save, not after.
 10. **The brain page.** On the desktop, http://127.0.0.1:8090 shows the exact prompt each person
    gets, every line and how long each step took (/history keeps the session).
+11. **Simple voice commands** (Windows' own speech recognition, no AI: the Voice tab's "Simple
+    voice commands", on). They work with "Talk to the game's characters" off too.
+    - Activate someone for the game's dialogue and read a topic out loud ("Rumors", "The
+      Imperial City"): it's picked, as a click on it would. "Goodbye" closes it. Any short text
+      in any menu works the same (a button's word).
+    - Out of menus, look at a shopkeeper and say "What have you got for sale?" (or "What do you
+      sell?", "Show me your wares", "Let's trade"): their dialogue opens and its Barter is clicked.
+      "Can we talk?" just opens their dialogue.
+    - The adapter's log (`rustvr-oblivion.log`) says each thing it heard and how sure it was
+      (`voice commands: heard ...`).
 
 ## What I checked, and what I couldn't
 
@@ -121,6 +134,9 @@ Known for now:
 - The game's dialogue menu speaks in 2D, centred; in the world (theirs, and the game's own greetings)
   voices are 3D, a few dB quieter at the same loudness. If they're still quiet at 4, the game's
   own Voice slider at full (and its effects or music a little lower) is the rest of the room.
+- Breeze is the C++ one now: measured with the game closed it makes a second of acted voice in
+  0.34 s (the Python one: 0.51 s), plain in 0.24 s (0.40 s), its first sound in 0.13 to 0.19 s.
+  In the headset it should keep up better; the numbers below are the Python one's.
 - In the headset Breeze makes their voice a little slower than they speak it: the game's rendering
   has most of the GPU (a second of acted voice took 1.2 to 1.3 s in your last run; 0.5 s with the
   game closed). So in a long answer they now and then wait for the rest: at a pause (a comma, a
