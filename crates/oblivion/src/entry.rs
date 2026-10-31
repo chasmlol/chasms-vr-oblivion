@@ -38,6 +38,10 @@ fn startup() {
     tracing::info!("startup: the game's code is there after {:?}", t0.elapsed());
     render::install();
     #[cfg(target_arch = "x86")]
+    window::install_focus();
+    #[cfg(target_arch = "x86")]
+    window::install_sound_focus();
+    #[cfg(target_arch = "x86")]
     crate::worldmenu::install();
     #[cfg(target_arch = "x86")]
     crate::clock::install();

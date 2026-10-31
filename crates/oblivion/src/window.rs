@@ -2,7 +2,12 @@
 //!
 //! * **Focus**: Oblivion skips its frames while its window isn't the active one (it sleeps 50 ms
 //!   instead). In VR the player looks at the headset, not the window, so the game is told its window
-//!   is always active ([`install`], once the game has made its device).
+//!   is always active ([`install`], once the game has made its device). And it never hears its window
+//!   was deactivated ([`install_focus`]): its window procedure (0x4060F0) pauses the game's clock on
+//!   `WM_ACTIVATE`'s inactive (the time globals' pause count, 0xB33E90), and paused, every frame is
+//!   no time at all: the world stands still (no walking, no swing, no menu's fade) while the
+//!   runtime goes on drawing the hands. Another window in front (the desktop view, OBS) is no
+//!   reason for the game to stop, nor for its sounds to go quiet ([`install_sound_focus`]).
 //! * **Background** (the `background` setting, for testing): the game's window is made off-screen
 //!   and never activated or brought to the front, and message boxes are logged and answered (a
 //!   player isn't there to), so the game runs without touching the desktop. (A desktop of its own
@@ -64,6 +69,92 @@ mod win {
         let f = hook_user32("SetForegroundWindow", set_foreground_window as *const (), &REAL_FOREGROUND);
         let m = hook_user32("MessageBoxA", message_box as *const (), &REAL_BOX);
         tracing::info!("window: background mode (create {c}, show {s}, move {p}, foreground {f}, message box {m})");
+    }
+
+    /// The game's window procedure, and `WM_ACTIVATE` with the window deactivated (`WA_INACTIVE`).
+    #[cfg(target_arch = "x86")]
+    const WND_PROC: usize = 0x0040_60F0;
+    #[cfg(target_arch = "x86")]
+    const WM_ACTIVATE: u32 = 6;
+    #[cfg(target_arch = "x86")]
+    const WA_INACTIVE: usize = 0;
+    #[cfg(target_arch = "x86")]
+    static REAL_WND_PROC: AtomicUsize = AtomicUsize::new(0);
+
+    /// Once the game's code is there, before it makes its window: its window procedure hooked, so
+    /// the game is never told its window was deactivated.
+    #[cfg(target_arch = "x86")]
+    pub fn install_focus() {
+        if hooks::install_into(WND_PROC as *const (), wnd_proc as *const (), "the game's window procedure", &REAL_WND_PROC) {
+            tracing::info!("window: the game plays on with another window in front (its clock never paused for it)");
+        }
+    }
+
+    #[cfg(target_arch = "x86")]
+    unsafe extern "system" fn wnd_proc(h: HWND, msg: u32, wparam: usize, lparam: isize) -> isize {
+        if msg == WM_ACTIVATE && wparam & 0xFFFF == WA_INACTIVE {
+            // (The game's own answer to it is 0.)
+            return 0;
+        }
+        let real: unsafe extern "system" fn(HWND, u32, usize, isize) -> isize = unsafe { std::mem::transmute(REAL_WND_PROC.load(Ordering::Acquire)) };
+        unsafe { real(h, msg, wparam, lparam) }
+    }
+
+    /// The game's sounds go on with another window in front: DirectSound mutes a buffer made
+    /// without `DSBCAPS_GLOBALFOCUS` while its window (the game's, at `DSSCL_PRIORITY`) isn't the
+    /// foreground one, and the game makes none with it. `DirectSoundCreate8` (dsound.dll's own) is
+    /// hooked before the game makes its sound, and `IDirectSound8::CreateSoundBuffer` (slot 3) on
+    /// what it makes; a duplicated buffer has its original's flags.
+    #[cfg(target_arch = "x86")]
+    static REAL_DS_CREATE: AtomicUsize = AtomicUsize::new(0);
+    #[cfg(target_arch = "x86")]
+    static REAL_CREATE_BUFFER: AtomicUsize = AtomicUsize::new(0);
+    #[cfg(target_arch = "x86")]
+    const DSBCAPS_PRIMARYBUFFER: u32 = 0x1;
+    #[cfg(target_arch = "x86")]
+    const DSBCAPS_GLOBALFOCUS: u32 = 0x8000;
+    /// `DSBUFFERDESC`'s size (a 32-bit process's: `DSBUFFERDESC1`, the older one, is 20).
+    #[cfg(target_arch = "x86")]
+    const BUFFER_DESC: usize = 36;
+
+    #[cfg(target_arch = "x86")]
+    pub fn install_sound_focus() {
+        let Ok(dsound) = (unsafe { LoadLibraryW(w!("dsound.dll")) }) else { return };
+        let Some(f) = (unsafe { GetProcAddress(dsound, PCSTR(c"DirectSoundCreate8".as_ptr() as *const u8)) }) else { return };
+        if hooks::install_into(f as *const (), ds_create as *const (), "DirectSoundCreate8", &REAL_DS_CREATE) {
+            tracing::info!("window: the game's sounds play on with another window in front");
+        }
+    }
+
+    #[cfg(target_arch = "x86")]
+    unsafe extern "system" fn ds_create(guid: *const u8, out: *mut *mut u8, outer: *mut u8) -> i32 {
+        let real: unsafe extern "system" fn(*const u8, *mut *mut u8, *mut u8) -> i32 = unsafe { std::mem::transmute(REAL_DS_CREATE.load(Ordering::Acquire)) };
+        let hr = unsafe { real(guid, out, outer) };
+        hooks::guard_void("DirectSoundCreate8", || {
+            if hr < 0 || out.is_null() || unsafe { (*out).is_null() } || REAL_CREATE_BUFFER.load(Ordering::Acquire) != 0 {
+                return;
+            }
+            let create = unsafe { *(*(*out as *const *const *const ())).add(3) };
+            hooks::install_into(create, create_buffer as *const (), "IDirectSound8::CreateSoundBuffer", &REAL_CREATE_BUFFER);
+        });
+        hr
+    }
+
+    #[cfg(target_arch = "x86")]
+    unsafe extern "system" fn create_buffer(ds: *mut u8, desc: *const u8, out: *mut *mut u8, outer: *mut u8) -> i32 {
+        let real: unsafe extern "system" fn(*mut u8, *const u8, *mut *mut u8, *mut u8) -> i32 = unsafe { std::mem::transmute(REAL_CREATE_BUFFER.load(Ordering::Acquire)) };
+        // (A copy with the flag: the game's own description stays as it made it.)
+        let mut copy = [0u8; BUFFER_DESC];
+        let size = if desc.is_null() { 0 } else { unsafe { (desc as *const u32).read_unaligned() as usize } };
+        if (8..=BUFFER_DESC).contains(&size) {
+            unsafe { std::ptr::copy_nonoverlapping(desc, copy.as_mut_ptr(), size) };
+            let flags = u32::from_le_bytes(copy[4..8].try_into().unwrap());
+            if flags & DSBCAPS_PRIMARYBUFFER == 0 {
+                copy[4..8].copy_from_slice(&(flags | DSBCAPS_GLOBALFOCUS).to_le_bytes());
+                return unsafe { real(ds, copy.as_ptr(), out, outer) };
+            }
+        }
+        unsafe { real(ds, desc, out, outer) }
     }
 
     /// Once the game is running (its device made).
