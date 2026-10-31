@@ -4,7 +4,7 @@ rem Puts away a game another .bat may have left running (else this boot waits fo
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" -Close
 rem The trailer is recorded from the desktop view: tools\oblivion.ps1 turns it off unless it's asked for.
 set RUSTVR_DESKTOP_VIEW=1
-rem Installs the trailer build (main, <builds>\trailer) and boots rustvr-archery, then takes you to
+rem Installs the trailer build (main) and boots rustvr-archery, then takes you to
 rem Weye, the hamlet across the bridge from the Imperial City: outside the Wawnet Inn's door, where the
 rem game puts you coming out of it, facing down into the hamlet (its houses, the stables, the Legion
 rem guard, people about) at 1 pm in clear weather. The Daedric cuirass, greaves, boots and gauntlets
@@ -27,9 +27,9 @@ echo the houses past the people.
 echo.
 echo Press a key here when you're done to close the game.
 pause >nul
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" -Close
-rem Keeps this run's runtime log in the next clip-<shot>-<n> folder: the next start replaces it.
-powershell -NoProfile -Command "$n = 1; while (Test-Path ('<builds>\trailer\clip-02-daedric-archer-weye-' + $n)) { $n++ }; $d = '<builds>\trailer\clip-02-daedric-archer-weye-' + $n; New-Item -ItemType Directory -Force $d | Out-Null; Copy-Item '%LOCALAPPDATA%\RustVR\rustvr.log' $d -ErrorAction SilentlyContinue"
+rem Closes the game and keeps this run's runtime log in the trailer build's next clip-02-daedric-archer-weye-<n> folder
+rem (tools\play.ps1 -KeepLogs), as the next start replaces it.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Close -KeepLogs clip-02-daedric-archer-weye
 echo The game is closed.
 pause
 exit /b 0

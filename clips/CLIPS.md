@@ -13,20 +13,17 @@ Every bat:
   lines the shot needs (`tools\play.ps1`);
 - takes every spell and power away last (`RemoveAllSpells`): nothing in your hands but what you
   take, nothing to pick;
-- keeps the run's `rustvr.log` in `<builds>\trailer\clip-<shot>-<n>`.
+- keeps the run's `rustvr.log` in the trailer build's folder, `clip-<shot>-<n>`, as it closes
+  (`tools\play.ps1 -KeepLogs`).
 
-The bats never touch your RustVR settings (but for clip 08 turning Voice on) (`%LOCALAPPDATA%\RustVR\settings.toml`): the desktop
-view's look, its field of view and the overscan are whatever you set in the RustVR menu, and stay
-so. The looks are in the menu's Studio tab.
+The bats never touch your RustVR settings (`%LOCALAPPDATA%\RustVR\settings.toml`), but for clip 08
+turning Voice on: the desktop view's look, its field of view and the overscan are whatever you set
+in the RustVR menu, and stay so. The looks are in the menu's Studio tab.
 
-The trailer build is main as of `323bc1b` (protocol v17: stealth's crouch, voice, the framework's
-melee in the range), built in `<builds>\trailer` (`rustvr-voice.exe` too), with the trailer
-branch's fixes: the game plays on (controls, clock, sound) with another window in front, the
-desktop view opens in front of the game's window, the boot's New Game reaches the prison cell with
-the main menu in Cyrodiil, a changed overscan takes at the next start, and the overscan goes up to
-20. Talking to people needs the voice servers up and `DEEPSEEK_API_KEY` set
-(`docs/playtest/voice.md`). Shots that need a feature not in main yet boot that feature's own build
-(`play.ps1 <feature>`).
+The bats play the `trailer` worktree's build (`tools\play.ps1 trailer`): main, built with
+`rustvr-voice` too (`README.md`, "The voice plugin"). Where the worktrees and their builds are is
+your machine's own (`tools\paths.ps1`, `tools\dev.example.toml`). Talking to people needs the voice
+servers up and the LLM's key set (`docs/playtest/voice.md`).
 
 ## Shots
 

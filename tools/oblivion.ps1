@@ -1,4 +1,4 @@
-# Oblivion in one command, for checks and playtests (docs/OVERNIGHT.md, "Fast boot"): boot, test, close.
+# Oblivion in one command, for checks and playtests (docs/DEVELOPING.md): boot, test, close.
 #
 # Takes the game lock (one game at a time, whichever worktree asks), builds and installs this
 # checkout's adapter and runtime, and starts the game from its exe (`SteamAppId` keeps Steam's DRM
@@ -16,7 +16,8 @@
 #   powershell -File tools\oblivion.ps1 -Close
 #
 # Run it from the Bash tool, not the PowerShell tool: a sandboxed start can't reach Steam and brings
-# up Oblivion's launcher. Builds go to $env:CARGO_TARGET_DIR (a worktree's own), else target\.
+# up Oblivion's launcher. Builds go to $env:CARGO_TARGET_DIR (a worktree's own), else target\. The
+# game's folder and the lock's are this machine's own (tools\paths.ps1).
 # Test saves: rustvr-base (a Nord in iron armour), rustvr-city (Imperial City market), rustvr-weye
 # (open ground on Lake Rumare's shore), rustvr-ruin (Vilverin, an Ayleid ruin), rustvr-chorrol
 # (Chorrol, its stables); `-Save "Skip Tutorial"` and the player's own saves load too. `-Save none`
@@ -47,10 +48,11 @@ if (-not $env:RUSTVR_DESKTOP_VIEW) { $env:RUSTVR_DESKTOP_VIEW = "0" }
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $repo "target" }
-$game = "${env:ProgramFiles(x86)}\Steam\steamapps\common\Oblivion"
-$lockDir = "<builds>"
-$lock = Join-Path $lockDir "game.lock"
-New-Item -ItemType Directory -Force $lockDir | Out-Null
+. "$PSScriptRoot\paths.ps1"
+# ($Game, the game's folder; PowerShell's names are case-blind, so it's the $game below.)
+if (-not $Game) { "Oblivion isn't where its installer or Steam says: set RUSTVR_OBLIVION_DIR, or game in $DevConfig"; exit 1 }
+$lock = $LockFile
+New-Item -ItemType Directory -Force (Split-Path -Parent $lock) | Out-Null
 
 function Alive([int]$id) { $id -gt 0 -and (Get-Process -Id $id -ErrorAction SilentlyContinue) }
 
@@ -103,7 +105,7 @@ function Put-Away {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     Start-Sleep 1
     Set-Content "$game\rustvr-oblivion.toml" "background = false`n"
-    python tools\install_oblivion.py --restore-ini | Out-Null
+    python tools\install_oblivion.py --game $game --restore-ini | Out-Null
     Remove-Item "$game\rustvr-console-test" -ErrorAction SilentlyContinue
 }
 
@@ -132,7 +134,7 @@ try {
         $b = cmd /c "cargo build -q --release -p rustvr-oblivion --target i686-pc-windows-msvc -j $Jobs 2>&1 && cargo build -q --release --manifest-path framework\Cargo.toml --target-dir `"$target`" -p rustvr-runtime -p rustvr-range -p rustvr-xrsim -j $Jobs 2>&1"
         if ($LASTEXITCODE -ne 0) { "build failed:"; $b; Give-Lock; exit 1 }
     }
-    python tools\install_oblivion.py | Select-Object -First 1
+    python tools\install_oblivion.py --game $game | Select-Object -First 1
 
     # The console lines: the save as soon as the main menu is up, then the rest once in the game.
     $lines = @()

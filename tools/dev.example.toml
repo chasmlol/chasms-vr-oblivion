@@ -1,0 +1,30 @@
+# Where this machine keeps things, for the scripts in tools\ and clips\ (tools\paths.ps1 reads it).
+# Copy it to %LOCALAPPDATA%\RustVR\dev.toml and set what differs; every line is optional, and the
+# environment variable named beside a line wins over it. This file is only an example: the real one
+# stays on your machine, out of the repository. Use single quotes, so a Windows path's backslashes
+# stay as they are.
+
+# Oblivion's folder (RUSTVR_OBLIVION_DIR). Unset, the scripts find it where the game's installer left
+# it in the registry, or in one of Steam's libraries.
+# game = 'E:\Games\Steam\steamapps\common\Oblivion'
+
+# The folder holding a worktree per feature, which tools\play.ps1 <feature> plays (RUSTVR_WORKTREES).
+# Unset: the folder this checkout is in.
+# worktrees = 'E:\rustvr\worktrees'
+
+# Where each worktree builds, <builds>\<worktree's name> (RUSTVR_BUILDS); the game lock is kept here
+# too. Unset: each worktree's own target\, and the lock in %LOCALAPPDATA%\RustVR.
+# builds = 'E:\rustvr\builds'
+
+# The voice plugin's servers, for clips\voice-servers.ps1 (docs/playtest/voice.md).
+[voice]
+# m8's speech-to-text server (built with m8: m8\target\release\stt-server.exe), and its model folder.
+# stt_server = 'E:\m8\m8\target\release\stt-server.exe'
+# stt_model = 'E:\m8\models\sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8'
+# Breeze, the voices' text to speech: its server, the folder it runs in and its model (relative to
+# that folder).
+# tts_server = 'E:\breeze-cpp\build\Release\breeze-server.exe'
+# tts_dir = 'E:\breeze-cpp'
+# tts_model = 'models\breeze-tts-2-q8_0.gguf'
+# A voice clip and its text (a .txt beside it) to warm both servers up with before the game's first line.
+# warm_up = 'E:\m8\voices\me.wav'

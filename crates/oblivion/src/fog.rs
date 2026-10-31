@@ -1,8 +1,8 @@
 //! Oblivion's fog by how far away a thing is.
 //!
 //! The game's vertex shaders don't fog a vertex by its distance. They fog it by the length of its
-//! clip-space position: x, y and depth (`SLS2000.vso`: `dp4 r0.xyz, ModelViewProj, v0`, then
-//! `dp3 r2.x, r0, r0; rsq; rcp`, then `(FogParam.x - d) / FogParam.y`). That's the depth times
+//! clip-space position: x, y and depth (`SLS2000.vso` takes the length `d` of the position's
+//! `ModelViewProj` x, y and z, and fogs by `(FogParam.x - d) / FogParam.y`). That's the depth times
 //! `sqrt(1 + ndc.x² + ndc.y²)`, so it grows towards the frustum's edges, and is the distance only in
 //! a symmetric 90 degree frustum. A flat player's 75 degrees barely shows it. The headset's eyes are
 //! off-centre, mirrored and wide, and wider again overscanned:
@@ -326,9 +326,13 @@ mod tests {
     /// instructions, and Direct3D 9 taking them all.
     #[test]
     fn every_fogged_shader_of_the_games_is_rewritten() {
-        let path = r"C:\Program Files (x86)\Steam\steamapps\common\Oblivion\Data\Shaders\shaderpackage004.sdp";
-        let Ok(b) = std::fs::read(path) else {
-            eprintln!("no {path}: skipped");
+        let Some(game) = oblivion_assets::install::game_folder() else {
+            eprintln!("no Oblivion here: skipped");
+            return;
+        };
+        let path = game.join(r"Data\Shaders\shaderpackage004.sdp");
+        let Ok(b) = std::fs::read(&path) else {
+            eprintln!("no {}: skipped", path.display());
             return;
         };
         let count = u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize;

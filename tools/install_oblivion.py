@@ -14,10 +14,12 @@ import shutil
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import local_paths  # noqa: E402
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Where the builds are: this checkout's `target`, or `CARGO_TARGET_DIR` (a worktree's own).
 TARGET = os.environ.get("CARGO_TARGET_DIR") or os.path.join(REPO, "target")
-DEFAULT_GAME = r"C:\Program Files (x86)\Steam\steamapps\common\Oblivion"
 OURS = ["dinput8.dll", "dinput8.pdb", "rustvr-runtime.txt"]
 IN_THE_WAY = ["dinput8.dll", "dinput8.pdb"]
 BACKUP = "rustvr_backup"
@@ -123,10 +125,13 @@ def restore_ini(game):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--game", default=DEFAULT_GAME)
+    ap.add_argument("--game", help="Oblivion's folder (found through the registry when not given: tools/local_paths.py)")
     ap.add_argument("--uninstall", action="store_true")
     ap.add_argument("--restore-ini", action="store_true")
     a = ap.parse_args()
+    a.game = a.game or local_paths.oblivion()
+    if not a.game:
+        sys.exit("Oblivion wasn't found: pass --game <its folder>, or set RUSTVR_OBLIVION_DIR")
     if not os.path.exists(os.path.join(a.game, "Oblivion.exe")):
         sys.exit(f"no Oblivion.exe in {a.game}")
     if a.restore_ini:

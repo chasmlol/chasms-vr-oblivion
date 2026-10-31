@@ -4,7 +4,7 @@ rem Puts away a game another .bat may have left running (else this boot waits fo
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" -Close
 rem The trailer is recorded from the desktop view: tools\oblivion.ps1 turns it off unless it's asked for.
 set RUSTVR_DESKTOP_VIEW=1
-rem Installs the trailer build (main, <builds>\trailer) and boots rustvr-base (the Nord), then takes
+rem Installs the trailer build (main) and boots rustvr-base (the Nord), then takes
 rem you to the Imperial City's Market District (its street cell ICMarketDistrict03: the district is a
 rem worldspace, which coc can't go to) at 7 pm in clear weather, where the game puts you coming out of
 rem The Merchants Inn, facing up the street. The glass cuirass, greaves, boots and gauntlets are put on
@@ -23,9 +23,9 @@ echo load for the armour to go on and the spells to go. Crouch a little to sneak
 echo.
 echo Press a key here when you're done to close the game.
 pause >nul
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" -Close
-rem Keeps this run's runtime log in the next clip-<shot>-<n> folder: the next start replaces it.
-powershell -NoProfile -Command "$n = 1; while (Test-Path ('<builds>\trailer\clip-03-glass-imperial-city-evening-' + $n)) { $n++ }; $d = '<builds>\trailer\clip-03-glass-imperial-city-evening-' + $n; New-Item -ItemType Directory -Force $d | Out-Null; Copy-Item '%LOCALAPPDATA%\RustVR\rustvr.log' $d -ErrorAction SilentlyContinue"
+rem Closes the game and keeps this run's runtime log in the trailer build's next clip-03-glass-imperial-city-evening-<n> folder
+rem (tools\play.ps1 -KeepLogs), as the next start replaces it.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Close -KeepLogs clip-03-glass-imperial-city-evening
 echo The game is closed.
 pause
 exit /b 0

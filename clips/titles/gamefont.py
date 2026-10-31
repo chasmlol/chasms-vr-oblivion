@@ -4,10 +4,17 @@ offset), then per folder its name (a bstring) and file records (hash, size, offs
 names; a file is zlib (its size first) when the archive's compressed flag and the size's 0x40000000
 bit differ."""
 import struct
+import sys
 import zlib
 from pathlib import Path
 
-DATA = Path(r"C:\Program Files (x86)\Steam\steamapps\common\Oblivion\Data")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+import local_paths  # noqa: E402
+
+_GAME = local_paths.oblivion()
+if not _GAME:
+    sys.exit("Oblivion wasn't found: set RUSTVR_OBLIVION_DIR to its folder")
+DATA = Path(_GAME) / "Data"
 
 
 def bsa_files(path):

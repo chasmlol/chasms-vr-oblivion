@@ -22,20 +22,21 @@
 //! art under the prefixes for the runtime to paint (`oblivion_assets::ui`: `fonts\...` and
 //! `textures\menus\...`, the art as RGBA).
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use oblivion_assets::export::{self, Part};
 use oblivion_assets::{bsa::Archives, nif::Nif, preview};
 use std::path::PathBuf;
 
-const DEFAULT_GAME: &str = r"C:\Program Files (x86)\Steam\steamapps\common\Oblivion";
-
 fn main() -> Result<()> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    let mut game = PathBuf::from(DEFAULT_GAME);
-    if args.first().map(String::as_str) == Some("--game") {
-        game = PathBuf::from(args.remove(1));
+    // The game: --game, else found as the repository's tools find it (`oblivion_assets::install`).
+    let game = if args.first().map(String::as_str) == Some("--game") {
+        let game = PathBuf::from(args.remove(1));
         args.remove(0);
-    }
+        game
+    } else {
+        oblivion_assets::install::game_folder().context("Oblivion wasn't found: pass --game <its folder>, or set RUSTVR_OBLIVION_DIR")?
+    };
     let archives = Archives::open(&game)?;
     match args.first().map(String::as_str) {
         Some("check") => {

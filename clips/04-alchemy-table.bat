@@ -4,7 +4,7 @@ rem Puts away a game another .bat may have left running (else this boot waits fo
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" -Close
 rem The trailer is recorded from the desktop view: tools\oblivion.ps1 turns it off unless it's asked for.
 set RUSTVR_DESKTOP_VIEW=1
-rem Installs the trailer build (main, <builds>\trailer) and boots rustvr-alchemy (Odiil Farm's
+rem Installs the trailer build (main) and boots rustvr-alchemy (Odiil Farm's
 rem farmhouse, standing in its entrance), then sets out one table on your right (alchemy-table.txt):
 rem the Journeyman mortar and pestle, alembic, calcinator and retort, Flax Seeds and Steel-Blue
 rem Entoloma Cap for Restore Magicka on the left, Boar Meat and Venison for Restore Health on the
@@ -25,9 +25,9 @@ echo Then the same with the Flax Seeds and the Steel-Blue Entoloma Cap for Resto
 echo.
 echo Press a key here when you're done to close the game.
 pause >nul
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" -Close
-rem Keeps this run's runtime log in the next clip-<shot>-<n> folder: the next start replaces it.
-powershell -NoProfile -Command "$n = 1; while (Test-Path ('<builds>\trailer\clip-04-alchemy-table-' + $n)) { $n++ }; $d = '<builds>\trailer\clip-04-alchemy-table-' + $n; New-Item -ItemType Directory -Force $d | Out-Null; Copy-Item '%LOCALAPPDATA%\RustVR\rustvr.log' $d -ErrorAction SilentlyContinue"
+rem Closes the game and keeps this run's runtime log in the trailer build's next clip-04-alchemy-table-<n> folder
+rem (tools\play.ps1 -KeepLogs), as the next start replaces it.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Close -KeepLogs clip-04-alchemy-table
 echo The game is closed.
 pause
 exit /b 0

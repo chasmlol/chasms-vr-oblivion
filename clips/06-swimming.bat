@@ -4,7 +4,7 @@ rem Puts away a game another .bat may have left running (else this boot waits fo
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" -Close
 rem The trailer is recorded from the desktop view: tools\oblivion.ps1 turns it off unless it's asked for.
 set RUSTVR_DESKTOP_VIEW=1
-rem Installs the trailer build (main, <builds>\trailer) and boots rustvr-swim: floating in Lake
+rem Installs the trailer build (main) and boots rustvr-swim: floating in Lake
 rem Rumare just south of the Imperial Bridge, east of Weye, at 1 pm, the weather held clear (the save's
 rem can turn to rain). The rocks and the bridge are to the north, open water east and south. Your
 rem RustVR settings are left as they are.
@@ -23,9 +23,9 @@ echo slap the surface for a splash. Swim north to the rocks under the bridge and
 echo.
 echo Press a key here when you're done to close the game.
 pause >nul
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" -Close
-rem Keeps this run's runtime log in the next clip-<shot>-<n> folder: the next start replaces it.
-powershell -NoProfile -Command "$n = 1; while (Test-Path ('<builds>\trailer\clip-06-swimming-' + $n)) { $n++ }; $d = '<builds>\trailer\clip-06-swimming-' + $n; New-Item -ItemType Directory -Force $d | Out-Null; Copy-Item '%LOCALAPPDATA%\RustVR\rustvr.log' $d -ErrorAction SilentlyContinue"
+rem Closes the game and keeps this run's runtime log in the trailer build's next clip-06-swimming-<n> folder
+rem (tools\play.ps1 -KeepLogs), as the next start replaces it.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Close -KeepLogs clip-06-swimming
 echo The game is closed.
 pause
 exit /b 0

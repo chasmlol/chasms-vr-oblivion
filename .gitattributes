@@ -1,0 +1,2 @@
+# cmd reads a .bat's labels (goto) right only with Windows line endings, whatever git's own setting.
+*.bat text eol=crlf

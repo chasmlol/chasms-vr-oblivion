@@ -28,12 +28,15 @@ import urllib.parse
 import urllib.request
 import zlib
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import local_paths  # noqa: E402
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIOS = os.path.join(REPO, "crates", "oblivion", "data", "bios.toml")
 # (the line in bios.toml after which every bio is this tool's, remade each time it runs)
 WRITTEN = "# Written by tools/oblivion_bios.py from here to the end (run it again to remake this part):"
-DEFAULT_GAME = r"C:\Program Files (x86)\Steam\steamapps\common\Oblivion"
-DEFAULT_CACHE = r"<builds>\voice\uesp"
+# The pages and bios written so far (--cache): kept out of the repository.
+DEFAULT_CACHE = os.path.join(os.environ.get("LOCALAPPDATA", ""), "RustVR", "uesp")
 VOICE_TOML = os.path.join(os.environ.get("LOCALAPPDATA", ""), "RustVR", "voice.toml")
 # The game's plugins with people in them, and the wiki namespace each one's people are in.
 PLUGINS = [
@@ -230,12 +233,15 @@ def toml_entry(name, bio):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--game", default=DEFAULT_GAME)
+    ap.add_argument("--game", help="Oblivion's folder (found through the registry when not given)")
     ap.add_argument("--cache", default=DEFAULT_CACHE)
     ap.add_argument("--limit", type=int, default=0, help="write at most this many (0: everyone)")
     ap.add_argument("--only", default="", help="these people only (names, comma-separated)")
     ap.add_argument("--jobs", type=int, default=12)
     args = ap.parse_args()
+    args.game = args.game or local_paths.oblivion()
+    if not args.game:
+        sys.exit("Oblivion wasn't found: pass --game <its folder>, or set RUSTVR_OBLIVION_DIR")
 
     done_path = os.path.join(args.cache, "bios.json")
     done = json.load(open(done_path, encoding="utf-8")) if os.path.exists(done_path) else {}

@@ -10,7 +10,7 @@ rem one setting this .bat changes). The DeepSeek key is your own, already in
 rem %LOCALAPPDATA%\RustVR\voice.toml.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0voice-servers.ps1"
 if errorlevel 1 goto failed
-rem Installs the trailer build (main with voice, <builds>\trailer) and boots rustvr-voice: The
+rem Installs the trailer build (main with voice) and boots rustvr-voice: The
 rem Merchants Inn in the Imperial City's Market District, people about, with the Adoring Fan put a
 rem couple of steps in front of you.
 rem Every spell and power is taken away (RemoveAllSpells): nothing in your hands but what you take.
@@ -26,9 +26,9 @@ echo own voice, their lips moving with it. Their prompts and lines show on http:
 echo.
 echo Press a key here when you're done to close the game.
 pause >nul
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" -Close
-rem Keeps this run's runtime and voice logs in the next clip-<shot>-<n> folder: the next start replaces them.
-powershell -NoProfile -Command "$n = 1; while (Test-Path ('<builds>\trailer\clip-08-voice-talk-' + $n)) { $n++ }; $d = '<builds>\trailer\clip-08-voice-talk-' + $n; New-Item -ItemType Directory -Force $d | Out-Null; Copy-Item '%LOCALAPPDATA%\RustVR\rustvr.log','%LOCALAPPDATA%\RustVR\voice.log' $d -ErrorAction SilentlyContinue"
+rem Closes the game and keeps this run's runtime and voice logs in the trailer build's next clip-08-voice-talk-<n> folder
+rem (tools\play.ps1 -KeepLogs), as the next start replaces them.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Close -KeepLogs clip-08-voice-talk -Logs "rustvr.log,voice.log"
 echo The game is closed. The voice servers are still running.
 pause
 exit /b 0
