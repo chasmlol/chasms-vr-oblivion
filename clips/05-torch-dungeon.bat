@@ -6,9 +6,10 @@ rem The trailer is recorded from the desktop view: tools\oblivion.ps1 turns it o
 set RUSTVR_DESKTOP_VIEW=1
 rem Installs the trailer build (main, <builds>\trailer) and boots rustvr-torches: Vilverin, at the
 rem top of the stairs down into the dark Ayleid ruin, a burning torch equipped at your right hip (two
-rem more in the pack). No spell is selected (SelectSpell none): nothing in your off hand, so the
-rem torch is the only light you carry. Your RustVR settings are left as they are.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-torches -Commands "SelectSpell none"
+rem more in the pack). Every spell and power is taken away (RemoveAllSpells): nothing in your hands
+rem but what you take, so the torch is the only light you carry. Your RustVR settings are left as
+rem they are.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\play.ps1" trailer -Save rustvr-torches -Commands "RemoveAllSpells"
 if errorlevel 1 goto failed
 echo.
 echo Connect the headset in Virtual Desktop if it isn't: RustVR waits for it, and the desktop view

@@ -176,6 +176,18 @@ fn select_no_spell() -> bool {
     false
 }
 
+/// Takes every spell and power the player could cast away (the game's own `RemoveSpell`, each as
+/// the magic menu lists them; the mirror spell not given back), and selects none: nothing for
+/// either hand to cast, nothing to pick.
+fn remove_all_spells() -> bool {
+    crate::mirror_spell::withhold();
+    let (table, _) = crate::combat::spells();
+    let ids: Vec<u32> = table.spells[..table.count as usize].iter().map(|s| s.id).collect();
+    let removed = ids.iter().filter(|id| run_script(&format!("player.removespell {id:08X}"))).count();
+    tracing::info!("console: {removed} of the player's {} spells and powers taken away", ids.len());
+    select_no_spell()
+}
+
 /// The form id of the player's spell called `name` (as the magic menu lists their spells and
 /// powers), if they have one.
 fn spell_named(name: &str) -> Option<u32> {
@@ -209,7 +221,8 @@ pub fn equip_all(_id: u32) -> bool {
 
 /// Runs a console line: `LoadGame <save>` loads a save, `NewGame` starts a new game (at the main
 /// menu: a boot straight into the character creator), `SelectSpell <name or hex id>` selects one
-/// of the player's spells by its name (`none`: no spell at all), or any spell by its id (a spell
+/// of the player's spells by its name (`none`: no spell at all; `RemoveAllSpells` takes them all
+/// away), or any spell by its id (a spell
 /// the game makes, as the mirror spell, has no id to know beforehand), `EquipAll <hex id>` equips
 /// all the player has of a thing (a
 /// stack of arrows), `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in
@@ -239,6 +252,9 @@ pub fn run(line: &str) -> bool {
     }
     if line.trim() == "NewGame" {
         return new_game();
+    }
+    if line.trim() == "RemoveAllSpells" {
+        return remove_all_spells();
     }
     if let Some(spell) = line.strip_prefix("SelectSpell ") {
         let spell = spell.trim().trim_matches('"');

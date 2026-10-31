@@ -96,9 +96,17 @@ struct State {
     /// The summons count the runtime's frame said last (None before its first frame).
     seen: Option<u32>,
     arrival: Option<Arrival>,
+    /// The player is to have no spells at all ([`withhold`]): the spell isn't given again.
+    withheld: bool,
 }
 
-static STATE: Mutex<State> = Mutex::new(State { checked: f64::MIN, had: 0, made: None, tries: 0, seen: None, arrival: None });
+static STATE: Mutex<State> = Mutex::new(State { checked: f64::MIN, had: 0, made: None, tries: 0, seen: None, arrival: None, withheld: false });
+
+/// The spell isn't given back once it's taken away, until the game closes (the test console's
+/// `RemoveAllSpells`: a player with no spells at all).
+pub fn withhold() {
+    STATE.lock().unwrap().withheld = true;
+}
 
 /// Whether `spell` (a `SpellItem`) is the mirror spell.
 fn is_mirror(spell: usize) -> bool {
@@ -150,7 +158,7 @@ pub fn tick() {
     let now = link::now();
     let mut st = STATE.lock().unwrap();
     // (Not while a menu is open: the magic menu shows the list the spell goes into.)
-    if now - st.checked > CHECK_EVERY && !menus::menu_mode() && st.tries < MOST_TRIES {
+    if now - st.checked > CHECK_EVERY && !menus::menu_mode() && st.tries < MOST_TRIES && !st.withheld {
         st.checked = now;
         let mut spell = find(player);
         if spell == 0 {

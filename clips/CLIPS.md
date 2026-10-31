@@ -30,9 +30,9 @@ the main menu in Cyrodiil, a changed overscan takes at the next start, and the o
 | `00-check.bat` | Check the build and the desktop view: Lake Rumare's shore at 1 pm | trailer |
 | `01-face-sculpt.bat` | Shaping your face by hand: a new game, the prison cell's race menu, the big copy of your head and the mirror; pull the nose long, the ears out | trailer |
 | `02-daedric-archer-weye.bat` | Daedric armour, the Daedric Bow on your back and Daedric Arrows, outside the Wawnet Inn in Weye at 1 pm (the hamlet across the bridge from the Imperial City, its houses and people) | trailer |
-| `03-glass-imperial-city-evening.bat` | Glass armour in the Imperial City's Market District at 7 pm, no spell selected | trailer |
+| `03-glass-imperial-city-evening.bat` | Glass armour outside The Merchants Inn in the Imperial City's Market District at 7 pm, no spells at all | trailer |
 | `04-alchemy-table.bat` | Alchemy at one table in Odiil Farm's farmhouse: the Journeyman set, and Boar Meat and Venison (Restore Health), Flax Seeds and Steel-Blue Entoloma Cap (Restore Magicka) to grind (set out by `alchemy-table.txt`) | trailer |
-| `05-torch-dungeon.bat` | A burning torch at your hip at the top of the stairs into Vilverin's dark Ayleid ruin, no spell selected | trailer |
+| `05-torch-dungeon.bat` | A burning torch at your hip at the top of the stairs into Vilverin's dark Ayleid ruin, no spells at all | trailer |
 | `06-swimming.bat` | Floating in Lake Rumare by the Imperial Bridge at 1 pm, clear | trailer |
 | `07-riding-evening.bat` | Your own horse behind you outside Chorrol's stables at 7 pm, clear | trailer |
 
@@ -58,6 +58,10 @@ about 18 for its camera's lag behind a turning head.
 - `tgm`: god mode. `tai`: AI off (people freeze). `tcl`: no clipping.
 - `player.placeatme <base id> 1 <distance> <direction>`: someone or something placed by you.
 - The adapter's own: `PlaceAt <base> <ahead> <right> <up> [<turn>]`, `PlaceInFront <ref> <metres>`,
-  `SelectSpell <name>` (`SelectSpell none`: no spell, nothing in the off hand), `EquipAll <id>`, `PlayerHorse <base> [<metres>]`, `GoreCut <bone>`
+  `SelectSpell <name>` (`SelectSpell none`: no spell selected), `RemoveAllSpells` (every spell and
+  power taken away, the Mirror power not given back), `EquipAll <id>`, `PlayerHorse <base> [<metres>]`, `GoreCut <bone>`
   (`crates/oblivion/src/console.rs`).
-- Where a door leads (a spot to stand at): its teleport in `Oblivion.esm`, as clip 02's place was found.
+- Where a door leads (a spot to stand at): its teleport in `Oblivion.esm`, as clips 02's and 03's
+  places were found.
+- `coc` goes to cells only: the Imperial City's districts are worldspaces (`ICMarketDistrict`), so
+  `-At` takes one of their cells (`ICMarketDistrict01` to `04`) and `player.setpos` the spot.
