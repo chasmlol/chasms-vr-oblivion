@@ -96,11 +96,13 @@ pub fn sneak_drop() -> Option<Vec3> {
 }
 
 /// Whether the headset's view leaves the game's sneak drop out: from when the player crouches for
-/// real (`body_crouched`, the runtime's `Intents::crouch`: their head is already as low as they
-/// went) until the game's camera is back up (`drop`, metres). A sneak from the button is the game's
-/// own, its camera down as the flat game has it.
+/// real with the game's camera up (`body_crouched`, the runtime's `Intents::crouch`: their head is
+/// already as low as they went; `drop`, metres), until it's back up. A sneak from the button is the
+/// game's own, its camera down as the flat game has it, and crouching for real in it goes lower
+/// still: the view never jumps back up.
 pub fn hold_sneak_drop(holding: bool, body_crouched: bool, drop: f32) -> bool {
-    body_crouched || (holding && drop > 0.01)
+    let down = drop > 0.01;
+    if holding { body_crouched || down } else { body_crouched && !down }
 }
 
 /// The camera for one headset eye: the eye's pose mapped into the world by `view`, its field of
@@ -152,9 +154,13 @@ mod tests {
     fn the_sneak_drop_is_held_out_only_for_a_real_crouch() {
         // The button's sneak: the game's camera goes down.
         assert!(!hold_sneak_drop(false, false, 0.35));
-        // Crouched for real: held out, and still while standing up, until the camera's back up.
-        assert!(hold_sneak_drop(false, true, 0.35));
+        // Crouched for real: held out (from its start, the camera up), and still while standing up,
+        // until the camera's back up.
+        assert!(hold_sneak_drop(false, true, 0.0));
+        assert!(hold_sneak_drop(true, true, 0.35));
         assert!(hold_sneak_drop(true, false, 0.2));
         assert!(!hold_sneak_drop(true, false, 0.0));
+        // The button's sneak, then crouching for real in it: the game's drop stays, the view lower.
+        assert!(!hold_sneak_drop(false, true, 0.35));
     }
 }

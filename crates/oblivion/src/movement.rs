@@ -31,10 +31,6 @@
 //!
 //! Swimming, the arms' strokes are the step ([`crate::swim::stroke_step`]): the game's own swimming
 //! moves the player at the strokes' velocity, the stick's swimming added while it's pushed.
-//!
-//! **Sneaking by crouching** (the runtime's `Intents::crouch`): the less the player crouches in
-//! real life, the less the game's sneak slows them ([`sneak_pace`]). Crouched as low as the game's
-//! sneak puts its camera, it's the game's own sneaking pace.
 
 use glam::Vec3;
 
@@ -110,17 +106,6 @@ pub fn lead_step(lead: Vec3, asked: Vec3, went: Vec3) -> Vec3 {
     lead.clamp_length_max((lead.length() - RETURN * went.length()).max(0.0))
 }
 
-/// What to give the game's sneaking pace for a player crouched `crouch` metres in real life. The
-/// game's sneak walks at its walk times `mult` (`fMoveSneakMult`); crouched `drop` (as far as its
-/// sneak lowers its camera) or lower, that's its pace; less, nearer its walk, by how much less.
-pub fn sneak_pace(crouch: f32, drop: f32, mult: f32) -> f32 {
-    if !(mult > 0.05 && mult < 1.0) || !(drop > 0.05) || !(crouch > 0.0) {
-        return 1.0;
-    }
-    let t = (crouch / drop).min(1.0);
-    (1.0 + (mult - 1.0) * t) / mult
-}
-
 /// The frame's step in the actor's own space (x right, y ahead, game units) for the stick (x right,
 /// y ahead, its length 0..1 how far it's pushed) at the game's `speed` (units a second).
 pub fn step(stick: [f32; 2], speed: f32, dt: f32) -> [f32; 2] {
@@ -133,7 +118,7 @@ pub fn step(stick: [f32; 2], speed: f32, dt: f32) -> [f32; 2] {
 }
 
 #[cfg(all(windows, target_arch = "x86"))]
-pub use win::{fit_people, install, lead, set_crouch, set_stick, set_swim};
+pub use win::{fit_people, install, lead, set_stick, set_swim};
 
 #[cfg(all(windows, target_arch = "x86"))]
 mod win {
@@ -182,13 +167,6 @@ mod win {
     static REAL: AtomicUsize = AtomicUsize::new(0);
     /// The runtime's stick this frame, while in VR (None: the game walks as it would).
     static STICK: Mutex<Option<[f32; 2]>> = Mutex::new(None);
-    /// How far the player's crouched in real life (metres), and how far the game's sneak lowers its
-    /// camera (as last seen: Oblivion's 24.8 units at a race height of 1, to begin with).
-    static CROUCH: Mutex<f32> = Mutex::new(0.0);
-    static SNEAK_DROP: Mutex<f32> = Mutex::new(24.814 / 70.0);
-    /// `fMoveSneakMult`'s value: the game's sneak walks at its walk times this (0.6 in
-    /// `Oblivion.esm`), read live.
-    const MOVE_SNEAK_MULT: usize = 0x00B3_7428;
     /// The arms' strokes this frame, while the runtime swims the player: their velocity in the
     /// world (game units a second).
     static SWIM: Mutex<Option<[f32; 3]>> = Mutex::new(None);
@@ -212,11 +190,6 @@ mod win {
 
     pub fn set_stick(stick: Option<[f32; 2]>) {
         *STICK.lock().unwrap() = stick;
-    }
-
-    /// How far the player's crouched in real life this frame (the runtime's `Intents::crouch`).
-    pub fn set_crouch(metres: f32) {
-        *CROUCH.lock().unwrap() = metres;
     }
 
     pub fn set_swim(v: Option<[f32; 3]>) {
@@ -425,16 +398,7 @@ mod win {
                     return;
                 }
                 type Speed = unsafe extern "thiscall" fn(usize) -> f32;
-                let mut speed = unsafe { std::mem::transmute::<usize, Speed>(MOVEMENT_SPEED)(this) };
-                // Sneaking by crouching: the less the crouch, the less the sneak slows the player.
-                let crouch = *CROUCH.lock().unwrap();
-                if crouch > 0.0 && crate::player::sneaking() {
-                    let mut drop = SNEAK_DROP.lock().unwrap();
-                    if let Some(d) = crate::camera::sneak_drop().map(|d| d.length()).filter(|d| *d > 0.25) {
-                        *drop = d;
-                    }
-                    speed *= super::sneak_pace(crouch, *drop, mem::at::<f32>(MOVE_SNEAK_MULT).unwrap_or(1.0));
-                }
+                let speed = unsafe { std::mem::transmute::<usize, Speed>(MOVEMENT_SPEED)(this) };
                 let [mut x, mut y] = super::step(stick, speed, dt);
                 // (What's asked of the body, for the view's lead, before it's kept from people: the
                 // view goes on with all of it. Its own space in the world: +Y ahead is (sin, cos)
@@ -489,15 +453,5 @@ mod tests {
         assert_eq!(step([0.0, 0.0], 270.0, 0.01), [0.0, 0.0]);
         // Never past full pace.
         assert!((step([0.0, 1.4], 100.0, 0.01)[1] - 1.0).abs() < 1e-5);
-    }
-
-    #[test]
-    fn a_slight_crouch_sneaks_nearer_walking_pace() {
-        // The game's sneak at 0.6 of its walk, its camera 35 cm down: crouched that far or more,
-        // its own pace; 12 cm, 86% of the walk (1.44 times the sneak); not crouched, nothing.
-        assert!((sneak_pace(0.354, 0.354, 0.6) - 1.0).abs() < 1e-5);
-        assert!((sneak_pace(0.6, 0.354, 0.6) - 1.0).abs() < 1e-5);
-        assert!((sneak_pace(0.12, 0.354, 0.6) * 0.6 - 0.864).abs() < 1e-3);
-        assert_eq!(sneak_pace(0.0, 0.354, 0.6), 1.0);
     }
 }
