@@ -70,6 +70,8 @@ pub fn before_update() {
     // The player's step on the ground is the stick's (crate::movement).
     #[cfg(target_arch = "x86")]
     crate::movement::set_stick(snap.filter(|_| vr).map(|s| s.frame.intents.move_xy));
+    #[cfg(target_arch = "x86")]
+    crate::movement::set_crouch(snap.filter(|_| vr).map_or(0.0, |s| s.frame.intents.crouch));
     // Out of VR, the player's capsule is its own again (in VR it's a body's round, set once the
     // world's actors are read: crate::render).
     #[cfg(target_arch = "x86")]
