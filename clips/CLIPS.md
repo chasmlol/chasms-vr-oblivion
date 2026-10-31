@@ -35,7 +35,7 @@ the main menu in Cyrodiil, a changed overscan takes at the next start, and the o
 | `00-check.bat` | Check the build and the desktop view: Lake Rumare's shore at 1 pm | trailer |
 | `01-face-sculpt.bat` | Shaping your face by hand: a new game, the prison cell's race menu, the big copy of your head and the mirror; pull the nose long, the ears out | trailer |
 | `02-daedric-archer-weye.bat` | Daedric armour, the Daedric Bow on your back and Daedric Arrows, outside the Wawnet Inn in Weye at 1 pm (the hamlet across the bridge from the Imperial City, its houses and people) | trailer |
-| `03-glass-imperial-city-evening.bat` | Glass armour outside The Merchants Inn in the Imperial City's Market District at 7 pm | trailer |
+| `03-glass-imperial-city-evening.bat` | Glass armour outside The Merchants Inn in the Imperial City's Market District at 7 pm, Sneak 100 | trailer |
 | `04-alchemy-table.bat` | Alchemy at one table in Odiil Farm's farmhouse: the Journeyman set, and Boar Meat and Venison (Restore Health), Flax Seeds and Steel-Blue Entoloma Cap (Restore Magicka) to grind (set out by `alchemy-table.txt`) | trailer |
 | `05-torch-dungeon.bat` | A burning torch at your hip at the top of the stairs into Vilverin's dark Ayleid ruin | trailer |
 | `06-swimming.bat` | Floating in Lake Rumare by the Imperial Bridge at 1 pm, clear | trailer |
