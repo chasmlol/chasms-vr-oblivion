@@ -1,14 +1,27 @@
-# Playtest: the desktop view's effects studio
+# Playtest: the desktop view's effects studio, and its bob as you walk
 
-Save: rustvr-city
+Save: rustvr-weye
 
 The desktop view (the window on the monitor, for recording and streaming) gets a studio of
 effects only it shows. They'd make you sick in a headset, and they make footage look filmed. The
 headset's view never changes.
 
-Everything is in the RustVR menu's new **Studio** tab, and it's saved with the settings. There
-are no black bars anywhere: the letterbox is gone, as you asked after the first look. How it's
-built and why is in `framework/docs/research/desktop-fx.md`.
+Everything is in the RustVR menu's new **Studio** tab, and it's saved with the settings.
+
+- **No black bars:** the letterbox is gone, as you asked after the first look.
+- **The view bob branch is merged in here:** the desktop view bobs as you walk (below).
+- **The desktop camera's own settings** sit at the top of the Studio tab's Camera section:
+  - its field of view;
+  - the overscan;
+  - the bob.
+- **The right stick scrolls the RustVR menu** (any tab, wherever the laser points), as it already
+  scrolls the game's menus.
+
+The save is Weye's open ground on Lake Rumare's shore: room to walk, run and jump, and water to
+swim in, for the bob as well as the effects.
+
+How the studio's built and why: `framework/docs/research/desktop-fx.md`. The bob's research:
+`docs/research/view-bob.md`.
 
 ## The looks
 
@@ -45,6 +58,30 @@ Pick one at the top of the Studio tab. Change anything by hand and it becomes "c
   - The headset keeps the HUD where the menus feature floats it.
   - On the desktop, the same pieces stop floating in the world.
 
+## The bob as you walk (merged from the view bob branch)
+
+It's in the Studio tab, under Camera: "Bobs as you walk (never the headset)", and "Bob strength"
+(1 by default, up to 3).
+
+- **Off**: the camera glides.
+- **The runtime's**: the framework's own bob, the same for every game.
+  - About 2 steps a second walking and 3 running.
+  - The view drops at each footfall and sways a little over each foot.
+  - A soft dip landing from a jump or a fall; smaller crouched; a slow float swimming.
+- **The game's own** (the default): Oblivion's own first-person bob, read from the game. Where the
+  game gives none (third person), the runtime's.
+
+Oblivion's own bob comes from its first-person animations moving the camera:
+
+- **Walking:** 5 mm a stride, very subtle.
+- **Running:** 1.9 cm a step.
+- **Landing a jump:** a 20 cm dip.
+- **Swimming:** a slow float of up to 5 cm.
+- **With a weapon or fists out:** walking and running don't bob at all. That's Oblivion's own data.
+
+**The headset changes too:** it no longer takes the game's camera animation. Before, a landing dipped
+your view 20 cm. The Comfort tab's "Camera bob / shake" brings it back if you want it.
+
 ## What to try
 
 Watch the monitor (or OBS) while you play.
@@ -80,7 +117,11 @@ Watch the monitor (or OBS) while you play.
    - Look at something near, then far: the focus pulls between them.
    - Hold a potion or a book up close to your face: it comes into focus and the world behind
      blurs.
-9. **The flat HUD.** Studio tab, "The game's HUD on the screen where a flat player has it".
+9. **The bob.** Walk, run, sneak, jump and swim with each of its three choices.
+   - Watch the recording, and check the headset never bobs.
+   - With the game's own, walking is barely there; running, landing and swimming show it.
+   - **Tell me** how each looks, and whether the strength should be different by default.
+10. **The flat HUD.** Studio tab, "The game's HUD on the screen where a flat player has it".
    - The health bars, the compass and the effects should sit at the bottom of the desktop view, at
      about the size Oblivion has them on a flat screen.
    - Subtitles should sit low in the middle.
@@ -88,9 +129,15 @@ Watch the monitor (or OBS) while you play.
    - All of them are crisp, over any effects.
    - Open a menu: the HUD goes and the menus float in the world as before.
    - **Tell me** if anything is the wrong size or in the wrong place.
-10. **Your own mix.** Every effect has its own switch and strengths below the looks.
+11. **Your own mix.** Every effect has its own switch and strengths below the looks.
     - Colour grades: teal and orange, bleach bypass, warm film, body cam, noir.
     - LUTs: put `.cube` files in `%LOCALAPPDATA%\RustVR\luts` and they show in the tab.
+
+12. **The menu.** Open the RustVR menu and push the right stick forward and back: the tab
+    scrolls, wherever the laser points.
+    - The Studio tab's Camera section has the desktop field of view, the overscan and the bob.
+    - The field of view slider moves the look's own lens where it has one (and the look becomes
+      custom). In Clean it's your own.
 
 **Tell me** which looks you'd keep and what you'd change in each: they're my picks, tuned on the
 test range, not in Oblivion.
@@ -104,7 +151,11 @@ captured:
 - a fast head turn (with the edge stretch off and on);
 - two snap turns (captured frame by frame through the turn);
 - a walk and a sprint, a sword swung across the body, the rifle fired in bursts;
-- the flat HUD, over Clean and over Cinematic.
+- the flat HUD, over Clean and over Cinematic;
+- the RustVR menu scrolled by the right stick, with the laser on the pause panel.
+
+The view bob branch checked its runtime's bob on the range (walking, running, landings) before the
+merge; the merged build passes its tests and the studio's.
 
 The unit tests cover:
 
@@ -114,7 +165,8 @@ The unit tests cover:
 - the looks;
 - reading a `.cube` LUT.
 
-The three branches merged together (this one, the aim zoom, the view bob) build with no conflicts.
+The view bob branch is merged here with no conflicts, and the aim zoom still merges cleanly with
+the result.
 
 **Couldn't check:**
 
@@ -123,6 +175,11 @@ The three branches merged together (this one, the aim zoom, the view bob) build 
     and sized from its text.
   - Its depth for the focus and the blur.
   - How a real snap turn, a real recentre and a real horse look.
+  - Oblivion's own bob in play.
+    - The adapter's log says every 5 seconds how far the game's bob went (`view bob: the game's
+      own in the last 5 s: ...` in `rustvr-oblivion.log`).
+    - The runtime's log says what the desktop view showed (`desktop view: bobbed ...`).
+  - The headset no longer taking the game's bob, and its height standing unchanged.
 - **The real headset's timing**: whether the effects ever cost the headset a frame. They run after
   the headset's frame is handed over, and they're a third of a millisecond on this GPU.
 
@@ -147,10 +204,9 @@ kept for smoothed snaps, the HUD's copy) is lost in the run-to-run spread.
 
 Notes for merging this branch:
 
-- The framework's `fxstudio` branch merges cleanly with `aimzoom` and `viewbob`, and the three
-  together build. How the pieces fit is in `framework/docs/research/desktop-fx.md` section 3.
-- **The Studio tab's Camera section** is where the aim zoom's and the view bob's settings belong
-  once merged (they're on the Display tab on their branches).
-- **`RUSTVR_DESKTOP_EVERY`** (seconds between saved desktop frames in tests) is written the same
-  here as on the view bob's branch.
-- **No protocol change.** The adapter is unchanged apart from the framework pointer.
+- **The view bob is merged in** (framework and adapter), at your word. Its bob settings moved from
+  the Display tab to the Studio tab's Camera section. The desktop field of view and the overscan are
+  on both tabs (the Display tab's field of view stays where the aim zoom's lines follow it).
+- **The aim zoom isn't merged.** It still merges cleanly. Its settings belong in the Studio tab's
+  Camera section too; on its branch they're on the Display tab.
+- **The protocol** has the view bob's `GameState::view_bob`, and nothing of the studio's.
