@@ -128,7 +128,9 @@ pub fn equip_all(_id: u32) -> bool {
 /// new one of a base form there (metres from the player's feet, turned that many degrees from facing
 /// them: a bench set out for a test save), `Place <base hex id> <x> <y> <z> [<angle>]` makes one at
 /// a place in the player's cell (game units, the game's heading in degrees: a set-out that stays put
-/// however the player stands), `RunFile <path>` adds a file's lines to the test's (this file's own
+/// however the player stands), `LockKey <base hex id> <key hex id>` makes a key the key to the
+/// newest reference of a base form's lock (one locked with `OnNewest ... lock <level>`: a script
+/// can't name a lock's key), `RunFile <path>` adds a file's lines to the test's (this file's own
 /// format: a set-out too long for a line each), anything else is compiled and run as a line of script. A
 /// reference by its hex id that starts with a digit (`0001c462.additem ...`, a persistent NPC: the
 /// script compiler reads it as a number) runs as the console runs a line on the reference it has
@@ -206,6 +208,11 @@ pub fn run(line: &str) -> bool {
         let Some((base, script)) = rest.trim().split_once(' ') else { return false };
         return on_newest(base, script.trim());
     }
+    if let Some(rest) = line.strip_prefix("LockKey ") {
+        let mut it = rest.split_whitespace();
+        let (Some(base), Some(key)) = (it.next(), it.next()) else { return false };
+        return lock_key(base, key);
+    }
     if let Some(id) = line.strip_prefix("ActivateRef ") {
         return u32::from_str_radix(id.trim().trim_start_matches("0x"), 16).is_ok_and(activate_ref);
     }
@@ -246,6 +253,25 @@ fn on_newest(base: &str, script: &str) -> bool {
 
 #[cfg(not(target_arch = "x86"))]
 fn on_newest(_base: &str, _script: &str) -> bool {
+    false
+}
+
+/// The key `key` (its hex id) to the lock of the newest reference of the base form `base` near the
+/// player: a chest set out and locked, opened with a key of the test's.
+#[cfg(target_arch = "x86")]
+fn lock_key(base: &str, key: &str) -> bool {
+    type Lookup = unsafe extern "C" fn(u32) -> usize;
+    let id = |s: &str| u32::from_str_radix(s.trim_start_matches("0x"), 16).ok();
+    let (Some(base), Some(key)) = (id(base), id(key)) else { return false };
+    let (form, key) = unsafe { (std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(base), std::mem::transmute::<usize, Lookup>(LOOKUP_FORM)(key)) };
+    let Some(r) = (form != 0 && key != 0).then(|| crate::items::newest_of(form)).flatten() else { return false };
+    let ok = crate::world::set_lock_key(r, key);
+    tracing::info!("console: {:08X}'s lock's key {:08X}: {ok}", crate::mem::at::<u32>(r + 0xC).unwrap_or(0), crate::mem::at::<u32>(key + 0xC).unwrap_or(0));
+    ok
+}
+
+#[cfg(not(target_arch = "x86"))]
+fn lock_key(_base: &str, _key: &str) -> bool {
     false
 }
 

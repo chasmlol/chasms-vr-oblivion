@@ -56,6 +56,7 @@ pub mod iat;
 pub mod input;
 pub mod inventory;
 pub mod items;
+pub mod keys;
 pub mod launcher;
 pub mod lighting;
 pub mod link;

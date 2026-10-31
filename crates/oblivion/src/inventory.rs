@@ -155,6 +155,9 @@ pub fn defaults() -> Vec<SlotDesc> {
         // Ayleids' stones in its right pouch.
         slot("Soul Gems", [-0.07, -0.42, -0.16], 0.065, 0.04, &[SOUL_GEMS], RULE_STRONGEST, 0),
         slot("Ayleid Stones", [0.07, -0.42, -0.16], 0.065, 0.04, &[AYLEID_STONES], RULE_VALUE, 0),
+        // Keys on a ring at the belt just behind the left hip (a sword in the hip's holster keeps the
+        // hip's middle): the key to the nearest locked thing first.
+        slot("Keys", [-0.2, -0.5, -0.08], 0.06, 0.03, &[KEYS], RULE_STRONGEST, 0),
     ]
 }
 
@@ -221,13 +224,12 @@ mod game {
     /// Poisoning (the game's own yes, 0x666890): the weapon's entry (the process's virtual +0xEC,
     /// `(process, 1)`), already poisoned (`EntryData`'s 0x484DF0), poisoned (0x484E20, thiscall
     /// on the weapon's entry with the poison), the poison taken out (the reference's `RemoveItem`,
-    /// virtual +0x100), "<poison> used." (0x57ADD0, cdecl `(text, seconds, 0, 0)`).
+    /// virtual +0x100), "<poison> used." (the game's corner notice, [`crate::menus::notice`]).
     const PROCESS: usize = 0x58;
     const VT_WEAPON_ENTRY: usize = 0xEC;
     const POISONED: usize = 0x0048_4DF0;
     const SET_POISON: usize = 0x0048_4E20;
     const VT_REMOVE_ITEM: usize = 0x100;
-    const MESSAGE: usize = 0x0057_ADD0;
     /// The game's own words: "used." and the poison's refusals (no weapon, already poisoned, a
     /// staff); `char*`s.
     const USED: usize = 0x00B3_8BA8;
@@ -305,7 +307,7 @@ mod game {
         unsafe { std::mem::transmute::<usize, Count>(ITEM_COUNT)(changes, form) }
     }
 
-    fn name_of(form: usize) -> String {
+    pub(crate) fn name_of(form: usize) -> String {
         let n = crate::items::cast(form, RTTI_FULL_NAME);
         if n != 0 { crate::combat::read_str(mem::deref(n + 4)) } else { String::new() }
     }
@@ -316,10 +318,7 @@ mod game {
     }
 
     fn message(text: &str) {
-        type Message = unsafe extern "C" fn(*const u8, f32, u32, u32) -> u8;
-        if let Ok(t) = std::ffi::CString::new(text) {
-            unsafe { std::mem::transmute::<usize, Message>(MESSAGE)(t.as_ptr() as *const u8, 2.0, 0, 0) };
-        }
+        crate::menus::notice(text);
     }
 
     /// A potion's or an ingredient's effects: (code, magnitude, duration); an ingredient's first
@@ -403,6 +402,8 @@ mod game {
         /// one put there, not to sound coming out of the pack as one drawn does (until when).
         give: Option<(usize, usize, f64)>,
         quiet: Option<(usize, f64)>,
+        /// Each key's strength for the Keys slot's order: how near a locked thing it opens is.
+        keys: HashMap<usize, f32>,
         states: Box<ObjectStates>,
         logged: usize,
     }
@@ -424,6 +425,7 @@ mod game {
             to_use: Vec::new(),
             give: None,
             quiet: None,
+            keys: HashMap::new(),
             states: bytemuck::zeroed_box(),
             logged: usize::MAX,
         }))
@@ -498,6 +500,8 @@ mod game {
             // (Its soul first: a filled gem before an empty one, the strongest soul first; then how
             // big a soul it holds.)
             SOUL_GEM => crate::soul::soul_of(form, r.list) as f32 * 10.0 + mem::at::<u8>(form + SOUL_CAPACITY).unwrap_or(0) as f32,
+            // (The key to the nearest locked thing first: the one the player reaches for.)
+            KEY => s.keys.get(&form).copied().unwrap_or(0.0),
             _ => 0.0,
         };
         // (The game's weights are about pounds: a kilogram is two.)
@@ -513,6 +517,7 @@ mod game {
 
     /// The inventory now, as the runtime has it (the taken-back list kept).
     fn scan(s: &mut State, player: usize) {
+        s.keys = crate::keys::keys_near().into_iter().map(|(key, d)| (key, crate::keys::key_strength(d))).collect();
         let mut out = Vec::new();
         each_row(player, |r| {
             if out.len() < MAX_INV_ITEMS

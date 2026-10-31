@@ -194,6 +194,39 @@ pub fn open_menu(kind: u32) -> usize {
     unsafe { std::mem::transmute::<usize, ByType>(MENU_BY_TYPE)(kind) }
 }
 
+/// The message box (`kMenuType_Message`): its buttons (+0x34, ten tiles) and its `HandleClick`
+/// (thiscall: the tile's id, the tile; its vtable's fourth): button n is id 4 + n.
+const MESSAGE: u32 = 0x3E9;
+const MESSAGE_BUTTONS: usize = 0x34;
+const MESSAGE_CLICK: usize = 0x005B_CDD0;
+const FIRST_BUTTON: u32 = 4;
+/// The game's corner notice (cdecl: the words, how long, 0, 0).
+const NOTICE: usize = 0x0057_ADD0;
+
+/// The message box open now (its `Menu*`), and how many buttons it has.
+#[cfg(target_arch = "x86")]
+pub fn message_box() -> Option<(usize, usize)> {
+    let menu = crate::tiles::menu(MESSAGE);
+    (menu != 0).then(|| (menu, (0..10).filter(|k| mem::deref(menu + MESSAGE_BUTTONS + 4 * k) != 0).count()))
+}
+
+/// Button `n` of the message box `menu` clicked, as the player's click does: what asked (a script,
+/// the game) has its answer.
+#[cfg(target_arch = "x86")]
+pub fn click_message(menu: usize, n: u32) {
+    type Click = unsafe extern "thiscall" fn(usize, u32, usize);
+    unsafe { std::mem::transmute::<usize, Click>(MESSAGE_CLICK)(menu, FIRST_BUTTON + n, 0) };
+}
+
+/// Words in the game's corner notice for a couple of seconds, as its own messages are.
+#[cfg(target_arch = "x86")]
+pub fn notice(text: &str) {
+    type Notice = unsafe extern "C" fn(*const u8, f32, u32, u32) -> u8;
+    if let Ok(t) = std::ffi::CString::new(text) {
+        unsafe { std::mem::transmute::<usize, Notice>(NOTICE)(t.as_ptr() as *const u8, 2.0, 0, 0) };
+    }
+}
+
 /// `InterfaceManager` (`INTERFACE_MANAGER`): its mode (+8: 1 the game, 3 a menu), the tiles and menu
 /// under the cursor (+0x88, +0x98, +0x9C), its stack of open menus (+0xE0, ten ids); the menu
 /// background's flag (a menu opening sets it); a tile's menu (thiscall) and the open menu of a type

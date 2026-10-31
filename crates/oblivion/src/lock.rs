@@ -304,7 +304,7 @@ mod game {
     }
 
     /// A reference that's a locked door or container, there and drawn.
-    fn locked_thing(refr: usize) -> bool {
+    pub(crate) fn locked_thing(refr: usize) -> bool {
         let flags = mem::at::<u32>(refr + FORM_FLAGS).unwrap_or(DELETED);
         let base = mem::deref(refr + REFR_BASE);
         flags & (DELETED | DISABLED) == 0

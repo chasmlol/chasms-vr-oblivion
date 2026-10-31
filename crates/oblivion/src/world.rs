@@ -459,6 +459,24 @@ mod game {
         data != 0 && mem::at::<u8>(data + 8).is_some_and(|f| f & 1 != 0)
     }
 
+    /// The key to a reference's lock (`ExtraLock`'s data: its key +4, a `TESKey`), or 0.
+    pub(crate) fn lock_key(refr: usize) -> usize {
+        let x = extra(refr, EXTRA_LOCK);
+        let data = if x != 0 { deref(x + 0xC) } else { 0 };
+        if data != 0 { deref(data + 4) } else { 0 }
+    }
+
+    /// Testing (`LockKey`): the key to a reference's lock, one locked already (`lock <level>`).
+    pub(crate) fn set_lock_key(refr: usize, key: usize) -> bool {
+        let x = extra(refr, EXTRA_LOCK);
+        let data = if x != 0 { deref(x + 0xC) } else { 0 };
+        if data == 0 || !mem::is_readable(data as *const u8, 12) {
+            return false;
+        }
+        unsafe { ((data + 4) as *mut usize).write(key) };
+        true
+    }
+
     fn open_state(refr: usize) -> i32 {
         type F = unsafe extern "thiscall" fn(usize) -> i32;
         unsafe { std::mem::transmute::<usize, F>(GET_OPEN_STATE)(refr) }

@@ -241,3 +241,31 @@ new hand-out.
 
 What I couldn't: anything in the game: whether a plant's meshes' bounds are where its flower is,
 whether 7 cm is a natural pluck, and whether the ingredient reaches the hand before you open it.
+
+## 9. Keys at the lock — `playtest-keys.bat`
+
+Odiil Farm with four keys on you and two chests locked a metre ahead: the right one (Easy) opens
+with the Whitmond Farm Key, the left one only with the Faregyl Inn Key (it can't be picked); the
+Sleeping Mare Key fits neither, and the Odiil Farm Key is the farm's own. Saves as `rustvr-keys`.
+
+1. **The ring**: reach just behind your left hip, on the belt, and close the grip: a key comes out,
+   the key to the nearest locked chest first. (If you've changed your slots in the holsters'
+   editor, the new Keys slot isn't there: add one with the Keys category, or reset to the game's
+   own.)
+2. **In and turned**: put its tip to the chest's front where a keyhole would be. If it's that
+   chest's key it goes in (a click); turn your wrist about the key, either way, to about 60° (a
+   detent every 20°, then a clunk). The chest unlocks and opens, and "Opened the container with a
+   key." shows in the corner.
+3. **The wrong key**: put the other chest's key, or the odd one, to a chest: a dull bump, it doesn't
+   go in, nothing happens.
+4. **Out**: put the key in, then pull it out (6 cm) without turning: nothing happens; put it back
+   in to try again.
+5. **A door**: if the farmhouse door is locked, the Odiil Farm Key opens it the same way: it
+   unlocks, "You opened the door with Odiil Farm Key." shows in the corner, and it opens (into the
+   house).
+
+What I checked: builds; unit tests (the key's turn about itself, not its swing; the nearest lock's
+key first).
+
+What I couldn't: anything in the game: where a key's tip is on its model (the far end of its
+longest side from the grip), and whether the game's Ok box is answered the frame it opens.
