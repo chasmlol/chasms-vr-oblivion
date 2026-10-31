@@ -40,6 +40,35 @@ pub fn load_game(_name: &str) -> bool {
     false
 }
 
+/// The main menu's New, answered: `InterfaceManager*` (`*0xB3A6E0`), the button its message box had
+/// pressed (+0xB0; the game counts them from 1, and its "Start new game?" box puts "Yes" first), and
+/// the main menu's answer to that box (0x5B5DF0, thiscall, `this` unused: on a 1 it starts the new
+/// game, as xOBSE's `OnNewGame` catches at 0x5B5EFD).
+const INTERFACE_MANAGER: usize = 0x00B3_A6E0;
+const BUTTON_PRESSED: usize = 0xB0;
+const NEW_GAME_ANSWERED: usize = 0x005B_5DF0;
+
+/// Starts a new game, as the main menu's New answered "Yes" does: its film, then the character
+/// generation quest (the prison cell, and the race menu). Only at the main menu.
+#[cfg(target_arch = "x86")]
+pub fn new_game() -> bool {
+    let im = crate::mem::deref(INTERFACE_MANAGER);
+    if im == 0 || !crate::menus::menu_open(crate::menus::MENU_MAIN) {
+        return false;
+    }
+    type Answered = unsafe extern "thiscall" fn(usize);
+    unsafe {
+        *((im + BUTTON_PRESSED) as *mut u8) = 1;
+        std::mem::transmute::<usize, Answered>(NEW_GAME_ANSWERED)(0);
+    }
+    true
+}
+
+#[cfg(not(target_arch = "x86"))]
+pub fn new_game() -> bool {
+    false
+}
+
 /// `LookupFormByID` (cdecl) and `PlayerCharacter::SetActiveSpell` (thiscall, a `MagicItem*`).
 const LOOKUP_FORM: usize = 0x0046_B250;
 const SET_ACTIVE_SPELL: usize = 0x0066_4700;
@@ -93,7 +122,8 @@ pub fn equip_all(_id: u32) -> bool {
     false
 }
 
-/// Runs a console line: `LoadGame <save>` loads a save, `SelectSpell <name or hex id>` selects one
+/// Runs a console line: `LoadGame <save>` loads a save, `NewGame` starts a new game (at the main
+/// menu: a boot straight into the character creator), `SelectSpell <name or hex id>` selects one
 /// of the player's spells by its name, or any spell by its id (a spell the game makes, as the mirror
 /// spell, has no id to know beforehand), `EquipAll <hex id>` equips all the player has of a thing (a
 /// stack of arrows), `PlaceInFront <ref hex id> <metres> [<metres up>]` puts a reference that far in
@@ -120,6 +150,9 @@ pub fn run(line: &str) -> bool {
     }
     if let Some(name) = line.strip_prefix("LoadGame ") {
         return load_game(name.trim().trim_matches('"'));
+    }
+    if line.trim() == "NewGame" {
+        return new_game();
     }
     if let Some(spell) = line.strip_prefix("SelectSpell ") {
         let spell = spell.trim().trim_matches('"');
