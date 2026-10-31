@@ -11,6 +11,18 @@ is in `framework/docs/research/ik.md`.
 hold both grips with your hands together in front of your chest and pull them apart) to stand a
 mirror in front of you. `range.bat` starts the test range instead.
 
+## Fixed after the first look: the body stood on your room's floor
+
+Oblivion never told the runtime how high its eye is over the player's feet, so the runtime stood
+the body on your real floor rather than the game's ground, and sized it to your head's height over
+that floor. Sitting, the body was a child's size and floated about 35 cm over the ground, the mirror
+with it. Standing, it sank a few centimetres in. Every build had this, not only this one. The
+adapter now reports the eye's height over the feet (`link.rs`, logged once as "the game's eye is
+1.6 m over the player's feet"), so the body stands on the game's ground at the character's size,
+and the mirror stands there too. While the game sneaks, the body keeps its standing size and
+crouches. (Before, a real crouch while sneaking would have thrown the view 1.8 m up: its
+compensation was worked out from the same missing height.)
+
 ## What changed
 
 1. **Your feet stay planted.** They step only when your balance needs it, your leg can't reach, or
@@ -114,6 +126,8 @@ the trigger elbow is level (the runtime's log), and the old body held both highe
 
 ## What to look at in the headset
 
+0. **Your feet on the ground**, looking down and in the mirror, sitting or standing, and the mirror
+   standing on the ground too. Sneak (the button): the body crouches rather than shrinking.
 1. **Look down at yourself standing still, hands at your sides.** The chest and shoulders should be
    where yours are below your eyes: not sunk behind you, not pushed out in front. This is the one
    thing measured from anthropometry rather than motion capture (the two datasets disagree by 6 cm).
@@ -139,13 +153,14 @@ the trigger elbow is level (the runtime's log), and the old body held both highe
    real shoulders. Turn the Body tab's "Elbows and chest from the headset's body tracking" off and
    on to compare.
 
-Your settings have Seated mode on and your height as 1.37 m. Seated, the body is drawn standing
-whatever you do, so 4, 5 and 7 need you on your feet. The height only sizes the hands while you
-play at the character's height: 8.1 cm wrist to knuckle (the model's are 9.8). If 1.37 m isn't
-your standing height, set it in the Body tab first.
+Seated, the body is drawn standing whatever you do, so 4, 5 and 7 need you on your feet. The body
+is the character's size (you play at the character's height); your height in the Body tab (1.84
+m now) only sizes the hands: 10.9 cm wrist to knuckle.
 
 ## What I couldn't check
 
+- **The feet's fix in Oblivion itself**: it's built, not played. The test range has always reported
+  its eye's height over the feet, which is why its body stood on its floor and Oblivion's didn't.
 - **Nothing in a real headset or in Oblivion** (the rule for the night). Only the emulated
   headset in the test range: the range's mannequin, not Oblivion's body, and scripted poses, not
   your motion.
