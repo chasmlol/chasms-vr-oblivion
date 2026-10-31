@@ -15,7 +15,7 @@ Every bat:
   take, nothing to pick;
 - keeps the run's `rustvr.log` in `<builds>\trailer\clip-<shot>-<n>`.
 
-The bats never touch your RustVR settings (`%LOCALAPPDATA%\RustVR\settings.toml`): the desktop
+The bats never touch your RustVR settings (but for clip 08 turning Voice on) (`%LOCALAPPDATA%\RustVR\settings.toml`): the desktop
 view's look, its field of view and the overscan are whatever you set in the RustVR menu, and stay
 so. The looks are in the menu's Studio tab.
 
@@ -40,6 +40,7 @@ the main menu in Cyrodiil, a changed overscan takes at the next start, and the o
 | `05-torch-dungeon.bat` | A burning torch at your hip at the top of the stairs into Vilverin's dark Ayleid ruin | trailer |
 | `06-swimming.bat` | Floating in Lake Rumare by the Imperial Bridge at 1 pm, clear | trailer |
 | `07-riding-evening.bat` | Your own horse behind you outside Chorrol's stables at 7 pm, clear | trailer |
+| `08-voice-talk.bat` | Talking to people out loud in The Merchants Inn, the Adoring Fan in front of you (starts the voice servers with `voice-servers.ps1` and turns RustVR's Voice setting on, which stays on; the DeepSeek key is the one in `%LOCALAPPDATA%\RustVR\voice.toml`) | trailer |
 
 ## The overscan
 
