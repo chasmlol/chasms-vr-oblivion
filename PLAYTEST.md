@@ -19,8 +19,8 @@ Everything is in the RustVR menu's new **Studio** tab, and it's saved with the s
   - the bob.
 - **The right stick scrolls the RustVR menu** (any tab, wherever the laser points), as it already
   scrolls the game's menus.
-- **Fixed after the third playtest:** the thinner distant fog down the side of a wide desktop view
-  with the overscan up (below).
+- **Fixed after the third playtest:** Oblivion's fog now goes by how far away things are, in the
+  headset and on the monitor. There's no thinner haze down the side of a wide desktop view (below).
 
 The save is Weye's open ground on Lake Rumare's shore at 1 pm, with an Iron Bow equipped and 168
 Iron Arrows. There's room to walk, run and jump, water to swim in, and a bow to aim: for the bob,
@@ -128,30 +128,36 @@ scope picture, no crop. The headset's view never changes.
 - **With a look's own lens** (Cinematic's 90 degrees), aiming still narrows to exactly the aiming
   field of view. The speed widening fades while you aim, and the bob is damped.
 
-## The fog at the sides (fixed after the third playtest)
+## The fog (fixed after the third playtest)
 
 You saw less distant fog at the side of the desktop view, with the overscan up and its field of
-view wide. You were right, on the left side.
+view wide. You were right, and the headset had the same quirk.
 
 - **Why:** Oblivion's shaders don't fog a thing by how far away it is.
   - They use the length of its clip-space position, which grows towards the edges of the eye's
-    frustum. The same hill is foggier near the edge of an eye's picture than in its middle.
+    frustum. On a flat screen's 75 degrees that barely shows.
+  - The headset's eyes are wide, off-centre and mirrored, and the overscan widens them more. So in
+    the headset:
+    - your two eyes fogged a far hill off to the side differently;
+    - a hill's haze changed as you turned your head towards it;
+    - more overscan thinned the fog;
+    - the land's fog didn't match the water's (the water's shader does use the distance).
   - The desktop view is the right eye's picture. Past the right eye's left edge, it fills in from
-    the left eye's. With your settings that edge is 51 degrees out: 11 degrees of overscan and a
-    128 degree desktop view.
+    the left eye's. With your settings that edge is 51 degrees out (11 degrees of overscan, a 128
+    degree desktop view).
   - In the left eye's picture that hill sits nearer the middle of the frustum, so the game fogged
     it about a fifth less. That made a step in the fog at the join, and thinner fog past it.
-- **Now:** where the left eye's picture fills in, the desktop view evens out the fog.
-  - From the game's depth, it works out how much fog the game gave each pixel, and how much the
-    right eye's picture would have given it.
-  - The fog carries on past the join without a step.
-  - **The headset doesn't change:** each eye only ever shows its own picture.
-  - It's for Oblivion's fog only (Gamebryo's). Metro fogs by real distance.
-  - The sky has no depth, and keeps its colour.
-- **The headset has the same quirk, unchanged:**
-  - your two eyes see a far hill off to the side fogged a little differently;
-  - more overscan thins the fog a little.
-  - Fixing those would mean changing Oblivion's shaders, and so the headset's picture.
+- **Now the game's fog goes by distance**, in the headset and on the monitor.
+  - As the game makes its vertex shaders, the adapter rewrites the 112 that fog (of 329), so the
+    distance they fog by is how far away the thing is.
+  - Each camera the adapter draws with (each eye, the mirror) gives the shaders its frustum.
+  - The fog's colour, start and end are the game's own. Only where it falls changes, and it's the
+    same at any overscan.
+  - **The headset's picture changes:** far things off to the sides are a little foggier than
+    before (the game measured them short), and the same in both eyes.
+- **The desktop view's own evening-out of the fog** (made first, for the monitor alone) now stays
+  off. It comes back only if the game's shaders keep their own fog: a shader the adapter couldn't
+  rewrite, or `RUSTVR_OBLIVION_GAME_FOG=1` set to compare.
 
 ## What to try
 
@@ -218,12 +224,17 @@ Watch the monitor (or OBS) while you play.
     scrolls, wherever the laser points.
     - The Studio tab's Camera section has the desktop field of view, the aim zoom, the overscan
       and the bob.
-14. **The fog at the sides.**
-    - Set the overscan to 10 or more and the desktop field of view to 120 or more.
-    - On open ground with hills far off, the haze should be even across the desktop view.
-    - There should be no edge in it down the left side.
     - The field of view slider moves the look's own lens where it has one (and the look becomes
       custom). In Clean it's your own.
+14. **The fog.** On open ground with hills far off:
+    - In the headset, close one eye and then the other: a far hill off to the side should be as
+      hazy in each.
+    - Turn your head towards the hill and away: its haze should stay put.
+    - Change the overscan: the fog should stay the same.
+    - Where the land meets the lake far off, the fog on each should match.
+    - On the monitor, with the overscan at 10 or more and the desktop field of view at 120 or more,
+      the haze should be even across, with no edge down the left side.
+    - **Tell me** if the distance looks foggier or clearer than you're used to.
 
 **Tell me** which looks you'd keep and what you'd change in each: they're my picks, tuned on the
 test range, not in Oblivion.
@@ -250,13 +261,19 @@ The unit tests cover:
 - the flat HUD's layout;
 - the looks;
 - reading a `.cube` LUT;
-- the fog where the other eye's picture fills in (on the GPU).
-  - It uses two eye pictures fogged as Oblivion's shaders fog them, with your playtest's frustums
-    and a 128 degree desktop view.
-  - Before the fix, the fog past the join was 0.10 off the right eye's: a tenth of the way from
-    clear to full fog.
-  - After the fix, it's 0.006 off at worst, which is 8-bit rounding. That holds for far hills (found
-    by direction) and near ones (followed through the depth).
+- the fog by distance, on Oblivion's own shader package (`shaderpackage004.sdp`, the one its
+  `RendererInfo.txt` names):
+  - all 112 of its 329 vertex shaders that fog are rewritten (the 15 older `vs_1_1` ones too, the
+    trees' leaves and fronds among them);
+  - each is the same as before but for four instructions, checked instruction by instruction;
+  - Direct3D 9 makes every one;
+  - the frustum's terms give the distance back from the clip position, for both your eyes'
+    frustums and a flat screen's.
+- the desktop view's own evening-out of the fog where the other eye's picture fills in (on the
+  GPU), kept for when the shaders aren't rewritten. It uses two eye pictures fogged as Oblivion's
+  shaders fog them, with your playtest's frustums and a 128 degree desktop view. Before, the fog
+  past the join was 0.10 off the right eye's (a tenth of the way from clear to full fog); after,
+  0.006 at worst, which is 8-bit rounding.
 
 The view bob branch is merged here with no conflicts, and the aim zoom still merges cleanly with
 the result.
@@ -273,7 +290,10 @@ the result.
       own in the last 5 s: ...` in `rustvr-oblivion.log`).
     - The runtime's log says what the desktop view showed (`desktop view: bobbed ...`).
   - The headset no longer taking the game's bob, and its height standing unchanged.
-  - Its fog evened out at the desktop view's side, over its real hills, water and distant land.
+  - Its fog by distance, in the headset and on the monitor, over its real hills, water, trees and
+    distant land.
+  - That nothing else of the game's own fog looks wrong: its sky, its interiors, its water's
+    reflections.
 - **The real headset's timing**: whether the effects ever cost the headset a frame. They run after
   the headset's frame is handed over, and they're a third of a millisecond on this GPU.
 
@@ -306,4 +326,9 @@ Notes for merging this branch:
     Camera section.
   - With a look's lens, aiming still reaches the aiming field of view.
   - Its range has the bow on your back.
-- **The protocol** has the view bob's `GameState::view_bob`, and nothing of the studio's.
+- **The protocol** has the view bob's `GameState::view_bob`, and nothing of the studio's but a
+  meaning for `GameLighting::fog_fade`'s spare `z`: 1 when the game's shaders fog by distance. Its
+  layout and version are unchanged.
+- **The adapter's fog** (`crates/oblivion/src/fog.rs`) hooks `IDirect3DDevice9::CreateVertexShader`
+  (slot 91) in `d3d9.rs`, and sets each camera's frustum in `render.rs`. It changes the headset's
+  picture: at your word, after the third playtest.

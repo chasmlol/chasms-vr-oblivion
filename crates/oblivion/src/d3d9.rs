@@ -248,6 +248,14 @@ mod win {
             // IDirect3DDevice9::TestCooperativeLevel (slot 3): the game skips its frames while it fails.
             let tcl = unsafe { *(*(dev as *const *const usize)).add(3) };
             hooks::install_into(tcl as *const (), test_cooperative_level as *const (), "IDirect3DDevice9::TestCooperativeLevel", &REAL_TCL);
+            // IDirect3DDevice9::CreateVertexShader (slot 91): the fog by distance (`crate::fog`).
+            // (Testing, `RUSTVR_OBLIVION_GAME_FOG=1`: the game's own fog, to compare.)
+            if std::env::var("RUSTVR_OBLIVION_GAME_FOG").is_ok_and(|v| v == "1") {
+                tracing::info!("fog: the game's own (RUSTVR_OBLIVION_GAME_FOG)");
+            } else {
+                let create_vs = unsafe { *(*(dev as *const *const usize)).add(91) };
+                hooks::install_into(create_vs as *const (), create_vertex_shader as *const (), "IDirect3DDevice9::CreateVertexShader", &REAL_CREATE_VS);
+            }
             match Gpu::new() {
                 Ok(gpu) => {
                     let (w, h) = if params.is_null() { (0, 0) } else { unsafe { ((*params).BackBufferWidth, (*params).BackBufferHeight) } };
@@ -435,6 +443,43 @@ mod win {
             let _ = windows::Win32::Foundation::CloseHandle(b.event);
         }
         tracing::info!("d3d9: the device is lost: our copies of its picture let go, for the game to reset it");
+    }
+
+    type CreateVsFn = unsafe extern "system" fn(*mut c_void, *const u32, *mut *mut c_void) -> windows::core::HRESULT;
+    static REAL_CREATE_VS: AtomicUsize = AtomicUsize::new(0);
+
+    /// The game's vertex shaders, made with their fog by distance (`crate::fog`), else as they are.
+    unsafe extern "system" fn create_vertex_shader(dev: *mut c_void, code: *const u32, out: *mut *mut c_void) -> windows::core::HRESULT {
+        let real: CreateVsFn = unsafe { std::mem::transmute(REAL_CREATE_VS.load(Ordering::Acquire)) };
+        let rewritten = hooks::guard("CreateVertexShader", None, || {
+            let n = unsafe { crate::fog::length(code) }?;
+            crate::fog::rewrite(unsafe { std::slice::from_raw_parts(code, n) }).unwrap_or_else(|why| {
+                tracing::warn!("fog: a vertex shader of the game's keeps its own fog: {why}");
+                None
+            })
+        });
+        if let Some(new) = rewritten {
+            let hr = unsafe { real(dev, new.as_ptr(), out) };
+            if hr.is_ok() {
+                let n = crate::fog::rewritten();
+                if n == 1 || n.is_multiple_of(25) {
+                    tracing::info!("fog: {n} of the game's vertex shaders made so far fog by distance");
+                }
+                return hr;
+            }
+            tracing::warn!("fog: Direct3D 9 refuses a vertex shader rewritten ({hr:?}): it keeps its own fog");
+        }
+        unsafe { real(dev, code, out) }
+    }
+
+    /// The fog's terms for the camera the game is about to render with (`frustum`: its
+    /// `NiFrustum`), in the constant register the rewritten shaders read them from.
+    pub fn fog_frustum(dev: &IDirect3DDevice9, frustum: &[f32; 6]) {
+        if REAL_CREATE_VS.load(Ordering::Acquire) == 0 {
+            return;
+        }
+        let terms = crate::fog::terms(frustum);
+        let _ = unsafe { dev.SetVertexShaderConstantF(crate::fog::REGISTER, terms.as_ptr(), 1) };
     }
 
     /// The game's device, borrowed.

@@ -207,6 +207,12 @@ mod win {
         // into it, read back at its size, crashed it. (Its frame passes 0; the world behind its
         // menus goes into its world texture.)
         d3d9::rendering(true);
+        // The fog's terms for the game's own camera (a render of its own; each eye's are its own).
+        hooks::guard_void("fog", || {
+            if let (Some(dev), Some(game)) = (d3d9::device(engine::device() as *mut c_void), camera::read(engine::world_camera())) {
+                d3d9::fog_frustum(&dev, &game.frustum);
+            }
+        });
         let result = if arg != 0 && arg as usize != mem::deref(WORLD_TEXTURE) {
             unsafe { real(this, arg) }
         } else {
@@ -272,6 +278,7 @@ mod win {
             if eye == 2 {
                 let s = mirror_cam.expect("a third render is the mirror's");
                 camera::write(cam, &s);
+                d3d9::fog_frustum(&dev, &s.frustum);
                 set_lock(false, true);
                 SECOND_EYE.store(true, Ordering::Release);
                 result = time(Part::Eye, || unsafe { real(this, arg) });
@@ -298,6 +305,7 @@ mod win {
                 );
             }
             camera::write(cam, &s);
+            d3d9::fog_frustum(&dev, &s.frustum);
             set_lock(eye == 0, eye + 1 == renders);
             SECOND_EYE.store(eye == 1, Ordering::Release);
             result = time(Part::Eye, || unsafe { real(this, arg) });
@@ -307,6 +315,7 @@ mod win {
         set_lock(true, true);
         SECOND_EYE.store(false, Ordering::Release);
         camera::write(cam, &game);
+        d3d9::fog_frustum(&dev, &game.frustum);
         if let Some(f) = arms_flags {
             unsafe { ((arms + engine::av::FLAGS) as *mut u16).write(f) };
         }

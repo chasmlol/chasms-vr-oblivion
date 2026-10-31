@@ -296,6 +296,10 @@ pub fn publish(view: &rustvr_adapter::View, head: Vec3) {
     let g = buf.get_or_insert_with(Default::default);
     let (night, fog) = (night_eye(), fog());
     lighting(&lights, night, fog, view.tracking_to_world.inverse(), head, g);
+    // (The game's shaders fog by distance, made so as the game makes them: `crate::fog`.)
+    if g.fog_fade[1] != 0.0 && crate::fog::by_distance() {
+        g.fog_fade[2] = 1.0;
+    }
     g.frame = FRAME.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     // (Every half minute, and whenever the lights on the player change.)
     static LAST_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(u32::MAX);
