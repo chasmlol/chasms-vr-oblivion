@@ -50,7 +50,9 @@ Pick one at the top of the Studio tab. Change anything by hand and it becomes "c
 - **Snap turns, snap crouches and recentres turn as a head would** instead of cutting. On by
   default.
   - The turn gathers speed, swings through, and lands with a little overshoot.
-  - A 45 degree snap settles in about a third of a second.
+  - It turns at 160 degrees a second at its fastest: half the speed it had at first, so a 45 degree
+    snap settles in about 0.7 s.
+  - "Snap turn speed on the desktop view" in the Studio tab sets it (60 to 500).
 - **No black at the edges**: where a fast turn makes the desktop view see past the game's picture,
   the picture's edge is stretched out over the gap. It's a smear, but not black. On by default.
 - **The game's HUD where a flat player has it**: the bars, the compass and the subtitles at the
@@ -109,8 +111,8 @@ Watch the monitor (or OBS) while you play.
      settles with a slight overshoot. The world turns round your body, with no cut and no black
      edge.
    - Flick twice quickly: it should become one longer turn that keeps its speed.
-   - The slider "A 45 degree snap settles in" sets how long it takes. **Tell me** if it's too quick
-     or too lazy.
+   - The slider "Snap turn speed on the desktop view" sets how fast it turns. **Tell me** the
+     speed you like and I'll make it the default.
    - Try it in Clean and in Cinematic: in Cinematic the pan is motion-blurred.
 2. **Recentre** (the menu's Recenter button, or after a load). It should glide, not cut. A step to
    the side dissolves rather than pans.
