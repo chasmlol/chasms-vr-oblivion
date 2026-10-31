@@ -58,6 +58,12 @@ The research and the design are in `docs/research/facesculpt.md`.
 - **The desktop view showed no copy of the head.** The eyes drew it with the held things; the
   desktop view made its own list of those and left it out. It's in now. (The .bat turns the
   desktop view on: `RUSTVR_DESKTOP_VIEW=1`.)
+- **The menu button in the race menu paused the game with no RustVR settings.** The race menu was
+  told to the runtime as the menu shown in the world while it was open, the pause menu over it
+  too, and the runtime keeps its settings away from such a menu. Paused, the pause menu is the
+  menu shown now, as anywhere else, with the settings beside it.
+- **The squish of taking and letting go of the face is half as loud** (the sound pack's gains for
+  them halved: `oblivion-extract sounds` makes the pack again).
 
 ## What changed since the first playtest
 

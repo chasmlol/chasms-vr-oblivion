@@ -229,9 +229,10 @@ const DEFAULTS: &[(&str, &[(&str, f32)])] = &[
     ("bite", &[("NPCHumanChew", 1.0)]),
     ("gulp", &[("NPCHumanSwallow", 1.0)]),
     // A face taken hold of in the race menu to pull into shape, and let go of: soft and wet, as
-    // something organic set down (the game's own clay, near enough).
-    ("face_take", &[("COrganicSmall", 0.8)]),
-    ("face_let_go", &[("COrganicSmall", 0.45)]),
+    // something organic set down (the game's own clay, near enough), and quiet (at 0.8 and 0.45
+    // it was too much, taken and let go of over and over).
+    ("face_take", &[("COrganicSmall", 0.4)]),
+    ("face_let_go", &[("COrganicSmall", 0.225)]),
     ("knife_throw", &[("WPNSwishSmall", 1.0)]),
     ("knife_stick", &[("WPNHitArrow", 1.0)]),
     ("mag_out", &[("ITMAmmoUp", 1.0)]),
