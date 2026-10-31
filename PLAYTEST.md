@@ -34,8 +34,9 @@ own, Virtual Desktop's, unless you pick another), their voices' volume (2.5 time
 by default, up to 4: a limiter keeps them under full scale, turned down around a loud word rather
 than clipped), acting lines out (on: their voice follows the line's "[sneering]"; a quarter more of
 the voice server's work), their voice streaming as it's made (on: the soonest; off: the way it
-was before, a few words at a time, each made whole first), talking over them to cut them off (for
-headphones), and how long a pause ends what you're saying. Changing any of these but the volume
+was before, a few words at a time, each made whole first), talking over them to cut them off (on:
+their own voice coming back through the headset is told apart from yours), and how long a pause
+ends what you're saying. Changing any of these but the volume
 restarts the voice plugin (what people were told since your last save goes with it).
 
 ## What to try, in order
@@ -136,8 +137,13 @@ Known for now:
   where the word ends): about half a second sooner.
 - Someone walking somewhere keeps walking while they talk (they look at you, they don't stop).
 - Their own greeting ("Hello", as the game has people greet you when you pass) can talk over a line.
-- The mic doesn't hear you while someone's talking, and you can't cut them off: the Quest's
-  speakers are beside its mic. With headphones, `barge_in = true` in `voice.toml` lets you.
+- Talking over them (on now, in your settings too): the mic stays open while they talk, and their
+  own voice coming back through the Quest's speakers is told apart from yours by how loud it is
+  (it learns how loud their voice comes back, in their first second or two of talking; you need
+  to be about twice as loud as that). As you start speaking they stop, and what you say is
+  answered. If they cut themselves off, or don't stop when you talk, the plugin's log
+  (`voice.log`) says how loud their voice came back (`[mic] ... x0.12 of its level`): tell me what
+  it says.
 - If the open mic cuts your sentences short or fires on noise, say so: push-to-talk on a controller
   is the next step (VR players of Mantella asked for it).
 
