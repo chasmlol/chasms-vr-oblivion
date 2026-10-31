@@ -12,7 +12,12 @@ player does it changes. The pieces, in the order they're built:
 6. Sitting and sleeping.
 7. Surrendering and yielding.
 
-Then a survey of what else could be done by hand ([More to do by hand](#more-to-do-by-hand)).
+Then a survey of what else could be done by hand ([More to do by hand](#more-to-do-by-hand)), and
+the three of it picked next:
+
+8. Harvesting plants by hand.
+9. Keys at the lock.
+10. Doomstones and runestones.
 
 The game here is Oblivion 1.2.0.416 (Steam GOTY).
 
@@ -454,20 +459,136 @@ Calls made:
 * The gesture asks; the game answers (its own accept or reject, its own dialogue). Raising the hands
   before nobody does nothing.
 
+## 8. Harvesting plants by hand
+
+### How VR games do it
+
+* **Grab and pull.** Survival games in VR (*Green Hell VR*, *Into the Radius*' mushrooms) take a
+  plant's produce with a grab on it and a pull away: the pull is the pluck, so brushing past or
+  reaching through a bush takes nothing.
+* **What's taken is in the hand.** The produce ends up in the fingers that plucked it, to be put in
+  a pouch, eaten or dropped, never just counted into a menu.
+
+### Oblivion
+
+* **Flora** (`TESFlora`, form type 0x1F; `FLOR` records, 155 of them: flowers, mushrooms,
+  Nirnroot) is an activator with a produce form first in it (ahead of its
+  `TESForm`): a reference's base is the `TESFlora`, the ingredient in it, and
+  the four seasons' chances beside it.
+* **Harvesting is its activation** (`TESFlora::Activate`): a plant not
+  harvested yet (the reference's flag 0x2000) gives its ingredient by the season's chance
+  (`rand % 100 < chance`): into the activator's pack (the actor's `AddItem`, or the ingredient's
+  script), then "You successfully harvest %s." (`sFloraSuccessMessage`) and `ITMPickupOrganic`.
+  Else "You find nothing of use." (`sFloraFailureMessage`). Either way the reference is marked
+  harvested (its flag 0x2000, and a change for the save) until the cell resets; the game
+  draws a harvested plant as before.
+
+### Design
+
+* **A plant plucked**: a hand closing its grip in a plant (inside the bounds of one of its meshes,
+  with 2 cm to spare) and pulled 7 cm away while still closed is the player's activation of the
+  plant: the game's harvest, its chance, words and sound. Closing on it is felt (a light tension
+  that grows with the pull), the pluck snaps.
+* **In the hand**: when the harvest gave the ingredient (its count went up), the hand that plucked
+  it, still closed and empty, holds it: the runtime's copy of that ingredient, as if drawn from a
+  slot (put in a slot it's simply in the pack, held at the mouth it's eaten, let go it drops). The
+  framework's inventory region asks for it (`Inventory::give_*`, from its padding: one of the
+  player's things into a hand). A hand opened before the game answered leaves it in the pack.
+
+Calls made:
+
+* The pull is the pluck (a grab alone takes nothing), so a hand passing through plants, or picking
+  up a thing lying in one, harvests nothing.
+* A plant harvested already plucks to the game's "You find nothing of use.": the game doesn't draw
+  harvested plants differently, so the hand finds out as the player would.
+
+## 9. Keys at the lock
+
+### How VR games do it
+
+* **Put in and turned.** VR puzzle and horror games (*The Room VR*, *Resident Evil 4 VR*) have the
+  key brought to its lock and turned with the wrist, a click at each stop; the wrong key doesn't go
+  in.
+* **The key ring.** Players expect the key for the door in front of them to be the one they reach
+  for.
+
+### Oblivion
+
+* **A lock** (`ExtraLock`, its data: level +0, key +4 (`TESKey*`), flags +8 (1: locked)) whose key
+  the player carries opens on the player's activation (doors: `TESObjectDOOR::Activate`;
+  containers: `TESObjectCONT::Activate`): the lock
+  is unlocked there and then (changed for the save), and a message box with one button,
+  "Ok", says so ("You opened the door with <key>.", `sOpenWithKey`; "Opened the
+  container with a key.", `sOpenedContainer`). Its button (`HandleClick`, id
+  4: answer 1, with the box's offset of 1) runs the box's callback, which takes
+  answer 1 as Ok and activates the door or container again: it opens (a load door takes the player
+  through).
+* **A key with a lock it doesn't fit** does nothing there; the game's own activation would open the
+  lock's menu if the player has picks, so it isn't asked.
+
+### Design
+
+* **The key put in and turned**: a key drawn from the body (a new Keys slot, a ring on the belt
+  just behind the left hip) with its tip put to a locked door or container (as a lockpick's is) goes
+  in if it's that lock's key (a click in the hand); turned in it (the hand's twist about the key,
+  60° either way, with a detent felt every 20°) it's the player's activation: the game unlocks it,
+  and the key's turn is its message box's Ok (the box's own click), so the door or chest opens. The
+  box's words are the game's corner notice instead. The wrong key bumps and stays out. Taken more
+  than 6 cm from where it went in, it's out.
+* **The key that fits first**: the Keys slot gives the key to the nearest locked thing it opens
+  first (the slot's Strongest order, a key's strength being how near its lock is, in metres from
+  10 m), then the rest by value.
+
+Calls made:
+
+* The turn is the yes: the box only says what the turn did, so it doesn't wait for a laser click.
+* The Keys slot is new, behind the left hip, so a sword in the hip holster keeps the hip's middle.
+
+## 10. Doomstones and runestones
+
+### How VR games do it
+
+* **A palm on the stone** is the ritual, as with the wayshrines (section 5): held a moment, felt
+  building, the stone answers.
+
+### Oblivion
+
+* **Doomstones** (twenty: the thirteen of the birthsigns, `Doomstone01Apprentice` to
+  `Doomstone01Warrior`, and the seven of the sky, the Jone, Aetherius, Jode, Sithian,
+  Magnus, Shezarr and Dragon Stones, to `Doomstone08Dragon`) and **rune stones** (the
+  Hestra, Sidri-Ashak and Reman Rune Stones) are activators with the models
+  `Dungeons\FortRuins\Exterior\RuinStonesExterior\RuneStoneExt*.NIF`, each with its own script on
+  the player's activation: a birthsign's Doomstone at night asks "Do you choose to steer by the
+  stars of the Atronach?" (No / Yes: its Greater Power replaces the one the player has), by day "No
+  stars shine upon the doomstone."; the sky's have their own (the Dragon Stone's power for the
+  famous); a rune stone "The stone stirs under your hand. Do you seek its conjured
+  weapon and armor?" (No / Yes, once a day: "Stones sleep. Stones rest this day.").
+
+### Design
+
+* **A palm on the stone**: an empty hand on a Doomstone or rune stone for 0.6 s is the player's
+  activation of it (the wayshrines' touch): its own words and question, answered by the player with
+  the laser.
+
+Calls made:
+
+* The stone's question isn't answered by the touch: a Doomstone's power replaces the one the player
+  has, a choice that's the player's.
+
 ## More to do by hand
 
 A survey of what else in Oblivion the player could do with their hands and body, each through the
 game's own system. Ranked by how good it would feel in VR and how often a player meets it (best and
-most often first). Not built: for the user to pick from. (Already passed on: taking things out of
+most often first). 1, 3 and 5 are built (sections 8 to 10); the rest are for the user to pick from. (Already passed on: taking things out of
 containers and bodies by hand, eating and drinking at the mouth, shopping at the counter with gold.)
 
 | # | By hand | Feel | How often | The game's own system |
 |---|---|---|---|---|
-| 1 | **Harvesting plants**: pinch a flower's head, pull a mushroom's cap, pluck a Nirnroot (it hums) | High: the most tactile thing in the wild | Constantly, outdoors and in caves (155 flora forms) | `TESFlora` (form type 0x1F): the player's activation harvests by the game's chance ("You successfully harvest %s.", its season, its harvested look); the ingredient into the pack, or into the hand as its model |
+| 1 | **Harvesting plants** (built: section 8): pinch a flower's head, pull a mushroom's cap, pluck a Nirnroot (it hums) | High: the most tactile thing in the wild | Constantly, outdoors and in caves (155 flora forms) | `TESFlora` (form type 0x1F): the player's activation harvests by the game's chance ("You successfully harvest %s.", its season, the plant marked harvested); the ingredient into the pack, or into the hand as its model |
 | 2 | **Putting armour and clothes on and off**: a helmet held to the head, a cuirass to the chest, gauntlets pulled on, a ring onto a finger; a worn piece gripped and pulled off | High: dressing is the classic VR moment | Every haul of loot | `Actor::EquipItem` / `UnequipItem` with the piece's biped slots (its `TESBipedModelForm`); needs apparel in the hands (the holsters handing out armour and clothes as their ground models, also in its `TESBipedModelForm`), which also lets carried armour be repaired and enchanted in the hand |
-| 3 | **Keys at the lock**: a key from the Keys slot put to its door or chest | Medium-high: small, satisfying, the lock already reads the tip | Often (houses, dungeons, quests) | The player's activation of a locked thing whose key they carry (`ExtraLock` +4, the key): it opens; the lockpicking's keyhole touch reused |
+| 3 | **Keys at the lock** (built: section 9): a key from the Keys slot put to its door or chest | Medium-high: small, satisfying, the lock already reads the tip | Often (houses, dungeons, quests) | The player's activation of a locked thing whose key they carry (`ExtraLock` +4, the key): it opens; the lockpicking's keyhole touch reused |
 | 4 | **Sigil Stones on gear**: a Sigil Stone held to the weapon in the other hand, or to a worn piece | High: the reward of every gate, made physical | Once per gate | The `SigilStoneMenu` (type 0x418) with its item chosen through the `RepairMenu` in mode 6 (made for a moment, as recharging is) |
-| 5 | **Doomstones and runestones**: a palm on the standing stone | Medium: a ritual, like the wayshrines | Common outdoors (13 Doomstones, 26 runestones) | Each stone's own script on activation (the birthsign power once a day, the runestones' lesser powers); the wayshrines' touch and kneel reused |
+| 5 | **Doomstones and runestones** (built: section 10): a palm on the standing stone | Medium: a ritual, like the wayshrines | Common outdoors (13 Doomstones, 26 runestones) | Each stone's own script on activation (the birthsign power once a day, the runestones' lesser powers); the wayshrines' touch reused |
 | 6 | **Traps by hand**: a tripwire cut with a blade or snagged, a pressure plate pressed with a palm, stepped over to avoid | High: tension, and a reason to look down | Often in caves, forts and ruins (153 trap activators) | The trigger activators' own scripts (`CTrigTripwire01`, `ARTrigPressurePlate01`...): their activation by the player sets the trap off; a blade's cut is a hit on the wire |
 | 7 | **Persuasion by gesture**: admire (a hand on the heart), boast (a fist to the chest), joke (a laugh), coerce (a pointed finger) to the speaker | Medium: social VR, but gestures can misfire | Often with quests and merchants | The `PersuasionMenu`'s four quarters clicked as its wheel turns (its own disposition and timing), the wheel floating at the speaker |
 | 8 | **Ladders climbed**: rung over rung, the pull taking the player up | Medium-high (VR players love climbing) | Rarely (16 ladder doors: the palace, sewers) | Ladders are load doors: their activation at the top of the climb |
