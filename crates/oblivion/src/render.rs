@@ -365,8 +365,11 @@ mod win {
         };
         // The game's own bob, as its camera sees it (none in the race menu: its camera isn't the
         // player's eyes).
+        // Its posture left out: where its camera has sat lately isn't a bob (`camera::Rest`).
+        static REST: std::sync::Mutex<camera::Rest> = std::sync::Mutex::new(camera::Rest::new());
         let bob = race_menu.is_none().then(|| hooks::guard("view bob", None, camera::first_person_bob)).flatten();
-        camera::note_bob(bob.as_ref(), &game, now);
+        let (bob, rest) = REST.lock().unwrap_or_else(|e| e.into_inner()).take(bob, dt);
+        camera::note_bob(bob.as_ref(), rest, &game, now);
         let snap = link::game_frame(&GameFrame { eye: Some(eye), look_yaw, menu, race_menu, bob, camera: race_menu.is_none().then_some(game), now, dt })?;
         snap.view?;
         log_camera_once(&game);

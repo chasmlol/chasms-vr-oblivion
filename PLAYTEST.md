@@ -82,6 +82,23 @@ Oblivion's own bob comes from its first-person animations moving the camera:
 **The headset changes too:** it no longer takes the game's camera animation. Before, a landing dipped
 your view 20 cm. The Comfort tab's "Camera bob / shake" brings it back if you want it.
 
+**Fixed after the second playtest** ("something behind me getting stuck in the camera" on the
+desktop view):
+
+- **Standing still, Oblivion holds its camera 9.5 cm up and 3 cm to the side** of where the bob was
+  measured from. That's its posture, not a bob.
+  - The merged branch passed it on as one, which lifted the desktop camera off your eye. From there
+    it could see into what the runtime draws behind your head.
+  - It also sat the headset 10 cm lower than before.
+  - Now only the camera's movement off where it has sat for the last second and a half counts as
+    bob: the steps, a landing's dip and a swim's float.
+- **The bob now moves the world, not your body.**
+  - Before, moving the desktop camera only moved the body the runtime draws, the wrong way. The
+    game's picture is looked up by direction, so the world never moved with the camera.
+  - Now the bob turns the view by as much as it would move what's 2.5 m away, so the world bobs
+    and your hands stay with the camera, as a flat game's arms do.
+  - A landing's dip no longer drops the camera into your chest.
+
 ## What to try
 
 Watch the monitor (or OBS) while you play.
@@ -118,6 +135,9 @@ Watch the monitor (or OBS) while you play.
    - Hold a potion or a book up close to your face: it comes into focus and the world behind
      blurs.
 9. **The bob.** Walk, run, sneak, jump and swim with each of its three choices.
+   - Nothing should get in the desktop camera's face any more, standing or moving.
+   - The world should bob, not your hands.
+   - Your height in the headset standing should be as it was before the bob was merged.
    - Watch the recording, and check the headset never bobs.
    - With the game's own, walking is barely there; running, landing and swimming show it.
    - **Tell me** how each looks, and whether the strength should be different by default.
