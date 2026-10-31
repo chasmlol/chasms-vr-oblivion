@@ -11,12 +11,23 @@ character has:
 * target, touch and self spells: Flare, Snowball, Spark, Absorb Health, Shocking Touch, Cold Touch,
   Burning Touch, Protect, Heal Minor Wounds;
 * the Nord's power, Nordic Frost;
-* 200 more magicka;
 * the Staff of Conflagration in the inventory.
 
-The console can't be typed in VR, so the `.bat` puts two zombies in front of you, one 2 m away for
-touch spells and one 10 m down the stairs for bolts. It also switches the game's AI off, so they
-stand still. `range.bat` is the same on the framework's test range, with no game (see the end).
+The console can't be typed in VR, so the `.bat` does the setting up for you:
+* two zombies in front of you, one 2 m away for touch spells and one 10 m down the stairs for
+  bolts, with the game's AI switched off so they stand still;
+* **magicka 10000**, which comes back fast, so it's effectively unlimited;
+* the six magic skills at 100, so even Master spells pass the game's own mastery check;
+* **36 more of the game's own spells**, from every school, range and level. Among them are Fire
+  Ball, Immolating Blast, Lightning Bolt, Frost Bolt, Ice Storm, Lightning Storm, Searing Grasp,
+  Lightning Grasp, Fire and Lightning Shield, Heal Major Wounds, Convalescence, Shield, Open Easy
+  Lock, Starlight, Illuminate, Paralyze, Frenzy, Chameleon, Shadow Shape, Summon Skeleton, Summon
+  Dremora, Bound Dagger, Bound Sword, Turn Undead, Telekinesis and Soul Trap.
+
+The launcher runs one console line every half second, so the extra spells arrive over the first
+20 s or so after the save loads. That makes four pages on the wheel.
+
+`range.bat` is the same on the framework's test range, with no game (see the end).
 
 The design and its reasons are in `docs/research/spells.md`.
 
@@ -29,9 +40,11 @@ The design and its reasons are in `docs/research/spells.md`.
   * Point either hand at a spell and **pull that hand's trigger**: it goes into that hand.
   * Or **let go of B** while the right hand points at one: it goes into the right hand.
   * The **middle** empties the hand.
-  * A spell lights up when you point anywhere along its slice from the middle, even past the
-    ring's edge, and you feel a tick in that hand.
-  * The arrows at the foot turn the page when there are more than twelve spells.
+  * A spell lights up when you point anywhere along its slice from the middle, even a little past
+    the ring's edge, and you feel a tick in that hand. The name in the middle is whatever either
+    hand last pointed at.
+  * There are twelve spells to a page. Point at the arrows at the foot and pull a trigger to turn
+    the page.
 * **Charge and release**, as in Skyrim VR with ISPVR's feel. **Hold the trigger**: the spell
   charges over the game's own casting time (self 0.37 s, touch 0.27 s, target 0.4 s). Its art grows
   in the palm, its casting light fades in and its casting sound plays. In the hand you feel nothing
@@ -68,10 +81,10 @@ The design and its reasons are in `docs/research/spells.md`.
 6. **Activate with a spell in hand.** With spells in both hands, look at something you can use
    (a door, the zombie) and tap a trigger quickly: that's the game's Activate, not a cast.
 7. **When the game says no.**
-   * Cast until your magicka runs out, then pull: nothing charges, you feel a long dull pulse, and
-     the game's own "You don't have enough Magicka" with the school's failure sound.
-   * Cast **Nordic Frost** from the wheel twice: the second time it should be refused with the
-     game's "only once per day".
+   * Cast **Nordic Frost** from the wheel twice. The second time nothing charges: you feel a long
+     dull pulse, and get the game's own "only once per day" with the school's failure sound.
+   * With 10000 magicka you won't run out. The "not enough Magicka" refusal works the same way, and
+     you can feel it on the range with Inferno.
 8. **A pick in the game's own menu.** Press the left B (Menu Mode), open Magic and click a spell:
    it goes into your **left** hand.
 9. **The staff.** In the inventory, equip the Staff of Conflagration (it goes on your back) and
@@ -79,6 +92,11 @@ The design and its reasons are in `docs/research/spells.md`.
    game's own staff cast along the staff, using its charge.
 10. **Holding something.** Take the torch or the sword in your left hand: the spell's art goes.
     Let go of it: the spell is back in that hand.
+11. **The rest of the spells.** Use the wheel's pages to try the rest:
+    * the big ones, whose aim should feel heavier (Immolating Blast, Lightning Storm);
+    * area spells (Fire Ball, Ice Storm);
+    * summons and bound weapons;
+    * Telekinesis, Turn Undead on the zombies, Paralyze, Soul Trap, and the lights.
 
 Things worth telling me about:
 * Does the 60° palm angle feel natural, or should it be more finger-pointing or more palm-out?
@@ -91,15 +109,17 @@ Things worth telling me about:
 ## The range (`range.bat`)
 
 The framework's own test range, with no game. The left hand holds a fire bolt, and the training
-dummies stand ahead and to the left. The right B opens the wheel, with these spells:
-* Heal minor wounds (self);
-* Frost bolt (a harder spell, so its aim is heavier);
-* Shocking touch;
-* Lantern (a power);
-* Inferno, which costs more than you have, so you can feel the refusal.
+dummies stand ahead and to the left. You have 1000 magicka, which comes back at 60 a second. The
+right B opens the wheel, with eighteen spells on two pages:
+* target spells: bolts of fire, frost and lightning, a fireball, an ice storm (Master, so its aim
+  is heaviest), and a heal-other;
+* touch spells: shocking, cold, searing, and paralyze;
+* self spells: heal, shield, light, summon, bound sword;
+* Lantern, a power;
+* Inferno, which costs more than you'll ever have, so you can feel the refusal.
 
-Bolts fly from the palm and knock the dummies, touches jolt them, a heal flashes on you, and the
-magicka is spent and comes back.
+Bolts fly from the palm and knock the dummies, touches jolt them, a self spell flashes on you, and
+the magicka is spent and comes back.
 
 ## Checked, and not
 
