@@ -23,7 +23,7 @@ saves). To make one from any save, boot it, put the player in deep water and sav
 `powershell -File tools\oblivion.ps1 -Save rustvr-weye -Commands "player.setpos x <x>|player.setpos
 y <y>"`, with a point out in the lake.
 
-The research and the design are in `docs/research/swimming.md`; how it's wired into the game is
+The research and the design are in `docs/design/swimming.md`; how it's wired into the game is
 the Swimming row of `docs/OBLIVION.md`. The numbers to tune are at the top of
 `framework/crates/runtime/src/swim.rs` (the catch, the pull's pace, the glide and drag, the most
 speed) and `framework/crates/ik/src/swim.rs` (the body's lean and kicks).
@@ -54,7 +54,7 @@ speed) and `framework/crates/ik/src/swim.rs` (the body's lean and kicks).
 - **At the surface** the game holds you up: a stroke's rise goes into the surface, and a stroke has
   to take you down faster than 0.2 m/s to dive.
 - **Strokes go where the hands push, the stick where the head looks.** The strokes are the game's
-  swimming step in `Actor::Move` (`crates/oblivion/src/movement.rs`), turned back by the pitch the
+  swimming step in the game's move (`crates/oblivion/src/movement.rs`), turned back by the pitch the
   game's swimming turns a step by; the stick's swimming is added while it's pushed. The game's
   character controller moves you, with its collision and its shore.
 - **The game sees a swimmer.** While the arms swim (faster than 0.15 m/s) with the stick let go,

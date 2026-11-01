@@ -1,6 +1,6 @@
 # Oblivion's armour marks: which parts of the game's armour models are rigid plates, and what each
 # rides. The guide to the format is the framework's docs/ARMOUR.md; the research behind it is
-# docs/research/armour.md. Look at a set with the preview, from this repository's root:
+# docs/design/armour.md. Look at a set with the preview, from this repository's root:
 #
 #     cargo build --release --manifest-path framework\Cargo.toml --target-dir target -p rustvr-avatar --bin rustvr-armour
 #     target\release\rustvr-armour oblivion --set iron

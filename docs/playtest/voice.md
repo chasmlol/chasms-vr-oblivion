@@ -11,7 +11,7 @@ This is the voice plugin, `rustvr-voice`: an optional plugin for power users who
 `tools\oblivion.ps1` doesn't build it. The simple voice commands (Windows' own speech recognition,
 below) need none of it.
 
-The research and the design: `docs/research/voice.md` (and `docs/research/npcs.md` for the looks).
+The research and the design: `docs/design/voice.md` (and `docs/design/npcs.md` for the looks).
 
 ## Setting the plugin up (once)
 
@@ -108,12 +108,12 @@ Then save it as `rustvr-voice` ([DEVELOPING.md](../DEVELOPING.md), "Test saves")
   seven emotions, stronger for "very", milder for "slightly"), and each sentence brings its
   subtitle as the game shows its own. Each line is made as loud as the game's own voice for them,
   times the Voice tab's volume, under a limiter (turned down round a loud word, never clipped).
-- **Streamed** (the default): they speak a long silent sound with the game's own `Actor::Speak` (so
-  the voice comes from them in 3D, at the game's voice volume), and the voice is written into that
-  sound as it's made; each frame their mouth is set to the mouth shapes at the voice where it plays.
-  When Breeze makes the voice slower than they say it, the stream waits at a pause (a comma, a full
-  stop) and goes on with a good stretch, not a word at a time. Not streamed: a clause at a time,
-  cut at the voice's pauses, each a WAV with the game's own lip file (in the game's folder,
+- **Streamed** (the default): they speak a long silent sound through the game's own speech (so the
+  voice comes from them in 3D, at the game's voice volume), and the voice is written into that sound
+  as it's made; each frame their mouth is set to the mouth shapes at the voice where it plays. When
+  Breeze makes the voice slower than they say it, the stream waits at a pause (a comma, a full stop)
+  and goes on with a good stretch, not a word at a time. Not streamed: a clause at a time, cut at
+  the voice's pauses, each a WAV with the game's own lip file (in the game's folder,
   `Data\Sound\Voice\RustVR`).
 - **The mic** is deaf while any menu is open, the game is paused or loading. Talking over them (on
   by default) cuts them off and what you say is answered; off, the mic is muted while they speak.

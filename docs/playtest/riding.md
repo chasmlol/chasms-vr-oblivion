@@ -27,7 +27,7 @@ Then save it as `rustvr-horse` ([DEVELOPING.md](../DEVELOPING.md), "Test saves")
 `PlayerHorse <base form id> [metres]` is the adapter's test line (`crates/oblivion/src/console.rs`,
 `riding::give_horse`): the game places a horse of that base that far from you (`placeatme`) and the
 adapter makes it yours (`SetOwnership`). `0004DE90` is "My Chestnut Horse" in `Oblivion.esm`;
-`docs/research/riding.md` lists a bay, a black and Shadowmere too. Arriving at `ChorrolStables00`
+`0001F11D` a bay, `0001F11A` a black and `00032BF4` Shadowmere. Arriving at `ChorrolStables00`
 brings up the main quest's "arrived in Chorrol" message.
 
 The logs: the runtime's `%LOCALAPPDATA%\RustVR\rustvr.log` has `riding:` lines (twice a second while
@@ -36,9 +36,8 @@ and steering sent; every spur, pull, ease and gait change). The game folder's `r
 has the adapter's `riding:` lines (what the game's controls were given, the gait changes), and the
 `d3d9:` and `mem:` lines that matter for the crashes in round 10.
 
-Why riding works the way it does (what players like and hate, how other VR games ride, Oblivion's
-engine facts): `docs/research/riding.md`. How it's wired into the game: the Riding row of
-`docs/OBLIVION.md`.
+Why riding works the way it does (what players like and hate, how other VR games ride):
+`docs/design/riding.md`. How it's wired into the game: the Riding row of `docs/OBLIVION.md`.
 
 ## What it does
 

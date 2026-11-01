@@ -6,9 +6,8 @@ Oblivion draws its world once a frame from one camera, and a few things it makes
 that camera (the sky's centre, a body's bones, a shadow's clip planes, the grass, the leaves and far
 trees facing the view) are wrong for a second eye, or for a head that never stops moving. This is
 the set of fixes for them, the game's own settings raised for a headset, and the work on the stutter
-crossing into new cells. The engine facts are in `docs/research/visuals.md`; the research on the
-game's image quality, its settings and the community's mods, in
-`docs/research/oblivion-image-quality.md`.
+crossing into new cells. The design is in `docs/design/visuals.md`; the research on the game's image
+quality, its settings and the community's mods, in `docs/design/oblivion-image-quality.md`.
 
 ## Playing it
 
@@ -134,7 +133,7 @@ The runtime (`framework/crates/runtime/src/compositor.rs`):
 
 The developer's own game has these, set up at their request for the stutter and the distance.
 None of it is in the repository or done by its scripts; a player without them gets the fixes above
-all the same. What each is and how it was set up: `docs/research/oblivion-image-quality.md`.
+all the same. What each is and how it was set up: `docs/design/oblivion-image-quality.md`.
 
 - **The 4GB patch** on `Oblivion.exe` (the original kept beside it as
   `Oblivion.exe.rustvr-original`). If Steam verifies or updates the game, it puts the original back.

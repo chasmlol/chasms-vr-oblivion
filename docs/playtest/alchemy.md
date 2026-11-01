@@ -37,7 +37,7 @@ pack holds a Novice and an Apprentice Mortar & Pestle, a Novice Alembic and Calc
 Apprentice Retort, and the character's own ingredients (among them Wisp Stalk Caps and Stinkhorn
 Cap, which make Damage Health).
 
-The research and the engine facts: `docs/research/alchemy.md`.
+The research and the design: `docs/design/alchemy.md`.
 
 ## What it does
 

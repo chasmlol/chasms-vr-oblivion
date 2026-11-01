@@ -15,7 +15,7 @@ works is [OBLIVION.md](OBLIVION.md); the framework's side is
   game rule, the design has gone wrong ([framework/docs/DESIGN.md](../framework/docs/DESIGN.md)).
 - **Hands.** A hand touching nothing follows its controller exactly. Every weapon snaps to its
   rigged grip when grabbed near it. The gravity gloves pull things to the hand.
-- **Research first.** A feature starts with research in `docs/research/<feature>.md`: what players
+- **Research first.** A feature starts with research in `docs/design/<feature>.md`: what players
   like most in the best VR games that do it, how those games do it, what people complain about,
   and the game's own systems for it. Inspiration only: nothing copied.
 - **None of the game's code is committed.** The adapter hooks and calls the game's own functions,

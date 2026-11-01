@@ -29,7 +29,7 @@ game's.
 The body the runtime draws for you (`framework/crates/ik`) was measured against real people's
 motion capture, fed what a Quest would see of them (the eyes and both hands, with tracking noise),
 and rebuilt where it was furthest from them. What the research found and why each change was made
-is in `framework/docs/research/ik.md`.
+is in `framework/docs/design/ik.md`.
 
 - **It stands on the game's ground at the character's size.** The adapter reports how high the
   game's eye is over the player's feet (`link.rs`, logged once as "link: the game's eye is 1.60 m

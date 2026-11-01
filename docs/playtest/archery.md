@@ -26,7 +26,7 @@ textures/menus/misc/hud_reticle.dds` writes the bows, their bent models (`#bent`
 (`#arrow`, without the quiver), the quivers (`#quiver0` to `#quiver5`), `bows.toml` and the
 crosshair image into `local_assets/oblivion`.
 
-The research and the design: `docs/research/archery.md`.
+The research and the design: `docs/design/archery.md`.
 
 ## What it does
 

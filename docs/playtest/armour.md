@@ -42,7 +42,7 @@ the Nord too laden to walk, even with strength 100 (the game's movement speed is
 | Legion | 00028ADF | 00028AE0 | 00028AE1 | 00028ADE |
 | Blades | 00023318 | 0002391C | 00023329 | 00023921 |
 
-The research: `docs/research/armour.md`. The guide to marking armour: the framework's
+The research: `docs/design/armour.md`. The guide to marking armour: the framework's
 `docs/ARMOUR.md`.
 
 ## What it does

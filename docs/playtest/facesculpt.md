@@ -28,7 +28,7 @@ save does, and one can be made from any save with `-At <cell>`, saved as `rustvr
 `tools\oblivion.ps1` turns the desktop view off: set `$env:RUSTVR_DESKTOP_VIEW = "1"` first to see
 the copy of the head on the monitor.
 
-The research and the design: `docs/research/facesculpt.md`.
+The research and the design: `docs/design/facesculpt.md`.
 
 ## What it does
 

@@ -2,7 +2,7 @@
 
 Save: none
 
-The research and the design: `docs/research/worldmenu.md`. The code: `crates/oblivion/src/worldmenu.rs`
+The research and the design: `docs/design/worldmenu.md`. The code: `crates/oblivion/src/worldmenu.rs`
 (the place), `render.rs` (the held view while loading) and `hud.rs` (the menu's floating words).
 
 ## Playing it
