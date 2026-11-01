@@ -4,8 +4,9 @@
 //! ([`rustvr_protocol::GS_QUICK_LOOT`]).
 //!
 //! * **What's looted:** a container the game would open (not locked, the lock is the game's to
-//!   work), and a dead person or creature; neither with a script, so a script's activation runs as
-//!   ever (a hand on it, the trigger opens it the game's way: its menu, its script).
+//!   work), and a dead person or creature; neither with a script that has its own activation (an
+//!   `OnActivate` block, which the game runs instead of opening it), so that one opens the game's
+//!   way as ever: its script, then its menu if the script opens it.
 //! * **What's listed** is the container menu's own list: its entries of the thing's things
 //!   (`GetInventoryItem`, 0x4D88F0) and its own filter (0x4854F0, as it lists a container's or a
 //!   body's things, worn ones too), each by the game's name, value, weight and inventory icon.
@@ -189,8 +190,15 @@ mod game {
     const ITEM_SOUND: usize = 0x005E_99C0;
     /// The inventory's icon of a thing (cdecl: its form; under `Icons\`).
     const ICON: usize = 0x005C_0C50;
-    /// `TESScriptableForm`'s RTTI: its script at +4.
+    /// `TESScriptableForm`'s RTTI: its script at +4. A `Script`'s compiled code (+0x30) and its
+    /// length (+0x20): its blocks, each a `Begin` line (0x10: an opcode, its length, then the
+    /// block's type, `OnActivate`'s 2, and how long the block is past it), outside them lines of
+    /// an opcode, a length and that much more (its name's).
     const RTTI_SCRIPTABLE: usize = 0x00B0_331C;
+    const SCRIPT_CODE: usize = 0x30;
+    const SCRIPT_LENGTH: usize = 0x20;
+    const BEGIN: u16 = 0x10;
+    const ON_ACTIVATE: u16 = 2;
     /// `Tile::ReadXML(parent, path)`, `Tile::UpdateFloat`, `Tile::UpdateString` (thiscall).
     const READ_XML: usize = 0x0059_0420;
     const UPDATE_FLOAT: usize = 0x0058_CEB0;
@@ -257,6 +265,8 @@ mod game {
         focus_y: Option<f32>,
         /// The runtime's presses seen last (menu up, menu down, use, loot all).
         presses: [u16; 4],
+        /// What a hand pointed at last (for the log).
+        pointed: usize,
         failed: bool,
     }
 
@@ -294,22 +304,47 @@ mod game {
         let _ = PATH.set(std::ffi::CString::new(path.to_string_lossy().as_bytes()).unwrap_or_default());
     }
 
-    /// The thing can be looted at a glance: a container the game would open, or a body; with no
-    /// script (whose activation would be skipped).
-    fn lootable(refr: usize) -> bool {
+    /// Whether the thing can be looted at a glance (else why not): a container the game would open,
+    /// or a body; not one whose script has its own activation.
+    fn lootable(refr: usize) -> Result<(), &'static str> {
         if refr == 0 || mem::at::<u32>(refr + FORM_FLAGS).is_none_or(|f| f & (DELETED | DISABLED) != 0) || mem::deref(refr + REFR_NODE) == 0 {
-            return false;
+            return Err("it isn't there");
         }
         let base = mem::deref(refr + REFR_BASE);
-        let scriptable = items::cast(base, RTTI_SCRIPTABLE);
-        if scriptable != 0 && mem::deref(scriptable + 4) != 0 {
-            return false;
-        }
         match mem::at::<u8>(base + FORM_TYPE) {
-            Some(CONTAINER) => !locked(refr),
-            Some(NPC | CREATURE) => combat::is_actor(refr) && dead(refr),
-            _ => false,
+            Some(CONTAINER) if locked(refr) => return Err("it's locked"),
+            Some(CONTAINER) => {}
+            Some(NPC | CREATURE) if combat::is_actor(refr) && dead(refr) => {}
+            Some(NPC | CREATURE) => return Err("they're alive"),
+            _ => return Err("it holds nothing"),
         }
+        let scriptable = items::cast(base, RTTI_SCRIPTABLE);
+        let script = if scriptable != 0 { mem::deref(scriptable + 4) } else { 0 };
+        if script != 0 && activates(script) {
+            return Err("its script has its own activation");
+        }
+        Ok(())
+    }
+
+    /// A script has an `OnActivate` block (or its code can't be read: as if it had).
+    fn activates(script: usize) -> bool {
+        let (code, n) = (mem::deref(script + SCRIPT_CODE), mem::at::<u32>(script + SCRIPT_LENGTH).unwrap_or(0) as usize);
+        let Some(bytes) = (code != 0 && n > 0 && n < 1 << 20).then(|| mem::bytes(code as *const u8, n)).flatten() else { return true };
+        let word = |at: usize| bytes.get(at..at + 2).map(|w| u16::from_le_bytes([w[0], w[1]]));
+        let long = |at: usize| bytes.get(at..at + 4).map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]));
+        let mut at = 0;
+        while at + 4 <= n {
+            let (Some(op), Some(len)) = (word(at), word(at + 2)) else { return true };
+            at += 4 + len as usize;
+            if op == BEGIN {
+                let (Some(kind), Some(block)) = (word(at - len as usize), long(at - len as usize + 2)) else { return true };
+                if kind == ON_ACTIVATE {
+                    return true;
+                }
+                at += block as usize;
+            }
+        }
+        at != n
     }
 
     fn locked(refr: usize) -> bool {
@@ -552,7 +587,14 @@ mod game {
         // What a free hand points at (none in a menu, or with no hand put up).
         let vr = snap.is_some_and(|s| s.view.is_some());
         let target = if vr && player != 0 && !crate::menus::menu_mode() && crate::pointing::hand().is_some() { crate::hud_info::looked_at() } else { 0 };
-        let target = if target != 0 && lootable(target) { target } else { 0 };
+        let why = (target != 0).then(|| crate::hooks::guard("loot test", Err("it couldn't be read"), || lootable(target)));
+        if target != s.pointed {
+            s.pointed = target;
+            if let Some(Err(why)) = why {
+                tracing::info!("quickloot: {} ({target:#x}) isn't looted at the hand: {why}", items::form_facts(mem::deref(target + REFR_BASE)).name);
+            }
+        }
+        let target = if why == Some(Ok(())) { target } else { 0 };
         if s.loot.as_ref().is_some_and(|l| l.refr != target) {
             let mut l = s.loot.take().unwrap();
             crate::hooks::guard_void("loot close", || l.close(player));
