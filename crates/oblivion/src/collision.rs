@@ -1021,6 +1021,10 @@ mod win {
         /// A thing the runtime draws: its object space is its model's, as the runtime has it (the
         /// file's, in metres: the weapon, the shield, the torch).
         Model,
+        /// A part that turns or slides (a door's leaf, a lever): its object space is its joint's
+        /// frame, this from its node's own (game units): a matrix by its columns, then the
+        /// translation.
+        Placed([f32; 12]),
     }
 
     struct Shape {
@@ -1081,6 +1085,7 @@ mod win {
                     let at = |v: Vec3| match frame {
                         Frame::Node(scale) => b.point_from_game(v * scale),
                         Frame::Model => oblivion_assets::export::point(h.root.apply(v)),
+                        Frame::Placed(m) => Mat3::from_cols_slice(&m[..9]) * v + Vec3::new(m[9], m[10], m[11]),
                     };
                     h.triangles.iter().map(|t| t.map(|i| at(h.vertices[i as usize]))).collect()
                 }
@@ -1352,43 +1357,99 @@ mod win {
         }
     }
 
-    /// Whether `entity` (an `hkRigidBody`) is one of the fixed bodies a drawn shape stands in for
-    /// now: the hands, and the game's arrows, meet its reference's drawn shape instead.
-    pub fn stands_in(entity: usize) -> bool {
-        let Ok(st) = STATE.try_lock() else { return false };
-        st.as_ref().is_some_and(|s| s.covered.binary_search(&entity).is_ok())
+    /// A moving part of a thing near the player (a door's leaf): its node and its drawn shape (and
+    /// its box), and when it was last offered.
+    struct MovingPart {
+        node: usize,
+        hitbox: Arc<Hitbox>,
+        bounds: (Vec3, Vec3),
+        seen: f64,
+    }
+    static MOVING: Mutex<Option<HashMap<usize, MovingPart>>> = Mutex::new(None);
+
+    /// A thing's moving part, its Havok body `body` (an `hkRigidBody`) on node `node`, is drawn as
+    /// `model` (`model|node`): the game's arrows meet its drawn shape where the node is now, not
+    /// its body's shape (a gate's bars, not a slab). Its owner calls this whenever it looks round.
+    pub fn moving_part(body: usize, node: usize, model: &str, now: f64) {
+        let drawn = hitbox(model, now).flatten().filter(|h| !h.is_empty());
+        let mut parts = MOVING.lock().unwrap();
+        let parts = parts.get_or_insert_with(HashMap::new);
+        parts.retain(|_, p| now - p.seen <= SHAPE_KEEP);
+        if let Some((h, bounds)) = drawn.and_then(|h| h.bounds().map(|b| (h, b))) {
+            parts.insert(body, MovingPart { node, hitbox: h, bounds, seen: now });
+        }
     }
 
-    /// The first drawn shape standing in for the game's (of the references near the player) that the
-    /// segment `a`-`b` meets (the game's world, game units): the point, the surface's normal against
-    /// the segment, and the reference's fixed body nearest the point (an `hkRigidBody`, for the
-    /// game's impact on it).
+    /// The moving parts offered lately (each its body and part).
+    fn with_moving<R>(f: impl FnOnce(&[(usize, &MovingPart)]) -> R) -> Option<R> {
+        let now = crate::link::now();
+        let parts = MOVING.try_lock().ok()?;
+        let fresh: Vec<(usize, &MovingPart)> = parts.as_ref()?.iter().filter(|(_, p)| now - p.seen <= SHAPE_KEEP).map(|(b, p)| (*b, p)).collect();
+        Some(f(&fresh))
+    }
+
+    /// Whether `entity` (an `hkRigidBody`) is one of the fixed bodies a drawn shape stands in for
+    /// now, or a moving part's: the hands, and the game's arrows, meet the drawn shape instead.
+    pub fn stands_in(entity: usize) -> bool {
+        let covered = STATE.try_lock().ok().is_some_and(|st| st.as_ref().is_some_and(|s| s.covered.binary_search(&entity).is_ok()));
+        covered || with_moving(|parts| parts.iter().any(|(b, _)| *b == entity)).unwrap_or(false)
+    }
+
+    /// Where the segment `a`-`b` (game units) first meets hitbox `h` (its box `bounds`, its model's
+    /// frame) placed by `at` (a 3D's world transform): the share of the way along, the point and
+    /// the surface's normal against the segment.
+    fn ray_into(h: &Hitbox, (lo, hi): (Vec3, Vec3), at: &[f32; 13], a: Vec3, b: Vec3) -> Option<(f32, Vec3, Vec3)> {
+        let rows: [f32; 9] = at[..9].try_into().unwrap();
+        let r = crate::items::ni_matrix(rows);
+        let (t, scale) = (Vec3::new(at[9], at[10], at[11]), at[12]);
+        let to_model = |p: Vec3| r.transpose() * (p - t) / scale;
+        let (ma, mb) = (to_model(a), to_model(b));
+        if ma.min(mb).cmpgt(hi).any() || ma.max(mb).cmplt(lo).any() {
+            return None;
+        }
+        let len = ma.distance(mb);
+        let dir = (mb - ma).try_normalize()?;
+        let mut best: Option<(f32, Vec3, Vec3)> = None;
+        for tri in &h.triangles {
+            let v = tri.map(|i| h.vertices[i as usize]);
+            let Some(d) = ray_triangle(ma, dir, &v).filter(|d| *d <= len) else { continue };
+            let frac = d / len;
+            if best.is_none_or(|b| frac < b.0) {
+                let n = (r * (v[1] - v[0]).cross(v[2] - v[0])).normalize_or_zero();
+                let n = if n.dot(b - a) > 0.0 { -n } else { n };
+                best = Some((frac, a + (b - a) * frac, n));
+            }
+        }
+        best
+    }
+
+    /// The first drawn shape standing in for the game's (of the references near the player, and the
+    /// moving parts offered) that the segment `a`-`b` meets (the game's world, game units): the
+    /// point, the surface's normal against the segment, and the body it stands in for (a
+    /// reference's fixed body nearest the point, or the part's: an `hkRigidBody`, for the game's
+    /// impact on it).
     pub fn drawn_hit(a: Vec3, b: Vec3) -> Option<(Vec3, Vec3, usize)> {
         let st = STATE.try_lock().ok()?;
         let s = st.as_ref()?;
         let mut best: Option<(f32, Vec3, Vec3, &Owner)> = None;
         for o in s.owners.values() {
-            let (Some(at), Some(h), Some((lo, hi))) = (o.sent, o.drawn(), o.bounds) else { continue };
-            let rows: [f32; 9] = at[..9].try_into().unwrap();
-            let r = crate::items::ni_matrix(rows);
-            let (t, scale) = (Vec3::new(at[9], at[10], at[11]), at[12]);
-            let to_model = |p: Vec3| r.transpose() * (p - t) / scale;
-            let (ma, mb) = (to_model(a), to_model(b));
-            if ma.min(mb).cmpgt(hi).any() || ma.max(mb).cmplt(lo).any() {
-                continue;
+            let (Some(at), Some(h), Some(bounds)) = (o.sent, o.drawn(), o.bounds) else { continue };
+            if let Some((frac, point, normal)) = ray_into(h, bounds, &at, a, b).filter(|hit| best.is_none_or(|b| hit.0 < b.0)) {
+                best = Some((frac, point, normal, o));
             }
-            let len = ma.distance(mb);
-            let Some(dir) = (mb - ma).try_normalize() else { continue };
-            for tri in &h.triangles {
-                let v = tri.map(|i| h.vertices[i as usize]);
-                let Some(d) = ray_triangle(ma, dir, &v).filter(|d| *d <= len) else { continue };
-                let frac = d / len;
-                if best.as_ref().is_none_or(|b| frac < b.0) {
-                    let n = (r * (v[1] - v[0]).cross(v[2] - v[0])).normalize_or_zero();
-                    let n = if n.dot(b - a) > 0.0 { -n } else { n };
-                    best = Some((frac, a + (b - a) * frac, n, o));
-                }
-            }
+        }
+        // (A moving part where its node is now.)
+        let part = with_moving(|parts| {
+            parts
+                .iter()
+                .filter_map(|(body, p)| placement(p.node).and_then(|at| ray_into(&p.hitbox, p.bounds, &at, a, b)).map(|hit| (hit, *body)))
+                .min_by(|x, y| x.0.0.total_cmp(&y.0.0))
+        })
+        .flatten();
+        if let Some(((frac, point, normal), body)) = part
+            && best.is_none_or(|b| frac < b.0)
+        {
+            return Some((point, normal, body));
         }
         let (_, point, normal, o) = best?;
         // (Its body nearest the point: a reference may have several.)

@@ -33,6 +33,11 @@ game's simplified collision.
 - **What's in your hands:** your weapon (a sword is its blade, guard, grip and pommel, not a box),
   your shield and your torch (its flame isn't solid).
 - **Swinging things:** chain links, buckets on ropes and the like, each part as drawn.
+- **Doors and gates** (new): a door's or a gate's moving part is its drawn shape too, open or shut:
+  a cell gate is its bars, your hand goes between them, and arrows fly through the gaps. Before it
+  was one flat slab.
+- **Furniture and anything made of separate bars, legs or boards** (new): each separate piece that's
+  a plain solid (a bar, a leg, a slat) is its exact shape now, so the gaps between them stay open.
 - **Still as before:** the bow (its string's side is your drawing hand's), the arrow on the string,
   the mortar and pestle (their own pieces), spells in flight, and the ground and trees.
 - **The game itself is unchanged.** Your walking, the NPCs, and things falling and resting where
@@ -61,6 +66,9 @@ model, in the background, once for each model); until then it keeps its old shap
 8. **Your weapon.** Draw it and lay the blade on a table edge, slide it between a chair's rungs,
    rest it against a shelf: the blade, not a box round the sword, meets things.
 9. **A torch** (if you have one): the handle and head are solid, the flame isn't.
+10. **A cell gate** (`playtest-prison.bat`: the prison cell the game starts in, a bow, 500 arrows
+    and a dagger): put your hand between the gate's bars, swing it by a bar, and shoot arrows
+    through the gaps between the bars and into a bar.
 
 Say what feels wrong: a thing your hand stops short of, a hand going into something it shouldn't,
 a thing that jitters or flies off when you set it down or pick it up, a stutter as you walk into

@@ -9,7 +9,7 @@
 //!     oblivion-extract bench <prefix>...
 //!     oblivion-extract export-ui <prefix>...
 //!     oblivion-extract hitboxes [--out <folder>] [<prefix>...]
-//!     oblivion-extract hitbox <model> <png>
+//!     oblivion-extract hitbox <model>[|<node>] <png>
 //!
 //! `check` parses every model under the prefixes and reports which it can't read (a test of the
 //! model reader against the real files). `export` writes every model under the prefixes, and the
@@ -135,11 +135,16 @@ fn main() -> Result<()> {
         }
         Some("hitboxes") => hitboxes(&archives, &args[1..])?,
         Some("hitbox") if args.len() == 3 => {
-            // One model's hitbox (above) and the game's own collision (below), from three sides.
-            let path = oblivion_assets::bsa::normalise(&args[1]);
+            // One model's hitbox (above) and the game's own collision (below), from three sides; or
+            // (`model|node`) one moving part's, in its node's frame (a door's leaf, a swinging link).
+            let (model, node) = args[1].split_once('|').map_or((args[1].as_str(), None), |(m, n)| (m, Some(n)));
+            let path = oblivion_assets::bsa::normalise(model);
             let nif = Nif::parse(&archives.read(&path)?)?;
             let own = oblivion_assets::hitbox::collision(&nif);
-            let (hitbox, notes) = oblivion_assets::hitbox::of_with(&nif, &own, true);
+            let (hitbox, notes) = match node {
+                Some(n) => oblivion_assets::hitbox::of_part(&nif, n).with_context(|| format!("{model} has no node '{n}'"))?,
+                None => oblivion_assets::hitbox::of_with(&nif, &own, true),
+            };
             let drawn: Vec<[glam::Vec3; 3]> = hitbox.triangles.iter().map(|t| t.map(|i| hitbox.vertices[i as usize])).collect();
             // (A thing's, as the runtime makes its collision of it: its convex parts.)
             let parts = if drawn.len() <= 20_000 { convex_parts(&drawn) } else { Vec::new() };
@@ -176,7 +181,7 @@ fn main() -> Result<()> {
             preview::save(&model, std::path::Path::new(&args[2]))?;
             println!("{}: {} meshes, {} bones -> {}", args[1], model.meshes.len(), model.bones.len(), args[2]);
         }
-        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>... | export [--out <folder>] <prefix>... | sounds [--out <folder>] | preview <model> <png> | hitboxes [--out <folder>] [<prefix>...] | hitbox <model> <png>"),
+        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>... | export [--out <folder>] <prefix>... | sounds [--out <folder>] | preview <model> <png> | hitboxes [--out <folder>] [<prefix>...] | hitbox <model>[|<node>] <png>"),
     }
     Ok(())
 }

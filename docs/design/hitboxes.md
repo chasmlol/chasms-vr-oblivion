@@ -57,13 +57,17 @@ it without being felt.
   Havok gives its body what its motion there lacks, as it does a swinging prop's.
 - **What the hands take and hold, too.** The things lying about (plates, cups, baskets, books,
   everything the player can take), the swinging parts the game simulates (a chain's links, a
-  bucket on a rope) and the weapon, shield and torch in the hands are given the runtime as their
-  drawn shapes, by the same rules (`COL_OBJECT_MESH` in the framework's protocol, each in its
-  object's own space). The runtime makes each one's collision its convex parts (an approximate
-  convex decomposition on a coarse voxel grid, finer for a long thin thing, and a part more for
-  anything it would leave out; about a tenth of a second a model on a thread of its own, once for
-  each model): a basket's wall and handle, a bowl's wall round its hollow, a sword's blade, guard
-  and grip. Until then, and for what draws nothing solid, a thing keeps its
+  bucket on a rope), the doors' and levers' moving parts (a gate's leaf, in its hinge's frame) and
+  the weapon, shield and torch in the hands are given the runtime as their drawn shapes, by the
+  same rules (`COL_OBJECT_MESH` in the framework's protocol, each in its object's own space). The
+  runtime makes each one's collision its convex parts. A separate piece of the model that its own
+  hull fits (95% of the hull's surface within a voxel of the piece: a gate's bar or crossbar, a
+  chair's leg or slat, a nail's head) is a part as it is, exactly; the rest is an approximate
+  convex decomposition on a coarse voxel grid, finer for a long thin thing, with a part more for
+  anything it would leave out (about a tenth of a second a model on a thread of its own, once for
+  each model): a basket's wall round its hollow, a bowl's, a gate's arched frame in its
+  segments. A grid of so few voxels can't keep a lattice's gaps by itself: a gate's bars came out
+  sixteen lumps with the gaps between them filled. Until then, and for what draws nothing solid, a thing keeps its
   own shape. The bow keeps its own (its string's side is the drawing hand's), and so do arrows
   (thin enough as they are) and the mortars and pestles (their pieces are the runtime's).
 - **The game itself is unchanged.** Walking, the NPCs and things falling keep the game's collision;
@@ -72,7 +76,8 @@ it without being felt.
 - **Arrows too.** The game's arrows in flight (anyone's) pass through the game's shapes a drawn
   one stands in for, and the drawn shapes in their way are the game's own impact there: through a
   chair's rungs or a fence's bars, into the drawn leg or board (stuck where it's drawn, broken on
-  stone as the game breaks them), with the game's damage and sounds (`arrows.rs`). Spells in flight
+  stone as the game breaks them), with the game's damage and sounds (`arrows.rs`). A door's moving
+  part (a gate's leaf) is met where its node is now, open or shut. Spells in flight
   are still the game's alone.
 - **Worked out where they're needed.** The adapter finds the references in the loaded cells whose
   3D holds the world's fixed bodies, nearest first, reads each model from the game's archives on a
@@ -83,8 +88,9 @@ it without being felt.
 - **Checked over the whole game.** `oblivion-extract hitboxes` works out every model's hitbox and
   holds it up to the game's own collision: by kind of model, what was kept and left out and why, how
   far the drawn shape reaches past the game's and how much of the game's has nothing drawn near it
-  (`local_assets/oblivion/hitboxes`). `oblivion-extract hitbox <model> <png>` draws one model's
-  hitbox above its game collision and, below, the convex parts the runtime makes of it; for the
+  (`local_assets/oblivion/hitboxes`). `oblivion-extract hitbox <model>[|<node>] <png>` draws one
+  model's hitbox (or one moving part's) above its game collision and, below, the convex parts the
+  runtime makes of it; for the
   things the hands take, the report counts their parts and how long each took.
 - **Seeing them in the headset:** `RUSTVR_SHOW_COLLISION=1` draws the world's collision within reach
   as lines over the game's picture.

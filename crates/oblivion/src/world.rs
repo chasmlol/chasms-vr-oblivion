@@ -749,8 +749,9 @@ mod game {
         id: u32,
         joint: usize,
         node: usize,
-        /// The node its Havok body is on (0: the game only draws it).
+        /// The node its Havok body is on, and the body (0: the game only draws it).
         body_node: usize,
+        hk: usize,
         /// The hinge or slide in the runtime's world: its centre, its frame (+Z the axis, at the
         /// start of its travel), slide or turn, and the game units in one of its runtime units.
         centre: Vec3,
@@ -762,6 +763,9 @@ mod game {
         tracks: Vec<(usize, usize)>,
         desc: ObjectDesc,
         hull: Vec<Vec3>,
+        /// Its drawn shape (`model|node`), and where that goes in its frame: the hands' collision
+        /// with it, and the game's arrows'.
+        shape: Option<(String, crate::collision::Frame)>,
         /// Where the runtime has it, and whether a hand has it (which: bit 0 left, bit 1 right);
         /// where it was last logged.
         at: f32,
@@ -872,7 +876,7 @@ mod game {
     }
 
     /// The thing a reference is, its parts from its model's animation and its live 3D.
-    fn make(s: &mut State, refr: usize, kind: u8, anims: Arc<(Animation, Option<Animation>)>) -> Option<Thing> {
+    fn make(s: &mut State, refr: usize, kind: u8, path: &str, anims: Arc<(Animation, Option<Animation>)>) -> Option<Thing> {
         let root = deref(refr + REFR_NODE);
         let form_id = mem::at::<u32>(refr + FORM_ID)?;
         let a = &anims.0;
@@ -959,6 +963,19 @@ mod game {
                 why.push(format!("'{}' has no shape ({} points)", tr.node, shape.len()));
                 continue;
             }
+            // Its drawn shape, from its node's own frame (game units) into the part's: what the hands
+            // meet (a gate's bars, not the slab round them).
+            let shape = world_of(node).map(|(nr, nt, ns)| {
+                let to_part = |v: Vec3| {
+                    let p = b.point_from_game(nt + nr * (v * ns));
+                    let p = if slide { p + undo.1 } else { centre + undo.0 * (p - centre) };
+                    base.inverse() * (p - centre)
+                };
+                let t = to_part(Vec3::ZERO);
+                let [x, y, z] = [Vec3::X, Vec3::Y, Vec3::Z].map(|a| (to_part(a * 100.0) - t) / 100.0);
+                let m = [x.x, x.y, x.z, y.x, y.y, y.z, z.x, z.y, z.z, t.x, t.y, t.z];
+                (format!("{path}|{}", tr.node), crate::collision::Frame::Placed(m))
+            });
             let (_, half) = crate::items::bounds(&points).unwrap_or((Vec3::ZERO, Vec3::splat(0.05)));
             let mut mass = if j.mass > 0.0 { j.mass } else { part_mass(half, j.drawn, material(on)) };
             // A lid (a door on a level hinge) is never heavier than one hand lifts by its edge.
@@ -993,7 +1010,8 @@ mod game {
                 .filter_map(|(ti, t)| Some((ti, *live.get(&t.node)?)))
                 .filter(|&(ti, n)| ti == j.track || (n != root && (under(n, node) || (k == 0 && !joint_nodes.iter().any(|&o| under(n, o))))))
                 .collect();
-            parts.push(Part { id, joint: k, node, body_node, centre, base, slide, units, far, tracks, desc: bytemuck::Zeroable::zeroed(), hull: points, at: now, vel: 0.0, held: false, hands: 0, logged: now });
+            let hk = body.map_or(0, |b| b.1);
+            parts.push(Part { id, joint: k, node, body_node, hk, centre, base, slide, units, far, tracks, desc: bytemuck::Zeroable::zeroed(), hull: points, shape, at: now, vel: 0.0, held: false, hands: 0, logged: now });
             let p = parts.last_mut().unwrap();
             p.desc = part_desc(id, 1, centre, base, &p.hull, mass, 0.0, (0.0, far), (0.0, 0.0), 0);
             p.desc.friction = PIN_FRICTION * mass * 9.81 * PIN_RADIUS;
@@ -1115,7 +1133,7 @@ mod game {
             }
             if now >= s.next_scan {
                 s.next_scan = now + SCAN_EVERY;
-                scan(s);
+                scan(s, now);
             }
             if std::mem::take(&mut s.republish) {
                 publish(s);
@@ -1196,7 +1214,7 @@ mod game {
         }
     }
 
-    fn scan(s: &mut State) {
+    fn scan(s: &mut State, now: f64) {
         let Some(me) = mem::at::<[f32; 3]>(engine::player() + engine::refr::POS).map(|p| camera::basis().point_from_game(Vec3::from(p))) else { return };
         let near = nearby(me, REACH);
         let mut keep = Vec::new();
@@ -1212,7 +1230,7 @@ mod game {
                 s.none.insert(refr, root);
                 continue;
             };
-            match make(s, refr, kind, anims) {
+            match make(s, refr, kind, &path, anims) {
                 Some(t) => {
                     s.things.insert(refr, t);
                     s.republish = true;
@@ -1225,6 +1243,15 @@ mod game {
         let before = s.things.len();
         s.things.retain(|r, t| keep.contains(r) || t.parts.iter().any(|p| p.held) || t.owned && t.parts.iter().any(|p| p.vel.abs() > 0.01));
         s.things.retain(|r, t| alive(*r, t));
+        // Each part is its drawn shape, to the hands and to the game's arrows.
+        for p in s.things.values().flat_map(|t| &t.parts) {
+            if let Some((model, frame)) = &p.shape {
+                crate::collision::object_shape(p.id, model, *frame, now);
+                if p.hk != 0 {
+                    crate::collision::moving_part(p.hk, p.node, model, now);
+                }
+            }
+        }
         if s.things.len() != before {
             s.republish = true;
         }
