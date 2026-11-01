@@ -50,18 +50,18 @@ The design and its reasons are in `docs/design/spells.md`.
   appears in your palm and grows, its casting light fades in and its casting sound plays. After
   you let go the art stays in the palm for 30 s, then goes; a hand that's only holding a spell
   shows nothing. **The art is drawn apart from the game's picture** and laid over your hand where
-  it's nearer: it sits cupped in the middle of your palm, a little out of it as in Skyrim VR; turn
+  it's nearer: it sits in the hollow of your palm, just off the skin, your fingers cupped round it; turn
   your palm up and you see it, palm down and your hand hides it; a thumb in front of it hides it
   with a slightly soft edge, and both eyes agree where.
   (Not with the game's HDR on: then it stays in the game's picture, and your hand covers it.) In the hand you feel nothing
   at first, then pulses that speed up and strengthen sharply, then a spike when it's charged and a
   faint tick while you hold it. **Let go to cast**, and you feel a full burst. Let go before it's
   charged and nothing is cast; no magicka is spent.
-* **Aiming along your arm.** A target spell leaves your palm along your arm, from your shoulder
-  through your hand. **Hold your hand out at what you're casting at and let go**; how your wrist is
-  bent doesn't matter. (The controller's own pointing ray, the menu laser's, went high: a hand held
-  out to cast has its wrist cocked up.) With your hand pulled in at your shoulder there's no arm to
-  go by, and it goes where the controller points. The aim is smoothed a touch, a little more for
+* **Aiming with your hand.** A target spell leaves your palm where your hand points: **your arm and
+  your wrist both steer it**. Bend your wrist down and it goes lower, up and it goes higher. It's
+  the controller's own pointing ray (the menu laser's) turned 25° down, because a hand held out to
+  cast rests with its wrist cocked up about that much (your casts at the zombies last time); raw,
+  it went high. The aim is smoothed a touch, a little more for
   harder spells, to take out the jolt of the trigger. It's also helped gently onto a creature (10°
   up or down, 15° across).
 
@@ -120,7 +120,8 @@ The design and its reasons are in `docs/design/spells.md`.
     * Chameleon and Shadow Shape (invisibility) don't make your own body see-through yet.
 
 Things worth telling me about:
-* Does it go where your hand is held out? If you'd rather cast out of your palm, `palm_tilt` in
+* Does it go where your hand points, with your wrist at its natural angle? If it still goes a bit
+  high or low, say which: the 25° is one number. If you'd rather cast out of your palm, `palm_tilt` in
   the RustVR settings (`[magic]`) turns the aim towards it (about 60 for palm casting). Each cast
   writes to the runtime's log how far up it went, against the controller's ray and the head.
 * Is the aim help too strong or too weak?
@@ -147,10 +148,10 @@ the magicka is spent and comes back.
 ## Checked, and not
 
 * **Checked:**
-  * The aim along the arm: the hand held out with its wrist cocked well up (the controller pointing
-    46° up, 57° above the arm) casts along the arm, and with the hand in at the shoulder, where the
-    controller points (the runtime's tests). The headless `spell` scenario's arm held out at the
-    dummy: the bolt struck it.
+  * The aim: a hand held out level with its wrist at its rest (the controller 25° up) casts level,
+    and its wrist bent 20° down from there casts 20° down (the runtime's tests). The headless
+    `spell` scenario's hand held out at the dummy, the controller cocked 25° up: the bolt went 12°
+    down and struck it.
   * A bound weapon on the range, on the emulated headset: Bound sword taken from the wheel's second
     page and cast, and the range's sword is made in that hand. Squeezed and let go in front, it went
     back to the left hip.
