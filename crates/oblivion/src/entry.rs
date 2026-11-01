@@ -56,6 +56,7 @@ fn startup() {
     crate::hud_info::install();
     crate::pointing::install();
     crate::saves::install();
+    crate::quickloot::install();
     crate::combat::install();
     crate::console::install();
     crate::slot_menu::install();

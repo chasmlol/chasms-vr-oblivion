@@ -81,6 +81,7 @@ pub mod pockets;
 pub mod pointing;
 pub mod profile;
 pub mod props;
+pub mod quickloot;
 pub mod proxy;
 pub mod render;
 pub mod resolution;

@@ -172,6 +172,9 @@ pub fn game_frame(g: &GameFrame) -> Option<Snapshot> {
     if view.is_some() && crate::player::sneaking() {
         gs.flags |= GS_CROUCHED;
     }
+    if view.is_some() && crate::quickloot::shown() {
+        gs.flags |= GS_QUICK_LOOT;
+    }
     if g.talking && view.is_some() {
         gs.flags |= GS_MENU_TURNS;
     }

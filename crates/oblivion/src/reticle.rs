@@ -3,13 +3,13 @@
 //! `menus\misc\hud_reticle.dds`), shown while the reticle's icon type (its `user5`) is 0, and the
 //! icon of what it can activate (`hudreticle_reticle_activate`: a hand, a door, a book; red when
 //! taking it is stealing), shown otherwise. In VR the hands aim, and a dot fixed in the middle of
-//! the view is only in the way, so the crosshair is hidden; the activate icon stays, as it's the
-//! game's only sign of a theft before it's done.
+//! the view is only in the way, so both are hidden: the activate icon is on the card of what a hand
+//! points at instead, red as the reticle has it when it's a crime (`crate::hud_info`).
 //!
 //! The game's own Gameplay setting (`bCrossHair`) isn't used: it hides the whole rect, the icons
-//! with it. Instead, before each picture, the crosshair image's `visible` is set to false through
-//! the game's own update of a tile's value (`Tile::UpdateFloat`, as the HUD's own code sets the
-//! reticle's), whenever the game has made it true again (as the icon type comes back to 0).
+//! with it (the sneaking eye too). Instead, before each picture, the two images' `visible` is set to
+//! false through the game's own update of a tile's value (`Tile::UpdateFloat`, as the HUD's own code
+//! sets the reticle's), whenever the game has made it true again (as the icon type changes).
 //!
 //! Tiles (xOBSE's `GameTiles.h`): a tile's name at +8 (`BSStringT`: the characters, their count),
 //! its values at +0x14 and its children at +0x30 (lists: +4 the first node; a node is next,
@@ -37,6 +37,7 @@ mod win {
     const VISIBLE: u16 = 0xFA1;
     const FALSE: f32 = 1.0;
     const CROSSHAIR: &str = "hudreticle_reticle_crosshair";
+    const ACTIVATE: &str = "hudreticle_reticle_activate";
 
     fn list(at: usize) -> Vec<usize> {
         let mut out = Vec::new();
@@ -63,18 +64,20 @@ mod win {
         list(tile + VALUES).into_iter().find(|&v| mem::at::<u16>(v + VALUE_ID) == Some(VISIBLE)).and_then(|v| mem::at::<f32>(v + VALUE_NUM))
     }
 
-    /// Before a picture in VR: the game's crosshair hidden, if the game has shown it again.
+    /// Before a picture in VR: the game's crosshair and its activate icon hidden, if the game has
+    /// shown them again (the icon goes on the card of what a hand points at, `crate::hud_info`).
     pub fn hide_crosshair() {
         let rect = mem::deref(RETICLE_RECT);
         if rect == 0 {
             return;
         }
-        let Some(crosshair) = list(rect + CHILDREN).into_iter().find(|&t| name(t) == CROSSHAIR) else { return };
-        if visible(crosshair).is_some_and(|v| v != FALSE) {
-            type Update = unsafe extern "thiscall" fn(usize, u32, f32);
-            unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(crosshair, VISIBLE as u32, FALSE) };
-            static SAID: std::sync::Once = std::sync::Once::new();
-            SAID.call_once(|| tracing::info!("reticle: the game's crosshair hidden (its activate icons stay)"));
+        for tile in list(rect + CHILDREN).into_iter().filter(|&t| matches!(name(t).as_str(), CROSSHAIR | ACTIVATE)) {
+            if visible(tile).is_some_and(|v| v != FALSE) {
+                type Update = unsafe extern "thiscall" fn(usize, u32, f32);
+                unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(tile, VISIBLE as u32, FALSE) };
+                static SAID: std::sync::Once = std::sync::Once::new();
+                SAID.call_once(|| tracing::info!("reticle: the game's crosshair and its activate icon hidden (the icon is on the hand's card)"));
+            }
         }
     }
 }

@@ -471,6 +471,7 @@ mod win {
             crate::inventory::frame(link::now());
             crate::slot_menu::frame();
             crate::keyboard::frame();
+            crate::quickloot::frame(link::now());
             crate::pockets::frame(link::now());
             crate::alchemy::frame(link::now());
         });

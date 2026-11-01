@@ -188,7 +188,9 @@ impl Bridge {
         if held(it, Action::Sprint) && !game.always_run {
             hold(self.binding("Run"), &mut v);
         }
-        // Pressed: a moment's tap.
+        // Pressed: a moment's tap. (Not Activate while a hand's looting what it points at: the
+        // trigger takes from its list, `crate::quickloot`, and held it doesn't rest.)
+        let looting = crate::quickloot::shown();
         for (a, name) in [
             (Action::Jump, "Jump"),
             (Action::Use, "Activate"),
@@ -197,6 +199,9 @@ impl Bridge {
             (Action::Inventory, "Menu Mode"),
             (Action::UseHold, "Rest"),
         ] {
+            if looting && matches!(a, Action::Use | Action::UseHold) {
+                continue;
+            }
             if pressed(&counts, a) || (a == Action::Jump && jump) {
                 self.pulses.push((self.binding(name), now + PULSE));
             }

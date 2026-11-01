@@ -139,8 +139,18 @@ mod win {
     }
 
     static CARD: Mutex<Card> = Mutex::new(Card { world: Vec::new(), pockets: Vec::new(), shown: None, since: 0.0, came: Vec::new(), pictured: Vec::new(), told: 0 });
-    /// The card's action line as it's to be: the icon and the word, or none ([`card_now`]).
-    static ACTION: Mutex<Option<(u32, usize)>> = Mutex::new(None);
+    /// The card's action line: the reticle's icon for the thing (the n-th of its sheet), the game's
+    /// word for it (its setting's text, 0: none) and whether using it is a crime (in the reticle's
+    /// stealing red).
+    #[derive(Clone, Copy, PartialEq)]
+    struct Action {
+        icon: u32,
+        word: usize,
+        crime: bool,
+    }
+
+    /// The card's action line as it's to be, or none ([`card_now`]).
+    static ACTION: Mutex<Option<Action>> = Mutex::new(None);
 
     /// The reference the card's given for a thing on a hand, or 0.
     fn held() -> usize {
@@ -285,20 +295,34 @@ mod win {
         show(changed);
     }
 
-    /// The card's action line for a thing: the reticle's icon for it and the game's word for taking
-    /// it, when that's a crime (the reticle's own test: someone's thing, someone's pocket).
-    fn action(t: Thing) -> Option<(u32, usize)> {
+    /// The reticle's icon for a reference (0: none), and whether using it is a crime (the reticle's
+    /// own test: someone's thing, a living person while sneaking: their pocket).
+    fn icon_of(refr: usize) -> (u32, bool) {
         type Of = unsafe extern "thiscall" fn(usize) -> u32;
         type Crime = unsafe extern "thiscall" fn(usize) -> u8;
+        let icon = unsafe { std::mem::transmute::<usize, Of>(ICON_OF)(refr) } & 0xFF;
+        (icon, icon != 0 && icon != ICON_TALK && unsafe { std::mem::transmute::<usize, Crime>(IS_CRIME)(refr) } != 0)
+    }
+
+    /// The card's action line for a thing on a hand: the reticle's icon for it and the game's word
+    /// for taking it, when that's a crime (someone's thing, someone's pocket).
+    fn action(t: Thing) -> Option<Action> {
         let (refr, word) = match t {
-            // (A person a hand's put up towards: using them is a crime only as a pickpocket's.)
-            Thing { world: true, refr, .. } => (refr, if crate::combat::is_actor(refr) { S_PICKPOCKET } else { S_STEAL }),
+            Thing { world: true, refr, .. } => (refr, S_STEAL),
             Thing { from, .. } if from != 0 => (from, S_PICKPOCKET),
             _ => return None,
         };
-        let icon = unsafe { std::mem::transmute::<usize, Of>(ICON_OF)(refr) } & 0xFF;
-        let crime = icon != 0 && icon != ICON_TALK && unsafe { std::mem::transmute::<usize, Crime>(IS_CRIME)(refr) } != 0;
-        crime.then_some((icon, word))
+        let (icon, crime) = icon_of(refr);
+        crime.then_some(Action { icon, word, crime })
+    }
+
+    /// The card's action line for what a hand points at: the reticle's icon for it (a hand to search
+    /// a chest or a body, a door, talking) beside its name, in the reticle's stealing red with the
+    /// game's word when using it is a crime (taking from someone's chest, from a person's pocket).
+    fn pointed(refr: usize) -> Option<Action> {
+        let (icon, crime) = icon_of(refr);
+        let word = if !crime { 0 } else if crate::combat::is_actor(refr) { S_PICKPOCKET } else { S_STEAL };
+        (icon != 0).then_some(Action { icon, word, crime })
     }
 
     /// The card now shows `target` (0: nothing, as it fades out): its action line decided with it, and
@@ -311,7 +335,7 @@ mod win {
         if let Some(t) = shown {
             *ACTION.lock().unwrap() = action(t);
         } else if target != 0 {
-            *ACTION.lock().unwrap() = crate::pointing::hand().and_then(|_| action(Thing { key: 0, refr: target, from: 0, world: true }));
+            *ACTION.lock().unwrap() = crate::pointing::hand().and_then(|_| pointed(target));
         }
         keep_action();
     }
@@ -324,15 +348,17 @@ mod win {
             return;
         }
         let action = *ACTION.lock().unwrap();
-        let Some((kind, word)) = action else {
+        let Some(Action { icon: kind, word, crime }) = action else {
             set_value(menu, USER2, FALSE);
             return;
         };
         let reticle = mem::deref(RETICLE_RECT);
         let (Some(icon), Some(words), Some(activate)) = (child(menu, ACTION_ICON), child(menu, ACTION_TEXT), (reticle != 0).then(|| child(reticle, RETICLE_ACTIVATE)).flatten()) else { return };
-        let [Some(r), Some(g), Some(b)] = [c"_red_stealing", c"_green_stealing", c"_blue_stealing"].map(|n| value(reticle, trait_id(n))) else { return };
-        // The word, in the stealing red.
-        set_text(menu, USER0, mem::deref(word));
+        // A crime in the reticle's stealing red, else its white.
+        let [Some(r), Some(g), Some(b)] = (if crime { [c"_red_stealing", c"_green_stealing", c"_blue_stealing"].map(|n| value(reticle, trait_id(n))) } else { [Some(255.0); 3] }) else { return };
+        // The word (or none).
+        static NONE: [u8; 1] = [0];
+        set_text(menu, USER0, if word != 0 { mem::deref(word) } else { NONE.as_ptr() as usize });
         for (id, v) in [(RED, r), (GREEN, g), (BLUE, b)] {
             set_value(words, id, v);
             set_value(icon, id, v);
@@ -346,7 +372,11 @@ mod win {
         set_value(icon, trait_id(c"cropx"), w * (kind - 1) as f32);
         if value(menu, USER2) != Some(TRUE) {
             set_value(menu, USER2, TRUE);
-            tracing::info!("hud: the card says \"{}\" in the reticle's stealing red ({r} {g} {b}), with its icon {kind}", crate::combat::read_str(mem::deref(word)));
+            if crime {
+                tracing::info!("hud: the card says \"{}\" in the reticle's stealing red ({r} {g} {b}), with its icon {kind}", crate::combat::read_str(mem::deref(word)));
+            } else {
+                tracing::info!("hud: the card has the reticle's icon {kind} beside its name");
+            }
         }
     }
 
