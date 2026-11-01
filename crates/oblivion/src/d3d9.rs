@@ -5,7 +5,7 @@
 //! to the game (managed textures and all), but every surface is a Direct3D 12 resource underneath.
 //! Asked which pixel formats there are, it's told what the system's own Direct3D 9 says as well
 //! ([`check_format_hook`]): D3D9On12 has a few more (32-bit colour in RGBA byte order), which the
-//! game's renderer would pick for a picture it makes from its own pixels and can't convert into.
+//! game's renderer, made for Direct3D 9, was never offered.
 //!
 //! An eye ([`capture`]): the back buffer is copied into a render target of ours (Direct3D 9), that
 //! target's Direct3D 12 resource is copied on our queue into a texture shared with the adapter's
@@ -249,9 +249,8 @@ mod win {
 
     /// D3D9On12's `IDirect3D9::CheckDeviceFormat`: a format it has that the system's own Direct3D 9
     /// hasn't (a texture's 32-bit colour in RGBA byte order, among others) isn't there, as the game
-    /// was made to be answered. Its renderer picks such a format for a picture it makes from pixels
-    /// of its own (a save's, in the save menu and on a load's screen), and then its converter can't
-    /// make that picture in it: nothing came back, and the game read from nothing.
+    /// was made to be answered: its renderer picks its formats from these answers (for a picture it
+    /// makes from its own pixels, a save's, the closest one there).
     unsafe extern "system" fn check_format_hook(this: *mut c_void, adapter: u32, kind: D3DDEVTYPE, adapter_format: D3DFORMAT, usage: u32, rtype: D3DRESOURCETYPE, format: D3DFORMAT) -> windows::core::HRESULT {
         let real: CheckFormatFn = unsafe { std::mem::transmute(REAL_CHECK_FORMAT.load(Ordering::Acquire)) };
         let hr = unsafe { real(this, adapter, kind, adapter_format, usage, rtype, format) };
