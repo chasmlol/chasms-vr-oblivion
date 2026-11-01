@@ -36,7 +36,7 @@ mod win {
     use crate::d3d9::{self, HUD};
     use crate::link::{self, GameFrame, Snapshot};
     use crate::{engine, hooks, mem};
-    use rustvr_protocol::{DEPTH_LINEAR, MIR_RENDER, SLOT_AUX, SLOT_DEPTH, SLOT_HELD, SLOT_HUD, SLOT_MENU, SLOT_MIRROR, SLOT_STEREO, SlotInfo};
+    use rustvr_protocol::{DEPTH_LINEAR, MIR_RENDER, SLOT_ART, SLOT_AUX, SLOT_DEPTH, SLOT_HELD, SLOT_HUD, SLOT_MENU, SLOT_MIRROR, SLOT_STEREO, SlotInfo};
     use std::ffi::c_void;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -54,6 +54,8 @@ mod win {
         near_far: (f32, f32),
         /// The mirror's world was rendered and copied with its depth, and its near and far planes.
         mirror: Option<(f32, f32)>,
+        /// Each eye's hand art went apart and was copied (`d3d9::art_eye`).
+        art: [bool; 2],
     }
     static EYES: Mutex<Option<Eyes>> = Mutex::new(None);
     static LAST: Mutex<f64> = Mutex::new(0.0);
@@ -524,6 +526,7 @@ mod win {
         let mut result = 0;
         let mut captured = [false; 2];
         let mut depth = [false; 2];
+        let mut art = [false; 2];
         // The game's own first-person arms aren't drawn: the runtime draws the player's hands.
         // (Testing, `RUSTVR_OBLIVION_GAME_ARMS=1`: they are, to hold the runtime's lighting of the
         // same armour up to the game's own.)
@@ -629,7 +632,10 @@ mod win {
                 set_lock(true, true);
             }
             SECOND_EYE.store(eye == 1, Ordering::Release);
+            // (The hand art apart from the eye's picture, for the runtime to lay over its hands.)
+            let apart = hooks::guard("hand art", false, || d3d9::art_eye(&dev, Some(eye)));
             result = time(Part::Eye, || unsafe { real(this, arg) });
+            d3d9::art_eye(&dev, None);
             if log_shadows {
                 tracing::info!("render: eye {eye}: {}", shadow_lights_state());
             }
@@ -643,6 +649,7 @@ mod win {
             }
             captured[eye] = time(Part::Capture, || hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false)));
             depth[eye] = time(Part::Depth, || hooks::guard("capture depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), eye)).unwrap_or(false)));
+            art[eye] = apart && d3d9::art_drawn(eye) && hooks::guard("capture hand art", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::ART[eye])).unwrap_or(false));
         }
         set_lock(true, true);
         SECOND_EYE.store(false, Ordering::Release);
@@ -666,7 +673,7 @@ mod win {
             let _ = unsafe { dev.Clear(0, std::ptr::null(), D3DCLEAR_TARGET as u32, 0, 1.0, 0) };
             d3d9::ui_pass(&dev, true);
             crate::menus::hide_menu_3d(true);
-            *EYES.lock().unwrap() = Some(Eyes { snap, captured, depth, near_far: (game.frustum[4], game.frustum[5]), mirror: mirror_done });
+            *EYES.lock().unwrap() = Some(Eyes { snap, captured, depth, near_far: (game.frustum[4], game.frustum[5]), mirror: mirror_done, art });
         });
         result
     }
@@ -920,6 +927,7 @@ mod win {
             let mut have_hud = false;
             let mut have_depth = false;
             let mut have_mirror = false;
+            let mut have_art = false;
             {
                 let Some(slot) = a.begin_slot() else { return };
                 for eye in 0..2 {
@@ -934,6 +942,10 @@ mod win {
                 if let (true, Some(d)) = (e.depth == [true, true], slot.depth.as_ref()) {
                     have_depth = (0..2).all(|eye| d3d9::deliver_depth(&gpu, eye, &d[eye], e.near_far.0, e.near_far.1));
                 }
+                // Each eye's hand art, apart from its picture.
+                if let (true, Some(art)) = (e.art == [true, true], slot.art.as_ref()) {
+                    have_art = (0..2).all(|eye| d3d9::deliver(&gpu, d3d9::ART[eye], &art[eye].tex));
+                }
                 // The mirror's world and its depth.
                 if let (Some((near, far)), Some(aux), Some(aux_depth)) = (e.mirror, slot.aux.as_ref(), slot.aux_depth.as_ref()) {
                     have_mirror = d3d9::deliver(&gpu, d3d9::MIRROR, &aux.tex) && d3d9::deliver_depth(&gpu, 2, aux_depth, near, far);
@@ -944,7 +956,7 @@ mod win {
             info.eye_pose = e.snap.frame.eyes;
             info.fov = e.snap.frame.fov;
             info.eye_map = [view.slot_map(); 2];
-            info.flags = SLOT_STEREO | if have_hud { SLOT_HUD } else { 0 } | if have_depth { SLOT_DEPTH } else { 0 };
+            info.flags = SLOT_STEREO | if have_hud { SLOT_HUD } else { 0 } | if have_depth { SLOT_DEPTH } else { 0 } | if have_art { SLOT_ART } else { 0 };
             if have_mirror {
                 info.flags |= SLOT_AUX | SLOT_MIRROR;
                 info.aux_frame = e.snap.frame.mirror.frame;

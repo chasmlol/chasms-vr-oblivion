@@ -32,11 +32,12 @@ pub fn init(gpu: Gpu, w: u32, h: u32) {
     }
 }
 
-/// The eyes and a HUD panel, the size of Oblivion's back buffer, in its format (BGRA), and the
-/// mirror's world with its depth (the aux view, the eyes' size: [`crate::render`]).
+/// The eyes and a HUD panel, the size of Oblivion's back buffer, in its format (BGRA), the
+/// mirror's world with its depth (the aux view, the eyes' size: [`crate::render`]), and each eye's
+/// hand art apart (`crate::d3d9::art_eye`).
 fn request(w: u32, h: u32) -> TargetRequest {
     const DXGI_FORMAT_B8G8R8A8_UNORM: u32 = 87;
-    TargetRequest { color_format: DXGI_FORMAT_B8G8R8A8_UNORM, flags: TGT_HUD | TGT_DEPTH | TGT_AUX | TGT_AUX_DEPTH, eye_w: w, eye_h: h, hud_w: w, hud_h: h, ..Default::default() }
+    TargetRequest { color_format: DXGI_FORMAT_B8G8R8A8_UNORM, flags: TGT_HUD | TGT_DEPTH | TGT_AUX | TGT_AUX_DEPTH | TGT_ART, eye_w: w, eye_h: h, hud_w: w, hud_h: h, ..Default::default() }
 }
 
 pub fn set_size(w: u32, h: u32) {

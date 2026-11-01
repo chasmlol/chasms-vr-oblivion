@@ -51,6 +51,7 @@ fn startup() {
     #[cfg(target_arch = "x86")]
     crate::hud_info::install();
     crate::spells::install();
+    d3d9::install_art();
     crate::console::install();
     crate::slot_menu::install();
     tracing::info!("startup: hooks installed");

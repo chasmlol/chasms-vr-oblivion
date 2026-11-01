@@ -24,6 +24,16 @@
 //! for its additive blending (light added covers nothing). The colour is the game's own blending
 //! over black, so the HUD texture is the UI premultiplied by its alpha: drawn over the world it's
 //! exactly what the game would have drawn over it.
+//!
+//! The hand art apart ([`art_eye`]): the casting art the adapter puts in the player's palms
+//! (`crate::magic`) is drawn by the game into its picture, and the runtime's hands, drawn over that
+//! picture, would hide it even where it's nearer than they are. While an eye's world is drawn, each
+//! of the art's geometries goes into a render target of ours for that eye instead (the game's
+//! renderer draws a geometry whole in one call: its draws are hooked, [`ART_DRAWS`]), in the
+//! world's depth (what's in front hides it), its alpha blended as coverage as the UI's is: a
+//! premultiplied layer the runtime lays over its hands where it's nearer (`TGT_ART`). Not with the
+//! game's HDR on: its world is drawn in floating point and tone-mapped after, which the art apart
+//! would miss; there it stays in the picture.
 
 #[cfg(all(windows, target_arch = "x86"))]
 pub use win::*;
@@ -53,10 +63,11 @@ mod win {
     use windows::core::{IUnknown, Interface, PCWSTR, s};
 
     /// Copies: the left eye, the right eye, the HUD (or the whole picture outside the world), the
-    /// mirror's world (`crate::render`).
-    pub const KINDS: usize = 4;
+    /// mirror's world (`crate::render`), and each eye's hand art ([`art_eye`]).
+    pub const KINDS: usize = 6;
     pub const HUD: usize = 2;
     pub const MIRROR: usize = 3;
+    pub const ART: [usize; 2] = [4, 5];
     /// Depths: the left eye's, the right eye's, the mirror's world's.
     const DEPTHS: usize = 3;
 
@@ -403,8 +414,9 @@ mod win {
 
     unsafe extern "system" fn set_render_state(dev: *mut c_void, state: D3DRENDERSTATETYPE, value: u32) -> windows::core::HRESULT {
         let real: SetStateFn = unsafe { std::mem::transmute(REAL_SET_STATE.load(Ordering::Acquire)) };
-        let ui = UI_PASS.load(Ordering::Acquire);
-        // In the UI pass the HUD copy's alpha is the UI's coverage, so its alpha blending is ours,
+        let ui = UI_PASS.load(Ordering::Acquire) || ART_ON.load(Ordering::Acquire);
+        // In the UI pass the HUD copy's alpha is the UI's coverage, so its alpha blending is ours (and
+        // the hand art's, drawn apart: `art_eye`),
         // and alpha is written with the colour whatever the game asks (its own back buffer has no
         // alpha, so it needn't keep it right): a page the game draws solid is solid in the copy.
         if ui && (state == D3DRS_SEPARATEALPHABLENDENABLE || state == D3DRS_SRCBLENDALPHA || state == D3DRS_DESTBLENDALPHA || state == D3DRS_BLENDOPALPHA) {
@@ -436,7 +448,7 @@ mod win {
             let b = BLEND.load(Ordering::Acquire);
             let b = if state == D3DRS_SRCBLEND { (b & 0xFFFF_0000) | value } else { (b & 0xFFFF) | (value << 16) };
             BLEND.store(b, Ordering::Release);
-            if UI_PASS.load(Ordering::Acquire) {
+            if ui {
                 set_alpha_blend(dev);
             }
         }
@@ -725,6 +737,9 @@ mod win {
         // (The UI's targets too: a reset can't happen while anything holds the back buffer.)
         UI_PASS.store(false, Ordering::Release);
         UI_TARGETS.lock().unwrap().take();
+        ART_ON.store(false, Ordering::Release);
+        ART_EYE.store(-1, Ordering::Release);
+        *ART_TARGETS.lock().unwrap() = [None, None];
         let Some(b) = BRIDGE.lock().unwrap().take() else { return };
         if unsafe { b.fence12.GetCompletedValue() } < b.value && unsafe { b.fence12.SetEventOnCompletion(b.value, b.event) }.is_ok() {
             unsafe { WaitForSingleObject(b.event, 1000) };
@@ -1064,8 +1079,14 @@ mod win {
     }
 
     fn copy(dev: &IDirect3DDevice9, d12: &D3d12, b: &mut Bridge, kind: usize) -> anyhow::Result<()> {
-        // (The UI drew itself into ours: see `ui_pass`.)
-        if !(kind == HUD && UI_DRAWN.swap(false, Ordering::AcqRel)) {
+        // (The UI drew itself into ours: see `ui_pass`. The hand art drew itself into its own
+        // target, multisampled as the world is: resolved into ours.)
+        if let Some(eye) = ART.iter().position(|&k| k == kind) {
+            let targets = ART_TARGETS.lock().unwrap();
+            let t = targets[eye].as_ref().context("no hand art target")?;
+            let ours = unsafe { b.tex9[kind].GetSurfaceLevel(0) }?;
+            unsafe { dev.StretchRect(&t.surface, std::ptr::null(), &ours, std::ptr::null(), D3DTEXF_NONE) }?;
+        } else if !(kind == HUD && UI_DRAWN.swap(false, Ordering::AcqRel)) {
             let bb = unsafe { dev.GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO) }?;
             let ours = unsafe { b.tex9[kind].GetSurfaceLevel(0) }?;
             unsafe { dev.StretchRect(&bb, std::ptr::null(), &ours, std::ptr::null(), D3DTEXF_NONE) }?;
@@ -1240,6 +1261,170 @@ mod win {
             gpu.ctx.CopyResource(dst, &b.shared11[kind]);
         }
         true
+    }
+
+    /// The game's renderer draws each geometry whole, in one call of one of these (the renderer, the
+    /// geometry): its triangle shapes and strips, the same batched, its particles.
+    const ART_DRAWS: [usize; 4] = [0x0076_93E0, 0x0076_94F0, 0x0076_9700, 0x0076_5990];
+    static REAL_ART_DRAWS: [AtomicUsize; 4] = [const { AtomicUsize::new(0) }; 4];
+    type GeometryDrawFn = unsafe extern "thiscall" fn(usize, usize);
+    /// The game's HDR is on (`bDoHighDynamicRange`): its world is drawn in floating point and
+    /// tone-mapped after.
+    const HDR_ON: usize = 0x00B4_3070;
+    /// The eye whose world is being drawn with the hand art apart ([`art_eye`]; -1: none).
+    static ART_EYE: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+    /// The hand art is going into its target now (its alpha blended as coverage).
+    static ART_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    /// The hand art's geometries (`NiGeometry`), as `crate::magic` last placed it.
+    static ART_GEOMETRY: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+    /// Each eye's hand art target: the size and multisampling of the world's target (the depth
+    /// buffer the art is drawn in must match it), cleared to nothing as the eye starts.
+    static ART_TARGETS: Mutex<[Option<ArtTarget>; 2]> = Mutex::new([None, None]);
+    struct ArtTarget {
+        surface: IDirect3DSurface9,
+        size: (u32, u32),
+        multisample: (D3DMULTISAMPLE_TYPE, u32),
+    }
+    // (Only ever used on the game's render thread.)
+    unsafe impl Send for ArtTarget {}
+
+    /// Hooks the game's geometry draws, for the hand art apart.
+    pub fn install_art() {
+        let names = ["the renderer's shape draw", "the renderer's batched shape draw", "the renderer's batched strip draw", "the renderer's particle draw"];
+        let detours: [*const (); 4] = [art_draw_0 as *const (), art_draw_1 as *const (), art_draw_2 as *const (), art_draw_3 as *const ()];
+        for i in 0..4 {
+            hooks::install_into(ART_DRAWS[i] as *const (), detours[i], names[i], &REAL_ART_DRAWS[i]);
+        }
+    }
+
+    unsafe extern "thiscall" fn art_draw_0(renderer: usize, geometry: usize) {
+        draw_geometry(0, renderer, geometry);
+    }
+    unsafe extern "thiscall" fn art_draw_1(renderer: usize, geometry: usize) {
+        draw_geometry(1, renderer, geometry);
+    }
+    unsafe extern "thiscall" fn art_draw_2(renderer: usize, geometry: usize) {
+        draw_geometry(2, renderer, geometry);
+    }
+    unsafe extern "thiscall" fn art_draw_3(renderer: usize, geometry: usize) {
+        draw_geometry(3, renderer, geometry);
+    }
+
+    /// A geometry drawn: the hand art's, in an eye's world with the art apart, into that eye's
+    /// target; anything else as the game draws it.
+    fn draw_geometry(i: usize, renderer: usize, geometry: usize) {
+        let real: GeometryDrawFn = unsafe { std::mem::transmute(REAL_ART_DRAWS[i].load(Ordering::Acquire)) };
+        let eye = ART_EYE.load(Ordering::Acquire);
+        if eye < 0 || ART_ON.load(Ordering::Acquire) || !ART_GEOMETRY.lock().unwrap().contains(&geometry) {
+            return unsafe { real(renderer, geometry) };
+        }
+        let dev = device(crate::engine::device() as *mut c_void);
+        let back = dev.as_ref().and_then(|dev| hooks::guard("hand art apart", None, || art_apart(dev, eye as usize)));
+        unsafe { real(renderer, geometry) };
+        if let (Some(dev), Some(back)) = (dev, back) {
+            hooks::guard_void("hand art back", || art_back(&dev, back));
+        }
+    }
+
+    /// What the game had before a geometry of the hand art went into ours: its first target, its
+    /// viewport and its scissor rectangle.
+    struct ArtBack {
+        target: IDirect3DSurface9,
+        viewport: D3DVIEWPORT9,
+        scissor: windows::Win32::Foundation::RECT,
+    }
+
+    /// The hand art's geometry about to be drawn in eye `eye`'s world: into the eye's target, its
+    /// alpha as coverage. None (drawn as the game draws it) where the target being drawn isn't the
+    /// eye's world (the water's reflection, smaller).
+    fn art_apart(dev: &IDirect3DDevice9, eye: usize) -> Option<ArtBack> {
+        let set_target: SetTargetFn = unsafe { std::mem::transmute(REAL_SET_TARGET.load(Ordering::Acquire)) };
+        let set_state: SetStateFn = unsafe { std::mem::transmute(REAL_SET_STATE.load(Ordering::Acquire)) };
+        if REAL_SET_TARGET.load(Ordering::Acquire) == 0 || REAL_SET_STATE.load(Ordering::Acquire) == 0 {
+            return None;
+        }
+        let target = unsafe { dev.GetRenderTarget(0) }.ok()?;
+        let mut desc = D3DSURFACE_DESC::default();
+        unsafe { target.GetDesc(&mut desc) }.ok()?;
+        if Some((desc.Width, desc.Height)) != backbuffer_size(dev) {
+            return None;
+        }
+        let mut viewport = D3DVIEWPORT9::default();
+        unsafe { dev.GetViewport(&mut viewport) }.ok()?;
+        let mut scissor = windows::Win32::Foundation::RECT::default();
+        unsafe { dev.GetScissorRect(&mut scissor) }.ok()?;
+        let ours = {
+            let mut targets = ART_TARGETS.lock().unwrap();
+            let fits = |t: &ArtTarget| t.size == (desc.Width, desc.Height) && t.multisample == (desc.MultiSampleType, desc.MultiSampleQuality);
+            if !targets[eye].as_ref().is_some_and(fits) {
+                let mut s: Option<IDirect3DSurface9> = None;
+                unsafe { dev.CreateRenderTarget(desc.Width, desc.Height, D3DFMT_A8R8G8B8, desc.MultiSampleType, desc.MultiSampleQuality, false, &mut s, std::ptr::null_mut()) }.ok()?;
+                let surface = s?;
+                unsafe { dev.ColorFill(&surface, std::ptr::null(), 0) }.ok()?;
+                tracing::info!("d3d9: the hand art's target for eye {eye}: {}x{}, multisampled {:?}/{}", desc.Width, desc.Height, desc.MultiSampleType, desc.MultiSampleQuality);
+                targets[eye] = Some(ArtTarget { surface, size: (desc.Width, desc.Height), multisample: (desc.MultiSampleType, desc.MultiSampleQuality) });
+            }
+            targets[eye].as_ref()?.surface.clone()
+        };
+        unsafe { set_target(dev.as_raw(), 0, ours.as_raw()) }.ok().ok()?;
+        unsafe {
+            let _ = dev.SetViewport(&viewport);
+            let _ = dev.SetScissorRect(&scissor);
+        }
+        ART_ON.store(true, Ordering::Release);
+        let raw = dev.as_raw();
+        let _ = unsafe { set_state(raw, D3DRS_SEPARATEALPHABLENDENABLE, 1) };
+        set_alpha_blend(raw);
+        let write = WRITE.load(Ordering::Acquire);
+        if write & WRITE_COLOUR != 0 {
+            let _ = unsafe { set_state(raw, D3DRS_COLORWRITEENABLE, write | WRITE_ALPHA) };
+        }
+        Some(ArtBack { target, viewport, scissor })
+    }
+
+    /// The game's own target, viewport and scissor again, and its blending as it believes it is.
+    fn art_back(dev: &IDirect3DDevice9, back: ArtBack) {
+        let set_target: SetTargetFn = unsafe { std::mem::transmute(REAL_SET_TARGET.load(Ordering::Acquire)) };
+        let set_state: SetStateFn = unsafe { std::mem::transmute(REAL_SET_STATE.load(Ordering::Acquire)) };
+        ART_ON.store(false, Ordering::Release);
+        let raw = dev.as_raw();
+        unsafe {
+            let _ = set_state(raw, D3DRS_SEPARATEALPHABLENDENABLE, 0);
+            let _ = set_state(raw, D3DRS_COLORWRITEENABLE, WRITE.load(Ordering::Acquire));
+            let _ = set_target(raw, 0, back.target.as_raw());
+            let _ = dev.SetViewport(&back.viewport);
+            let _ = dev.SetScissorRect(&back.scissor);
+        }
+    }
+
+    /// The hand art's geometries now (`crate::magic`; none: nothing apart). Cleared before the art
+    /// is let go, so a geometry gone is never taken for it.
+    pub fn set_art_geometry(geometry: Vec<usize>) {
+        *ART_GEOMETRY.lock().unwrap() = geometry;
+    }
+
+    /// Eye `eye`'s world is about to be drawn (`Some`), or is done (`None`). With hand art to draw
+    /// (and the game's HDR off) its art goes apart into the eye's target, cleared now: true then,
+    /// and the target is copied out with [`capture`] (`ART[eye]`).
+    pub fn art_eye(dev: &IDirect3DDevice9, eye: Option<usize>) -> bool {
+        let Some(eye) = eye else {
+            ART_EYE.store(-1, Ordering::Release);
+            return false;
+        };
+        let hdr = crate::mem::at::<u8>(HDR_ON).unwrap_or(0) != 0;
+        if hdr || ART_GEOMETRY.lock().unwrap().is_empty() || REAL_ART_DRAWS.iter().any(|r| r.load(Ordering::Acquire) == 0) {
+            return false;
+        }
+        if let Some(t) = ART_TARGETS.lock().unwrap()[eye].as_ref() {
+            let _ = unsafe { dev.ColorFill(&t.surface, std::ptr::null(), 0) };
+        }
+        ART_EYE.store(eye as i32, Ordering::Release);
+        true
+    }
+
+    /// Eye `eye`'s hand art went into its target this frame (the target is there to copy out).
+    pub fn art_drawn(eye: usize) -> bool {
+        ART_TARGETS.lock().unwrap()[eye].is_some()
     }
 
     /// The game's video memory (MB): what it has on the GPU now, and how much Windows lets it have

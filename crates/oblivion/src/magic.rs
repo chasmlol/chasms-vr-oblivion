@@ -115,10 +115,25 @@ mod game {
     static STATE: Mutex<Option<State>> = Mutex::new(None);
 
     fn drop_art(art: Art) {
+        // (Its geometry isn't to be drawn apart any more: gone, another's could be where it was.)
+        crate::d3d9::set_art_geometry(Vec::new());
         if let Some(l) = art.light {
             l.remove();
         }
         scene::unload(art.node);
+    }
+
+    /// The geometries under `node` (its own, if it's one): what the game draws of it.
+    fn geometry(node: usize, out: &mut Vec<usize>, depth: u32) {
+        if node == 0 || depth > 16 {
+            return;
+        }
+        if crate::engine::is_a(node, "NiGeometry") {
+            out.push(node);
+        }
+        for c in crate::nodes::children(node) {
+            geometry(c, out, depth + 1);
+        }
     }
 
     /// The art of `effect` (its model playing its casting sequence, its casting light), or None.
@@ -199,6 +214,12 @@ mod game {
                 l.update(dt);
             }
         }
+        // What the game draws of the art, drawn apart from its picture (`crate::d3d9::art_eye`).
+        let mut drawn = Vec::new();
+        for a in s.arts.iter().flatten() {
+            geometry(a.node, &mut drawn, 0);
+        }
+        crate::d3d9::set_art_geometry(drawn);
         super::publish_overlays();
     }
 }

@@ -195,6 +195,13 @@ the game, but their hands still move in VR.
 * **`crates/oblivion/src/magic.rs`**: the art, in the palm once the trigger has charged it and for
   30 s after (smaller with the magicka), growing with its casting light and sound as it charges. A
   hand only holding a spell shows nothing: turned about, its art flickered round the hand's edges.
+* **The art over the hand** (`d3d9.rs`, `render.rs`; the framework's `TGT_ART`): drawn into the
+  game's picture, the art was hidden by the runtime's hand drawn over it, even in front of the
+  palm. The game's renderer draws each geometry whole in one call, so while an eye's world is drawn
+  the art's own geometries go into a picture of their own for that eye (in the world's depth, the
+  alpha as coverage, as the HUD's is), which the runtime lays over the hand where it's nearer: palm
+  up the art shows, palm down the hand hides it. With the game's HDR on it stays in the picture
+  (the HDR tone curve comes after the world, and the art apart would miss it).
 * **Bound weapons and shields** (`spells.rs`, `weapons.rs`): made in the hand that cast them
   (`ObjectDesc::into_hand`, which the rig honours as the thing arrives).
 * **Telekinesis** (`spells.rs`): the game's melee rules say the hands' telekinesis is on while its

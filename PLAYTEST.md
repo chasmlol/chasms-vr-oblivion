@@ -49,7 +49,9 @@ The design and its reasons are in `docs/design/spells.md`.
   charges over the game's own casting time (self 0.37 s, touch 0.27 s, target 0.4 s). Its art
   appears in your palm and grows, its casting light fades in and its casting sound plays. After
   you let go the art stays in the palm for 30 s, then goes; a hand that's only holding a spell
-  shows nothing. In the hand you feel nothing
+  shows nothing. **The art is drawn apart from the game's picture** and laid over your hand where
+  it's nearer: turn your palm up and you see it in your palm, palm down and your hand hides it.
+  (Not with the game's HDR on: then it stays in the game's picture, and your hand covers it.) In the hand you feel nothing
   at first, then pulses that speed up and strengthen sharply, then a spike when it's charged and a
   faint tick while you hold it. **Let go to cast**, and you feel a full burst. Let go before it's
   charged and nothing is cast; no magicka is spent.
@@ -114,8 +116,6 @@ The design and its reasons are in `docs/design/spells.md`.
       while letting go throws it. It moves things, not people, like the game's own. When the spell
       runs out, what you hold falls and the gravity gloves are back.
     * Chameleon and Shadow Shape (invisibility) don't make your own body see-through yet.
-    * Your hand still covers the spell's art where the art is in front of it (palm up): the game
-      draws the art into its picture, and your hand is drawn over that picture.
 
 Things worth telling me about:
 * Does it go where your hand is held out? If you'd rather cast out of your palm, `palm_tilt` in
@@ -124,7 +124,8 @@ Things worth telling me about:
 * Is the aim help too strong or too weak?
 * Is the wheel in a good place and size?
 * Can you feel the charge and the ready spike clearly?
-* Do the spell's art and light in the palm look right?
+* Do the spell's art and light in the palm look right? Palm up, is it over your palm; palm down,
+  hidden by your hand? Does it keep up with your hand when you move it fast?
 
 ## The range (`range.bat`)
 
@@ -157,12 +158,17 @@ the magicka is spent and comes back.
   * The wheel, on the emulated headset: it opens, both hands pick from it, and casts go from either
     hand.
   * The unit tests for the charge curve, the palm aim, the cone and the wheel's slices.
+  * The art laid over the hand, on the range in the headless `spell_art` scenario (the range draws
+    its casting glow apart from its picture, as the game now does): a charged spell held up with
+    the palm to the eye shows its glow over the palm; turned, the back of the hand hides it.
 * **Not checked in the game**, since the game is never booted here:
   * the cast through the game's own checked cast;
   * the projectile carrying its casting light;
   * the touch pick into the touched creature;
   * the wheel's pick through the game's selection and its sound;
   * the failure message and sound;
-  * the spell icons and font on the wheel.
+  * the spell icons and font on the wheel;
+  * the art drawn apart from the game's picture: the game's own draws of it sent to a picture of
+    their own for each eye, its alpha kept, and the runtime laying that over the hand.
 
   This playtest is their first run.
