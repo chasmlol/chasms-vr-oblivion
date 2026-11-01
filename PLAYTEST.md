@@ -29,18 +29,20 @@ their way at its own pace.
 
 1. **Take the longsword in both hands** and hold it still at any angle, up or out: it shouldn't
    droop.
-2. **Put your hands sideways.** Bring your lower hand up beside the other (or roll your wrists):
-   the handle lies along the line between your hands, so the blade turns sideways with them.
-3. **Fast slash, as fast as you can, and stop.** The sword can't go faster than about 620 degrees a
+2. **Hands close together** (a fist over a fist, as it's drawn): your wrists turn it. Tilt them
+   and the blade tilts down or up with them.
+3. **Hands wide apart**: the handle lies along the line between your hands. Put them sideways and
+   the blade turns sideways. (Half wrists, half line at 20 cm between the hands.)
+4. **Fast slash, as fast as you can, and stop.** The sword can't go faster than about 620 degrees a
    second (a half turn in 0.3 s), so a slash faster than that comes after your hands along the
-   same way; it carries on past where they stopped (about 27 degrees after a quick chop) and
-   settles there about half a second later. The drawn hands stay on its grip, so they follow your
-   real hands.
-4. **Slow chop, stop your hands dead**: it follows closely (8 degrees behind), carries on about 8
+   same way; it carries well on past where they stopped (about 40 degrees after a quick chop),
+   swings back a little and settles about half a second later. The drawn hands stay on its grip,
+   so they follow your real hands.
+5. **Slow chop, stop your hands dead**: it follows closely (6 degrees behind), carries on about 7
    degrees and settles.
-5. **Lay it on your shoulder**, blade back: it rests there instead of passing through you (your
+6. **Lay it on your shoulder**, blade back: it rests there instead of passing through you (your
    head and torso too).
-6. **Strength on a weapon**: lower it for a heavier sword (slower to turn, more carry), raise it
+7. **Strength on a weapon**: lower it for a heavier sword (slower to turn, more carry), raise it
    for a lighter one. Tell me where it feels right.
 
 ## The duel's combat (later: start without `--no-duelist`)
@@ -67,14 +69,14 @@ their way at its own pace.
 
 ## What was checked, and what wasn't
 
-The sword, checked headless (`framework/tools/xrsim/duel_chop.toml`, `duel_sideways.toml`,
-`duel_shoulder.toml`, with `RUSTVR_DEBUG_MELEE=1`): chopped from overhead in 0.25 s it falls 34
-degrees behind the hands, carries on 27 past their stop and is with them 0.45 s after it; chopped
-in 0.6 s it trails 8 and carries on 8; the hands put sideways over a second, its handle turns with
-them (11 degrees behind, then on their line); the blade laid back through the shoulder rests on it
+The sword, checked headless (`framework/tools/xrsim/duel_chop.toml`, `duel_two_hands.toml`,
+`duel_shoulder.toml`, with `RUSTVR_DEBUG_MELEE=1`): chopped from overhead in 0.25 s it falls 47
+degrees behind the hands, carries on 40 past their stop (swinging back 7) and is with them 0.45 s
+after it; chopped in 0.6 s it trails 6 and carries on 7; the hands close together, the wrists
+tilted 60 degrees tilt it 51; the hands 32 cm apart sideways turn it 78 of 90 degrees; the blade laid back through the shoulder rests on it
 (held 9 cm up off its hold); held still, it stays where the hands put it. Not checked: how heavy it
 feels in the hand, and the drawn hands away from your real hands while it comes after them (up to
-about 14 cm in a fast slash).
+about 15 cm in a fast slash).
 
 The combat, checked headless on the emulated headset before the hold became plain physics (to be
 checked again; `framework/tools/xrsim/duel_parry.toml`, `duel_guard.toml`, twice each, the same
