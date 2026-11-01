@@ -31,11 +31,12 @@ their way at its own pace.
    droop.
 2. **Put your hands sideways.** Bring your lower hand up beside the other (or roll your wrists):
    the handle lies along the line between your hands, so the blade turns sideways with them.
-3. **Fast slash, as fast as you can, and stop.** The sword can't go that fast: it turns at most
-   about 310 degrees a second (a half turn in 0.6 s), so it comes after your hands along the
-   same way, carries on a little past where they stopped (about 10 degrees) and settles there
-   about half a second later. The drawn hands stay on its grip, so they follow your real hands.
-4. **Slow chop, stop your hands dead**: it follows closely (8 degrees behind), carries on about 11
+3. **Fast slash, as fast as you can, and stop.** The sword can't go faster than about 620 degrees a
+   second (a half turn in 0.3 s), so a slash faster than that comes after your hands along the
+   same way; it carries on past where they stopped (about 27 degrees after a quick chop) and
+   settles there about half a second later. The drawn hands stay on its grip, so they follow your
+   real hands.
+4. **Slow chop, stop your hands dead**: it follows closely (8 degrees behind), carries on about 8
    degrees and settles.
 5. **Lay it on your shoulder**, blade back: it rests there instead of passing through you (your
    head and torso too).
@@ -67,13 +68,13 @@ their way at its own pace.
 ## What was checked, and what wasn't
 
 The sword, checked headless (`framework/tools/xrsim/duel_chop.toml`, `duel_sideways.toml`,
-`duel_shoulder.toml`, with `RUSTVR_DEBUG_MELEE=1`): chopped from overhead in 0.25 s it falls 70
-degrees behind the hands, carries on 10 past their stop and is with them 0.5 s after it; chopped in
-0.6 s it trails 8 and carries on 11; the hands put sideways over a second, its handle turns with
-them (14 degrees behind, then on their line); the blade laid back through the shoulder rests on it
+`duel_shoulder.toml`, with `RUSTVR_DEBUG_MELEE=1`): chopped from overhead in 0.25 s it falls 34
+degrees behind the hands, carries on 27 past their stop and is with them 0.45 s after it; chopped
+in 0.6 s it trails 8 and carries on 8; the hands put sideways over a second, its handle turns with
+them (11 degrees behind, then on their line); the blade laid back through the shoulder rests on it
 (held 9 cm up off its hold); held still, it stays where the hands put it. Not checked: how heavy it
 feels in the hand, and the drawn hands away from your real hands while it comes after them (up to
-about 20 cm in a fast slash).
+about 14 cm in a fast slash).
 
 The combat, checked headless on the emulated headset before the hold became plain physics (to be
 checked again; `framework/tools/xrsim/duel_parry.toml`, `duel_guard.toml`, twice each, the same
