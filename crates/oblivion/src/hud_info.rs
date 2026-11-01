@@ -15,6 +15,10 @@
 //! once the game has laid it out). With a thing in each hand, the card is of each in turn till both
 //! have their picture, then stays: of a thing new to a hand first.
 //!
+//! **A hand put up:** what the game picks to use is along a free hand put up in front
+//! ([`crate::pointing`]), and the card of what it picks floats over that hand: a gate's, a
+//! person's. Nothing's card shows where the eyes look.
+//!
 //! **Taking it is a crime:** the game's own sign is the reticle's activate icon in its stealing red
 //! (`hud_reticle.xml`: its `user1`, set by 0x578D50 when 0x4DEBF0 says activating what the
 //! crosshair's on is a crime: someone's thing, or a living person while sneaking, which is their
@@ -287,7 +291,8 @@ mod win {
         type Of = unsafe extern "thiscall" fn(usize) -> u32;
         type Crime = unsafe extern "thiscall" fn(usize) -> u8;
         let (refr, word) = match t {
-            Thing { world: true, refr, .. } => (refr, S_STEAL),
+            // (A person a hand's put up towards: using them is a crime only as a pickpocket's.)
+            Thing { world: true, refr, .. } => (refr, if crate::combat::is_actor(refr) { S_PICKPOCKET } else { S_STEAL }),
             Thing { from, .. } if from != 0 => (from, S_PICKPOCKET),
             _ => return None,
         };
@@ -297,15 +302,16 @@ mod win {
     }
 
     /// The card now shows `target` (0: nothing, as it fades out): its action line decided with it, and
-    /// set in the same frame, so the card is never drawn without it first. A thing a hand has, as
-    /// [`action`] says; a thing the crosshair's on, none (the reticle's red is the game's own sign
-    /// there); nothing, the line as it was, fading out with the card it's on.
+    /// set in the same frame, so the card is never drawn without it first. A thing a hand has, or one
+    /// a hand's put up towards ([`crate::pointing`]), as [`action`] says (the reticle's red, its
+    /// own sign of a crime, isn't shown); anything else, none; nothing, the line as it was, fading
+    /// out with the card it's on.
     fn card_now(target: usize) {
         let shown = CARD.lock().unwrap().shown;
         if let Some(t) = shown {
             *ACTION.lock().unwrap() = action(t);
         } else if target != 0 {
-            *ACTION.lock().unwrap() = None;
+            *ACTION.lock().unwrap() = crate::pointing::hand().and_then(|_| action(Thing { key: 0, refr: target, from: 0, world: true }));
         }
         keep_action();
     }

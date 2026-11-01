@@ -97,10 +97,6 @@ pub const GAP: f32 = 0.018;
 /// A margin round each piece's box (the game's units), so nothing it draws is cut at its edge.
 pub const MARGIN: f32 = 3.0;
 
-/// How much lower a person's card, and the talk icon over it, float than a thing's (lines of the
-/// game's text): under their chin at talking distance, not over the face looked at.
-pub const PERSON_CARD_DROP: f32 = 6.0;
-
 /// The pieces' places in their group from their boxes on the screen (`[x0, y0, x1, y1]`, the game's
 /// units, `screen` wide and high): the first in the middle, the others where the game has them
 /// round it, each moved out from it by a `GAP` for every piece it's beyond (across, or up or down,
@@ -909,44 +905,35 @@ mod win {
         {
             l.push(HudElement::new(HUD_CENTER, uv));
         }
-        // At gaze: the reticle where it is from the screen's middle (its activate icon on the point
-        // looked at; its crosshair is hidden, as the hands aim), and the card of what it's on under it.
+        // At gaze: the reticle's sneaking eye where it is from the screen's middle. Nothing of what
+        // the game can use is said where the eyes look (its crosshair hidden, as the hands aim; its
+        // activate icon and its card left out): what a hand is put up towards is what the game picks
+        // to use then ([`crate::pointing`]), and its card floats over that hand.
         let (w, h) = screen;
         let offset = |b: [f32; 4]| [((b[0] + b[2]) * 0.5 - w * 0.5) / h, -((b[1] + b[3]) * 0.5 - h * 0.5) / h, 0.0];
         let crosshair = crate::hud_info::looked_at();
-        // A thing that can be taken says nothing while it's only looked at: neither its card (the
-        // game never gets it, `crate::hud_info`) nor its activate icon (a hand, red when taking it
-        // would be stealing), nor that icon fading out after the gaze leaves it. Once a hand has
-        // it, the game's card is the held thing's and floats over it, and the icon is under the
-        // gaze again, as the game sets it for its target.
-        let quiet = crate::hud_info::quiet();
-        let icons: &'static [From] = if quiet { &[From::Drawn("hudreticle_sneak")] } else { &[From::Drawn("hudreticle_reticle"), From::Drawn("hudreticle_sneak")] };
-        let reticle = piece_box(trees.get(RETICLE), &Piece::of(icons, false)).filter(|b| !under(*b));
-        // (A person's card a few lines lower, under their chin: not over the face looked at; the
-        // talk icon over it as ever, with it.)
-        let chin = if crosshair != 0 && is_actor(crosshair) { PERSON_CARD_DROP * l.text_height } else { 0.0 };
+        let pointing = crate::pointing::hand();
+        let reticle = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_sneak")], false)).filter(|b| !under(*b));
         if let Some((b, uv)) = reticle.and_then(|b| Some((b, tiles::uv_of(b, screen, MARGIN)?))) {
-            let [x, y, _] = offset(b);
-            l.push(HudElement { role: HUD_GAZE, uv, offset: [x, y - chin, 0.0], ..Default::default() });
+            l.push(HudElement { role: HUD_GAZE, uv, offset: offset(b), ..Default::default() });
         }
-        // (What they're about: they float just in front of it, a person's head or a thing's bound.)
+        // (What it's about, picked along the eyes: it floats just in front of it, a person's head
+        // or a thing's bound.)
         if crosshair != 0
+            && pointing.is_none()
             && let Some((centre, radius)) = bound(crosshair)
         {
             let (at, radius) = if is_actor(crosshair) { (head(crosshair).unwrap_or(centre), 0.12) } else { (centre, radius) };
             l.gaze = at.to_array();
             l.gaze_radius = radius.max(0.05);
         }
+        // The game's card: over the thing in a hand, or over the hand put up towards what it names.
+        // A thing that can be taken has none till a hand has it (`crate::hud_info`).
         if let Some(uv) = crate::hud_info::card_uv().filter(|uv| !under([uv[0] * w, uv[1] * h, uv[2] * w, uv[3] * h])) {
             if crate::hud_info::holding() {
-                // (Over the thing in a hand.)
                 l.push(HudElement::new(HUD_HELD, uv));
-            } else if quiet {
-                // (Its card comes once a hand has it: a card for every thing looked at is too much.)
-            } else {
-                let below = reticle.map_or(0.0, |r| (r[3] - r[1]) * 0.5 / h) + (uv[3] - uv[1]) * 0.5 + 0.01 + chin;
-                let above_middle = reticle.map_or([0.0; 3], offset);
-                l.push(HudElement { role: HUD_GAZE, uv, offset: [0.0, above_middle[1] - below, 0.0], ..Default::default() });
+            } else if let Some(hand) = pointing.filter(|_| crosshair != 0 && !crate::hud_info::quiet()) {
+                l.push(HudElement { role: HUD_POINTED, uv, hand, ..Default::default() });
             }
         }
         // A foe's health over the foe (what the crosshair is on), or at gaze with nobody there.

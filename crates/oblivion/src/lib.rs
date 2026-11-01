@@ -78,6 +78,7 @@ pub mod nodes;
 pub mod objects;
 pub mod player;
 pub mod pockets;
+pub mod pointing;
 pub mod profile;
 pub mod props;
 pub mod proxy;
