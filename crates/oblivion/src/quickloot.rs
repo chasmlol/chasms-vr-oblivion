@@ -1,15 +1,16 @@
 //! Looting at a glance: what's in a chest or a body a free hand points at ([`crate::pointing`]) is
-//! listed beside that hand, the game playing on, and taken from there: the turning stick's up and
-//! down move through it, the trigger takes the thing picked, that hand's A takes everything
-//! ([`rustvr_protocol::GS_QUICK_LOOT`]).
+//! listed over it, the game playing on, and taken from there: the turning stick's up and down move
+//! through it, the trigger takes the thing picked, that hand's A takes everything
+//! ([`rustvr_protocol::GS_QUICK_LOOT`]). The list stays on its thing while the aim slips off it a
+//! moment (past a body's arm), and goes over to another only once the hand's on that.
 //!
 //! * **What's looted:** a container the game would open (not locked, the lock is the game's to
 //!   work), and a dead person or creature. One whose script has its own activation (an
 //!   `OnActivate` block, which the game runs instead of opening it: Captain Renault's body moves
 //!   the main quest on as it's searched) is activated by the player as ever, its script run: if the
 //!   script opens it, the container menu it opens stays off the menu stack (the game plays on,
-//!   [`opening`]) and is shut with its own Exit, and what's in it is listed at the hand; if the
-//!   script doesn't, nothing is.
+//!   [`opening`]) and is shut with its own Exit, and what's in it is listed; if the script doesn't,
+//!   nothing is. Once a look: again only when the hand comes back to it.
 //! * **What's listed** is the container menu's own list: its entries of the thing's things
 //!   (`GetInventoryItem`, 0x4D88F0) and its own filter (0x4854F0, as it lists a container's or a
 //!   body's things, worn ones too), each by the game's name, value, weight and inventory icon.
@@ -18,11 +19,12 @@
 //!   player's things (marked stolen while stealing), its own item sound; what was stolen added up,
 //!   and when the hand moves on, its own check for whoever saw the theft (the player's vtable
 //!   +0x238 with the value and the owner), as closing its menu does.
-//! * **The list is the game's UI**: its container menu's rows (an item's icon, its count, its name,
-//!   its value and weight under the game's own small icons, in its brown ink) on its parchment,
-//!   the picked row in its focus box, and under them its own button icons and words for Take All
-//!   and Take (`strings()`). Read by the game's own reader into its HUD, drawn by the game, and the
-//!   runtime floats that piece of the HUD beside the hand ([`rustvr_protocol::HUD_LOOT`]).
+//! * **The list is the game's UI**: the thing's name, its container menu's rows (an item's icon, its
+//!   count, its name, its value and weight under the game's own small icons, in its brown ink) on
+//!   its parchment, the picked row in its focus box, and under them its own button icons and words
+//!   for Take All and Take (`strings()`). Read by the game's own reader into its HUD (at the top
+//!   right of its screen, clear of its own pieces: the notices are at the top left), drawn by the
+//!   game, and the runtime floats that piece of the HUD at the thing ([`rustvr_protocol::HUD_LOOT`]).
 
 /// The list's top tile's name (in the HUD).
 pub const LOOT: &str = "rustvr_loot";
@@ -38,7 +40,7 @@ const ROW: f32 = 72.0;
 const HEADER: f32 = 44.0;
 const FOOTER: f32 = 76.0;
 const PAD: f32 = 16.0;
-/// Where it is on the game's screen (top left: clear of the HUD's own pieces).
+/// Where it is on the game's screen: in from its right edge, down from its top.
 const AT: (f32, f32) = (16.0, 40.0);
 /// Its rows' ids, and the focus box's.
 const ROW_ID: i32 = 980;
@@ -59,14 +61,20 @@ fn rows_top() -> f32 {
     PAD + HEADER
 }
 
-/// The list's file: hidden until there's something to show.
+/// The list's file: hidden until there's something to show; the thing's name its `user0`, its place
+/// across the screen set once it's made (the screen's width is the HUD's).
 pub fn xml() -> String {
     let (w, h) = (WIDTH, height());
     let inner = w - 2.0 * PAD;
     let mut x = format!(
-        "<rect name=\"{LOOT}\">\n<locus> &true; </locus> <depth> 30 </depth> <visible> &false; </visible>\n<x> {} </x> <y> {} </y> <width> {w} </width> <height> {h} </height>\n\
-         <image name=\"rvloot_background\"> <filename> Menus\\Shared\\shared_main_background_1.dds </filename> <zoom> -1 </zoom> <depth> 1 </depth> <x> 0 </x> <y> 0 </y> <width> {w} </width> <height> {h} </height> </image>\n",
-        AT.0, AT.1
+        "<rect name=\"{LOOT}\">\n<locus> &true; </locus> <depth> 30 </depth> <visible> &false; </visible> <user0> </user0>\n<x> {} </x> <y> {} </y> <width> {w} </width> <height> {h} </height>\n\
+         <image name=\"rvloot_background\"> <filename> Menus\\Shared\\shared_main_background_1.dds </filename> <zoom> -1 </zoom> <depth> 1 </depth> <x> 0 </x> <y> 0 </y> <width> {w} </width> <height> {h} </height> </image>\n\
+         <text name=\"rvloot_name\"> <depth> 2 </depth> <justify> &left; </justify> <font> 1 </font> {INK} <wrapwidth> {} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user0\"/> </string> <x> {} </x> <y> {} </y> </text>\n",
+        AT.0,
+        AT.1,
+        VALUE_COL.0 - 24.0,
+        PAD + 12.0,
+        PAD + 4.0
     );
     // The small icons over the value and weight columns (the container menu's, from its sheet).
     for (name, crop, (cx, cw)) in [("rvloot_value_icon", 224, VALUE_COL), ("rvloot_weight_icon", 32, WEIGHT_COL)] {
@@ -236,6 +244,10 @@ mod game {
     const SCRIPT_WAIT: f64 = 1.5;
     /// Seconds between looks at what's in it.
     const REFRESH: f64 = 0.25;
+    /// How long the list stays on its thing with the aim off it (slipped past a body's arm), and
+    /// how long the aim's on another before the list goes over to that (seconds).
+    const HOLD: f64 = 0.6;
+    const SWITCH: f64 = 0.25;
 
     static PATH: std::sync::OnceLock<std::ffi::CString> = std::sync::OnceLock::new();
     /// The thing being activated for a look (its script run): the container menu it opens isn't
@@ -250,9 +262,16 @@ mod game {
     /// The list is up (its things beside a hand): the trigger is its.
     static SHOWN: AtomicBool = AtomicBool::new(false);
 
-    /// The list is up beside a pointing hand: its trigger takes, its A takes everything.
+    /// The list is up at what a hand points at: its trigger takes, its A takes everything.
     pub fn shown() -> bool {
         SHOWN.load(Ordering::Relaxed)
+    }
+    /// What the list is of (0: none).
+    static LISTED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    /// What the list is of, while it's up (0: none): the HUD floats it there.
+    pub fn listed() -> usize {
+        if shown() { LISTED.load(Ordering::Relaxed) } else { 0 }
     }
 
     /// One of the game's entries of what's in the thing, as it was read.
@@ -296,6 +315,14 @@ mod game {
         presses: [u16; 4],
         /// What a hand pointed at last (for the log).
         pointed: usize,
+        /// What the list is of (held through the aim's slips, [`HOLD`]), when the aim was last on
+        /// it; another the aim's on, and since when ([`SWITCH`]).
+        on: usize,
+        on_seen: f64,
+        next: usize,
+        next_since: f64,
+        /// The thing's name the list was given.
+        named: String,
         /// A thing whose script has its own activation: the one its script has opened for this
         /// look, and the one it didn't; when the one activated was.
         scripted: usize,
@@ -527,6 +554,32 @@ mod game {
     }
 
     impl State {
+        /// What the list is of now, from what the aim's on (`candidate`, 0: nothing to loot): kept
+        /// through a moment off it, over to another once the aim's stayed there, none with no hand
+        /// up (but not while a script's opening it: its menu is up a moment).
+        fn follow(&mut self, candidate: usize, hand_up: bool, now: f64) {
+            let was = self.on;
+            if !hand_up && OPENING.load(Ordering::Relaxed) == 0 {
+                (self.on, self.next) = (0, 0);
+            } else if candidate != 0 && candidate == self.on {
+                (self.on_seen, self.next) = (now, 0);
+            } else if candidate != 0 {
+                if self.next != candidate {
+                    (self.next, self.next_since) = (candidate, now);
+                }
+                if self.on == 0 || now - self.next_since >= SWITCH {
+                    (self.on, self.on_seen, self.next) = (candidate, now, 0);
+                }
+            }
+            if self.on != 0 && now - self.on_seen > HOLD && OPENING.load(Ordering::Relaxed) == 0 {
+                self.on = 0;
+            }
+            // (Another look: a script of its own runs again.)
+            if self.on != was {
+                (self.scripted, self.refused) = (0, 0);
+            }
+        }
+
         /// A thing whose script has its own activation, pointed at (`scripted`): activated once for
         /// this look; the container menu its script opens, shut; or given up on.
         fn scripts(&mut self, target: usize, scripted: bool, now: f64) {
@@ -589,7 +642,16 @@ mod game {
             self.focus = ids.iter().find(|(id, _)| *id == FOCUS_ID).map_or(0, |&(_, t)| t);
             (self.tile, self.parent, self.shown, self.focus_y) = (tile, parent, false, None);
             self.given.clear();
-            tracing::info!("quickloot: its list made in the HUD of the game's own art ({} rows{})", self.rows.len(), if self.focus == 0 { ", no focus box" } else { "" });
+            self.named.clear();
+            // (In from the screen's right edge.)
+            let screen = tiles::value(parent, tiles::WIDTH).filter(|w| *w > WIDTH).unwrap_or(1280.0);
+            update_float(tile, tiles::X as u32, screen - WIDTH - AT.0);
+            tracing::info!(
+                "quickloot: its list made in the HUD of the game's own art ({} rows{}), at {} across the screen's {screen}",
+                self.rows.len(),
+                if self.focus == 0 { ", no focus box" } else { "" },
+                screen - WIDTH - AT.0
+            );
             true
         }
 
@@ -621,6 +683,10 @@ mod game {
         fn lay_out(&mut self) {
             let Some(l) = &self.loot else { return };
             let (things, top, sel) = (l.things.clone(), l.top, l.sel);
+            if self.named != l.name {
+                update_text(self.tile, USER0, &l.name);
+                self.named = l.name.clone();
+            }
             for row in 0..ROWS {
                 match things.get(top + row) {
                     Some(t) => {
@@ -660,20 +726,30 @@ mod game {
         }
         // What a free hand points at (none in a menu, or with no hand put up).
         let vr = snap.is_some_and(|s| s.view.is_some());
-        let target = if vr && player != 0 && !crate::menus::menu_mode() && crate::pointing::hand().is_some() { crate::hud_info::looked_at() } else { 0 };
-        let why = (target != 0).then(|| crate::hooks::guard("loot test", Err("it couldn't be read"), || lootable(target)));
+        let hand_up = vr && player != 0 && !crate::menus::menu_mode() && crate::pointing::hand().is_some();
+        let target = if hand_up { crate::hud_info::looked_at() } else { 0 };
+        let test = |r: usize| crate::hooks::guard("loot test", Err("it couldn't be read"), || lootable(r));
+        let why = (target != 0).then(|| test(target));
         if target != s.pointed {
             s.pointed = target;
-            (s.scripted, s.refused) = (0, 0);
             if let Some(Err(why)) = why.filter(|w| *w != Err(SCRIPTED)) {
                 tracing::info!("quickloot: {} ({target:#x}) isn't looted at the hand: {why}", items::form_facts(mem::deref(target + REFR_BASE)).name);
             }
         }
-        // One whose script has its own activation: activated as the player would, its script run;
-        // the container menu that opens (off the stack) shut with its own Exit, and what's in it
-        // listed. (Or the script didn't open it: nothing to list.)
-        crate::hooks::guard_void("loot script", || s.scripts(target, why == Some(Err(SCRIPTED)), now));
-        let target = if why == Some(Ok(())) || (target != 0 && s.scripted == target) { target } else { 0 };
+        // What the list is of: held through the aim's slips; dropped once it can't be looted (gone,
+        // or locked).
+        s.follow(if matches!(why, Some(Ok(()) | Err(SCRIPTED))) { target } else { 0 }, hand_up, now);
+        let on_why = (s.on != 0).then(|| if s.on == target { why.unwrap_or(Ok(())) } else { test(s.on) });
+        if matches!(on_why, Some(Err(w)) if w != SCRIPTED) {
+            s.on = 0;
+        }
+        // One whose script has its own activation: activated as the player would, its script run,
+        // once a look; the container menu that opens (off the stack) shut with its own Exit, and
+        // what's in it listed. (Or the script didn't open it: nothing to list.)
+        let on = s.on;
+        crate::hooks::guard_void("loot script", || s.scripts(on, on_why == Some(Err(SCRIPTED)), now));
+        let target = if on != 0 && (on_why == Some(Ok(())) || s.scripted == on) { on } else { 0 };
+        LISTED.store(target, Ordering::Relaxed);
         if s.loot.as_ref().is_some_and(|l| l.refr != target) {
             let mut l = s.loot.take().unwrap();
             crate::hooks::guard_void("loot close", || l.close(player));
