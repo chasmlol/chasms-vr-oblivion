@@ -167,6 +167,7 @@ The adapter's own, in the game's folder; every key is optional (`crates/oblivion
 | `menu_world` | true | The main menu in a place in Cyrodiil (off: the flat main menu) |
 | `menu_spot` | "" | Its place: "imperial-city", "cloud-ruler", "dive-rock", "anvil", "rumare-night", "first-view", or several separated by commas, one each time the game starts (empty: the Imperial City; `RUSTVR_OBLIVION_MENU_SPOT` overrides it) |
 | `map_slot` | "" | The body slot the map is kept in (empty: not on the body, for now): "hip_right", "hip_left", "belt" (the belt pouch on the weapon hand's side), "chest_left", "chest_right" |
+| `save_folder` | "" | A game of its own: its saves, autosaves and quicksaves go to and load from this folder of the game's saves folder (`Saves\<name>`, the game's `SLocalSavePath` while it runs, put back on closing); empty: the player's own folder |
 | `anisotropy` | 16 | The anisotropic filtering of the game's textures (1: none, as the game has it). Oblivion has none of its own, and a driver's override doesn't reach D3D9On12 (`RUSTVR_OBLIVION_ANISOTROPY` overrides it) |
 
 ### The runtime's settings that matter here

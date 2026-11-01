@@ -6,17 +6,21 @@
 #
 #   powershell -File tools\play.ps1                      the features there are
 #   powershell -File tools\play.ps1 archery [-Save rustvr-weye | -NewGame] [-At <cell>] [-Give "<id> <n>,..."] [-Commands "a|b"]
+#   powershell -File tools\play.ps1 playthrough -OwnSaves [-NewGame]
 #   powershell -File tools\play.ps1 archery -Range
 #   powershell -File tools\play.ps1 -Close
 #   powershell -File tools\play.ps1 trailer -Close -KeepLogs clip-02 [-Logs "rustvr.log,voice.log"]
 #
 # -Commands runs console lines once the save is loaded ("showracemenu", "player.setav sneak 100"):
 # in VR the real keyboard doesn't reach the game, so its console can't be typed into. -NewGame starts
-# a new game instead of loading a save (the prison cell and the race menu). -Settings adds lines to
+# a new game instead of loading a save (the prison cell and the race menu). -OwnSaves plays a game of
+# the feature's own: its saves (autosaves and quicksaves too) go to Saves\rustvr-<feature> while it
+# runs, apart from the test saves, and it boots into the latest of them (-NewGame starts it; -Save
+# picks another of them). -Settings adds lines to
 # the game's rustvr-oblivion.toml for this run ("menu_world = false; menu_spot = 'cloud-ruler'").
 # -KeepLogs, with -Close, copies the run's logs (%LOCALAPPDATA%\RustVR's rustvr.log, or -Logs) into
 # the next free <name>-<n> folder of the feature's build folder: the next start replaces them.
-param([string]$Feature = "", [string]$Save = "", [switch]$NewGame, [string]$At = "", [string]$Give = "", [string]$Commands = "", [string]$Settings = "", [switch]$Range, [switch]$Close, [string]$KeepLogs = "", [string]$Logs = "rustvr.log")
+param([string]$Feature = "", [string]$Save = "", [switch]$NewGame, [switch]$OwnSaves, [string]$At = "", [string]$Give = "", [string]$Commands = "", [string]$Settings = "", [switch]$Range, [switch]$Close, [string]$KeepLogs = "", [string]$Logs = "rustvr.log")
 $ErrorActionPreference = "Continue"
 . "$PSScriptRoot\paths.ps1"
 
@@ -68,15 +72,17 @@ if (-not (Get-ItemProperty "HKCU:\Software\Valve\Steam\ActiveProcess" -ErrorActi
     exit 1
 }
 Stop-Ranges
+$folder = if ($OwnSaves) { "rustvr-$Feature" } else { "" }
 if ($NewGame) {
-    "$Feature : a new game"
-    & "$wt\tools\oblivion.ps1" -NoBuild -NewGame -At $At -Give $Give -Commands $Commands -Settings $Settings
+    "$Feature : a new game$(if ($folder) { ", its saves in Saves\$folder" })"
+    & "$wt\tools\oblivion.ps1" -NoBuild -NewGame -SaveFolder $folder -At $At -Give $Give -Commands $Commands -Settings $Settings
     exit 0
 }
+if (-not $Save -and $OwnSaves) { $Save = "latest" }
 if (-not $Save) {
     # The save the feature's PLAYTEST.md names first (a line "Save: rustvr-..."), else the city.
     $named = Select-String -Path "$wt\PLAYTEST.md" -Pattern 'Save:\s*(\S+)' -ErrorAction SilentlyContinue | Select-Object -First 1
     $Save = if ($named) { $named.Matches[0].Groups[1].Value.Trim('`', '"') } else { "rustvr-city" }
 }
 "$Feature : $Save$(if ($At) { " at $At" })"
-& "$wt\tools\oblivion.ps1" -NoBuild -Save $Save -At $At -Give $Give -Commands $Commands -Settings $Settings
+& "$wt\tools\oblivion.ps1" -NoBuild -Save $Save -SaveFolder $folder -At $At -Give $Give -Commands $Commands -Settings $Settings

@@ -34,11 +34,16 @@ pub struct Settings {
     /// "anvil", "rumare-night", "first-view"), or several separated by commas, one of them each time
     /// the game starts; empty: the Imperial City across Lake Rumare.
     pub menu_spot: String,
+    /// A folder of the game's own saves folder that this run's saves go to and load from, its
+    /// autosaves and quicksaves too (`Oblivion.ini`'s `SLocalSavePath` while the game runs, put back
+    /// with the rest: [`crate::game_settings`]): a game of its own kept apart from the test saves
+    /// (`tools/oblivion.ps1 -SaveFolder`). Empty: the player's own folder.
+    pub save_folder: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { d3d9on12: true, background: false, eye_width: 0, eye_height: 0, menu_background: 1.0, map_slot: String::new(), anisotropy: 16, menu_world: true, menu_spot: String::new() }
+        Settings { d3d9on12: true, background: false, eye_width: 0, eye_height: 0, menu_background: 1.0, map_slot: String::new(), anisotropy: 16, menu_world: true, menu_spot: String::new(), save_folder: String::new() }
     }
 }
 

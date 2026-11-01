@@ -69,7 +69,9 @@ It runs in this order:
 3. starts the game from its exe (`SteamAppId` keeps Steam from restarting it through its launcher),
    skips the intro films and the logo, and loads `-Save` the moment the main menu is up
    (`-NewGame`: the main menu's New, its film skipped, the prison cell and the race menu;
-   `-Save none`: the main menu, in its place in Cyrodiil);
+   `-Save none`: the main menu, in its place in Cyrodiil; `-SaveFolder <name>`: a game of its own,
+   its saves, autosaves and quicksaves in `Saves\<name>` while it runs, and `-Save latest` the
+   newest of them);
 4. once in the game: `-At <cell>` (`coc`), `-Give "<form id> <count>,..."`, `-Hour`, `-Weather
    <id>`, `-Commands "a|b"` (console lines in order), `-ConsoleFile <file>` (timed lines:
    `game+<s> <command>`, `menu+<s> ...`, `<s> ...`), and `-Settings "a = 1; b = 2"` (lines for the
@@ -135,7 +137,10 @@ into `main` until it has been played.
   `docs/playtest/<feature>.md`.
 - `tools/play.ps1 <feature>` installs that worktree's build and boots the save its `PLAYTEST.md`
   names (`-Save`, `-NewGame`, `-At`, `-Give`, `-Commands` and `-Settings` as for
-  `oblivion.ps1`). `-Range` starts the framework's test range from that build instead. `-Close`
+  `oblivion.ps1`). `-OwnSaves` plays a game of the feature's own instead, its saves kept in
+  `Saves\rustvr-<feature>` apart from the test saves: it boots into the latest of them, and
+  `-OwnSaves -NewGame` starts it (a playthrough of the whole game). `-Range` starts the framework's
+  test range from that build instead. `-Close`
   puts everything away, whichever worktree has the game; `-Close -KeepLogs <name>` also keeps the
   run's logs (`-Logs "rustvr.log,voice.log"`) in the next `<name>-<n>` folder of the feature's
   build folder. Run with no feature, it lists the worktrees.

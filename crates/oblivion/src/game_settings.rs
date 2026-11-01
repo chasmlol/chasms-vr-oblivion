@@ -153,8 +153,17 @@ pub fn restore(dir: &Path) {
     }
 }
 
-/// VR's values into `Oblivion.ini` (the player's kept), before the game reads it.
-pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
+/// The game's own saves folder (`SLocalSavePath`'s default, under `My Games\Oblivion`).
+const DEFAULT_SAVES: &str = "Saves\\";
+
+/// One folder's name, nothing that climbs out of the saves folder or names a drive.
+fn is_plain_folder(name: &str) -> bool {
+    !name.trim_matches('.').is_empty() && !name.contains(['\\', '/', ':', '*', '?', '"', '<', '>', '|'])
+}
+
+/// VR's values into `Oblivion.ini` (the player's kept), before the game reads it; with a
+/// `save_folder`, the game's saves in that folder of its saves folder.
+pub fn apply(dir: &Path, eye: Option<(u32, u32)>, save_folder: &str) {
     let Some(ini) = ini_path() else { return };
     let mut text = match std::fs::read_to_string(&ini) {
         Ok(t) => t,
@@ -172,6 +181,16 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
         .filter(|_| !flat)
         .filter(|(s, k, v)| get_key(&text, s, k).and_then(|o| o.parse::<f64>().ok()).is_none_or(|o| o < v.parse::<f64>().unwrap_or(0.0)))
         .collect();
+    // A game of its own (`save_folder`): its saves in a folder of the game's saves folder. A
+    // player's file without the key has the game's default, which is what closing puts back.
+    let save_folder = save_folder.trim();
+    let own_saves = is_plain_folder(save_folder);
+    if !save_folder.is_empty() && !own_saves {
+        tracing::warn!("game settings: save_folder {save_folder:?} isn't a folder's name: the player's own saves folder");
+    }
+    if own_saves && get_key(&text, "General", "SLocalSavePath").is_none() {
+        set_key(&mut text, "General", "SLocalSavePath", DEFAULT_SAVES);
+    }
     let mut backup = String::new();
     let mut set = |s: &str, k: &str, v: String| {
         let old = set_key(&mut text, s, k, &v);
@@ -197,6 +216,9 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
     for (s, k, v) in &floors {
         set(s, k, (*v).to_owned());
     }
+    if own_saves {
+        set("General", "SLocalSavePath", format!("{DEFAULT_SAVES}{save_folder}\\"));
+    }
     if !floors.is_empty() {
         let raised: Vec<String> = floors.iter().map(|(_, k, v)| format!("{k}={v}")).collect();
         tracing::info!("game settings: for the headset: {}", raised.join(", "));
@@ -212,6 +234,10 @@ pub fn apply(dir: &Path, eye: Option<(u32, u32)>) {
     }
     if let Some(parent) = ini.parent() {
         let _ = std::fs::create_dir_all(parent);
+        if own_saves {
+            let _ = std::fs::create_dir_all(parent.join(DEFAULT_SAVES).join(save_folder));
+            tracing::info!("game settings: this game's saves are in {DEFAULT_SAVES}{save_folder}");
+        }
     }
     let _ = std::fs::write(&ini, text);
     tracing::info!("game settings: Oblivion.ini windowed{}", eye.map(|(w, h)| format!(", {w}x{h}")).unwrap_or_default());

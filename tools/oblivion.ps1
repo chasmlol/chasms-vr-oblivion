@@ -10,7 +10,7 @@
 #   (neither)            leaves the game for the real headset (a playtest); -Close puts it away later.
 # Closing puts back everything it changed (Oblivion.ini, rustvr-oblivion.toml) and gives the lock back.
 #
-#   powershell -File tools\oblivion.ps1 [-Save rustvr-city | -NewGame] [-At ICMarketDistrict01] [-Give "0000000A 5,0000000F 100"]
+#   powershell -File tools\oblivion.ps1 [-Save rustvr-city | -Save latest | -NewGame] [-SaveFolder rustvr-playthrough] [-At ICMarketDistrict01] [-Give "0000000A 5,0000000F 100"]
 #       [-Hour 14] [-Weather 00038EEE] [-Commands "tgm|player.setav marksman 100"]
 #       [-Sim tools\xrsim\x.toml | -Hold 30] [-Out captures\run] [-Settings "eye_width = 2048; eye_height = 2048"] [-NoBuild]
 #   powershell -File tools\oblivion.ps1 -Close
@@ -24,9 +24,13 @@
 # loads nothing: the game stays at its main menu (in its place in Cyrodiil, crates/oblivion's worldmenu).
 # -NewGame starts a new game instead (the main menu's New, answered yes, its film skipped): the
 # prison cell and the race menu, as a player starting out has them.
+# -SaveFolder <name> is a game of its own: while it runs, the game keeps its saves (its autosaves and
+# quicksaves too) in that folder of its saves folder (Saves\<name>), apart from the test saves and the
+# player's; closing puts the game's own folder back. `-Save latest` loads the newest save there.
 param(
     [string]$Save = "rustvr-city",
     [switch]$NewGame,
+    [string]$SaveFolder = "",
     [string]$At = "",
     [string[]]$Give = @(),
     [int]$Hour = -1,
@@ -51,6 +55,19 @@ $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path 
 . "$PSScriptRoot\paths.ps1"
 # ($Game, the game's folder; PowerShell's names are case-blind, so it's the $game below.)
 if (-not $Game) { "Oblivion isn't where its installer or Steam says: set RUSTVR_OBLIVION_DIR, or game in $DevConfig"; exit 1 }
+# The folder the game keeps this run's saves in (the adapter points the game at it: save_folder).
+$saves = Join-Path ([Environment]::GetFolderPath("MyDocuments")) "My Games\Oblivion\Saves"
+if ($SaveFolder) {
+    if ($SaveFolder -notmatch '^[\w .-]+$' -or $SaveFolder.Trim('.') -eq "") { "-SaveFolder takes a folder's name: $SaveFolder"; exit 1 }
+    $saves = Join-Path $saves $SaveFolder
+}
+if (-not $NewGame -and $Save -eq "latest") {
+    # The one the game wrote last: a save, an autosave or a quicksave.
+    $newest = Get-ChildItem $saves -Filter *.ess -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $newest) { "no save in $saves yet: start the game there with -NewGame"; exit 1 }
+    $Save = $newest.BaseName
+    "the latest save in ${saves}: $Save ($($newest.LastWriteTime.ToString('g')))"
+}
 $lock = $LockFile
 New-Item -ItemType Directory -Force (Split-Path -Parent $lock) | Out-Null
 
@@ -153,6 +170,7 @@ try {
 
     $emulated = $Sim -or $Hold -gt 0
     $toml = @("background = $($emulated.ToString().ToLower())") + (($Settings -split ";" | ForEach-Object { $_.Trim() }) | Where-Object { $_ })
+    if ($SaveFolder) { $toml += "save_folder = '$SaveFolder'" }
     Set-Content "$game\rustvr-oblivion.toml" (($toml -join "`n") + "`n")
 
     $env:SteamAppId = "22330"

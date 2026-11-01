@@ -74,7 +74,7 @@ pub extern "system" fn DllMain(inst: HMODULE, reason: u32, _reserved: *mut core:
         settings::load_from(&dir);
         game_settings::restore(&dir);
         let s = settings::get();
-        game_settings::apply(&dir, (s.eye_width > 0 && s.eye_height > 0).then_some((s.eye_width, s.eye_height)));
+        game_settings::apply(&dir, (s.eye_width > 0 && s.eye_height > 0).then_some((s.eye_width, s.eye_height)), &s.save_folder);
         console::load_test(&dir);
         window::install_early();
         crate::xobse::install_early(&dir);
