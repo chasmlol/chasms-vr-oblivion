@@ -344,9 +344,13 @@ mod game {
 
     /// The interface's push of a menu onto its stack: a book opened with no menu up (taken in the hand,
     /// or activated where it lies) isn't pushed, so the game stays in play under it. In VR only: on
-    /// the flat screen a book is the game's menu as ever.
+    /// the flat screen a book is the game's menu as ever. Nor is the container menu a script opens
+    /// for a look at what's in it at the hand ([`crate::quickloot::opening`]).
     unsafe extern "thiscall" fn push_menu(ui: usize, kind: u32) -> i32 {
         let real: unsafe extern "thiscall" fn(usize, u32) -> i32 = unsafe { std::mem::transmute(REAL_PUSH.load(Ordering::Acquire)) };
+        if kind == crate::quickloot::MENU_CONTAINER && crate::quickloot::opening() {
+            return 0;
+        }
         if kind == MENU_BOOK && mem::deref(ui + MENU_STACK) == 0 && crate::link::last().is_some_and(|s| s.view.is_some()) {
             static SAID: std::sync::Once = std::sync::Once::new();
             SAID.call_once(|| tracing::info!("books: a book opened in play stays off the menu stack: the game plays on under it"));

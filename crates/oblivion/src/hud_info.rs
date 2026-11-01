@@ -356,8 +356,8 @@ mod win {
         let (Some(icon), Some(words), Some(activate)) = (child(menu, ACTION_ICON), child(menu, ACTION_TEXT), (reticle != 0).then(|| child(reticle, RETICLE_ACTIVATE)).flatten()) else { return };
         // A crime in the reticle's stealing red, else its white.
         let [Some(r), Some(g), Some(b)] = (if crime { [c"_red_stealing", c"_green_stealing", c"_blue_stealing"].map(|n| value(reticle, trait_id(n))) } else { [Some(255.0); 3] }) else { return };
-        // The word (or none).
-        static NONE: [u8; 1] = [0];
+        // The word (or a space: none, where nothing given reads as a 0).
+        static NONE: [u8; 2] = *b" \0";
         set_text(menu, USER0, if word != 0 { mem::deref(word) } else { NONE.as_ptr() as usize });
         for (id, v) in [(RED, r), (GREEN, g), (BLUE, b)] {
             set_value(words, id, v);

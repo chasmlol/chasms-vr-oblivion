@@ -4,9 +4,12 @@
 //! ([`rustvr_protocol::GS_QUICK_LOOT`]).
 //!
 //! * **What's looted:** a container the game would open (not locked, the lock is the game's to
-//!   work), and a dead person or creature; neither with a script that has its own activation (an
-//!   `OnActivate` block, which the game runs instead of opening it), so that one opens the game's
-//!   way as ever: its script, then its menu if the script opens it.
+//!   work), and a dead person or creature. One whose script has its own activation (an
+//!   `OnActivate` block, which the game runs instead of opening it: Captain Renault's body moves
+//!   the main quest on as it's searched) is activated by the player as ever, its script run: if the
+//!   script opens it, the container menu it opens stays off the menu stack (the game plays on,
+//!   [`opening`]) and is shut with its own Exit, and what's in it is listed at the hand; if the
+//!   script doesn't, nothing is.
 //! * **What's listed** is the container menu's own list: its entries of the thing's things
 //!   (`GetInventoryItem`, 0x4D88F0) and its own filter (0x4854F0, as it lists a container's or a
 //!   body's things, worn ones too), each by the game's name, value, weight and inventory icon.
@@ -23,6 +26,9 @@
 
 /// The list's top tile's name (in the HUD).
 pub const LOOT: &str = "rustvr_loot";
+
+/// The container menu (`kMenuType_Container`).
+pub const MENU_CONTAINER: u32 = 0x3F0;
 
 /// Rows shown at once, and the list's sizes (the menus' units): its width, a row's height, the
 /// room for the small icons over the rows and for the buttons under them, and its edge.
@@ -140,6 +146,11 @@ pub fn shown() -> bool {
     false
 }
 
+#[cfg(not(all(windows, target_arch = "x86")))]
+pub fn opening() -> bool {
+    false
+}
+
 #[cfg(all(windows, target_arch = "x86"))]
 mod game {
     use super::*;
@@ -212,12 +223,29 @@ mod game {
     const USER7: u32 = 0xFB5;
     const USER8: u32 = 0xFB6;
     const FALSE: f32 = 1.0;
-    /// The HUD (`kMenuType_HUDMain`), whose tiles the list goes in.
+    /// The HUD (`kMenuType_HUDMain`), whose tiles the list goes in; the container menu
+    /// (`kMenuType_Container`): its container (+0x44), the type it put on the menu stack (+0x14),
+    /// its click (vtable slot 3) and its Exit.
     const MENU_HUD: u32 = 0x3EC;
+    const MENU_OF: usize = 0x44;
+    const MENU_STACKED: usize = 0x14;
+    const VT_HANDLE_CLICK: usize = 3 * 4;
+    const EXIT: u32 = 33;
+    /// How long a script is given to open what it was activated for (seconds).
+    const SCRIPT_WAIT: f64 = 1.5;
     /// Seconds between looks at what's in it.
     const REFRESH: f64 = 0.25;
 
     static PATH: std::sync::OnceLock<std::ffi::CString> = std::sync::OnceLock::new();
+    /// The thing being activated for a look (its script run): the container menu it opens isn't
+    /// pushed on the menu stack ([`crate::books`]'s push).
+    static OPENING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    /// A thing is being activated for a look: the container menu its script opens stays off the
+    /// menu stack, so the game plays on.
+    pub fn opening() -> bool {
+        OPENING.load(Ordering::Relaxed) != 0
+    }
     /// The list is up (its things beside a hand): the trigger is its.
     static SHOWN: AtomicBool = AtomicBool::new(false);
 
@@ -267,6 +295,11 @@ mod game {
         presses: [u16; 4],
         /// What a hand pointed at last (for the log).
         pointed: usize,
+        /// A thing whose script has its own activation: the one its script has opened for this
+        /// look, and the one it didn't; when the one activated was.
+        scripted: usize,
+        refused: usize,
+        activated_at: f64,
         failed: bool,
     }
 
@@ -305,7 +338,8 @@ mod game {
     }
 
     /// Whether the thing can be looted at a glance (else why not): a container the game would open,
-    /// or a body; not one whose script has its own activation.
+    /// or a body; one whose script has its own activation, once that's opened it (`SCRIPTED`).
+    const SCRIPTED: &str = "its script has its own activation";
     fn lootable(refr: usize) -> Result<(), &'static str> {
         if refr == 0 || mem::at::<u32>(refr + FORM_FLAGS).is_none_or(|f| f & (DELETED | DISABLED) != 0) || mem::deref(refr + REFR_NODE) == 0 {
             return Err("it isn't there");
@@ -321,7 +355,7 @@ mod game {
         let scriptable = items::cast(base, RTTI_SCRIPTABLE);
         let script = if scriptable != 0 { mem::deref(scriptable + 4) } else { 0 };
         if script != 0 && activates(script) {
-            return Err("its script has its own activation");
+            return Err(SCRIPTED);
         }
         Ok(())
     }
@@ -492,6 +526,41 @@ mod game {
     }
 
     impl State {
+        /// A thing whose script has its own activation, pointed at (`scripted`): activated once for
+        /// this look; the container menu its script opens, shut; or given up on.
+        fn scripts(&mut self, target: usize, scripted: bool, now: f64) {
+            if OPENING.load(Ordering::Relaxed) == 0 && scripted && target != self.scripted && target != self.refused {
+                let name = items::form_facts(mem::deref(target + REFR_BASE)).name;
+                tracing::info!("quickloot: {name} ({target:#x}) has a script of its own activation: activated as the player would, its script run");
+                OPENING.store(target, Ordering::Relaxed);
+                self.activated_at = now;
+                crate::world::activate(target);
+            }
+            let waiting = OPENING.load(Ordering::Relaxed);
+            if waiting == 0 {
+                return;
+            }
+            let menu = tiles::menu(super::MENU_CONTAINER);
+            if menu != 0 && mem::deref(menu + MENU_OF) == waiting {
+                // (Off the stack: its close mustn't take another menu off it.)
+                if mem::is_readable((menu + MENU_STACKED) as *const u8, 4) {
+                    unsafe { ((menu + MENU_STACKED) as *mut u32).write(0) };
+                }
+                let f = mem::deref(mem::deref(menu) + VT_HANDLE_CLICK);
+                if (0x0040_1000..0x00A0_0000).contains(&f) {
+                    type Click = unsafe extern "thiscall" fn(usize, u32, usize);
+                    unsafe { std::mem::transmute::<usize, Click>(f)(menu, EXIT, 0) };
+                }
+                tracing::info!("quickloot: its script opened {waiting:#x}: its menu shut, what's in it listed at the hand");
+                self.scripted = waiting;
+                OPENING.store(0, Ordering::Relaxed);
+            } else if now - self.activated_at > SCRIPT_WAIT {
+                tracing::info!("quickloot: its script didn't open {waiting:#x}: nothing to list");
+                self.refused = waiting;
+                OPENING.store(0, Ordering::Relaxed);
+            }
+        }
+
         /// The list's tiles, as they are (gone with the HUD's, made again).
         fn alive(&self) -> bool {
             self.tile != 0 && tiles::menu_tile(MENU_HUD) == self.parent && tiles::children(self.parent).contains(&self.tile)
@@ -590,11 +659,16 @@ mod game {
         let why = (target != 0).then(|| crate::hooks::guard("loot test", Err("it couldn't be read"), || lootable(target)));
         if target != s.pointed {
             s.pointed = target;
-            if let Some(Err(why)) = why {
+            (s.scripted, s.refused) = (0, 0);
+            if let Some(Err(why)) = why.filter(|w| *w != Err(SCRIPTED)) {
                 tracing::info!("quickloot: {} ({target:#x}) isn't looted at the hand: {why}", items::form_facts(mem::deref(target + REFR_BASE)).name);
             }
         }
-        let target = if why == Some(Ok(())) { target } else { 0 };
+        // One whose script has its own activation: activated as the player would, its script run;
+        // the container menu that opens (off the stack) shut with its own Exit, and what's in it
+        // listed. (Or the script didn't open it: nothing to list.)
+        crate::hooks::guard_void("loot script", || s.scripts(target, why == Some(Err(SCRIPTED)), now));
+        let target = if why == Some(Ok(())) || (target != 0 && s.scripted == target) { target } else { 0 };
         if s.loot.as_ref().is_some_and(|l| l.refr != target) {
             let mut l = s.loot.take().unwrap();
             crate::hooks::guard_void("loot close", || l.close(player));
