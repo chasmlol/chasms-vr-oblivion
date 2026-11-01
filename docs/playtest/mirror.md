@@ -27,7 +27,7 @@ The heads, hair, helmets and their FaceGen morphs come from the player's own ins
 cargo run --release -p oblivion-assets --bin oblivion-extract -- export meshes/characters meshes/armor meshes/clothes textures/characters
 ```
 
-The research and the design are in `docs/research/mirror.md`.
+The research and the design are in `docs/design/mirror.md`.
 
 ## What it does
 

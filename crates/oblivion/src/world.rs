@@ -35,8 +35,6 @@
 //! mass is its Havok shape's volume times its Havok material's density, and its hinge's friction
 //! is its pins' (its weight on them, [`PIN_FRICTION`] on a [`PIN_RADIUS`] pin). A hinge more than
 //! halfway to level (a trap door) turns under its own weight.
-//!
-//! The engine facts are in `docs/research/world.md`.
 
 use glam::{Quat, Vec3};
 use oblivion_assets::nif::Nif;

@@ -1,7 +1,7 @@
 //! The face shaped by hand in the race menu (`rustvr_protocol::FaceSculpt`, the runtime's
 //! `sculpt`): the runtime's hands pull the face into shape within its own FaceGen geometry
 //! coordinates, and this puts each face they make into the player's character as the race menu's
-//! own sliders do (docs/research/facesculpt.md):
+//! own sliders do (docs/design/facesculpt.md):
 //!
 //! * **The coordinates.** The face the runtime sends is the whole face (the race's coordinates and
 //!   the character's added, as the game adds them, 0x552990); the character's own set (the

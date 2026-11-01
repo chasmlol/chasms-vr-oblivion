@@ -38,7 +38,7 @@ Other places, each `powershell -File tools\oblivion.ps1 -Save rustvr-doors` plus
 | `-At ChorrolNorthernGoodsAndTrade`, `-At ChorrolFireAndSteel`, `-At GottshawInnTavern` | Ordinary house doors, wood on iron hinges |
 | `-Save rustvr-ruin -At Vilverin03` (in place of `-Save rustvr-doors`) | Vilverin's halls: Ayleid switch stones on pillars |
 
-The research and the design: `docs/research/world.md`. How it's wired into the game: the "Doors
+The research and the design: `docs/design/world.md`. How it's wired into the game: the "Doors
 and levers" and "The lock" rows of `docs/OBLIVION.md`.
 
 ## What it does
@@ -209,7 +209,7 @@ Nothing in `rustvr-oblivion.toml` shapes it.
   work as slides with a spring back; unchecked.
 - **Not tried in the game**: following an NPC through a door, a trap door, a ruin's stone door, a
   display case's lid held fully open on its stay, the door sounds by ear, the haptics by hand.
-- **Harvesting plants by pulling, sitting, sleeping**: in `docs/research/world.md`, not on main.
+- **Harvesting plants by pulling, sitting, sleeping**: in `docs/design/world.md`, not on main.
 
 ## History
 

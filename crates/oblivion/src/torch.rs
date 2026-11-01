@@ -1,7 +1,7 @@
 //! The player's torch, in the hand: the equipped torch is an object on the body as the equipped
 //! weapon is, that either hand draws, waves about, holsters (in any holster it fits) and drops, and
 //! the game draws it where the runtime has it, burning: its own model, its own flame and its own
-//! light, flickering as the game flickers a torch (docs/research/torches.md, "The player's torch").
+//! light, flickering as the game flickers a torch (docs/design/torches.md, "The player's torch").
 //! A torch drawn from one of the body's slots (`crate::inventory`) is equipped by the game, and
 //! this one takes the copy's place in the hand; one equipped from the game's own menu starts at the
 //! right hip ([`TORCH_SLOT`]), as a sword starts at the left.

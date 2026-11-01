@@ -1,4 +1,4 @@
-//! The main menu in a real place in Cyrodiil (`docs/research/worldmenu.md`). At the main menu with no
+//! The main menu in a real place in Cyrodiil (`docs/design/worldmenu.md`). At the main menu with no
 //! game (the boot's, or after quitting to it), the game's own console lines take the default player
 //! the boot made to one of the [`SPOTS`]: `set gamehour`, then `coc` to its cell (or `cow` to its
 //! place in Tamriel), then `setpos`, `setangle` and `fw` (ForceWeather). The main menu stays open
@@ -49,7 +49,7 @@ const CLEAR: u32 = 0x0003_8EEE;
 const WHITE_GOLD: [f32; 3] = [28672.0, 63424.0, 9000.0];
 
 /// The places players call Oblivion's most beautiful views, placed from `Oblivion.esm`'s own map
-/// markers and land heights (`docs/research/worldmenu.md`, and a `.bat` for each at the worktree's
+/// markers and land heights (`docs/design/worldmenu.md`, and a `.bat` for each at the worktree's
 /// root).
 pub const SPOTS: &[Spot] = &[
     // The Imperial City across Lake Rumare at sunset, from the slope above Weye: the great bridge

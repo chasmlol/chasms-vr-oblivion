@@ -33,7 +33,7 @@ Both saves are the developer's own, not in the repository; the bandits' ids are 
 save with people or creatures to fight will do, and one can be made with
 `-At <cell> -Commands "..."`, saved as `rustvr-gore` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
-The research and the design: `docs/research/gore.md`.
+The research and the design: `docs/design/gore.md`.
 
 ## What it does
 
@@ -178,8 +178,8 @@ Newest first.
 
 - **Playtest 3:** a crash 16 s after a head came off, and the sword dripped only when shaken. The
   crash was in the adapter's own `combat::bones`, which walked into every child near a body's root,
-  meshes too (the game's blood decals among them), and read a mesh's fields as a node's children;
-  it now goes only into nodes, by the game's RTTI (the check in `engine.rs`). A drip started under
+  meshes too (the game's blood decals among them), and read a mesh's fields as a node's children; it
+  now goes only into nodes, by each object's type (the check in `engine.rs`). A drip started under
   the blade's line and was caught by the blade at once; a drop no longer lands back on its own
   blade. Asked for: more blood thrown off with a shake, runs down a tilted blade, and blood on the
   blade and the player wearing away (it was kept 20 minutes).

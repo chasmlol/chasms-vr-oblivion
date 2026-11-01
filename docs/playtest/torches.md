@@ -2,7 +2,7 @@
 
 Save: rustvr-torches
 
-The research and the design: `docs/research/torches.md`. How it's wired into the game: the Torch
+The research and the design: `docs/design/torches.md`. How it's wired into the game: the Torch
 row of `docs/OBLIVION.md`.
 
 ## Playing it

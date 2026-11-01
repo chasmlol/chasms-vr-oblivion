@@ -76,7 +76,7 @@ pub fn write(camera: usize, s: &CameraState) {
 /// axes), while the camera is the first-person one. Every first-person sneak animation keys the
 /// skeleton's `Bip01 NonAccum`, the node `Camera01` hangs from, at (0, 0, -24.8) units (35 cm at a
 /// race height of 1: the eye at 79% of its standing height), crossfaded in over the animations'
-/// blend (0.1 s); the standing ones key it at 0 (`docs/research/stealth.md`).
+/// blend (0.1 s); the standing ones key it at 0 (`docs/design/stealth.md`).
 pub fn sneak_drop() -> Option<Vec3> {
     let player = crate::engine::player();
     if player == 0 || mem::at::<u8>(player + crate::engine::pc::THIRD_PERSON)? != 0 || mem::at::<u8>(crate::engine::CAMERA_OFF_EYES)? != 0 {
@@ -133,7 +133,7 @@ pub fn eye_camera(view: &View, eye: &Pose, fov: &Fov, game: &CameraState) -> Cam
     out
 }
 
-/// The game's own first-person view bob (docs/research/view-bob.md): its first-person animations
+/// The game's own first-person view bob (docs/design/view-bob.md): its first-person animations
 /// move its camera. In first person the world camera is put on the first-person skeleton's
 /// `Camera01` (`PlayerCharacter::UpdateCamera`, 0x66B710), and every first-person animation keys
 /// that node: a walk drops it 0.4 units (5 mm) once a stride, a run 1.3 (2 cm) at each step, a

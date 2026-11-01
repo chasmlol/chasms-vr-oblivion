@@ -2,7 +2,7 @@
 //! `riding`) on the game's own horse. The game keeps its horse: its model and animations, its
 //! speeds and turning, whose it is and what stealing it costs, getting on and off and the sounds
 //! of it. The adapter tells the runtime where things are, and gives the game the rider's controls
-//! as its own. Engine facts are in `docs/research/riding.md`.
+//! as its own. The design: `docs/design/riding.md`.
 //!
 //! * **Getting on and off** ([`before_update`]): the runtime's hand on a saddle, and its getting
 //!   off, are the player's own activation of the horse (`TESObjectREFR::Activate`, 0x4DD260,
@@ -101,7 +101,7 @@ const STEADY: f32 = 0.35;
 /// The rider's eye over the saddle's seat (metres): where the game's own first-person camera is on
 /// a horse when it seats the rider right (the first time in a session it does; measured on both
 /// rides on the headset: 0.85 m over the seat, upright above it). In first person nothing in the
-/// game poses its rider (`docs/research/riding.md`), and once off and on again its camera stays at
+/// game poses its rider (`docs/design/riding.md`), and once off and on again its camera stays at
 /// a standing player's eye on the horse's back (1.9 m over the seat).
 const EYE_OVER_SEAT: f32 = 0.85;
 /// The horse's speed is eased over this (seconds).

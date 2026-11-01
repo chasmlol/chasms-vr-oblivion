@@ -26,7 +26,7 @@ textures/menus/misc/hud_reticle.dds` writes the bows, their bent models (`#bent`
 (`#arrow`, without the quiver), the quivers (`#quiver0` to `#quiver5`), `bows.toml` and the
 crosshair image into `local_assets/oblivion`.
 
-The research and the design: `docs/research/archery.md`.
+The research and the design: `docs/design/archery.md`.
 
 ## What it does
 
@@ -134,7 +134,7 @@ The Hands tab (`framework/crates/runtime/src/menu.rs`; `[archery]` in `settings.
   enchantment in flight and on a hit.
 - **Tracking loss near the face:** drawing with the hand by the face can lose a Quest controller,
   and nothing smooths it: the runtime has OpenXR's "valid", not "tracked".
-- **A game that draws held things itself** (Metro's in-frame drawing) wouldn't bend a bow: the
+- **A game that draws held things itself** wouldn't bend a bow: the
   protocol's drawn objects carry no bend. Oblivion is drawn by the runtime.
 - **Never checked on the headset:** the sounds; the haptics' strengths; the 9 cm nock reach;
   whether 92% of the arm is the right full draw; the grip's place on the bow; the quiver and the

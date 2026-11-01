@@ -32,7 +32,7 @@ powershell -File tools\oblivion.ps1 -Save rustvr-city -At ICMarketDistrictTheMer
 
 Then save it as `rustvr-pocket` ([DEVELOPING.md](../DEVELOPING.md), "Test saves").
 
-The research and the design are in `docs/research/pickpocket.md`.
+The research and the design are in `docs/design/pickpocket.md`.
 
 ## What it does
 

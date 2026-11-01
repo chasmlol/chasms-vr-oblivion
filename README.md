@@ -48,7 +48,7 @@ Oblivion's own. Starting Oblivion starts the runtime with it.
   [The voice plugin](#the-voice-plugin).
 
 [docs/OBLIVION.md](docs/OBLIVION.md) has every feature, how it's done and where in the code.
-`docs/playtest/` has how to try each one, and `docs/research/` what each is built on.
+`docs/playtest/` has how to try each one, and `docs/design/` what each is built on.
 
 ## What you need
 
@@ -182,15 +182,13 @@ rest.
 | [chasms-vr-framework](framework/README.md), in `framework/` | The runtime, the protocol, the adapter SDK, the test range, the emulated headset, the voice plugin. Shared by every game's adapter |
 | [chasmlol/m8](https://github.com/chasmlol/m8) (public, branch `rustvr`) | The voice plugin's speech pipeline, a git dependency of `framework/crates/voice` |
 
-Metro 2033 Redux has its own adapter repository on the same framework.
-
 | Path | What |
 |---|---|
 | `crates/oblivion` | The adapter (`dinput8.dll`) |
 | `crates/oblivion-assets` | `oblivion-extract`: reads Oblivion's archives, models, textures and sounds into `local_assets/` |
 | `crates/oblivion/data/bios.toml` | A paragraph on each of the game's people, for the voice plugin (written from UESP's pages, CC BY-SA 2.5) |
 | `content/armour/oblivion.toml` | Which parts of the game's armour models are rigid plates ([framework/docs/ARMOUR.md](framework/docs/ARMOUR.md)) |
-| `docs/` | [OBLIVION.md](docs/OBLIVION.md) (how the adapter works), [DEVELOPING.md](docs/DEVELOPING.md) (working on it), `playtest/`, `research/` |
+| `docs/` | [OBLIVION.md](docs/OBLIVION.md) (how the adapter works), [DEVELOPING.md](docs/DEVELOPING.md) (working on it), `playtest/`, `design/` |
 | `tools/` | Installing, the fast boot for checks and playtests (`oblivion.ps1`, `play.ps1`), emulated-headset scripts (`xrsim/`) |
 | `clips/` | Batch files that boot the trailer's shots ([clips/CLIPS.md](clips/CLIPS.md)) |
 

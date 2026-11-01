@@ -15,7 +15,7 @@
 //! the ingredients used up (taken from the bowl first, the game's own pick-up), its sound and
 //! message. The bottle is the game's own drop of it from the inventory, then put in the mortar.
 //! A mix with no shared effect has nothing to make: the game's own failure message and sound, and
-//! the ingredients are lost, as the message says. See `docs/research/alchemy.md`.
+//! the ingredients are lost, as the message says. See `docs/design/alchemy.md`.
 //!
 //! Forms: `TESObjectAPPA` model path +0x34, icon +0x4C, weight +0x6C, quality +0x74, kind +0x78
 //! (0 mortar and pestle, 1 alembic, 2 calcinator, 3 retort); `IngredientItem` icon +0x5C.

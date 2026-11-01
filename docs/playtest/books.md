@@ -21,7 +21,7 @@ puts the map on the body for this run (it isn't by default, see Settings).
 `-At <First Edition's cell> -Hour 14`, give the books by their form ids and save
 it as `rustvr-books` ([DEVELOPING.md](../DEVELOPING.md), "Test saves"); any shop or house with books does.
 
-The research and the design: `docs/research/books.md`.
+The research and the design: `docs/design/books.md`.
 
 ## What it does
 

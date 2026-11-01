@@ -1,4 +1,4 @@
-//! The map unfolded from the belt (`docs/research/books.md`): a folded map the player keeps in a
+//! The map unfolded from the belt (`docs/design/books.md`): a folded map the player keeps in a
 //! body slot (the right hip by default, `map_slot` in `rustvr-oblivion.toml`), an object of the
 //! adapter's own the runtime keeps there ([`OBJF_KEPT`]: let go anywhere, it goes back). Drawn from
 //! the belt, it opens the game's own map menu on the local map in an interior and the world map

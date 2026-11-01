@@ -1,5 +1,5 @@
 //! Talking to Cyrodiil's people out loud, through the framework's voice plugin (`rustvr-voice`,
-//! the user's m8; `rustvr_protocol::voice`). See `docs/research/voice.md`.
+//! the user's m8; `rustvr_protocol::voice`). See `docs/design/voice.md`.
 //!
 //! * **Who's listening**: the person the head looks at most directly, within talking distance,
 //!   when the player starts talking; looking at no one keeps whoever was listening while they're
@@ -215,7 +215,7 @@ mod win {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Mutex, mpsc};
 
-    // ---- the game's own (Oblivion 1.2.0.416; docs/research/voice.md) ------------------------
+    // ---- the game's own (Oblivion 1.2.0.416; docs/design/voice.md) ------------------------
     /// `Actor::Speak` (thiscall on the actor): the voice file, its sound's slot, the emotion and
     /// its value, the line's length in characters, set the emotion, flat (2D), load the lip in
     /// the background, use the lip file. Returns how long it talks (seconds; x87).

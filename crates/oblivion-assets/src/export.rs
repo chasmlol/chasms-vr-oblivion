@@ -160,7 +160,7 @@ pub fn convert(nif: &Nif, source: &str, skeleton: Option<&Skeleton>, part: Part,
 
 /// Converts a rigid part of the head (the hair, ears, eyes, mouth, teeth, tongue) as the game puts
 /// it on a body: on the skeleton's bone `bone` (`Bip01 Head`), its vertices in the model's own axes
-/// about that bone's place (docs/research/mirror.md), carrying the skeleton's bones.
+/// about that bone's place (docs/design/mirror.md), carrying the skeleton's bones.
 pub fn convert_attached(nif: &Nif, source: &str, skeleton: &Skeleton, bone: &str, exists: &dyn Fn(&str) -> bool) -> Converted {
     convert_on(nif, source, Some(skeleton), Part::All, exists, skeleton.find(bone))
 }

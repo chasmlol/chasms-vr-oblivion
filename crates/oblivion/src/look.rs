@@ -4,7 +4,7 @@
 //! spoken to, the dialogue menu, greetings, combat, `Look`, the voice's listeners), turns the
 //! player into a point with `PlayerCharacter`'s look-at point (0x6604C0, a reference's vtable
 //! +0x11C), and the actor's head tracking update (0x603500) aims the head, the eyes and the upper
-//! body's twist at it. That point is the headset's here. See `docs/research/npcs.md`.
+//! body's twist at it. That point is the headset's here. See `docs/design/npcs.md`.
 //!
 //! The game's frame may not run its people's head tracking while a menu is open, so in the
 //! dialogue menu whoever looks at the player is aimed at the headset each frame here, as 0x603500

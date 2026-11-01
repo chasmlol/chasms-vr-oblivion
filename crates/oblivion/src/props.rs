@@ -14,13 +14,13 @@
 //! ([`crate::collision`]), keyframed ones are moved by their animations (the doors and levers,
 //! [`crate::world`]); nor what the player can take ([`crate::items`]), nor the creatures'.
 //!
-//! Engine facts (`Oblivion.exe` 1.2.0.416; Havok's own reflection, `docs/research/oblivion-havok.md`):
+//! Engine facts (`Oblivion.exe` 1.2.0.416; Havok's own reflection):
 //! `hkEntity` world +8, filter info +0x30 (Bethesda's layer its low 7 bits), motion +0x50, `fixed`
 //! +0x91, `isFixedOrKeyframed` +0x92. Its `hkMotion`: centre of mass (Havok's world) +0x60, inverse
 //! mass +0xC0, linear and angular velocity +0xD0, +0xE0; virtual `getInertiaInvWorld` +0x3C and
 //! `applyPointImpulse` +0x60 (thiscall: impulse, point); `hkEntity::activate` 0x8A6410 wakes it. A
 //! node's collision object +0xA8, its `bhkRigidBody` +0x10, that one's `hkRigidBody` +8. Havok's
-//! unit is 7 game units. The game's grab (the npcs branch's research, `docs/research/npcs.md`): its
+//! unit is 7 game units. The game's grab: its
 //! allocator 0x401F00 (cdecl: size); a mouse spring's construction info (64 bytes, set to the game's
 //! own grab's by 0x47F9F0: +4 the body, +0x10 the point in the body, +0x20 the target in the world);
 //! the `bhkMouseSpringAction` made from it (0x47DE90: 16 bytes, refcounted at +4, its

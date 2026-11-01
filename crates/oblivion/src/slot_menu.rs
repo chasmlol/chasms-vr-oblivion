@@ -18,7 +18,7 @@
 //! vtable with its destructor, `HandleClick` and `GetID` ours). Its XML (written beside the
 //! runtime's settings at start) is read by the game's own `Tile::ReadXML`, which takes an absolute
 //! path; its `<include>`s are the game's own prefabs. Opening and closing it are the game's own
-//! steps for its message box (0x5BC8B0) and generic menus. Facts: `docs/research/holsters.md`.
+//! steps for its message box (0x5BC8B0) and generic menus. Facts: `docs/design/holsters.md`.
 
 use rustvr_protocol::*;
 

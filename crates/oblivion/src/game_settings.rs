@@ -48,7 +48,7 @@ pub fn get_key(text: &str, section: &str, key: &str) -> Option<String> {
 
 /// The game's own settings a headset needs at least (section, key, value): the player's own higher
 /// values are kept. Seen up close and from a head that never stops moving, the flat game's values
-/// show (`docs/research/oblivion-image-quality.md`):
+/// show (`docs/design/oblivion-image-quality.md`):
 /// * the actors' shadow maps at 256 pixels are blocks at arm's length;
 /// * the trees' textures are sharpened by a negative mip bias, which sparkles as the head moves;
 /// * the near trees switch detail as you move (full detail always: the game's own option);

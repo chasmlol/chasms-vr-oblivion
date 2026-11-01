@@ -20,8 +20,8 @@ walk, run and jump, water to swim in, and a bow to aim. `powershell -File tools\
 `rustvr-archery` is the developer's own save, not in the repository (`docs/playtest/archery.md`
 says how to make one); any outdoor save does.
 
-How the studio's built and why: `framework/docs/research/desktop-fx.md`. The bob's research:
-`docs/research/view-bob.md`.
+How the studio's built and why: `framework/docs/design/desktop-fx.md`. The bob's research:
+`docs/design/view-bob.md`.
 
 ## What it does
 

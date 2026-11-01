@@ -22,8 +22,6 @@
 //! The game's own slots: what heals at the belt in front of the off-hand hip (the sword hand
 //! fights), the arrows over the right shoulder where Oblivion wears its quiver, scrolls and
 //! poisons in the right chest pouch, food at the right hip.
-//!
-//! Engine facts and addresses: `docs/research/holsters.md`.
 
 use rustvr_protocol::*;
 

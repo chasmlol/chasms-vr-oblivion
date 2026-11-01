@@ -1,5 +1,5 @@
 //! The trees' leaves (SpeedTree's leaf cards, `STLEAF000..003.vso`), watched for the streaks seen
-//! across the view at one place by Weye's lake (`docs/research/visuals.md`): thin lines of leaf
+//! across the view at one place by Weye's lake (`docs/design/visuals.md`): thin lines of leaf
 //! texture from trees on the far shore to the edge of the picture, in one eye or both.
 //!
 //! The shader puts each leaf corner at the leaf's position plus `LeafBase[cluster] * size`, turned
@@ -12,7 +12,7 @@
 //! finite is made 0: on Direct3D 9 a leaf with no wind weight multiplied a broken wind matrix away
 //! (0 times anything is 0 there), where D3D9On12 follows IEEE and gets NaN. What they hold is summed
 //! up in the log every 10 s, and a value far out of range is logged as it comes. (Playtest 7: all
-//! sound. The streaks are the shadow pass's: `docs/research/visuals.md`.)
+//! sound. The streaks are the shadow pass's: `docs/design/visuals.md`.)
 //!
 //! The cards face the camera's `BillboardRight` and `BillboardUp`: square to the way it looks, and
 //! leaning with it. A flat screen's camera never leans and turns little; a head leans and turns all
@@ -360,7 +360,7 @@ pub fn floors_indices() -> bool {
 /// which loaded `a0` rounding down. Direct3D 9's own reference rounds to the nearest, and D3D9On12
 /// does: half the leaves took the next cluster's corner, and the last cluster's read past the
 /// corners into what another draw had left there, a corner thrown across the view, differently for
-/// each eye (the streaks, `docs/research/visuals.md`). So the index is made whole first: `expp
+/// each eye (the streaks, `docs/design/visuals.md`). So the index is made whole first: `expp
 /// r11.y, v#.c` (its fraction), `add r11.x, v#.c, -r11.y`, `mov a0.x, r11.x`. The tokens are the
 /// version's, then instructions (the shader's first unused temporary must be r11 or below).
 pub fn floor_indices(tokens: &[u32]) -> Option<Vec<u32>> {

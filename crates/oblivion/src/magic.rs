@@ -1,6 +1,6 @@
 //! The game's own casting art where the player's casting is: a spell readied in the palm, charging
 //! and charged, or a staff's enchantment at its tip, as the game shows a spell in its caster's hands
-//! (docs/research/torches.md, "Spells and their art").
+//! (docs/design/torches.md, "Spells and their art").
 //!
 //! The runtime says each hand's casting every frame (`rustvr_protocol::Casters`). For it the
 //! adapter does what the game's own casting art does (0x5EDCE0), with the hand where the game has

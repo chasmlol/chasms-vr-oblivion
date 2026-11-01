@@ -1,4 +1,4 @@
-//! FaceGen's files, as Oblivion's heads have them (docs/research/mirror.md): a head part's geometry
+//! FaceGen's files, as Oblivion's heads have them (docs/design/mirror.md): a head part's geometry
 //! morphs (`.egm`, `FREGM002`), the head's texture morphs (`.egt`, `FREGT003`) and the face's
 //! controls (`FaceGen\si.ctl`, `FRCTL001`), whose first linear control is the face's age.
 //!

@@ -134,8 +134,8 @@ too much or too little, anything twitching while you hold someone.
   bone sank 30 cm below the hand; now it hangs a hand's breadth below.
 - **A touch is the game's blend, not a spring of ours.** The bones about a touch get a heir and a
   velocity gain below 1 (loose 0.2 and 0.1, firm 0.5 and 0.3, stiff 0.7 and 0.5): a spring that
-  overshoots, read from the game's blend code. Oblivion has no value for how much a body gives, so
-  these are ours. A held person isn't touched (the grab moves them).
+  overshoots, as the game's blend has it. Oblivion has no value for how much a body gives, so these
+  are ours. A held person isn't touched (the grab moves them).
 - **The torso's thickness is its depth.** A capsule as wide as the shoulders would stop a hand in
   front of the chest; as deep as the chest, a hand on the waist's side sinks in a little (the arms
   hang there).
@@ -168,8 +168,8 @@ Newest first. Every round from playtest 2 on was about the head.
   puts its own in place, so nothing the physics does to the head shows while it's on. Now the head's
   animated turn is kept as the bone's blend begins, and the look is given the push on top.
 - **Playtest 5.** The head didn't move: once a bone's body is dynamic its blend object writes the
-  bone's own turn too (flag 8), so the "animated" turn had the push in it. The head tracking's
-  measure was then held for a head a hand has.
+  bone's own turn too, so the "animated" turn had the push in it. The head tracking's measure was
+  then held for a head a hand has.
 - **Playtest 4.** The head moved, but he should keep looking at you. Head tracking stayed on and was
   made to measure the head from its animation.
 - **Playtest 3.** The head still didn't move: the game's head tracking turned it back within a few
