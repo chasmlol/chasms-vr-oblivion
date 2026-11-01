@@ -237,6 +237,7 @@ and a hook body that panics logs it and lets the game's own run (`hooks.rs`).
 | the interface's menu push | `books.rs` | a book read with the game playing on |
 | the HUD's card of what the crosshair is on | `hud_info.rs` | the card of what's in the hand |
 | the interface's pick, as its ray is laid out | `pointing.rs` | what to use picked along a hand put up |
+| `IDirect3D9::CheckDeviceFormat` | `d3d9.rs` | the pixel formats the system's Direct3D 9 has too (a save's picture) |
 | the race menu's slider drag | `facesculpt.rs` | only the race menu's own ids reach it |
 | the menu factory | `slot_menu.rs` | the holsters' editor, menu type 1050 |
 | the race menu's click | `facesculpt.rs` | its Undo and Reset; the VR keyboard's keys over its name |
