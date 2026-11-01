@@ -703,6 +703,14 @@ mod game {
                 let there = mem::at::<u32>(it.refr + FORM_ID) == Some(*id) && takeable_ref(it.refr).is_some() && mem::deref(it.refr + REFR_NODE) == it.node;
                 there && (keep.contains(id) || it.owned || it.flying.is_some()) && !(it.taken_at.is_some() && !keep.contains(id))
             });
+            // Each one's collision for the hands is its drawn shape (not the mortars and pestles:
+            // their pieces are the runtime's, crate::alchemy).
+            for it in s.items.values().filter(|i| i.desc.flags & OBJF_RUNTIME_DRAWS == 0) {
+                let scale = world_of(it.node).map_or(1.0, |w| w.2);
+                if let Some(model) = model_of(mem::deref(it.refr + REFR_BASE)) {
+                    crate::collision::object_shape(it.desc.id, &model, crate::collision::Frame::Node(scale), now);
+                }
+            }
             let mut ids: Vec<(u32, u32)> = s.items.values().map(|i| (i.desc.id, i.desc.spawn_seq)).collect();
             ids.sort();
             if ids != s.sent {

@@ -53,9 +53,20 @@ it without being felt.
   cut-out card (a grate, a railing) that the game's collision doesn't cover. What draws only soft
   things is passable; what draws nothing (a collision stand-in for something drawn elsewhere) keeps
   the game's shape. Models the game gave no collision stay passable, as in the game.
+- **What the hands take and hold, too.** The things lying about (plates, cups, baskets, books,
+  everything the player can take), the swinging parts the game simulates (a chain's links, a
+  bucket on a rope) and the weapon, shield and torch in the hands are given the runtime as their
+  drawn shapes, by the same rules (`COL_OBJECT_MESH` in the framework's protocol, each in its
+  object's own space). The runtime makes each one's collision its convex parts (an approximate
+  convex decomposition on a coarse voxel grid, a few tens of milliseconds a model on a thread of
+  its own, once for each model): a basket's wall and handle, a bowl's wall round its hollow, a
+  sword's blade, guard and grip. Until then, and for what draws nothing solid, a thing keeps its
+  own shape. The bow keeps its own (its string's side is the drawing hand's), and so do arrows
+  (thin enough as they are) and the mortars and pestles (their pieces are the runtime's).
 - **The game itself is unchanged.** Walking, the NPCs and things falling keep the game's collision;
   only the runtime's physics (the hands, the arms, what they hold, drop and throw) gets the drawn
-  shapes.
+  shapes. Arrows and spells in flight are the game's own projectiles, flying in the game's
+  physics against its collision.
 - **Worked out where they're needed.** The adapter finds the references in the loaded cells whose
   3D holds the world's fixed bodies, nearest first, reads each model from the game's archives on a
   thread of its own (a few milliseconds a model), and sends each reference's drawn shape to the
@@ -66,6 +77,7 @@ it without being felt.
   holds it up to the game's own collision: by kind of model, what was kept and left out and why, how
   far the drawn shape reaches past the game's and how much of the game's has nothing drawn near it
   (`local_assets/oblivion/hitboxes`). `oblivion-extract hitbox <model> <png>` draws one model's
-  hitbox above its game collision.
+  hitbox above its game collision and, below, the convex parts the runtime makes of it; for the
+  things the hands take, the report counts their parts and how long each took.
 - **Seeing them in the headset:** `RUSTVR_SHOW_COLLISION=1` draws the world's collision within reach
   as lines over the game's picture.

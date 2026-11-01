@@ -26,8 +26,9 @@
 //! hands meet: its drawn shape, `oblivion_assets::hitbox`) under the prefixes (all of them by
 //! default) and checks it against the game's own collision, into a report (`report.txt`, and
 //! `models.tsv` and `shapes.tsv` model by model and shape by shape, in
-//! `local_assets/oblivion/hitboxes` or `--out`); `hitbox` draws one model's hitbox over its own
-//! collision.
+//! `local_assets/oblivion/hitboxes` or `--out`), and for the things the hands take (clutter,
+//! weapons, armour, clothes, lights), the convex parts the runtime makes their collision of; `hitbox`
+//! draws one model's hitbox over its own collision, and its convex parts.
 
 use anyhow::{Context, Result};
 use oblivion_assets::export::{self, Part};
@@ -140,7 +141,12 @@ fn main() -> Result<()> {
             let own = oblivion_assets::hitbox::collision(&nif);
             let (hitbox, notes) = oblivion_assets::hitbox::of_with(&nif, &own, true);
             let drawn: Vec<[glam::Vec3; 3]> = hitbox.triangles.iter().map(|t| t.map(|i| hitbox.vertices[i as usize])).collect();
-            preview::save_pair(&drawn, &own.surface, std::path::Path::new(&args[2]))?;
+            // (A thing's, as the runtime makes its collision of it: its convex parts.)
+            let parts = if drawn.len() <= 20_000 { convex_parts(&drawn) } else { Vec::new() };
+            preview::save_rows(&drawn, &own.surface, &parts, std::path::Path::new(&args[2]))?;
+            if !parts.is_empty() {
+                println!("  as the hands' collision of a thing: {} convex parts", parts.len());
+            }
             for n in &notes {
                 println!("  {:?} '{}' {} of {} triangles, {:.0}% on its collision, alpha {:#x}, {}", n.fate, n.name, n.kept, n.triangles, n.on_collision * 100.0, n.alpha, n.texture);
             }
@@ -574,9 +580,42 @@ fn dump(nif: &Nif) {
     }
 }
 
+/// The convex parts the runtime makes a thing's collision of, from its drawn shape (as its
+/// `rig::drawn` does: at most 16 parts of 48 points, on a grid of 40, 2% from convex; a few
+/// triangles are one hull), each as its hull's triangles.
+#[cfg(feature = "parts")]
+fn convex_parts(tris: &[[glam::Vec3; 3]]) -> Vec<Vec<[glam::Vec3; 3]>> {
+    use glam::Vec3;
+    if tris.is_empty() {
+        return Vec::new();
+    }
+    let whole = || vec![tris.iter().flatten().copied().collect::<Vec<Vec3>>()];
+    let parts = if tris.len() < 12 { whole() } else { rustvr_guns::hulls::convex_parts_with(tris, 16, 48, 40, 0.02) };
+    let parts = if parts.is_empty() { whole() } else { parts };
+    parts
+        .iter()
+        .map(|p| {
+            let points: Vec<parry3d::math::Vector> = p.iter().map(|q| parry3d::math::Vector::new(q.x, q.y, q.z)).collect();
+            let (v, idx) = parry3d::transformation::convex_hull(&points);
+            idx.iter().map(|t| t.map(|i| Vec3::new(v[i as usize].x, v[i as usize].y, v[i as usize].z))).collect()
+        })
+        .collect()
+}
+
+#[cfg(not(feature = "parts"))]
+fn convex_parts(_tris: &[[glam::Vec3; 3]]) -> Vec<Vec<[glam::Vec3; 3]>> {
+    Vec::new()
+}
+
+/// A model of a thing the hands take (clutter, weapons, armour, clothes, lights): the runtime makes
+/// its collision of its drawn shape's convex parts.
+fn taken(path: &str) -> bool {
+    ["meshes\\clutter\\", "meshes\\weapons\\", "meshes\\armor\\", "meshes\\clothes\\", "meshes\\staffs\\", "meshes\\lights\\"].iter().any(|p| path.starts_with(p))
+}
+
 /// Every model's hitbox under the prefixes (all the game's models by default), checked against the
 /// game's own collision: a report of it all by kind of model, and model by model and shape by
-/// shape (`oblivion_assets::hitbox`).
+/// shape (`oblivion_assets::hitbox`); and the convex parts of the things the hands take.
 fn hitboxes(archives: &Archives, args: &[String]) -> Result<()> {
     use glam::Vec3;
     use oblivion_assets::hitbox::{self, Collision, Fate};
@@ -612,6 +651,8 @@ fn hitboxes(archives: &Archives, args: &[String]) -> Result<()> {
         bare: f32,
         /// Drawn, and nothing of it solid (a banner, water): the hands meet nothing there.
         soft_only: bool,
+        /// A thing the hands take: its convex parts, and how long they took (ms).
+        parts: Option<(usize, f32)>,
         shapes: Vec<hitbox::ShapeNote>,
     }
     let one = |path: &str| -> Row {
@@ -632,6 +673,12 @@ fn hitboxes(archives: &Archives, args: &[String]) -> Result<()> {
         row.drawn = shapes.iter().map(|s| s.triangles).sum();
         row.kept = hb.triangles.len();
         row.soft_only = hitbox::nothing_solid(&hb, &shapes);
+        if taken(path) && !hb.is_empty() {
+            let drawn: Vec<[Vec3; 3]> = hb.triangles.iter().map(|t| t.map(|i| hb.vertices[i as usize])).collect();
+            let started = std::time::Instant::now();
+            let n = convex_parts(&drawn).len();
+            row.parts = (n > 0).then(|| (n, started.elapsed().as_secs_f32() * 1e3));
+        }
         if !own.is_empty()
             && let Some((hlo, hhi)) = hb.bounds()
         {
@@ -775,6 +822,25 @@ fn hitboxes(archives: &Archives, args: &[String]) -> Result<()> {
     for r in big.iter().take(25) {
         writeln!(report, "  {} [{}]: {} triangles", r.path, r.category, r.kept)?;
     }
+    let things: Vec<(&Row, usize, f32)> = rows.iter().filter_map(|r| Some((r, r.parts?.0, r.parts?.1))).collect();
+    if !things.is_empty() {
+        let count = |lo: usize, hi: usize| things.iter().filter(|(_, n, _)| (lo..=hi).contains(n)).count();
+        let mean = things.iter().map(|(_, _, t)| t).sum::<f32>() / things.len() as f32;
+        writeln!(
+            report,
+            "Things the hands take ({}): convex parts of each: 1: {}, 2-4: {}, 5-8: {}, 9-16: {}; worked out in {mean:.0} ms on average",
+            things.len(),
+            count(1, 1),
+            count(2, 4),
+            count(5, 8),
+            count(9, 16)
+        )?;
+        let mut slow = things.clone();
+        slow.sort_by(|a, b| b.2.total_cmp(&a.2));
+        for (r, n, t) in slow.iter().take(10) {
+            writeln!(report, "  {} : {n} parts in {t:.0} ms", r.path)?;
+        }
+    }
     let unread: Vec<&Row> = rows.iter().filter(|r| !r.unread.is_empty()).collect();
     writeln!(report, "Collision shapes of kinds not read ({}):", unread.len())?;
     for r in unread.iter().take(40) {
@@ -782,10 +848,10 @@ fn hitboxes(archives: &Archives, args: &[String]) -> Result<()> {
     }
     std::fs::write(out.join("report.txt"), &report)?;
 
-    let mut models = String::from("model\tkind\tread\tcollision\tdrawn\tkept\tbeyond\tbare\tnothing solid\n");
+    let mut models = String::from("model\tkind\tread\tcollision\tdrawn\tkept\tbeyond\tbare\tnothing solid\tparts\n");
     let mut shapes = String::from("model\tkind\tshape\ttexture\talpha\ttriangles\tkept\tfate\ton collision\n");
     for r in &rows {
-        writeln!(models, "{}\t{}\t{}\t{}\t{}\t{}\t{:.1}\t{:.3}\t{}", r.path, r.category, r.read, r.collision, r.drawn, r.kept, r.beyond, r.bare, r.soft_only)?;
+        writeln!(models, "{}\t{}\t{}\t{}\t{}\t{}\t{:.1}\t{:.3}\t{}\t{}", r.path, r.category, r.read, r.collision, r.drawn, r.kept, r.beyond, r.bare, r.soft_only, r.parts.map_or(0, |p| p.0))?;
         for s in &r.shapes {
             writeln!(shapes, "{}\t{}\t{}\t{}\t{:#x}\t{}\t{}\t{:?}\t{:.3}", r.path, r.category, s.name, s.texture, s.alpha, s.triangles, s.kept, s.fate, s.on_collision)?;
         }

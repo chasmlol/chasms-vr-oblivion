@@ -318,6 +318,15 @@ pub fn publish(a: &rustvr_adapter::Adapter) {
     let now = equipped();
     // (With a bow the game holds no shield: both hands are on the bow.)
     let shield_now = equipped_shield().filter(|_| now.as_ref().is_none_or(|e| e.kind != crate::archery::BOW));
+    // The weapon's and the shield's collision is their drawn shape (not a bow's: its string's
+    // side is the drawing hand's).
+    let t = crate::link::now();
+    if let Some(e) = now.as_ref().filter(|e| e.kind != crate::archery::BOW) {
+        crate::collision::object_shape(WEAPON_ID, &e.model, crate::collision::Frame::Model, t);
+    }
+    if let Some((_, path)) = &shield_now {
+        crate::collision::object_shape(SHIELD_ID, path, crate::collision::Frame::Model, t);
+    }
     let mut reg = REGISTERED.lock().unwrap();
     let forms = (now.as_ref().map_or(0, |e| e.form), shield_now.as_ref().map_or(0, |s| s.0));
     let arrows = crate::archery::arrows_key();

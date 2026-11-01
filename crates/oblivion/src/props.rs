@@ -276,6 +276,14 @@ mod game {
             }
             // (Out of reach: gone, unless a hand has it.)
             s.bodies.retain(|id, b| keep.contains(id) || b.spring != 0);
+            // Each one's collision for the hands is its part's drawn shape (the link, the bucket).
+            for (id, b) in &s.bodies {
+                let name = crate::combat::read_str(mem::deref(b.node + 0x8));
+                let scale = mem::at::<f32>(b.node + av::WORLD_SCALE).filter(|s| s.is_finite() && *s > 0.0).unwrap_or(1.0);
+                if let Some(model) = crate::items::model_of(mem::deref(b.refr + REFR_BASE)).filter(|_| !name.is_empty()) {
+                    crate::collision::object_shape(*id, &format!("{model}|{name}"), crate::collision::Frame::Node(scale), now);
+                }
+            }
             let held: Vec<usize> = s.bodies.values().map(|b| b.hk).collect();
             s.ids.retain(|hk, id| keep.contains(id) || held.contains(hk));
             let mut ids: Vec<u32> = s.bodies.keys().copied().collect();

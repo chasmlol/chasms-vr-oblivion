@@ -50,6 +50,9 @@ pub fn solid_layer(layer: u32) -> bool {
 pub struct Hitbox {
     pub vertices: Vec<Vec3>,
     pub triangles: Vec<[u32; 3]>,
+    /// The root node's own transform in the file (the model's space as the file has it is this
+    /// after the hitbox's).
+    pub root: Transform,
 }
 
 impl Hitbox {
@@ -560,18 +563,37 @@ fn moving_nodes(nif: &Nif) -> std::collections::HashSet<String> {
 /// The model's hitbox, and what became of each drawn shape.
 pub fn of(nif: &Nif) -> (Hitbox, Vec<ShapeNote>) {
     let own = collision(nif);
-    of_with(nif, &own, false)
+    drawn(nif, &own, false, None)
 }
 
 /// The model's hitbox against its collision `own` (see [`collision`]); `measure`: each shape's
 /// share on that collision worked out (for the checks: only a cut-out's is needed for the hitbox).
 pub fn of_with(nif: &Nif, own: &Collision, measure: bool) -> (Hitbox, Vec<ShapeNote>) {
+    drawn(nif, own, measure, None)
+}
+
+/// The hitbox of one part of a model, in that part's own frame: what's drawn under the node named
+/// `node` (case-insensitive), not under a node below it with collision of its own (another part:
+/// the next link of a chain). The part moves as one (it's what the game swings), so nothing in it
+/// is left out for moving.
+pub fn of_part(nif: &Nif, node: &str) -> Option<(Hitbox, Vec<ShapeNote>)> {
+    let i = nif.find(node)?;
+    let own = collision(nif);
+    Some(drawn(nif, &own, false, Some(i)))
+}
+
+fn drawn(nif: &Nif, own: &Collision, measure: bool, part: Option<i32>) -> (Hitbox, Vec<ShapeNote>) {
     let parents = nif.parents();
     let mut notes = Vec::new();
     // Each solid shape's triangles (by its note), joined once the strays are out.
     let mut pieces: Vec<(usize, Vec<[Vec3; 3]>)> = Vec::new();
-    let moving = moving_nodes(nif);
-    let mut stack: Vec<(i32, Look, Option<Fate>)> = nif.roots.iter().map(|&r| (r, Look::default(), None)).collect();
+    let moving = if part.is_some() { Default::default() } else { moving_nodes(nif) };
+    // (A part's triangles in its own frame.)
+    let to_part = part.map(|i| in_root(nif, i, &parents).inverse());
+    let mut stack: Vec<(i32, Look, Option<Fate>)> = match part {
+        Some(i) => vec![(i, Look::default(), None)],
+        None => nif.roots.iter().map(|&r| (r, Look::default(), None)).collect(),
+    };
     if stack.is_empty() && !nif.blocks.is_empty() {
         stack.push((0, Look::default(), None));
     }
@@ -583,6 +605,9 @@ pub fn of_with(nif: &Nif, own: &Collision, measure: bool) -> (Hitbox, Vec<ShapeN
         let kind = nif.kinds.get(i as usize).map(String::as_str).unwrap_or("");
         match &nif.blocks[i as usize] {
             Block::Node { av, children } => {
+                if part.is_some_and(|p| p != i) && av.collision >= 0 {
+                    continue;
+                }
                 let name = av.name.to_ascii_lowercase();
                 let dropped = dropped
                     .or((av.flags & 1 != 0).then_some(Fate::Hidden))
@@ -615,11 +640,14 @@ pub fn of_with(nif: &Nif, own: &Collision, measure: bool) -> (Hitbox, Vec<ShapeN
                     continue;
                 }
                 // The shape's triangles in the root's frame: skinned, by its bones' bind poses.
-                let Some(points) = placed(nif, i, d, *skin, &parents) else {
+                let Some(mut points) = placed(nif, i, d, *skin, &parents) else {
                     note.fate = Fate::Unplaced;
                     notes.push(note);
                     continue;
                 };
+                if let Some(t) = &to_part {
+                    points.iter_mut().for_each(|p| *p = t.apply(*p));
+                }
                 let tris: Vec<[Vec3; 3]> = d
                     .triangles
                     .iter()
@@ -655,7 +683,8 @@ pub fn of_with(nif: &Nif, own: &Collision, measure: bool) -> (Hitbox, Vec<ShapeN
     // The strays: a shape of a triangle or two far from all the others' bounds.
     let span = |ts: &[[Vec3; 3]]| bounds(ts.iter().flatten().copied());
     let big: Vec<(Vec3, Vec3)> = pieces.iter().filter(|(_, t)| t.len() > 2).filter_map(|(_, t)| span(t)).collect();
-    let mut hitbox = Hitbox::default();
+    let root = nif.roots.first().and_then(|&r| nif.av(r)).map_or(Transform::IDENTITY, |a| a.transform.clone());
+    let mut hitbox = Hitbox { root, ..Default::default() };
     let mut seen = HashMap::new();
     for (note, tris) in pieces {
         let far = |(lo, hi): (Vec3, Vec3)| big.iter().all(|&(blo, bhi)| (blo - hi).max(lo - bhi).max(Vec3::ZERO).length() > STRAY);

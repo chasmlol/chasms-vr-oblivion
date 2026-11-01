@@ -99,11 +99,12 @@ fn bounds(model: &Model) -> (Vec3, Vec3) {
     if lo.x > hi.x { (Vec3::ZERO, Vec3::ONE) } else { (lo, hi) }
 }
 
-/// Two sets of triangles drawn alike from three sides, one row over the other at the same size and
-/// place (a model's hitbox above, the game's collision below, to hold them up to each other).
-pub fn render_pair(top: &[[Vec3; 3]], bottom: &[[Vec3; 3]]) -> Vec<u8> {
+/// Rows of triangles (each its colour) drawn alike from three sides, one row over the next at the
+/// same size and place: a model's hitbox, the game's collision, and the convex parts made of the
+/// hitbox, to hold them up to each other.
+pub fn render_rows(rows: &[Vec<([Vec3; 3], [f32; 3])>]) -> Vec<u8> {
     let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
-    for p in top.iter().chain(bottom).flatten() {
+    for p in rows.iter().flatten().flat_map(|(t, _)| t) {
         lo = lo.min(*p);
         hi = hi.max(*p);
     }
@@ -113,9 +114,9 @@ pub fn render_pair(top: &[[Vec3; 3]], bottom: &[[Vec3; 3]]) -> Vec<u8> {
     let centre = (lo + hi) * 0.5;
     let scale = SIZE as f32 / ((hi - lo).max_element().max(1e-3) * 1.1);
     let width = SIZE * VIEWS.len();
-    let mut rgb = vec![30u8; width * SIZE * 2 * 3];
+    let mut rgb = vec![30u8; width * SIZE * rows.len() * 3];
     let light = Vec3::new(0.4, 0.6, 0.8).normalize();
-    for (row, (tris, tint)) in [(top, [140.0, 220.0, 140.0]), (bottom, [230.0, 120.0, 100.0])].into_iter().enumerate() {
+    for (row, tris) in rows.iter().enumerate() {
         for (k, view) in VIEWS.iter().enumerate() {
             // (Game models are Z up: the views turned so up is up.)
             let (right, up, look) = match k {
@@ -128,7 +129,7 @@ pub fn render_pair(top: &[[Vec3; 3]], bottom: &[[Vec3; 3]]) -> Vec<u8> {
                 let d = p - centre;
                 (Vec2::new(d.dot(right) * scale + SIZE as f32 * 0.5, SIZE as f32 * 0.5 - d.dot(up) * scale), d.dot(look))
             };
-            for t in tris {
+            for (t, tint) in tris {
                 let s = t.map(to_screen);
                 let area = (s[1].0 - s[0].0).perp_dot(s[2].0 - s[0].0);
                 if area.abs() < 1e-6 {
@@ -164,10 +165,17 @@ pub fn render_pair(top: &[[Vec3; 3]], bottom: &[[Vec3; 3]]) -> Vec<u8> {
     rgb
 }
 
-pub fn save_pair(top: &[[Vec3; 3]], bottom: &[[Vec3; 3]], path: &std::path::Path) -> Result<()> {
-    let rgb = render_pair(top, bottom);
+/// A model's hitbox (green) over the game's collision (red), and, if given, the convex parts made
+/// of it (each its own colour) below them.
+pub fn save_rows(hitbox: &[[Vec3; 3]], collision: &[[Vec3; 3]], parts: &[Vec<[Vec3; 3]>], path: &std::path::Path) -> Result<()> {
+    const PART_TINTS: [[f32; 3]; 6] = [[120.0, 170.0, 240.0], [240.0, 200.0, 90.0], [200.0, 120.0, 230.0], [110.0, 220.0, 210.0], [240.0, 140.0, 160.0], [170.0, 230.0, 110.0]];
+    let mut rows = vec![hitbox.iter().map(|t| (*t, [140.0, 220.0, 140.0])).collect::<Vec<_>>(), collision.iter().map(|t| (*t, [230.0, 120.0, 100.0])).collect()];
+    if !parts.is_empty() {
+        rows.push(parts.iter().enumerate().flat_map(|(k, p)| p.iter().map(move |t| (*t, PART_TINTS[k % PART_TINTS.len()]))).collect());
+    }
+    let rgb = render_rows(&rows);
     let file = std::io::BufWriter::new(std::fs::File::create(path)?);
-    let mut enc = png::Encoder::new(file, (SIZE * VIEWS.len()) as u32, (SIZE * 2) as u32);
+    let mut enc = png::Encoder::new(file, (SIZE * VIEWS.len()) as u32, (SIZE * rows.len()) as u32);
     enc.set_color(png::ColorType::Rgb);
     enc.set_depth(png::BitDepth::Eight);
     enc.write_header()?.write_image_data(&rgb)?;

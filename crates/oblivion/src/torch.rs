@@ -158,6 +158,10 @@ mod game {
     pub fn publish(a: &rustvr_adapter::Adapter) {
         with_state(|s| {
             let now = equipped();
+            // Its collision is its drawn shape (its flame isn't).
+            if let Some((_, path)) = &now {
+                crate::collision::object_shape(TORCH_ID, path, crate::collision::Frame::Model, crate::link::now());
+            }
             if s.torch.as_ref().map(|t| t.form) == now.as_ref().map(|n| n.0) {
                 return;
             }

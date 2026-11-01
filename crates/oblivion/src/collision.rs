@@ -914,11 +914,12 @@ mod win {
         f(HITBOXES.lock().unwrap().get_or_insert_with(Hitboxes::default))
     }
 
-    /// A model's hitbox, if it's read; None while it's being read.
+    /// A model's hitbox (`model|node`: one part of it, [`oblivion_assets::hitbox::of_part`]), if
+    /// it's read; None while it's being read.
     fn hitbox(model: &str, now: f64) -> Option<Option<Arc<Hitbox>>> {
         let key = model.to_ascii_lowercase().replace('/', "\\");
         // (A tree is grown from its SpeedTree file, not drawn from a model: it keeps the game's.)
-        if !key.ends_with(".nif") {
+        if !key.split('|').next().unwrap_or("").ends_with(".nif") {
             return Some(None);
         }
         let start = with_hitboxes(|h| {
@@ -956,8 +957,12 @@ mod win {
             let started = std::time::Instant::now();
             // (A model that trips the reader keeps the game's shape, and reading goes on.)
             let made = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let nif = archives.read(&format!("meshes\\{path}")).and_then(|d| Nif::parse(&d))?;
-                let (h, notes) = oblivion_assets::hitbox::of(&nif);
+                let (file, part) = path.split_once('|').map_or((path.as_str(), None), |(f, n)| (f, Some(n)));
+                let nif = archives.read(&format!("meshes\\{file}")).and_then(|d| Nif::parse(&d))?;
+                let (h, notes) = match part {
+                    Some(node) => oblivion_assets::hitbox::of_part(&nif, node).ok_or_else(|| anyhow::anyhow!("it has no node {node}"))?,
+                    None => oblivion_assets::hitbox::of(&nif),
+                };
                 anyhow::Ok((h, notes, nif.stopped_at))
             }));
             let hitbox = match made {
@@ -1004,8 +1009,101 @@ mod win {
         with_hitboxes(|h| h.busy = false);
     }
 
+    // ---- the drawn shapes of the things the hands handle -----------------------------------------
+    /// Where a thing's drawn shape goes in its object's space (the runtime's axes, metres).
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum Frame {
+        /// A thing in the world: its object space is its node's own frame, at its scale (a thing
+        /// lying about, a swinging part).
+        Node(f32),
+        /// A thing the runtime draws: its object space is its model's, as the runtime has it (the
+        /// file's, in metres: the weapon, the shield, the torch).
+        Model,
+    }
+
+    struct Shape {
+        model: String,
+        frame: Frame,
+        /// Its drawn shape is the runtime's (or it has none to give: its own shape stays).
+        sent: bool,
+        seen: f64,
+    }
+
+    #[derive(Default)]
+    struct Shapes {
+        by_id: HashMap<u32, Shape>,
+        connections: u32,
+    }
+    static SHAPES: Mutex<Option<Shapes>> = Mutex::new(None);
+
+    /// Seconds an object's drawn shape stays the runtime's after it was last offered.
+    const SHAPE_KEEP: f64 = 2.0;
+
+    /// Object `id`, offered to the runtime, is drawn as `model` (a path under `meshes\`; `model|node`
+    /// for one part of it, in that node's frame): its collision is made its drawn shape, sent once
+    /// it's worked out. Its owner calls this whenever it looks at what it offers.
+    pub fn object_shape(id: u32, model: &str, frame: Frame, now: f64) {
+        let conns = crate::link::with_adapter(|a| a.connections()).unwrap_or(0);
+        let mut shapes = SHAPES.lock().unwrap();
+        let s = shapes.get_or_insert_with(Shapes::default);
+        if conns != s.connections {
+            // (A restarted runtime has none of them.)
+            s.connections = conns;
+            s.by_id.clear();
+        }
+        let e = s.by_id.entry(id).or_insert_with(|| Shape { model: String::new(), frame, sent: false, seen: now });
+        if !e.model.eq_ignore_ascii_case(model) || e.frame != frame {
+            *e = Shape { model: model.to_owned(), frame, sent: false, seen: now };
+        }
+        e.seen = now;
+        if e.sent {
+            return;
+        }
+        let Some(h) = hitbox(model, now) else { return };
+        // (Nothing solid drawn, or no model to read: its own shape.)
+        let tris: Vec<[Vec3; 3]> = match &h {
+            Some(h) if !h.is_empty() => {
+                let b = camera::basis();
+                let at = |v: Vec3| match frame {
+                    Frame::Node(scale) => b.point_from_game(v * scale),
+                    Frame::Model => oblivion_assets::export::point(h.root.apply(v)),
+                };
+                h.triangles.iter().map(|t| t.map(|i| at(h.vertices[i as usize]))).collect()
+            }
+            _ => Vec::new(),
+        };
+        e.sent = send_object_mesh(id, &tris);
+        if e.sent && !tris.is_empty() {
+            tracing::info!("collision: object {id:#010x} ({model}) given its drawn shape, {} triangles", tris.len());
+        }
+    }
+
+    /// The drawn shapes of objects no longer offered taken back (their own shapes again).
+    fn shapes_gone(now: f64) {
+        let mut shapes = SHAPES.lock().unwrap();
+        let Some(s) = shapes.as_mut() else { return };
+        let gone: Vec<u32> = s.by_id.iter().filter(|(_, e)| now - e.seen > SHAPE_KEEP).map(|(id, _)| *id).collect();
+        for id in gone {
+            if send_object_mesh(id, &[]) {
+                s.by_id.remove(&id);
+            }
+        }
+    }
+
+    /// One object's drawn shape to the runtime (no triangles: its own shape again).
+    fn send_object_mesh(id: u32, tris: &[[Vec3; 3]]) -> bool {
+        let head = rustvr_protocol::ColMesh { id, count: tris.len() as u32 };
+        let mut payload = bytemuck::bytes_of(&head).to_vec();
+        for t in tris {
+            let v: [f32; 9] = [t[0].x, t[0].y, t[0].z, t[1].x, t[1].y, t[1].z, t[2].x, t[2].y, t[2].z];
+            payload.extend_from_slice(bytemuck::cast_slice(&v));
+        }
+        crate::link::with_adapter(|a| a.push_collision(rustvr_protocol::COL_OBJECT_MESH, &payload)).unwrap_or(false)
+    }
+
     /// Once per game frame in the world: keeps the runtime's collision around the player current.
     pub fn update(now: f64) {
+        shapes_gone(now);
         let player = engine::player();
         let Some(feet) = (player != 0).then(|| mem::at::<[f32; 3]>(player + refr::POS)).flatten() else { return };
         let feet = camera::basis().point_from_game(Vec3::from(feet));

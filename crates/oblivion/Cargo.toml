@@ -16,7 +16,7 @@ rustvr-protocol.workspace = true
 rustvr-adapter.workspace = true
 rustvr-gpu.workspace = true
 rustvr-asset.workspace = true
-oblivion-assets = { path = "../oblivion-assets" }
+oblivion-assets = { path = "../oblivion-assets", default-features = false }
 anyhow.workspace = true
 bytemuck.workspace = true
 glam.workspace = true
