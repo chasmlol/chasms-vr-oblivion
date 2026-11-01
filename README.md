@@ -182,8 +182,6 @@ rest.
 | [chasms-vr-framework](framework/README.md), in `framework/` | The runtime, the protocol, the adapter SDK, the test range, the emulated headset, the voice plugin. Shared by every game's adapter |
 | [chasmlol/m8](https://github.com/chasmlol/m8) (public, branch `rustvr`) | The voice plugin's speech pipeline, a git dependency of `framework/crates/voice` |
 
-Metro 2033 Redux has its own adapter repository on the same framework.
-
 | Path | What |
 |---|---|
 | `crates/oblivion` | The adapter (`dinput8.dll`) |

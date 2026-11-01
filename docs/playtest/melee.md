@@ -152,8 +152,8 @@ thrown dagger does. A spell cast at a creature lands at once (a fire bolt or lig
     wall holds you too.
 30. Guns: the rifle and pistol on the table by the start, into a dummy or a fighter; a dead body
     jerks when shot.
-31. Grenades (the chest pouch, or the throwables' table): Metro's incendiary, once extracted (by
-    Metro's adapter), sets them alight.
+31. Grenades (the chest pouch, or the throwables' table): a frag's blast hurts them, floors them
+    and throws them.
 32. Throwing knives into a dummy: one that sticks rides with it.
 33. Spells: the fire bolt (knocks a dummy down) and the shock (jolts it, may stun).
 
