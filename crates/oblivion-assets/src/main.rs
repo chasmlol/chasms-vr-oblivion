@@ -8,6 +8,8 @@
 //!     oblivion-extract anims <prefix>...
 //!     oblivion-extract bench <prefix>...
 //!     oblivion-extract export-ui <prefix>...
+//!     oblivion-extract hitboxes [--out <folder>] [<prefix>...]
+//!     oblivion-extract hitbox <model> <png>
 //!
 //! `check` parses every model under the prefixes and reports which it can't read (a test of the
 //! model reader against the real files). `export` writes every model under the prefixes, and the
@@ -20,7 +22,12 @@
 //! under the prefixes into its two pieces and measures them (`oblivion_assets::bench`: the pieces in
 //! the cache, the measurements in its `bench.toml`). `export-ui` writes the game's fonts and menu
 //! art under the prefixes for the runtime to paint (`oblivion_assets::ui`: `fonts\...` and
-//! `textures\menus\...`, the art as RGBA).
+//! `textures\menus\...`, the art as RGBA). `hitboxes` works out every model's hitbox (what the
+//! hands meet: its drawn shape, `oblivion_assets::hitbox`) under the prefixes (all of them by
+//! default) and checks it against the game's own collision, into a report (`report.txt`, and
+//! `models.tsv` and `shapes.tsv` model by model and shape by shape, in
+//! `local_assets/oblivion/hitboxes` or `--out`); `hitbox` draws one model's hitbox over its own
+//! collision.
 
 use anyhow::{Context, Result};
 use oblivion_assets::export::{self, Part};
@@ -125,6 +132,20 @@ fn main() -> Result<()> {
                 println!("  the game hasn't got {m}");
             }
         }
+        Some("hitboxes") => hitboxes(&archives, &args[1..])?,
+        Some("hitbox") if args.len() == 3 => {
+            // One model's hitbox (above) and the game's own collision (below), from three sides.
+            let path = oblivion_assets::bsa::normalise(&args[1]);
+            let nif = Nif::parse(&archives.read(&path)?)?;
+            let own = oblivion_assets::hitbox::collision(&nif);
+            let (hitbox, notes) = oblivion_assets::hitbox::of_with(&nif, &own, true);
+            let drawn: Vec<[glam::Vec3; 3]> = hitbox.triangles.iter().map(|t| t.map(|i| hitbox.vertices[i as usize])).collect();
+            preview::save_pair(&drawn, &own.surface, std::path::Path::new(&args[2]))?;
+            for n in &notes {
+                println!("  {:?} '{}' {} of {} triangles, {:.0}% on its collision, alpha {:#x}, {}", n.fate, n.name, n.kept, n.triangles, n.on_collision * 100.0, n.alpha, n.texture);
+            }
+            println!("{}: {} triangles; its own collision {} -> {}", args[1], drawn.len(), own.surface.len(), args[2]);
+        }
         Some("bench") => bench(&archives, &args[1..])?,
         Some("export-ui") => export_ui(&archives, &args[1..])?,
         Some("preview") if args.len() == 3 => {
@@ -149,7 +170,7 @@ fn main() -> Result<()> {
             preview::save(&model, std::path::Path::new(&args[2]))?;
             println!("{}: {} meshes, {} bones -> {}", args[1], model.meshes.len(), model.bones.len(), args[2]);
         }
-        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>... | export [--out <folder>] <prefix>... | sounds [--out <folder>] | preview <model> <png>"),
+        _ => println!("usage: oblivion-extract [--game <folder>] check <prefix>... | dump <model>... | export [--out <folder>] <prefix>... | sounds [--out <folder>] | preview <model> <png> | hitboxes [--out <folder>] [<prefix>...] | hitbox <model> <png>"),
     }
     Ok(())
 }
@@ -551,4 +572,227 @@ fn dump(nif: &Nif) {
     if let Some(k) = &nif.stopped_at {
         println!("(stopped at {k})");
     }
+}
+
+/// Every model's hitbox under the prefixes (all the game's models by default), checked against the
+/// game's own collision: a report of it all by kind of model, and model by model and shape by
+/// shape (`oblivion_assets::hitbox`).
+fn hitboxes(archives: &Archives, args: &[String]) -> Result<()> {
+    use glam::Vec3;
+    use oblivion_assets::hitbox::{self, Collision, Fate};
+    use std::collections::BTreeMap;
+    use std::fmt::Write as _;
+    let mut args = args.to_vec();
+    let mut out = rustvr_asset::default_root().join("oblivion").join("hitboxes");
+    if args.first().map(String::as_str) == Some("--out") && args.len() > 1 {
+        out = PathBuf::from(args.remove(1));
+        args.remove(0);
+    }
+    let prefixes: Vec<String> = if args.is_empty() { vec!["meshes\\".into()] } else { args.iter().map(|p| oblivion_assets::bsa::normalise(p)).collect() };
+    let mut names: Vec<String> = archives.names().filter(|n| n.ends_with(".nif") && prefixes.iter().any(|p| n.starts_with(p.as_str()))).map(str::to_owned).collect();
+    names.sort();
+    names.dedup();
+
+    /// One model's results.
+    #[derive(Default)]
+    struct Row {
+        path: String,
+        category: &'static str,
+        /// "whole", "stopped at X" or why it wasn't read.
+        read: String,
+        /// Drawn shapes past where reading stopped.
+        lost: usize,
+        collision: usize,
+        unread: Vec<String>,
+        drawn: usize,
+        kept: usize,
+        /// How far (game units) the hitbox reaches past the collision's box, and the share of the
+        /// collision's surface with nothing drawn near it.
+        beyond: f32,
+        bare: f32,
+        /// Drawn, and nothing of it solid (a banner, water): the hands meet nothing there.
+        soft_only: bool,
+        shapes: Vec<hitbox::ShapeNote>,
+    }
+    let one = |path: &str| -> Row {
+        let mut row = Row { path: path.to_owned(), category: hitbox::category(path), ..Default::default() };
+        let nif = match archives.read(path).and_then(|d| Nif::parse(&d)) {
+            Ok(n) => n,
+            Err(e) => {
+                row.read = format!("failed: {e:#}");
+                return row;
+            }
+        };
+        row.lost = nif.kinds[nif.blocks.len()..].iter().filter(|k| k.as_str() == "NiTriShape" || k.as_str() == "NiTriStrips").count();
+        row.read = nif.stopped_at.as_ref().map_or("whole".into(), |k| format!("stopped at {k}"));
+        let own = hitbox::collision(&nif);
+        let (hb, shapes) = hitbox::of_with(&nif, &own, true);
+        row.collision = own.surface.len();
+        row.unread = own.unread.iter().map(|(k, n)| format!("{k} x{n}")).collect();
+        row.drawn = shapes.iter().map(|s| s.triangles).sum();
+        row.kept = hb.triangles.len();
+        row.soft_only = hitbox::nothing_solid(&hb, &shapes);
+        if !own.is_empty()
+            && let Some((hlo, hhi)) = hb.bounds()
+        {
+            let (clo, chi) = own.surface.iter().flatten().fold((Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)), |(lo, hi), p| (lo.min(*p), hi.max(*p)));
+            row.beyond = (hhi - chi).max(clo - hlo).max(Vec3::ZERO).max_element();
+            let drawn: Vec<[Vec3; 3]> = hb.triangles.iter().map(|t| t.map(|i| hb.vertices[i as usize])).collect();
+            let near = Collision::mesh(&drawn);
+            let area = |t: &[Vec3; 3]| (t[1] - t[0]).cross(t[2] - t[0]).length() * 0.5;
+            let (mut all, mut bare) = (0.0f32, 0.0f32);
+            for t in &own.surface {
+                let a = area(t);
+                all += a;
+                if !near.near((t[0] + t[1] + t[2]) / 3.0, 2.0 * hitbox::NEAR) {
+                    bare += a;
+                }
+            }
+            row.bare = if all > 0.0 { bare / all } else { 0.0 };
+        }
+        row.shapes = shapes;
+        row
+    };
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(16);
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let mut rows: Vec<Row> = std::thread::scope(|s| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                s.spawn(|| {
+                    let mut mine = Vec::new();
+                    while let Some(path) = names.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed)) {
+                        // (A model that trips the reader is reported, not the end of the run.)
+                        let row = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| one(path)));
+                        mine.push(row.unwrap_or_else(|_| Row { path: path.clone(), category: hitbox::category(path), read: "failed: the reader panicked".into(), ..Default::default() }));
+                    }
+                    mine
+                })
+            })
+            .collect();
+        workers.into_iter().flat_map(|w| w.join().unwrap()).collect()
+    });
+    rows.sort_by(|a, b| a.path.cmp(&b.path));
+    std::fs::create_dir_all(&out)?;
+
+    // By kind of model.
+    #[derive(Default)]
+    struct Tally {
+        models: usize,
+        whole: usize,
+        failed: usize,
+        lost: usize,
+        with_collision: usize,
+        solid: usize,
+        soft_only: usize,
+        kept_game_shape: usize,
+        drawn: usize,
+        kept: usize,
+        collision: usize,
+        bare: f32,
+        far: usize,
+        fates: BTreeMap<Fate, (usize, usize)>,
+    }
+    let mut tallies: BTreeMap<&str, Tally> = BTreeMap::new();
+    for r in &rows {
+        let t = tallies.entry(r.category).or_default();
+        t.models += 1;
+        t.whole += (r.read == "whole") as usize;
+        t.failed += r.read.starts_with("failed") as usize;
+        t.lost += (r.lost > 0) as usize;
+        if r.collision == 0 {
+            continue;
+        }
+        t.with_collision += 1;
+        t.collision += r.collision;
+        if r.kept > 0 {
+            t.solid += 1;
+            t.bare += r.bare;
+            t.far += (r.beyond > 30.0) as usize;
+        } else if r.soft_only {
+            t.soft_only += 1;
+        } else {
+            t.kept_game_shape += 1;
+        }
+        t.drawn += r.drawn;
+        t.kept += r.kept;
+        for s in &r.shapes {
+            let f = t.fates.entry(s.fate).or_default();
+            f.0 += 1;
+            f.1 += s.triangles;
+        }
+    }
+    let mut report = String::new();
+    writeln!(report, "Hitboxes: {} models under {:?}.", rows.len(), prefixes)?;
+    writeln!(report, "Only models with collision of their own matter in the game: the rest are never solid to the hands, as in the game.")?;
+    writeln!(report)?;
+    for (cat, t) in &tallies {
+        writeln!(report, "{cat}: {} models ({} read whole, {} failed, {} with drawn shapes unread)", t.models, t.whole, t.failed, t.lost)?;
+        if t.with_collision == 0 {
+            writeln!(report, "  none has collision of its own")?;
+            continue;
+        }
+        writeln!(
+            report,
+            "  {} with collision: {} get their drawn shape, {} nothing (all they draw is soft), {} keep the game's (they draw nothing); drawn triangles {} -> kept {}; the game's collision {} triangles",
+            t.with_collision, t.solid, t.soft_only, t.kept_game_shape, t.drawn, t.kept, t.collision
+        )?;
+        writeln!(report, "  the game's collision with nothing drawn near it: {:.0}% of its surface on average; {} models' hitboxes reach 30+ units past it", 100.0 * t.bare / t.solid.max(1) as f32, t.far)?;
+        let fates: Vec<String> = t.fates.iter().map(|(f, (n, tri))| format!("{f:?} {n} shapes/{tri} tris")).collect();
+        writeln!(report, "  shapes: {}", fates.join(", "))?;
+    }
+    let world = |r: &&Row| r.collision > 0 && !matches!(r.category, "not placed in the world" | "markers and distant land");
+    writeln!(report)?;
+    let failed: Vec<&Row> = rows.iter().filter(|r| r.read.starts_with("failed")).collect();
+    writeln!(report, "Not read ({}):", failed.len())?;
+    for r in &failed {
+        writeln!(report, "  {} [{}]: {}", r.path, r.category, r.read)?;
+    }
+    let short: Vec<&Row> = rows.iter().filter(|r| r.lost > 0).collect();
+    writeln!(report, "Read short, drawn shapes unread ({}):", short.len())?;
+    for r in &short {
+        writeln!(report, "  {} [{}]: {}, {} shapes unread", r.path, r.category, r.read, r.lost)?;
+    }
+    for (title, soft) in [("With collision, all they draw soft: nothing solid to the hands", true), ("With collision, nothing drawn: the game's own shape kept", false)] {
+        let these: Vec<&Row> = rows.iter().filter(world).filter(|r| r.kept == 0 && r.soft_only == soft).collect();
+        writeln!(report, "{title} ({}):", these.len())?;
+        for r in &these {
+            let mut why: BTreeMap<Fate, usize> = BTreeMap::new();
+            for s in &r.shapes {
+                *why.entry(s.fate).or_default() += 1;
+            }
+            writeln!(report, "  {} [{}]: shapes {:?}", r.path, r.category, why)?;
+        }
+    }
+    let mut far: Vec<&Row> = rows.iter().filter(world).filter(|r| r.beyond > 30.0).collect();
+    far.sort_by(|a, b| b.beyond.total_cmp(&a.beyond));
+    writeln!(report, "Hitboxes reaching 30+ units past the game's collision ({}), furthest first:", far.len())?;
+    for r in far.iter().take(80) {
+        writeln!(report, "  {} [{}]: {:.0} units", r.path, r.category, r.beyond)?;
+    }
+    let mut big: Vec<&Row> = rows.iter().filter(world).collect();
+    big.sort_by(|a, b| b.kept.cmp(&a.kept));
+    writeln!(report, "Biggest hitboxes:")?;
+    for r in big.iter().take(25) {
+        writeln!(report, "  {} [{}]: {} triangles", r.path, r.category, r.kept)?;
+    }
+    let unread: Vec<&Row> = rows.iter().filter(|r| !r.unread.is_empty()).collect();
+    writeln!(report, "Collision shapes of kinds not read ({}):", unread.len())?;
+    for r in unread.iter().take(40) {
+        writeln!(report, "  {} [{}]: {}", r.path, r.category, r.unread.join(", "))?;
+    }
+    std::fs::write(out.join("report.txt"), &report)?;
+
+    let mut models = String::from("model\tkind\tread\tcollision\tdrawn\tkept\tbeyond\tbare\tnothing solid\n");
+    let mut shapes = String::from("model\tkind\tshape\ttexture\talpha\ttriangles\tkept\tfate\ton collision\n");
+    for r in &rows {
+        writeln!(models, "{}\t{}\t{}\t{}\t{}\t{}\t{:.1}\t{:.3}\t{}", r.path, r.category, r.read, r.collision, r.drawn, r.kept, r.beyond, r.bare, r.soft_only)?;
+        for s in &r.shapes {
+            writeln!(shapes, "{}\t{}\t{}\t{}\t{:#x}\t{}\t{}\t{:?}\t{:.3}", r.path, r.category, s.name, s.texture, s.alpha, s.triangles, s.kept, s.fate, s.on_collision)?;
+        }
+    }
+    std::fs::write(out.join("models.tsv"), models)?;
+    std::fs::write(out.join("shapes.tsv"), shapes)?;
+    print!("{report}");
+    println!("-> {}", out.display());
+    Ok(())
 }

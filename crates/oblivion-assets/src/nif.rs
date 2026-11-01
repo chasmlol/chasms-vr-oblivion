@@ -2,14 +2,15 @@
 //! 11), and the older 10.0.1.0 to 10.2.0.0 that many of the head's parts (hair, ears, eyes, mouth,
 //! teeth, tongue) and some older models (Chorrol's doors, the Ayleid switches) are. Those versions
 //! store no block sizes, so every block a file holds has to be read field by field: this reader
-//! knows the blocks Oblivion's weapons, armour, clothes, bodies, hands, heads, bows and doors use
-//! (layouts from the NifTools project's format description, `nif.xml`, with the fields each version
-//! has) and stops at the first one it doesn't, keeping the blocks before it.
+//! knows every block the game's models use (layouts from the NifTools project's format
+//! description, `nif.xml`, with the fields each version has) and stops at the first one it
+//! doesn't, keeping the blocks before it.
 //!
 //! What's kept: the node tree (names, local transforms, children), triangle shapes (vertices,
 //! normals, UVs, vertex colours, triangles from lists or strips), their skinning (bones, bind
-//! transforms, weights), their textures and materials, extra data, and the Havok collision (rigid
-//! bodies: mass, centre, shapes).
+//! transforms, weights), their textures and materials, extra data, animations, and the Havok
+//! collision (rigid bodies: mass, centre, shapes, the triangles of triangle shapes). Particle
+//! systems, cameras and most controllers are read past.
 
 use anyhow::{Result, bail};
 use glam::{Mat3, Vec3};
@@ -76,9 +77,24 @@ pub enum Block {
     BoxShape { dims: Vec3, radius: f32 },
     CapsuleShape { a: Vec3, b: Vec3, radius: f32 },
     SphereShape { radius: f32 },
-    ConvexVertices { vertices: Vec<Vec3>, radius: f32 },
+    /// `bhkConvexVerticesShape`: its vertices, shell radius and face planes (each the outward
+    /// normal and w, with n·p + w = 0 on the face), Havok's units.
+    ConvexVertices { vertices: Vec<Vec3>, radius: f32, planes: Vec<[f32; 4]> },
     ListShape { shapes: Vec<i32> },
     ConvexTransform { shape: i32, transform: [f32; 16] },
+    /// `bhkPackedNiTriStripsShape`: its parts (each: Havok filter's layer, vertex count, material) and its data block.
+    PackedStrips { parts: Vec<PackedPart>, data: i32 },
+    /// `hkPackedNiTriStripsData`: triangles (vertex indices) and vertices, in Havok's units.
+    PackedStripsData { triangles: Vec<[u16; 3]>, vertices: Vec<Vec3> },
+    /// `bhkMoppBvTreeShape`: the shape it's a tree over.
+    Mopp { shape: i32 },
+    /// `bhkNiTriStripsShape`: its `NiTriStripsData` blocks (each a `Block::ShapeData`). (Also
+    /// 10.0.1.0's `bhkMeshShape`, the same.)
+    TriStripsShape { strips: Vec<i32> },
+    /// `bhkConvexListShape`: its shapes.
+    ConvexList { shapes: Vec<i32> },
+    /// `bhkMultiSphereShape`: its spheres (centre, radius), Havok's units.
+    MultiSphere { spheres: Vec<(Vec3, f32)> },
     /// `NiGeomMorpherController`: shape `target`'s vertices morphed (a bow bending as it's drawn),
     /// by `data` ([`Block::MorphData`]), each morph weighted by one of `interpolators`.
     Morpher { target: i32, data: i32, interpolators: Vec<i32> },
@@ -101,9 +117,18 @@ pub enum Block {
     FloatInterpolator { value: f32, data: i32 },
     /// `NiFloatData`: its keys, (time, value).
     FloatKeys(Vec<(f32, f32)>),
-    /// Read past: of no use here (stencil, vertex colour, z-buffer, wireframe, dither and shade
-    /// properties, constraints).
+    /// Read past: of no use here (stencil, vertex colour, z-buffer, wireframe, dither, shade and fog
+    /// properties, constraints, particle systems, cameras, furniture markers, most controllers).
     Other(String),
+}
+
+/// A part of a `bhkPackedNiTriStripsShape`: its vertices' count (the parts' vertices follow each
+/// other in the data block), its Havok filter's layer and its Havok material.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PackedPart {
+    pub layer: u8,
+    pub vertices: u32,
+    pub material: u32,
 }
 
 /// One of a model's named animations (`NiControllerSequence`): the nodes it moves, each through an
@@ -115,6 +140,9 @@ pub struct Sequence {
     /// the controller's type, the controller's id and the interpolator's id.
     pub blocks: Vec<(i32, [u32; 4])>,
     pub palette: i32,
+    /// Files before 10.2 name what a sequence animates in the sequence itself: those names, each
+    /// ended by a NUL, that `blocks`' offsets point into (`palette` is then -1).
+    pub names: String,
     pub start: f32,
     pub stop: f32,
     pub text_keys: i32,
@@ -154,6 +182,13 @@ impl Keyframes {
         let times = self.rotations.iter().map(|k| k.0).chain(self.xyz.iter().flatten().map(|k| k.0)).chain(self.translations.iter().map(|k| k.0));
         times.fold(None, |s, t| Some(s.map_or((t, t), |(a, b): (f32, f32)| (a.min(t), b.max(t)))))
     }
+}
+
+/// The name at `offset` in names each ended by a NUL.
+fn name_at(names: &str, offset: u32) -> Option<String> {
+    let rest = names.as_bytes().get(offset as usize..)?;
+    let end = rest.iter().position(|&c| c == 0).unwrap_or(rest.len());
+    Some(String::from_utf8_lossy(&rest[..end]).into_owned())
 }
 
 /// Keys' value at `t`, blended linearly between the two either side.
@@ -210,6 +245,7 @@ pub struct RigidBody {
     pub shape: i32,
     pub layer: u8,
     pub translation: [f32; 4],
+    /// As Havok stores it: `[x, y, z, w]`.
     pub rotation: [f32; 4],
     pub center: [f32; 4],
     pub mass: f32,
@@ -239,23 +275,58 @@ struct Reader<'a> {
     at: usize,
     /// The file's version (`0x14000004` is 20.0.0.4).
     v: u32,
+    /// Bethesda's stream version (from its stream header; 0 without one).
+    bs: u32,
 }
 
 /// Versions as `nif.xml` writes them.
+const V10_0_1_0: u32 = 0x0A00_0100;
 const V10_0_1_2: u32 = 0x0A00_0102;
 const V10_0_1_3: u32 = 0x0A00_0103;
 const V10_1_0_0: u32 = 0x0A01_0000;
 const V10_1_0_101: u32 = 0x0A01_0065;
 const V10_1_0_103: u32 = 0x0A01_0067;
+const V10_1_0_104: u32 = 0x0A01_0068;
+const V10_1_0_106: u32 = 0x0A01_006A;
+const V10_1_0_108: u32 = 0x0A01_006C;
+const V10_1_0_109: u32 = 0x0A01_006D;
+const V10_1_0_110: u32 = 0x0A01_006E;
+const V10_1_0_112: u32 = 0x0A01_0070;
+const V10_1_0_113: u32 = 0x0A01_0071;
 const V10_1_0_114: u32 = 0x0A01_0072;
+const V10_2_0_0: u32 = 0x0A02_0000;
 /// The first without a texture's PS2 fields and a sequence's phase.
 const V10_4_0_1: u32 = 0x0A04_0001;
+const V20_0_0_2: u32 = 0x1400_0002;
 const V20_0_0_4: u32 = 0x1400_0004;
+const V20_0_0_5: u32 = 0x1400_0005;
 
 impl Reader<'_> {
     /// The file has the fields added in `version`.
     fn since(&self, version: u32) -> bool {
         self.v >= version
+    }
+    /// The file still has the fields last in `version`.
+    fn until(&self, version: u32) -> bool {
+        self.v <= version
+    }
+    /// Bethesda's stream header comes next: a small version, then three strings (author, process
+    /// and export script), each a length byte and ended by a NUL. (Without one, a count of block
+    /// types and the first type's name's length come next: never as small.)
+    fn stream_header_follows(&self) -> bool {
+        let b = &self.b[self.at.min(self.b.len())..];
+        if b.len() < 4 || u32::from_le_bytes(b[..4].try_into().unwrap()) > 0xFF {
+            return false;
+        }
+        let mut at = 4;
+        for _ in 0..3 {
+            let Some(&n) = b.get(at) else { return false };
+            if b.get(at + n as usize) != Some(&0) {
+                return false;
+            }
+            at += 1 + n as usize;
+        }
+        true
     }
 
     fn take(&mut self, n: usize) -> Result<&[u8]> {
@@ -341,6 +412,14 @@ fn av_object(r: &mut Reader) -> Result<AvObject> {
     Ok(AvObject { name, flags, transform: Transform { rotation, translation, scale }, properties, extra, collision })
 }
 
+/// A `HavokMaterial` (up to 10.0.1.2 after an unknown int).
+fn havok_material(r: &mut Reader) -> Result<u32> {
+    if r.until(V10_0_1_2) {
+        r.skip(4)?;
+    }
+    r.u32()
+}
+
 fn tex_desc(r: &mut Reader) -> Result<i32> {
     let source = r.i32()?;
     r.skip(4 + 4 + 4)?; // clamp, filter, UV set
@@ -353,7 +432,9 @@ fn tex_desc(r: &mut Reader) -> Result<i32> {
     Ok(source)
 }
 
-fn geometry_data(r: &mut Reader) -> Result<ShapeData> {
+/// `NiGeometryData`'s fields, and its vertex count (a particle system's data has no vertices but
+/// arrays as long).
+fn geometry_data(r: &mut Reader) -> Result<(ShapeData, usize)> {
     if r.since(V10_1_0_114) {
         let _group = r.i32()?;
     }
@@ -387,11 +468,11 @@ fn geometry_data(r: &mut Reader) -> Result<ShapeData> {
     if r.since(V20_0_0_4) {
         let _additional = r.i32()?;
     }
-    Ok(d)
+    Ok((d, n))
 }
 
 fn tri_shape_data(r: &mut Reader) -> Result<ShapeData> {
-    let mut d = geometry_data(r)?;
+    let (mut d, _) = geometry_data(r)?;
     let tris = r.u16()? as usize;
     let _points = r.u32()?;
     if !r.since(V10_1_0_0) || r.bool()? {
@@ -406,7 +487,7 @@ fn tri_shape_data(r: &mut Reader) -> Result<ShapeData> {
 }
 
 fn tri_strips_data(r: &mut Reader) -> Result<ShapeData> {
-    let mut d = geometry_data(r)?;
+    let (mut d, _) = geometry_data(r)?;
     let _tris = r.u16()?;
     let strips = r.u16()? as usize;
     let lengths: Vec<usize> = (0..strips).map(|_| Ok(r.u16()? as usize)).collect::<Result<_>>()?;
@@ -461,6 +542,103 @@ fn time_controller(r: &mut Reader) -> Result<()> {
     r.skip(4 + 2 + 4 * 4 + 4)
 }
 
+/// `NiInterpController`'s: `NiTimeController`'s and (10.1.0.104 to 10.1.0.108) whether a sequence
+/// manages it.
+fn interp_controller(r: &mut Reader) -> Result<()> {
+    time_controller(r)?;
+    if r.since(V10_1_0_104) && r.until(V10_1_0_108) {
+        r.skip(1)?;
+    }
+    Ok(())
+}
+
+/// `NiSingleInterpController`'s: those and its interpolator (from 10.1.0.104; before, the type's
+/// own fields end with its keys' block: [`old_keys`]).
+fn single_interp_controller(r: &mut Reader) -> Result<()> {
+    interp_controller(r)?;
+    if r.since(V10_1_0_104) {
+        r.skip(4)?;
+    }
+    Ok(())
+}
+
+/// A controller's keys' block, which it held itself up to 10.1.0.103.
+fn old_keys(r: &mut Reader) -> Result<()> {
+    if r.until(V10_1_0_103) {
+        r.skip(4)?;
+    }
+    Ok(())
+}
+
+/// `NiPSysModifier`'s: name, order, particle system, active.
+fn psys_modifier(r: &mut Reader) -> Result<()> {
+    r.string()?;
+    r.skip(4 + 4 + 1)
+}
+
+/// `NiPSysEmitter`'s: speed, declination and planar angle (each with its variation), colour, radius
+/// (and from 10.4.0.1 its variation), life span and its variation; and a volume emitter's node
+/// (from 10.1).
+fn psys_emitter(r: &mut Reader, volume: bool) -> Result<()> {
+    psys_modifier(r)?;
+    r.skip(24 + 16 + 4)?;
+    if r.since(V10_4_0_1) {
+        r.skip(4)?;
+    }
+    r.skip(8)?;
+    if volume && r.since(V10_1_0_0) {
+        r.skip(4)?;
+    }
+    Ok(())
+}
+
+/// `NiParticlesData`' fields (after `NiGeometryData`'s) for `n` particles: their sizes and
+/// rotations.
+fn particles_data(r: &mut Reader, n: usize) -> Result<()> {
+    if r.until(V10_0_1_0) {
+        r.skip(4)?; // radius
+    }
+    if r.since(V10_1_0_0) && r.bool()? {
+        r.skip(n * 4)?; // radii
+    }
+    r.skip(2)?; // active
+    if r.bool()? {
+        r.skip(n * 4)?; // sizes
+    }
+    if r.bool()? {
+        r.skip(n * 16)?; // rotations
+    }
+    if r.since(V20_0_0_4) {
+        if r.bool()? {
+            r.skip(n * 4)?; // rotation angles
+        }
+        if r.bool()? {
+            r.skip(n * 12)?; // rotation axes
+        }
+    }
+    Ok(())
+}
+
+/// `NiBlendInterpolator`'s fields (a blend of a sequence's interpolators).
+fn blend_interpolator(r: &mut Reader) -> Result<()> {
+    if r.since(V10_1_0_112) {
+        let flags = r.u8()?;
+        let items = r.u8()? as usize;
+        r.skip(4)?; // weight threshold
+        if flags & 1 == 0 {
+            r.skip(4 + 4 * 4)?; // count, single index, priorities; single time, weight sums, spinner
+            r.skip(items * 17)?; // interpolator, weights, priority, spinner
+        }
+    } else {
+        // (The older layout, 10.1.0.106's here: shorts for the counts, an int for each priority.)
+        let items = r.u16()? as usize;
+        r.skip(2)?; // grow by
+        r.skip(items * 20)?; // interpolator, weights, priority, spinner
+        r.skip(1 + 4 + 1 + 2 + 2 + 4 + 4)?; // managed, weight threshold, only the highest, count, single index, priorities
+    }
+    Ok(())
+}
+
 /// A `KeyGroup` of `width` floats per value.
 fn key_group(r: &mut Reader, width: usize) -> Result<()> {
     let n = r.u32()? as usize;
@@ -510,6 +688,9 @@ fn keyframes(r: &mut Reader) -> Result<Keyframes> {
     if n != 0 {
         let kind = r.u32()?;
         if kind == 4 {
+            if r.until(V10_1_0_0) {
+                r.skip(4)?; // order
+            }
             for axis in &mut k.xyz {
                 *axis = keys(r, 1)?.into_iter().map(|(t, v)| (t, v[0])).collect();
             }
@@ -532,18 +713,14 @@ fn keyframes(r: &mut Reader) -> Result<Keyframes> {
     Ok(k)
 }
 
-fn havok_material(r: &mut Reader) -> Result<()> {
-    r.skip(4)
-}
-
 fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
     Ok(Some(match kind {
         "NiNode" | "BSFadeNode" | "AvoidNode" | "RootCollisionNode" | "NiBSAnimationNode" | "NiBSParticleNode" | "NiBillboardNode" => {
             let av = av_object(r)?;
             let children = r.refs()?;
             let _effects = r.refs()?;
-            if kind == "NiBillboardNode" {
-                r.skip(2)?; // billboard mode
+            if kind == "NiBillboardNode" && r.since(V10_1_0_0) {
+                r.skip(2)?; // billboard mode (before 10.1, in the flags)
             }
             Block::Node { av, children }
         }
@@ -671,7 +848,15 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
         }
         "NiStencilProperty" => {
             object_net(r)?;
+            if r.until(V10_0_1_2) {
+                r.skip(2)?; // flags
+            }
             r.skip(1 + 4 + 4 + 4 + 4 + 4 + 4 + 4)?;
+            Block::Other(kind.into())
+        }
+        "NiFogProperty" => {
+            object_net(r)?;
+            r.skip(2 + 4 + 12)?; // flags, depth, colour
             Block::Other(kind.into())
         }
         "NiVertexColorProperty" => {
@@ -734,6 +919,24 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(24)?;
             Block::Other(kind.into())
         }
+        "BSFurnitureMarker" => {
+            r.string()?;
+            let n = r.u32()? as usize;
+            r.skip(n * 16)?; // positions: offset, orientation, the marker models they're for
+            Block::Other(kind.into())
+        }
+        "NiCamera" => {
+            av_object(r)?;
+            if r.since(V10_1_0_0) {
+                r.skip(2)?; // flags
+            }
+            r.skip(24)?; // frustum
+            if r.since(V10_1_0_0) {
+                r.skip(1)?; // orthographic
+            }
+            r.skip(16 + 4 + 4 + 4 + 4)?; // viewport, LOD adjust, scene, screen polygons and textures
+            Block::Other(kind.into())
+        }
         "bhkCollisionObject" | "bhkSPCollisionObject" => {
             let target = r.i32()?;
             r.skip(2)?; // flags
@@ -742,23 +945,29 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
         }
         "bhkRigidBody" | "bhkRigidBodyT" => {
             let shape = r.i32()?;
+            if r.until(V10_0_1_2) {
+                r.skip(4)?; // unknown
+            }
             let filter = r.u32()?;
             r.skip(20 + 4)?; // world object info, entity info
-            let info = r.take(196)?.to_vec();
-            let f = |at: usize| f32::from_le_bytes(info[at..at + 4].try_into().unwrap());
-            let v4 = |at: usize| [f(at), f(at + 4), f(at + 8), f(at + 12)];
-            let body = RigidBody {
-                shape,
-                layer: filter as u8,
-                translation: v4(20),
-                rotation: v4(36),
-                center: v4(132),
-                mass: f(148),
-                friction: f(160),
-                restitution: f(164),
-                transformed: kind == "bhkRigidBodyT",
-                motion: info[180],
-            };
+            if r.since(V10_1_0_0) {
+                r.skip(16)?; // the filter and entity info again
+            }
+            r.skip(4)?; // unused
+            let translation = r.vec4()?;
+            let rotation = r.vec4()?;
+            r.skip(16 + 16 + 48)?; // linear and angular velocity, inertia
+            let center = r.vec4()?;
+            let mass = r.f32()?;
+            r.skip(8)?; // damping
+            let friction = r.f32()?;
+            let restitution = r.f32()?;
+            if r.since(V10_1_0_0) {
+                r.skip(12)?; // fastest linear and angular velocity, penetration depth
+            }
+            let motion = r.u8()?;
+            r.skip(3 + 12)?; // deactivator, solver deactivation, quality; unused
+            let body = RigidBody { shape, layer: filter as u8, translation, rotation, center, mass, friction, restitution, transformed: kind == "bhkRigidBodyT", motion };
             let _constraints = r.refs()?;
             r.skip(4)?; // body flags
             Block::RigidBody(body)
@@ -785,15 +994,22 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             havok_material(r)?;
             Block::SphereShape { radius: r.f32()? }
         }
+        "bhkMultiSphereShape" => {
+            havok_material(r)?;
+            r.skip(12)?; // shape property
+            let n = r.u32()? as usize;
+            let spheres = (0..n).map(|_| Ok((r.vec3()?, r.f32()?))).collect::<Result<_>>()?;
+            Block::MultiSphere { spheres }
+        }
         "bhkConvexVerticesShape" => {
             havok_material(r)?;
             let radius = r.f32()?;
             r.skip(24)?;
             let n = r.u32()? as usize;
             let vertices = (0..n).map(|_| r.vec4().map(|v| Vec3::new(v[0], v[1], v[2]))).collect::<Result<_>>()?;
-            let normals = r.u32()? as usize;
-            r.skip(normals * 16)?;
-            Block::ConvexVertices { vertices, radius }
+            let n = r.u32()? as usize;
+            let planes = (0..n).map(|_| r.vec4()).collect::<Result<_>>()?;
+            Block::ConvexVertices { vertices, radius, planes }
         }
         "bhkListShape" => {
             let shapes = r.refs()?;
@@ -803,8 +1019,12 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(filters * 4)?;
             Block::ListShape { shapes }
         }
-        // Collision made of triangles (much of the clutter): passed over, so the blocks after it (often
-        // the model itself) are read.
+        "bhkConvexListShape" => {
+            let shapes = r.refs()?;
+            havok_material(r)?;
+            r.skip(4 + 8 + 12 + 1 + 4)?; // radius, unknown, child shape property, cached bounds, closest point distance
+            Block::ConvexList { shapes }
+        }
         "bhkConvexTransformShape" | "bhkTransformShape" => {
             let shape = r.i32()?;
             havok_material(r)?;
@@ -814,6 +1034,75 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
                 *v = r.f32()?;
             }
             Block::ConvexTransform { shape, transform }
+        }
+        "bhkConvexSweepShape" => {
+            // (10.0.1.0's.)
+            r.skip(4)?; // shape
+            havok_material(r)?;
+            r.skip(4 + 12)?; // radius, unknown
+            Block::Other(kind.into())
+        }
+        "bhkMeshShape" => {
+            // (10.0.1.0's `bhkNiTriStripsShape`: as it, triangles in `NiTriStripsData` blocks.)
+            r.skip(8 + 4 + 8 + 16)?; // unknown, radius, unknown, scale (1/7)
+            let n = r.u32()? as usize;
+            r.skip(n * 12 + 12)?; // shape properties, unknown
+            let strips = if r.until(V10_0_1_0) { r.refs()? } else { Vec::new() };
+            Block::TriStripsShape { strips }
+        }
+        // Collision made of triangles (much of the clutter and all the architecture).
+        "bhkNiTriStripsShape" => {
+            havok_material(r)?;
+            r.skip(4 + 20 + 4)?; // radius, unused, grow by
+            if r.since(V10_1_0_0) {
+                r.skip(16)?; // scale
+            }
+            let strips = r.refs()?;
+            let filters = r.u32()? as usize;
+            r.skip(filters * 4)?;
+            Block::TriStripsShape { strips }
+        }
+        "hkPackedNiTriStripsData" => {
+            let n = r.u32()? as usize;
+            let mut triangles = Vec::with_capacity(n.min(0x10000));
+            for _ in 0..n {
+                triangles.push([r.u16()?, r.u16()?, r.u16()?]);
+                r.skip(2 + 12)?; // welding, normal
+            }
+            let n = r.u32()? as usize;
+            let vertices = (0..n).map(|_| r.vec3()).collect::<Result<_>>()?;
+            Block::PackedStripsData { triangles, vertices }
+        }
+        "bhkPackedNiTriStripsShape" => {
+            let n = r.u16()? as usize;
+            let parts = (0..n)
+                .map(|_| {
+                    let filter = r.u32()?;
+                    let vertices = r.u32()?;
+                    Ok(PackedPart { layer: filter as u8, vertices, material: havok_material(r)? })
+                })
+                .collect::<Result<_>>()?;
+            r.skip(4 + 4 + 4 + 4 + 16 + 4 + 16)?; // user data, unused, radius, unused, scale, copies
+            let data = r.i32()?;
+            Block::PackedStrips { parts, data }
+        }
+        "bhkMoppBvTreeShape" => {
+            let shape = r.i32()?;
+            r.skip(12 + 4)?; // unused, scale
+            let n = r.u32()? as usize;
+            if r.since(V10_1_0_0) {
+                r.skip(16)?; // offset
+            }
+            r.skip(n)?; // the code
+            Block::Mopp { shape }
+        }
+        "bhkSimpleShapePhantom" => {
+            r.skip(4)?; // shape
+            if r.until(V10_0_1_2) {
+                r.skip(4)?; // unknown
+            }
+            r.skip(4 + 20 + 8 + 64)?; // filter, world object info, unused, transform
+            Block::Other(kind.into())
         }
         "NiBSBoneLODController" => {
             time_controller(r)?;
@@ -830,15 +1119,148 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(4)?;
             Block::Other(kind.into())
         }
-        "NiTransformController" | "NiVisController" | "NiAlphaController" => {
+        "NiTransformController" | "NiKeyframeController" | "NiVisController" | "NiAlphaController" => {
+            single_interp_controller(r)?;
+            old_keys(r)?;
+            Block::Other(kind.into())
+        }
+        "BSKeyframeController" => {
+            single_interp_controller(r)?;
+            old_keys(r)?;
+            r.skip(4)?; // more keys
+            Block::Other(kind.into())
+        }
+        "NiMaterialColorController" => {
+            single_interp_controller(r)?;
+            if r.since(V10_1_0_0) {
+                r.skip(2)?; // which colour
+            }
+            old_keys(r)?;
+            Block::Other(kind.into())
+        }
+        "NiTextureTransformController" => {
+            single_interp_controller(r)?;
+            r.skip(1 + 4 + 4)?; // shader map, texture slot, what it moves
+            old_keys(r)?;
+            Block::Other(kind.into())
+        }
+        "NiFlipController" => {
+            single_interp_controller(r)?;
+            r.skip(4)?; // texture slot
+            if r.until(V10_1_0_103) {
+                r.skip(4 + 4)?; // time so far, time between
+            }
+            let _textures = r.refs()?;
+            Block::Other(kind.into())
+        }
+        // Particle systems: read past.
+        "NiPSysEmitterCtlr" => {
+            single_interp_controller(r)?;
+            r.string()?; // modifier
+            old_keys(r)?;
+            if r.since(V10_1_0_104) {
+                r.skip(4)?; // visibility interpolator
+            }
+            Block::Other(kind.into())
+        }
+        "NiPSysModifierActiveCtlr" | "NiPSysEmitterDeclinationCtlr" | "NiPSysEmitterDeclinationVarCtlr" | "NiPSysEmitterInitialRadiusCtlr" | "NiPSysEmitterLifeSpanCtlr" | "NiPSysEmitterSpeedCtlr" | "NiPSysGravityStrengthCtlr" => {
+            single_interp_controller(r)?;
+            r.string()?; // modifier
+            old_keys(r)?;
+            Block::Other(kind.into())
+        }
+        "NiPSysUpdateCtlr" | "NiPSysResetOnLoopCtlr" => {
             time_controller(r)?;
-            r.skip(4)?; // interpolator
+            Block::Other(kind.into())
+        }
+        "NiParticleSystem" | "NiMeshParticleSystem" => {
+            av_object(r)?;
+            r.skip(4 + 4)?; // data, skin
+            if r.bool()? {
+                r.string()?; // shader
+                r.skip(4)?;
+            }
+            if r.since(V10_1_0_0) {
+                r.skip(1)?; // world space
+                let _modifiers = r.refs()?;
+            }
+            Block::Other(kind.into())
+        }
+        "NiPSysData" | "NiMeshPSysData" => {
+            let (_, n) = geometry_data(r)?;
+            particles_data(r, n)?;
+            r.skip(n * if r.until(V10_4_0_1) { 40 } else { 28 })?; // each particle's state
+            if r.since(V20_0_0_2) && r.bool()? {
+                r.skip(n * 4)?; // rotation speeds
+            }
+            r.skip(2 + 2)?; // added particles, base
+            if kind == "NiMeshPSysData" {
+                if r.since(V10_2_0_0) {
+                    r.skip(4 + 1)?; // pool size, fill pools
+                    let n = r.u32()? as usize;
+                    r.skip(n * 4)?; // generations
+                }
+                r.skip(4)?; // particle meshes
+            }
+            Block::Other(kind.into())
+        }
+        "NiPSysAgeDeathModifier" | "NiPSysBombModifier" | "NiPSysBoundUpdateModifier" | "NiPSysColliderManager" | "NiPSysColorModifier" | "NiPSysDragModifier" | "NiPSysGravityModifier" | "NiPSysGrowFadeModifier" | "NiPSysPositionModifier" | "NiPSysSpawnModifier" | "BSParentVelocityModifier" | "BSWindModifier" => {
+            psys_modifier(r)?;
+            r.skip(match kind {
+                "NiPSysAgeDeathModifier" => 1 + 4,                     // spawn on death, spawner
+                "NiPSysBombModifier" => 4 + 12 + 4 + 4 + 4 + 4,        // node, axis, decay, acceleration, decay and symmetry types
+                "NiPSysBoundUpdateModifier" => 2,                      // update skip
+                "NiPSysDragModifier" => 4 + 12 + 4 + 4 + 4,            // node, axis, percentage, range, falloff
+                "NiPSysGravityModifier" => 4 + 12 + 4 + 4 + 4 + 4 + 4, // node, axis, decay, strength, force type, turbulence and its scale
+                "NiPSysGrowFadeModifier" => 4 + 2 + 4 + 2,             // grow time and generation, fade time and generation
+                "NiPSysSpawnModifier" => 2 + 4 + 2 + 2 + 4 * 4,        // generations, share spawned, least and most, speed and direction variation, life span and its variation
+                "NiPSysPositionModifier" => 0,
+                _ => 4, // collider, colour keys, damping, strength
+            })?;
+            Block::Other(kind.into())
+        }
+        "NiPSysRotationModifier" => {
+            psys_modifier(r)?;
+            r.skip(4)?; // speed
+            if r.since(V20_0_0_2) {
+                r.skip(4 + 4 + 4 + 1)?; // speed variation, angle and its variation, random sign
+            }
+            r.skip(1 + 12)?; // random axis, axis
+            Block::Other(kind.into())
+        }
+        "NiPSysBoxEmitter" | "NiPSysCylinderEmitter" | "NiPSysSphereEmitter" | "BSPSysArrayEmitter" => {
+            psys_emitter(r, true)?;
+            r.skip(match kind {
+                "NiPSysBoxEmitter" => 12,     // width, height, depth
+                "NiPSysCylinderEmitter" => 8, // radius, height
+                "NiPSysSphereEmitter" => 4,   // radius
+                _ => 0,
+            })?;
+            Block::Other(kind.into())
+        }
+        "NiPSysMeshUpdateModifier" => {
+            psys_modifier(r)?;
+            let _meshes = r.refs()?;
+            Block::Other(kind.into())
+        }
+        "NiPSysMeshEmitter" => {
+            psys_emitter(r, false)?;
+            let _meshes = r.refs()?;
+            r.skip(4 + 4 + 12)?; // velocity type, where from, axis
+            Block::Other(kind.into())
+        }
+        "NiPSysPlanarCollider" => {
+            r.skip(4 + 1 + 1 + 4 + 4 + 4 + 4)?; // bounce, spawn and die on collision, spawner, manager, next, node
+            r.skip(4 + 4 + 12 + 12)?; // width, height, axes
             Block::Other(kind.into())
         }
         "NiTransformInterpolator" => {
             let translation = r.vec3()?;
             let [w, x, y, z] = r.vec4()?;
             let scale = r.f32()?;
+            if r.until(V10_1_0_109) {
+                r.skip(3)?; // which of those are set
+            }
             let data = r.i32()?;
             Block::TransformInterpolator { translation, rotation: [x, y, z, w], scale, data }
         }
@@ -847,22 +1269,22 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             let data = r.i32()?;
             Block::FloatInterpolator { value, data }
         }
-        "NiBoolInterpolator" => {
+        "NiBoolInterpolator" | "NiBoolTimelineInterpolator" => {
             r.skip(1 + 4)?; // value, data
             Block::Other(kind.into())
         }
+        "NiPathInterpolator" => {
+            r.skip(2 + 4 + 4 + 4 + 2 + 4 + 4)?; // flags, bank direction, steepest bank, smoothing, follow axis, path keys, percent keys
+            Block::Other(kind.into())
+        }
         // A blend of interpolators (an older model's sequences go through one), and its value.
-        "NiBlendTransformInterpolator" | "NiBlendFloatInterpolator" | "NiBlendBoolInterpolator" => {
-            let flags = r.u8()?;
-            let items = r.u8()? as usize;
-            r.skip(4)?; // weight threshold
-            if flags & 1 == 0 {
-                r.skip(4 + 4 * 4)?; // count, single index, priorities; single time, weight sums, spinner
-                r.skip(items * 17)?; // interpolator, weights, priority, spinner
-            }
+        "NiBlendTransformInterpolator" | "NiBlendFloatInterpolator" | "NiBlendBoolInterpolator" | "NiBlendPoint3Interpolator" => {
+            blend_interpolator(r)?;
             match kind {
                 "NiBlendFloatInterpolator" => r.skip(4)?,
                 "NiBlendBoolInterpolator" => r.skip(1)?,
+                "NiBlendPoint3Interpolator" => r.skip(12)?,
+                _ if r.until(V10_1_0_109) => r.skip(12 + 16 + 4 + 3)?, // translation, rotation, scale, which are set
                 _ => {}
             }
             Block::Other(kind.into())
@@ -875,6 +1297,10 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
         "NiFloatData" => Block::FloatKeys(keys(r, 1)?.into_iter().map(|(t, v)| (t, v[0])).collect()),
         "NiPosData" => {
             key_group(r, 3)?;
+            Block::Other(kind.into())
+        }
+        "NiColorData" => {
+            key_group(r, 4)?;
             Block::Other(kind.into())
         }
         "NiBoolData" => {
@@ -891,41 +1317,6 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             let n = r.u32()?;
             Block::TextKeys((0..n).map(|_| Ok((r.f32()?, r.string()?))).collect::<Result<_>>()?)
         }
-        // Collision that's only read past here (the game's live Havok shapes are what the adapter
-        // uses): triangle strips, packed triangles, their MOPP trees, phantoms.
-        "bhkNiTriStripsShape" => {
-            havok_material(r)?;
-            r.skip(4 + 20 + 4 + 16)?; // radius, unused, grow by, scale
-            let _strips = r.refs()?;
-            let filters = r.u32()? as usize;
-            r.skip(filters * 4)?;
-            Block::Other(kind.into())
-        }
-        "hkPackedNiTriStripsData" => {
-            let tris = r.u32()? as usize;
-            r.skip(tris * 20)?; // indices, welding, normal
-            let verts = r.u32()? as usize;
-            r.skip(verts * 12)?;
-            Block::Other(kind.into())
-        }
-        "bhkPackedNiTriStripsShape" => {
-            let parts = r.u16()? as usize;
-            r.skip(parts * 12)?;
-            r.skip(4 + 4 + 4 + 4 + 16 + 4 + 16)?; // user data, unused, radius, unused, scale, copies
-            r.skip(4)?; // data
-            Block::Other(kind.into())
-        }
-        "bhkMoppBvTreeShape" => {
-            let _shape = r.i32()?;
-            r.skip(12 + 4)?; // unused, scale
-            let n = r.u32()? as usize;
-            r.skip(16 + n)?; // offset, the code
-            Block::Other(kind.into())
-        }
-        "bhkSimpleShapePhantom" => {
-            r.skip(4 + 4 + 20 + 8 + 64)?;
-            Block::Other(kind.into())
-        }
         "NiControllerManager" => {
             time_controller(r)?;
             r.skip(1)?; // cumulative
@@ -934,36 +1325,76 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             Block::ControllerManager { sequences }
         }
         "NiControllerSequence" => {
-            let name = r.string()?;
+            let mut s = Sequence { name: r.string()?, palette: -1, text_keys: -1, ..Default::default() };
+            if r.until(V10_1_0_103) {
+                r.string()?; // accumulation root
+                s.text_keys = r.i32()?;
+            }
             let n = r.u32()? as usize;
             if n > 0x1000 {
                 bail!("{n} controlled blocks at {:#x}", r.at);
             }
-            r.skip(4)?; // array grow by
-            let mut blocks = Vec::with_capacity(n);
+            if r.since(V10_1_0_106) {
+                r.skip(4)?; // array grow by
+            }
+            // (A name kept in the sequence's own: its offset there.)
+            let name = |r: &mut Reader, names: &mut String| -> Result<u32> {
+                let at = names.len() as u32;
+                names.push_str(&r.string()?);
+                names.push('\0');
+                Ok(at)
+            };
             for _ in 0..n {
-                // Interpolator, controller, priority, string palette, then the offsets of the node's
-                // name, the property's type, the controller's type, its id and the interpolator's.
+                // What it animates: the interpolator, and the node's name, the controller's type, its
+                // id and the interpolator's id (from 10.2 offsets in a string palette, before the
+                // names themselves; up to 10.1.0.103 the node's name and its controller alone).
+                if r.until(V10_1_0_103) {
+                    let node = name(r, &mut s.names)?;
+                    r.skip(4)?; // controller
+                    let none = s.names.len() as u32;
+                    s.names.push('\0');
+                    s.blocks.push((-1, [node, none, none, none]));
+                    continue;
+                }
                 let interpolator = r.i32()?;
-                r.skip(4 + 1)?; // controller, priority
-                let _palette = r.i32()?;
-                let node = r.u32()?;
-                r.skip(4)?; // property type
-                let (ctrl, ctrl_id, interp_id) = (r.u32()?, r.u32()?, r.u32()?);
-                blocks.push((interpolator, [node, ctrl, ctrl_id, interp_id]));
+                r.skip(4)?; // controller
+                if r.until(V10_1_0_110) {
+                    r.skip(4 + 2)?; // blend interpolator, its index
+                }
+                if r.bs > 0 {
+                    r.skip(1)?; // priority
+                }
+                let offsets = if r.since(V10_2_0_0) {
+                    let _palette = r.i32()?;
+                    let node = r.u32()?;
+                    r.skip(4)?; // property type
+                    [node, r.u32()?, r.u32()?, r.u32()?]
+                } else {
+                    let node = name(r, &mut s.names)?;
+                    r.string()?; // property type
+                    [node, name(r, &mut s.names)?, name(r, &mut s.names)?, name(r, &mut s.names)?]
+                };
+                s.blocks.push((interpolator, offsets));
             }
-            r.skip(4)?; // weight
-            let text_keys = r.i32()?;
-            r.skip(4 + 4)?; // cycle type, frequency
-            if !r.since(V10_4_0_1) {
-                r.skip(4)?; // phase
+            if r.since(V10_1_0_106) {
+                r.skip(4)?; // weight
+                s.text_keys = r.i32()?;
+                r.skip(4 + 4)?; // cycle type, frequency
+                if !r.since(V10_4_0_1) {
+                    r.skip(4)?; // phase
+                }
+                s.start = r.f32()?;
+                s.stop = r.f32()?;
+                if r.v == V10_1_0_106 {
+                    r.skip(1)?; // play backwards
+                }
+                r.skip(4)?; // manager
+                r.string()?; // accumulation root
+                if r.since(V10_1_0_113) {
+                    s.palette = r.i32()?;
+                }
             }
-            let start = r.f32()?;
-            let stop = r.f32()?;
-            r.skip(4)?; // manager
-            r.string()?; // accumulation root
-            let palette = r.i32()?;
-            Block::Sequence(Sequence { name, blocks, palette, start, stop, text_keys })
+            Block::Sequence(s)
         }
         "NiStringPalette" => {
             let s = r.string()?;
@@ -980,7 +1411,7 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             Block::Other(kind.into())
         }
         "NiMultiTargetTransformController" => {
-            time_controller(r)?;
+            interp_controller(r)?;
             let n = r.u16()? as usize;
             r.skip(n * 4)?;
             Block::Other(kind.into())
@@ -989,14 +1420,20 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             // `NiTimeController`'s fields, to its target.
             r.skip(4 + 2 + 4 * 4)?;
             let target = r.i32()?;
-            r.skip(2)?; // morpher flags
+            if r.since(V10_1_0_104) && r.until(V10_1_0_108) {
+                r.skip(1)?; // managed
+            }
+            if r.since(V10_0_1_2) {
+                r.skip(2)?; // morpher flags
+            }
             let data = r.i32()?;
             r.skip(1)?; // always update
-            let n = r.u32()?;
-            let interpolators = (0..n).map(|_| r.i32()).collect::<Result<Vec<_>>>()?;
-            // (Bethesda's unknown ints, 20.0.0.4/5 with a user version past 9.)
-            let unknown = r.u32()? as usize;
-            r.skip(unknown * 4)?;
+            let interpolators = if r.since(V10_1_0_106) { r.refs()? } else { Vec::new() };
+            // (Bethesda's unknown ints, from 10.2 with a stream version past 9.)
+            if r.since(V10_2_0_0) && r.bs > 9 {
+                let unknown = r.u32()? as usize;
+                r.skip(unknown * 4)?;
+            }
             Block::Morpher { target, data, interpolators }
         }
         "NiMorphData" => {
@@ -1005,7 +1442,16 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(1)?; // relative targets (always 1 in the game's files)
             let mut morphs = Vec::new();
             for _ in 0..n {
-                let name = r.string()?;
+                let name = if r.since(V10_1_0_106) { r.string()? } else { String::new() };
+                if r.until(V10_1_0_0) {
+                    // (Its own float keys, up to 10.1.)
+                    let keys = r.u32()? as usize;
+                    let interpolation = r.u32()?;
+                    r.skip(keys * (8 + if interpolation == 2 { 8 } else if interpolation == 3 { 12 } else { 0 }))?;
+                }
+                if r.since(V10_1_0_104) && r.bs < 10 {
+                    r.skip(4)?; // weight
+                }
                 let offsets = (0..vertices).map(|_| r.vec3()).collect::<Result<Vec<_>>>()?;
                 morphs.push((name, offsets));
             }
@@ -1015,7 +1461,10 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             let target = r.i32()?;
             r.skip(2)?;
             let body = r.i32()?;
-            r.skip(8)?;
+            r.skip(8)?; // heir and velocity gain
+            if r.bs < 9 {
+                r.skip(8)?; // unknown
+            }
             Block::CollisionObject { target, body }
         }
         "bhkHingeConstraint" => {
@@ -1050,6 +1499,10 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
             r.skip(16 + 120)?;
             Block::Other(kind.into())
         }
+        "bhkStiffSpringConstraint" => {
+            r.skip(16 + 36)?;
+            Block::Other(kind.into())
+        }
         _ => return Ok(None),
     }))
 }
@@ -1057,9 +1510,9 @@ fn block(r: &mut Reader, kind: &str) -> Result<Option<Block>> {
 impl Nif {
     pub fn parse(data: &[u8]) -> Result<Nif> {
         let Some(nl) = data.iter().position(|&c| c == b'\n') else { bail!("no header line") };
-        let mut r = Reader { b: data, at: nl + 1, v: 0 };
+        let mut r = Reader { b: data, at: nl + 1, v: 0, bs: 0 };
         let version = r.u32()?;
-        if ![0x0A00_0100, V10_0_1_2, V10_1_0_0, 0x0A01_006A, 0x0A02_0000, 0x1400_0004, 0x1400_0005].contains(&version) {
+        if ![V10_0_1_0, V10_0_1_2, V10_1_0_0, V10_1_0_101, V10_1_0_106, V10_2_0_0, V20_0_0_4, V20_0_0_5].contains(&version) {
             bail!("NIF version {version:#x} (only 10.0.1.0 to 10.2.0.0 and 20.0.0.4/5 are read)");
         }
         r.v = version;
@@ -1069,8 +1522,10 @@ impl Nif {
         let user = if r.since(0x0A00_0108) { r.u32()? } else { 0 };
         let count = r.u32()? as usize;
         // Bethesda's stream header (`nif.xml`'s `BSSTREAMHEADER`): its version, author and scripts.
-        if user >= 3 && (version == V10_0_1_2 || version == 0x1400_0005 || (r.since(V10_1_0_0) && version <= V20_0_0_4 && user <= 11)) {
-            let _user2 = r.u32()?;
+        // 10.0.1.2 files have one though they've no user version to say so: it's known by its look.
+        let stream_header = if version == V10_0_1_2 { r.stream_header_follows() } else { user >= 3 && (version == V20_0_0_5 || (r.since(V10_1_0_0) && version <= V20_0_0_4 && user <= 11)) };
+        if stream_header {
+            r.bs = r.u32()?;
             for _ in 0..3 {
                 let n = r.u8()? as usize;
                 r.skip(n)?;
@@ -1083,8 +1538,8 @@ impl Nif {
         let mut blocks = Vec::with_capacity(count);
         let mut stopped_at = None;
         for kind in &kinds {
-            // (Up to 10.1.0.106 every block starts with a zero.)
-            if version <= 0x0A01_006A && r.u32()? != 0 {
+            // (Up to 10.1.0.106 every block starts with a zero, but Bethesda's Havok blocks.)
+            if version <= V10_1_0_106 && !kind.starts_with("bhk") && !kind.starts_with("hk") && r.u32()? != 0 {
                 bail!("block {} ({kind}) doesn't start with a zero", blocks.len());
             }
             match block(&mut r, kind) {
@@ -1098,9 +1553,13 @@ impl Nif {
         }
         let mut roots = Vec::new();
         if stopped_at.is_none() {
+            let footer = r.at;
             let n = r.u32()? as usize;
             roots = (0..n).map(|_| r.i32()).collect::<Result<_>>()?;
-            if r.at != data.len() {
+            // (Some of the distant land's files were written over an older, longer one and keep its
+            // end: the rest of its last block, then its footer, the same as this one.)
+            let stale_end = data.ends_with(&data[footer..r.at]);
+            if r.at != data.len() && !stale_end {
                 bail!("{} bytes left after the footer: a block was misread", data.len() - r.at);
             }
         }
@@ -1133,7 +1592,7 @@ impl Nif {
     /// (seconds after the hold, the bend as a share of the bend at the hold).
     pub fn bow_spring(&self, morph: &str) -> Option<Vec<[f32; 2]>> {
         let s = self.sequences().into_iter().next()?;
-        let at = |o: u32| self.palette_name(s.palette, o).unwrap_or_default();
+        let at = |o: u32| self.sequence_name(s, o).unwrap_or_default();
         let hold = self.text_keys(s).iter().find(|(_, k)| k.eq_ignore_ascii_case("Hold"))?.0;
         let interpolator = s.blocks.iter().find(|(_, o)| at(o[1]) == "NiGeomMorpherController" && at(o[3]).eq_ignore_ascii_case(morph))?.0;
         let Some(Block::FloatInterpolator { data, .. }) = self.get(interpolator) else { return None };
@@ -1202,9 +1661,12 @@ impl Nif {
     /// The name at `offset` in a string palette.
     pub fn palette_name(&self, palette: i32, offset: u32) -> Option<String> {
         let Some(Block::StringPalette(p)) = self.get(palette) else { return None };
-        let rest = p.as_bytes().get(offset as usize..)?;
-        let end = rest.iter().position(|&c| c == 0).unwrap_or(rest.len());
-        Some(String::from_utf8_lossy(&rest[..end]).into_owned())
+        name_at(p, offset)
+    }
+
+    /// The name at `offset` among a sequence's: in its string palette, or (files before 10.2) its own.
+    pub fn sequence_name(&self, s: &Sequence, offset: u32) -> Option<String> {
+        if s.palette < 0 { name_at(&s.names, offset) } else { self.palette_name(s.palette, offset) }
     }
 
     /// An animation's start and stop times (its keys' when it doesn't say).
@@ -1228,7 +1690,7 @@ impl Nif {
     pub fn sequence_pose(&self, s: &Sequence, t: f32) -> Vec<(String, Transform)> {
         let mut out = Vec::new();
         for &(interp, [offset, ..]) in &s.blocks {
-            let Some(name) = self.palette_name(s.palette, offset) else { continue };
+            let Some(name) = self.sequence_name(s, offset) else { continue };
             let Some(Block::TransformInterpolator { translation, rotation, data, .. }) = self.get(interp) else { continue };
             let rest = self.find(&name).and_then(|i| self.av(i)).map(|a| a.transform.clone()).unwrap_or(Transform::IDENTITY);
             // (Unset parts of the interpolator's own pose are Gamebryo's "invalid": huge.)

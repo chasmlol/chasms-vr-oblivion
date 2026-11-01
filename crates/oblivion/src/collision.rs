@@ -1,18 +1,30 @@
-//! Oblivion's real collision, for the runtime's physics: what the hands hold, drop and throw lands
-//! on and stops at the world Oblivion's own physics has, in view or not.
+//! Oblivion's world, for the runtime's physics: what the hands, the arms and what they hold meet,
+//! and what what they drop and throw lands on, in view or not.
 //!
-//! Oblivion simulates with Havok, a 2005 version. Everything
-//! that never moves (the land, buildings, rocks, trees, furniture) is a fixed rigid body in the
-//! current Havok world's fixed island: the exterior's world, or the interior cell's own. The
-//! adapter reads each body's shape where Havok's own reflection (its `hkClass` tables, in the game)
-//! puts the fields: boxes, spheres, capsules, cylinders, convex hulls, lists and transforms; every
-//! shape collection (the packed triangle strips most of the architecture is, the land's height
-//! field) through Havok's own interface for its children, one triangle at a time. A body's
-//! triangles are worked out once, when the player first comes near it; the ones within reach go to
-//! the runtime as one collision mesh, sent again when the player has moved on or the world changed,
-//! with each triangle's material (what a blade bites into): the game's own, Bethesda's per shape
-//! (`bhkShape` +0x10, the wrapper a shape's user data points to) and per part of a packed triangle
-//! mesh ([`material`]).
+//! **The shapes the hands meet are what's drawn.** Oblivion's own collision is a stand-in for most
+//! of its models (a box round a chair, a hull round a table, a slab for a wall and its mouldings),
+//! right for walking and things falling and wrong for a hand reaching between a chair's rungs,
+//! into a shelf or along a wall. So each reference near the player whose model has collision of
+//! its own (the fixed bodies under its 3D, below) is given the runtime as its model's drawn shape
+//! instead ([`oblivion_assets::hitbox`]: the drawn triangles, less what the game doesn't make
+//! solid), read from the game's archives on a thread of their own and placed where the game draws
+//! it (its 3D's world transform), one collision mesh per reference. What has no model (the land),
+//! a model with nothing drawn solid, and a model not read yet keep the game's own shape. The game's
+//! own physics (the player's walking, the NPCs, things falling) keeps the game's collision.
+//!
+//! **The game's collision.** Oblivion simulates with Havok, a 2005 version. Everything that never
+//! moves (the land, buildings, rocks, trees, furniture) is a fixed rigid body in the current Havok
+//! world's fixed island: the exterior's world, or the interior cell's own. The adapter reads each
+//! body's shape where Havok's own reflection (its `hkClass` tables, in the game) puts the fields:
+//! boxes, spheres, capsules, cylinders, convex hulls, lists and transforms; every shape collection
+//! (the packed triangle strips most of the architecture is, the land's height field) through
+//! Havok's own interface for its children, one triangle at a time. A body's triangles are worked
+//! out once, when the player first comes near it; the ones within reach that no drawn shape stands
+//! in for go to the runtime as one collision mesh, sent again when the player has moved on or the
+//! world changed, with each triangle's material (what a blade bites into): the game's own,
+//! Bethesda's per shape (`bhkShape` +0x10, the wrapper a shape's user data points to) and per part
+//! of a packed triangle mesh ([`material`]). A drawn shape's triangles take the material of the
+//! game's nearest.
 //!
 //! The triangle maths is pure and tested; the Havok reads are guarded.
 
@@ -24,21 +36,26 @@ pub const HAVOK_SCALE: f32 = 7.0;
 /// it's sent again.
 pub const RADIUS: f32 = 12.0;
 pub const RESEND: f32 = 3.0;
-/// At most this many triangles in the mesh sent (nearest first).
+/// At most this many triangles in the mesh of the game's shapes sent (nearest first).
 pub const MAX_TRIANGLES: usize = 40_000;
+/// At most this many drawn triangles in the runtime at once (the nearest references' first), and
+/// sent in one frame (a frame's share of the collision ring: the rest go next frame).
+pub const MAX_DRAWN_TRIANGLES: usize = 800_000;
+pub const SEND_PER_FRAME: usize = 40_000;
+/// The first id of the references' drawn meshes in the runtime (each its own, counting up).
+pub const DRAWN_ID_BASE: u32 = 0x4F43_0000;
+/// Drawn triangles kept read at most (models not near the player forgotten first).
+pub const HITBOX_CACHE: usize = 1_000_000;
+/// References whose 3D is looked through for fixed bodies in one scan (the rest the next).
+pub const WALKS_PER_SCAN: usize = 600;
 /// At most this many triangles from one body (a whole castle is far less).
 pub const MAX_BODY_TRIANGLES: usize = 250_000;
 /// The collision mesh's id in the runtime.
 pub const MESH_ID: u32 = 0x4F42_0001;
-/// Sides of the prism a round shape (sphere, capsule, cylinder) becomes.
-pub const ROUND_SIDES: usize = 8;
+/// Sides of the prism a round shape (sphere, capsule, cylinder: a tree's trunk) becomes.
+pub const ROUND_SIDES: usize = 16;
 
-/// Bethesda's collision layers (the low 7 bits of a body's filter info) that are solid to what
-/// the hands hold: the world's statics, the land, trees, furniture, stairs. Water, triggers,
-/// portals, the characters' own capsules and the pick-only layers are not.
-pub fn solid_layer(layer: u32) -> bool {
-    matches!(layer, 0 | 1 | 2 | 3 | 4 | 9 | 10 | 13 | 14 | 17 | 19)
-}
+pub use oblivion_assets::hitbox::solid_layer;
 
 /// A rigid transform as Havok keeps one: rotation (columns), then translation.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -159,6 +176,51 @@ pub fn nearby<'a>(bodies: impl IntoIterator<Item = (&'a [[Vec3; 3]], &'a [u8])>,
     near.into_iter().take(max).map(|(_, t, m)| (t, m)).collect()
 }
 
+/// Each of `tris`' material: the material of the nearest of `from` (by their middles), or
+/// `fallback` when there are none. One material for all of `from` is all of `tris`' (most models).
+pub fn nearest_materials(tris: &[[Vec3; 3]], from: &[[Vec3; 3]], mats: &[u8], fallback: u8) -> Vec<u8> {
+    let first = mats.first().copied().unwrap_or(fallback);
+    if from.is_empty() || mats.iter().all(|&m| m == first) {
+        return vec![first; tris.len()];
+    }
+    // A grid of `from`'s middles, half a metre a cell, looked through ring by ring.
+    const CELL: f32 = 0.5;
+    let key = |p: Vec3| ((p.x / CELL).floor() as i32, (p.y / CELL).floor() as i32, (p.z / CELL).floor() as i32);
+    let mid = |t: &[Vec3; 3]| (t[0] + t[1] + t[2]) / 3.0;
+    let mut grid: std::collections::HashMap<(i32, i32, i32), Vec<usize>> = std::collections::HashMap::new();
+    for (i, t) in from.iter().enumerate() {
+        grid.entry(key(mid(t))).or_default().push(i);
+    }
+    tris.iter()
+        .map(|t| {
+            let p = mid(t);
+            let (x, y, z) = key(p);
+            for ring in 0i32..6 {
+                let mut best: Option<(f32, usize)> = None;
+                for dx in -ring..=ring {
+                    for dy in -ring..=ring {
+                        for dz in -ring..=ring {
+                            if dx.abs().max(dy.abs()).max(dz.abs()) != ring {
+                                continue;
+                            }
+                            for &i in grid.get(&(x + dx, y + dy, z + dz)).into_iter().flatten() {
+                                let d = mid(&from[i]).distance_squared(p);
+                                if best.is_none_or(|b| d < b.0) {
+                                    best = Some((d, i));
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Some((_, i)) = best {
+                    return mats.get(i).copied().unwrap_or(fallback);
+                }
+            }
+            first
+        })
+        .collect()
+}
+
 /// Bethesda's collision material (Oblivion's 0..31: stone, cloth, dirt, glass, grass, metal,
 /// organic, skin, water, wood, heavy stone, heavy metal, heavy wood, chain, snow; then each again
 /// as stairs; the elevator) as the framework's `MAT_*`.
@@ -224,10 +286,12 @@ pub use win::*;
 mod win {
     use super::*;
     use crate::camera;
-    use crate::engine::{self, refr};
+    use crate::engine::{self, av, refr};
     use crate::mem;
+    use oblivion_assets::hitbox::Hitbox;
+    use oblivion_assets::nif::Nif;
     use std::collections::HashMap;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     /// `TES*` (xOBSE's `g_TES`) and its current interior cell (null outside).
     const TES: usize = 0x00B3_33A0;
@@ -575,6 +639,55 @@ mod win {
         mats: Vec<u8>,
     }
 
+    impl Body {
+        fn gap(&self, at: Vec3) -> f32 {
+            (self.lo - at).max(at - self.hi).max(Vec3::ZERO).length()
+        }
+
+        /// Its triangles worked out, if they aren't yet (how many).
+        fn read(&mut self, unknown: &mut HashMap<i32, u32>) -> usize {
+            if self.tris.is_some() {
+                return 0;
+            }
+            let (mut tris, mut mats) = (Vec::new(), Vec::new());
+            shape_triangles(self.fixed.shape, &self.fixed.xf, rustvr_protocol::MAT_STONE, &mut tris, &mut mats, unknown, 0);
+            mats.resize(tris.len(), rustvr_protocol::MAT_STONE as u8);
+            let n = tris.len();
+            self.tris = Some(tris.into_iter().map(|t| t.map(to_runtime)).collect());
+            self.mats = mats;
+            n
+        }
+    }
+
+    /// A reference whose 3D holds fixed bodies: its model's drawn shape stands in for them.
+    struct Owner {
+        root: usize,
+        model: String,
+        bodies: Vec<usize>,
+        /// Its bodies' box in the runtime's world.
+        lo: Vec3,
+        hi: Vec3,
+        /// Its model's hitbox once read (None in it: nothing drawn is solid, its bodies stay the
+        /// game's shape).
+        hitbox: Option<Option<Arc<Hitbox>>>,
+        /// Its mesh's id in the runtime and the 3D's world transform it was placed by, while sent.
+        id: u32,
+        sent: Option<[f32; 13]>,
+        triangles: usize,
+        /// Seen in the latest look round.
+        seen: bool,
+    }
+
+    impl Owner {
+        fn gap(&self, at: Vec3) -> f32 {
+            (self.lo - at).max(at - self.hi).max(Vec3::ZERO).length()
+        }
+
+        fn drawn(&self) -> Option<&Arc<Hitbox>> {
+            self.hitbox.as_ref().and_then(|h| h.as_ref())
+        }
+    }
+
     struct State {
         world: usize,
         bodies: HashMap<usize, Body>,
@@ -582,13 +695,27 @@ mod win {
         sent_at: Option<Vec3>,
         connections: u32,
         logged_world: bool,
+        /// The references holding fixed bodies (by reference), which reference holds each body,
+        /// and the references looked through that hold none (with the 3D they had, and how many
+        /// times bodies had come into the world then: they're looked through again after).
+        owners: HashMap<usize, Owner>,
+        claimed: HashMap<usize, usize>,
+        plain: HashMap<usize, (usize, u32)>,
+        bodies_added: u32,
+        next_id: u32,
+        /// The bodies left out of the game's mesh as last sent (their drawn shapes stand in).
+        covered: Vec<usize>,
+        /// The drawn meshes to take out of the runtime.
+        to_remove: Vec<u32>,
+        logged_owners: u32,
     }
 
     static STATE: Mutex<Option<State>> = Mutex::new(None);
 
     /// How far the world's fixed things are along `dir` (unit length) from the nearest of the
     /// points `from` (the runtime's world, metres), within `look`: of the bodies whose triangles
-    /// have been worked out (all of them near the player).
+    /// have been worked out (all of them near the player). The game's own shapes: where the game's
+    /// body can go.
     pub fn nearest_along(from: &[Vec3], dir: Vec3, look: f32) -> Option<f32> {
         let st = STATE.lock().unwrap();
         let s = st.as_ref()?;
@@ -608,15 +735,310 @@ mod win {
         best
     }
 
+    // ---- the references and their models --------------------------------------------------------
+    const FORM_TYPE: usize = 0x4;
+    const FORM_FLAGS: usize = 0x8;
+    const DELETED: u32 = 0x20;
+    const DISABLED: u32 = 0x800;
+    const REFR_BASE: usize = 0x1C;
+    const REFR_NODE: usize = 0x3C;
+    /// A cell's references (`{refr, next}`); a node's collision object, its `bhkRigidBody` (+0x10),
+    /// that one's `hkRigidBody` (+8).
+    const CELL_OBJECTS: usize = 0x48;
+    const NODE_COLLISION: usize = 0xA8;
+    const COLLISION_BODY: usize = 0x10;
+    /// Form types whose references are the characters (`NPC_`, `CREA`): never the world's.
+    const NPC: u8 = 0x23;
+    const CREATURE: u8 = 0x24;
+
+    /// The fixed bodies (of `bodies`) under a reference's 3D.
+    fn bodies_under(root: usize, bodies: &HashMap<usize, Body>) -> Vec<usize> {
+        let mut out = Vec::new();
+        let mut stack = vec![(root, 0u32)];
+        let mut n = 0;
+        while let Some((node, depth)) = stack.pop() {
+            n += 1;
+            if n > 4096 || depth > 32 {
+                break;
+            }
+            let co = mem::deref(node + NODE_COLLISION);
+            if co != 0 {
+                let rb = mem::deref(co + COLLISION_BODY);
+                let hk = if rb != 0 { mem::deref(rb + HK_OBJ) } else { 0 };
+                if hk != 0 && bodies.contains_key(&hk) && !out.contains(&hk) {
+                    out.push(hk);
+                }
+            }
+            stack.extend(crate::world::child_nodes(node).into_iter().map(|c| (c, depth + 1)));
+        }
+        out
+    }
+
+    /// The 3D's world transform: rotation (rows), translation, scale.
+    fn placement(root: usize) -> Option<[f32; 13]> {
+        let r: [f32; 9] = mem::at(root + av::WORLD_ROTATE)?;
+        let t: [f32; 3] = mem::at(root + av::WORLD_TRANSLATE)?;
+        let s: f32 = mem::at(root + av::WORLD_SCALE)?;
+        let mut out = [0.0; 13];
+        out[..9].copy_from_slice(&r);
+        out[9..12].copy_from_slice(&t);
+        out[12] = s;
+        (out.iter().all(|v| v.is_finite()) && s > 0.0).then_some(out)
+    }
+
+    /// A hitbox placed by a 3D's world transform, in the runtime's world.
+    fn place(h: &Hitbox, at: &[f32; 13]) -> Vec<[Vec3; 3]> {
+        let rows: [f32; 9] = at[..9].try_into().unwrap();
+        let r = crate::items::ni_matrix(rows);
+        let (t, s) = (Vec3::new(at[9], at[10], at[11]), at[12]);
+        let b = camera::basis();
+        let points: Vec<Vec3> = h.vertices.iter().map(|v| b.point_from_game(t + r * (*v * s))).collect();
+        h.triangles.iter().map(|t| t.map(|i| points[i as usize])).collect()
+    }
+
+    /// Looks through the references in the loaded cells near the player for the ones holding fixed
+    /// bodies: those not looked through yet, or not since bodies came into the world, nearest
+    /// first, [`WALKS_PER_SCAN`] of them.
+    fn look_round(s: &mut State, feet: Vec3) {
+        for o in s.owners.values_mut() {
+            o.seen = false;
+        }
+        let b = camera::basis();
+        let mut seen: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        let mut todo: Vec<(f32, usize, usize, usize)> = Vec::new();
+        for cell in crate::items::cells() {
+            let mut entry = cell + CELL_OBJECTS;
+            let mut guard = 0;
+            while entry != 0 && guard < 16384 {
+                guard += 1;
+                let r = mem::deref(entry);
+                entry = mem::deref(entry + 4);
+                if r == 0 {
+                    continue;
+                }
+                let root = mem::deref(r + REFR_NODE);
+                let flags = mem::at::<u32>(r + FORM_FLAGS).unwrap_or(DELETED);
+                if root == 0 || flags & (DELETED | DISABLED) != 0 {
+                    continue;
+                }
+                seen.insert(r);
+                if let Some(o) = s.owners.get_mut(&r).filter(|o| o.root == root) {
+                    o.seen = true;
+                    continue;
+                }
+                if s.plain.get(&r) == Some(&(root, s.bodies_added)) {
+                    continue;
+                }
+                let base = mem::deref(r + REFR_BASE);
+                let kind = mem::at::<u8>(base + FORM_TYPE).unwrap_or(0);
+                if base == 0 || kind == NPC || kind == CREATURE {
+                    continue;
+                }
+                let at = mem::at::<[f32; 3]>(r + refr::POS).map_or(f32::MAX, |p| b.point_from_game(Vec3::from(p)).distance(feet));
+                todo.push((at, r, root, base));
+            }
+        }
+        todo.sort_by(|a, b| a.0.total_cmp(&b.0));
+        for &(_, r, root, base) in todo.iter().take(WALKS_PER_SCAN) {
+            let bodies = bodies_under(root, &s.bodies);
+            let model = crate::items::model_of(base).unwrap_or_default();
+            if bodies.is_empty() || model.is_empty() {
+                s.plain.insert(r, (root, s.bodies_added));
+                continue;
+            }
+            if let Some(old) = s.owners.remove(&r) {
+                forget(s, old);
+            }
+            let (lo, hi) = bodies.iter().filter_map(|e| s.bodies.get(e)).fold((Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)), |(lo, hi), b| (lo.min(b.lo), hi.max(b.hi)));
+            for &e in &bodies {
+                s.claimed.insert(e, r);
+            }
+            s.plain.remove(&r);
+            s.owners.insert(r, Owner { root, model, bodies, lo, hi, hitbox: None, id: 0, sent: None, triangles: 0, seen: true });
+        }
+        let gone: Vec<usize> = s.owners.iter().filter(|(_, o)| !o.seen).map(|(r, _)| *r).collect();
+        for r in gone {
+            if let Some(o) = s.owners.remove(&r) {
+                forget(s, o);
+            }
+        }
+        // (A cell gone, its references are forgotten with it.)
+        s.plain.retain(|r, _| seen.contains(r));
+    }
+
+    /// A reference no longer the hands': its bodies are the game's shape again, its mesh taken out.
+    fn forget(s: &mut State, o: Owner) {
+        for e in &o.bodies {
+            if s.claimed.get(e).is_some_and(|r| !s.owners.contains_key(r)) {
+                s.claimed.remove(e);
+            }
+        }
+        if o.sent.is_some() {
+            s.to_remove.push(o.id);
+        }
+    }
+
+    // ---- the models' hitboxes, read from the game's archives on a thread of their own ------------
+    /// The game's archives, opened once (by the first thread that asks: it takes a moment).
+    pub(crate) fn archives() -> Option<Arc<oblivion_assets::bsa::Archives>> {
+        static ARCHIVES: std::sync::OnceLock<Option<Arc<oblivion_assets::bsa::Archives>>> = std::sync::OnceLock::new();
+        ARCHIVES
+            .get_or_init(|| {
+                let game = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())).unwrap_or_default();
+                match oblivion_assets::bsa::Archives::open(&game) {
+                    Ok(a) => {
+                        tracing::info!("the game's archives opened ({} of them)", a.bsas.len());
+                        Some(Arc::new(a))
+                    }
+                    Err(e) => {
+                        tracing::warn!("the game's archives: {e:#}");
+                        None
+                    }
+                }
+            })
+            .clone()
+    }
+
+    #[derive(Default)]
+    struct Hitboxes {
+        /// Model path (lower case) -> its hitbox (None: nothing drawn is solid, or it couldn't be
+        /// read), and when it was last asked for.
+        done: HashMap<String, (Option<Arc<Hitbox>>, f64)>,
+        wanted: Vec<String>,
+        busy: bool,
+        triangles: usize,
+    }
+    static HITBOXES: Mutex<Option<Hitboxes>> = Mutex::new(None);
+
+    fn with_hitboxes<R>(f: impl FnOnce(&mut Hitboxes) -> R) -> R {
+        f(HITBOXES.lock().unwrap().get_or_insert_with(Hitboxes::default))
+    }
+
+    /// A model's hitbox, if it's read; None while it's being read.
+    fn hitbox(model: &str, now: f64) -> Option<Option<Arc<Hitbox>>> {
+        let key = model.to_ascii_lowercase().replace('/', "\\");
+        // (A tree is grown from its SpeedTree file, not drawn from a model: it keeps the game's.)
+        if !key.ends_with(".nif") {
+            return Some(None);
+        }
+        let start = with_hitboxes(|h| {
+            if let Some(d) = h.done.get_mut(&key) {
+                d.1 = now;
+                return Err(d.0.clone());
+            }
+            if !h.wanted.contains(&key) {
+                h.wanted.push(key.clone());
+            }
+            Ok(!std::mem::replace(&mut h.busy, true))
+        });
+        match start {
+            Err(d) => Some(d),
+            Ok(true) => {
+                std::thread::spawn(move || read_hitboxes(now));
+                None
+            }
+            Ok(false) => None,
+        }
+    }
+
+    fn read_hitboxes(now: f64) {
+        let Some(archives) = archives() else {
+            with_hitboxes(|h| {
+                for k in std::mem::take(&mut h.wanted) {
+                    h.done.insert(k, (None, now));
+                }
+                h.busy = false;
+            });
+            return;
+        };
+        loop {
+            let Some(path) = with_hitboxes(|h| h.wanted.pop()) else { break };
+            let started = std::time::Instant::now();
+            // (A model that trips the reader keeps the game's shape, and reading goes on.)
+            let made = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let nif = archives.read(&format!("meshes\\{path}")).and_then(|d| Nif::parse(&d))?;
+                let (h, notes) = oblivion_assets::hitbox::of(&nif);
+                anyhow::Ok((h, notes, nif.stopped_at))
+            }));
+            let hitbox = match made {
+                Ok(Ok((h, notes, stopped))) => {
+                    let dropped: usize = notes.iter().map(|n| n.triangles - n.kept).sum();
+                    tracing::debug!(
+                        "collision: {path}: {} drawn triangles solid, {dropped} not ({} shapes{}) in {:.1} ms",
+                        h.triangles.len(),
+                        notes.len(),
+                        stopped.map(|k| format!(", read up to {k}")).unwrap_or_default(),
+                        started.elapsed().as_secs_f64() * 1e3
+                    );
+                    // (Drawn, and nothing of it solid, a banner or water: an empty hitbox, which
+                    // stands in for its bodies all the same. Nothing drawn: the game's shape.)
+                    (!h.is_empty() || oblivion_assets::hitbox::nothing_solid(&h, &notes)).then(|| Arc::new(h))
+                }
+                Ok(Err(e)) => {
+                    tracing::info!("collision: {path}: {e:#}");
+                    None
+                }
+                Err(_) => {
+                    tracing::warn!("collision: {path}: working out its hitbox failed");
+                    None
+                }
+            };
+            with_hitboxes(|h| {
+                h.triangles += hitbox.as_ref().map_or(0, |b| b.triangles.len());
+                h.done.insert(path, (hitbox, now));
+                // (Over the budget: the models asked for longest ago are forgotten.)
+                if h.triangles > HITBOX_CACHE {
+                    let mut by_age: Vec<(f64, String)> = h.done.iter().map(|(k, v)| (v.1, k.clone())).collect();
+                    by_age.sort_by(|a, b| a.0.total_cmp(&b.0));
+                    for (_, k) in by_age {
+                        if h.triangles <= HITBOX_CACHE * 3 / 4 {
+                            break;
+                        }
+                        if let Some((Some(b), _)) = h.done.remove(&k) {
+                            h.triangles -= b.triangles.len();
+                        }
+                    }
+                }
+            });
+        }
+        with_hitboxes(|h| h.busy = false);
+    }
+
     /// Once per game frame in the world: keeps the runtime's collision around the player current.
     pub fn update(now: f64) {
         let player = engine::player();
         let Some(feet) = (player != 0).then(|| mem::at::<[f32; 3]>(player + refr::POS)).flatten() else { return };
         let feet = camera::basis().point_from_game(Vec3::from(feet));
         let mut st = STATE.lock().unwrap();
-        let s = st.get_or_insert_with(|| State { world: 0, bodies: HashMap::new(), last_scan: f64::MIN, sent_at: None, connections: u32::MAX, logged_world: false });
+        let s = st.get_or_insert_with(|| State {
+            world: 0,
+            bodies: HashMap::new(),
+            last_scan: f64::MIN,
+            sent_at: None,
+            connections: u32::MAX,
+            logged_world: false,
+            owners: HashMap::new(),
+            claimed: HashMap::new(),
+            plain: HashMap::new(),
+            bodies_added: 0,
+            next_id: DRAWN_ID_BASE,
+            covered: Vec::new(),
+            to_remove: Vec::new(),
+            logged_owners: 0,
+        });
         let mut changed = false;
-        // The world's fixed bodies: read every second (cells load and unload as the player goes).
+        let conns = crate::link::with_adapter(|a| a.connections()).unwrap_or(0);
+        if conns != s.connections {
+            // (A restarted runtime knows nothing yet.)
+            s.connections = conns;
+            s.sent_at = None;
+            for o in s.owners.values_mut() {
+                o.sent = None;
+            }
+            s.to_remove.clear();
+        }
+        // The world's fixed bodies and the references holding them: looked at every second (cells
+        // load and unload as the player goes).
         if now - s.last_scan > 1.0 {
             s.last_scan = now;
             let world = world().unwrap_or(0);
@@ -625,6 +1047,12 @@ mod win {
                 s.world = world;
                 s.bodies.clear();
                 s.logged_world = false;
+                let owners: Vec<Owner> = s.owners.drain().map(|(_, o)| o).collect();
+                for o in owners {
+                    forget(s, o);
+                }
+                s.claimed.clear();
+                s.plain.clear();
                 changed = true;
             }
             if world != 0 {
@@ -633,6 +1061,7 @@ mod win {
                 s.bodies.retain(|e, b| fixed.get(e).is_some_and(|f| f.shape == b.fixed.shape && f.xf == b.fixed.xf));
                 changed |= s.bodies.len() != before;
                 let mut layers: HashMap<u32, u32> = HashMap::new();
+                let mut added = false;
                 for (e, f) in fixed {
                     *layers.entry(f.layer).or_default() += 1;
                     if s.bodies.contains_key(&e) || !solid_layer(f.layer) {
@@ -641,74 +1070,194 @@ mod win {
                     let Some((lo, hi)) = aabb(f.shape, &f.xf) else { continue };
                     let (a, b) = (to_runtime(lo), to_runtime(hi));
                     s.bodies.insert(e, Body { fixed: f, lo: a.min(b), hi: a.max(b), tris: None, mats: Vec::new() });
-                    changed = true;
+                    added = true;
                 }
+                changed |= added;
+                // (New bodies may be under references looked through before they had them.)
+                if added {
+                    s.bodies_added = s.bodies_added.wrapping_add(1);
+                }
+                // A body gone, its reference is looked through again.
+                let gone: Vec<usize> = s.owners.iter().filter(|(_, o)| o.bodies.iter().any(|e| !s.bodies.contains_key(e))).map(|(r, _)| *r).collect();
+                for r in gone {
+                    if let Some(o) = s.owners.remove(&r) {
+                        forget(s, o);
+                    }
+                }
+                look_round(s, feet);
                 if !s.logged_world {
                     s.logged_world = true;
                     let mut l: Vec<_> = layers.into_iter().collect();
                     l.sort();
-                    tracing::info!("collision: {} solid fixed bodies in the world; layers (layer, bodies) {l:?}", s.bodies.len());
+                    tracing::info!("collision: {} solid fixed bodies in the world; layers (layer, bodies) {l:?}; {} references near hold {} of them", s.bodies.len(), s.owners.len(), s.claimed.len());
                 }
             }
         }
-        let conns = crate::link::with_adapter(|a| a.connections()).unwrap_or(0);
-        if conns != s.connections {
-            s.connections = conns; // a restarted runtime knows nothing yet
-            s.sent_at = None;
-        }
-        if s.world == 0 || (!changed && s.sent_at.is_some_and(|p| p.distance(feet) < RESEND)) {
+        if s.world == 0 {
             return;
         }
-        // The bodies within reach, their triangles worked out the first time.
-        let reach = RADIUS + RESEND;
         let mut unknown: HashMap<i32, u32> = HashMap::new();
         let mut made = 0usize;
-        for b in s.bodies.values_mut() {
-            let gap = (b.lo - feet).max(feet - b.hi).max(Vec3::ZERO).length();
-            if gap > reach || b.tris.is_some() {
+        // The drawn shapes: the references near, their hitboxes asked for, placed and sent, the
+        // nearest first.
+        let mut near: Vec<(f32, usize)> = s.owners.iter().map(|(r, o)| (o.gap(feet), *r)).filter(|(g, _)| *g <= RADIUS + RESEND).collect();
+        near.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut budget = SEND_PER_FRAME;
+        let mut total = 0usize;
+        let mut pending = false;
+        let mut sent_now = 0usize;
+        for &(gap, r) in &near {
+            let Some(o) = s.owners.get_mut(&r) else { continue };
+            if o.hitbox.is_none() {
+                o.hitbox = hitbox(&o.model, now);
+                pending |= o.hitbox.is_none();
+            }
+            let Some(h) = o.drawn().cloned() else { continue };
+            let at = placement(o.root);
+            let wanted = total + h.triangles.len() <= MAX_DRAWN_TRIANGLES && (gap <= RADIUS || o.sent.is_some());
+            if o.sent.is_some() && (o.sent != at || !wanted) {
+                // (Moved, or no longer wanted: out, and in again where it is now.)
+                s.to_remove.push(o.id);
+                o.sent = None;
+            }
+            if o.sent.is_some() {
+                total += o.triangles;
                 continue;
             }
-            let (mut tris, mut mats) = (Vec::new(), Vec::new());
-            shape_triangles(b.fixed.shape, &b.fixed.xf, rustvr_protocol::MAT_STONE, &mut tris, &mut mats, &mut unknown, 0);
-            made += tris.len();
-            mats.resize(tris.len(), rustvr_protocol::MAT_STONE as u8);
-            b.tris = Some(tris.into_iter().map(|t| t.map(to_runtime)).collect());
-            b.mats = mats;
+            let Some(at) = at.filter(|_| wanted) else { continue };
+            if h.is_empty() {
+                // (Nothing solid: no mesh, its bodies out of the game's all the same.)
+                o.id = 0;
+                o.sent = Some(at);
+                o.triangles = 0;
+                continue;
+            }
+            if h.triangles.len() > budget && budget < SEND_PER_FRAME {
+                pending = true;
+                continue;
+            }
+            // Its bodies' triangles, for the materials.
+            let (mut from, mut mats) = (Vec::new(), Vec::new());
+            for e in &o.bodies {
+                if let Some(b) = s.bodies.get_mut(e) {
+                    made += b.read(&mut unknown);
+                    from.extend_from_slice(b.tris.as_deref().unwrap_or_default());
+                    mats.extend_from_slice(&b.mats);
+                }
+            }
+            let tris = place(&h, &at);
+            let materials = nearest_materials(&tris, &from, &mats, rustvr_protocol::MAT_STONE as u8);
+            let id = s.next_id;
+            if !send_mesh(id, &tris, &materials) {
+                pending = true;
+                break;
+            }
+            s.next_id = s.next_id.wrapping_add(1).max(DRAWN_ID_BASE);
+            o.id = id;
+            o.sent = Some(at);
+            o.triangles = tris.len();
+            total += tris.len();
+            budget = budget.saturating_sub(tris.len());
+            sent_now += 1;
+            if s.logged_owners < 12 {
+                s.logged_owners += 1;
+                // The drawn shape against the game's where they're placed: they should overlap.
+                let (dlo, dhi) = tris.iter().flatten().fold((Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)), |(lo, hi), p| (lo.min(*p), hi.max(*p)));
+                tracing::info!(
+                    "collision: {} ({} bodies, {} of the game's triangles) drawn as {} triangles; the drawn box {dlo:.2?}..{dhi:.2?}, the game's {:.2?}..{:.2?}",
+                    o.model,
+                    o.bodies.len(),
+                    from.len(),
+                    tris.len(),
+                    o.lo,
+                    o.hi
+                );
+            }
+        }
+        // The far ones out.
+        for o in s.owners.values_mut() {
+            if o.sent.is_some() && o.gap(feet) > RADIUS + RESEND {
+                s.to_remove.push(o.id);
+                o.sent = None;
+            }
+        }
+        while let Some(&id) = s.to_remove.last() {
+            if id != 0 && !send_mesh(id, &[], &[]) {
+                pending = true;
+                break;
+            }
+            s.to_remove.pop();
+        }
+        // The game's own shapes: the bodies near that no drawn shape stands in for, sent again once
+        // the drawn ones are all in (not every frame they come in).
+        let mut covered: Vec<usize> = s.owners.values().filter(|o| o.sent.is_some()).flat_map(|o| o.bodies.iter().copied()).collect();
+        covered.sort_unstable();
+        if !pending && covered != s.covered {
+            changed = true;
+        }
+        if !changed && s.sent_at.is_some_and(|p| p.distance(feet) < RESEND) {
+            return;
+        }
+        let reach = RADIUS + RESEND;
+        for b in s.bodies.values_mut() {
+            if b.gap(feet) <= reach {
+                made += b.read(&mut unknown);
+            }
         }
         if !unknown.is_empty() {
             tracing::info!("collision: shapes of kinds it doesn't read (kind, count): {unknown:?}");
         }
-        let near = nearby(
+        let game = nearby(
             s.bodies
-                .values()
-                .filter(|b| (b.lo - feet).max(feet - b.hi).max(Vec3::ZERO).length() <= RADIUS)
-                .filter_map(|b| Some((b.tris.as_deref()?, b.mats.as_slice()))),
+                .iter()
+                .filter(|(e, b)| b.gap(feet) <= RADIUS && covered.binary_search(e).is_err())
+                .filter_map(|(_, b)| Some((b.tris.as_deref()?, b.mats.as_slice()))),
             feet,
             RADIUS,
             MAX_TRIANGLES,
         );
-        let head = rustvr_protocol::ColMesh { id: MESH_ID, count: near.len() as u32 };
-        let mut payload = bytemuck::bytes_of(&head).to_vec();
-        for (t, _) in &near {
-            let v: [f32; 9] = [t[0].x, t[0].y, t[0].z, t[1].x, t[1].y, t[1].z, t[2].x, t[2].y, t[2].z];
-            payload.extend_from_slice(bytemuck::cast_slice(&v));
-        }
-        let mut materials = bytemuck::bytes_of(&head).to_vec();
-        materials.extend(near.iter().map(|(_, m)| *m));
-        let sent = crate::link::with_adapter(|a| a.push_collision(rustvr_protocol::COL_MESH, &payload) && a.push_collision(rustvr_protocol::COL_MESH_MATERIALS, &materials)).unwrap_or(false);
-        if sent {
+        let tris: Vec<[Vec3; 3]> = game.iter().map(|(t, _)| *t).collect();
+        let mats: Vec<u8> = game.iter().map(|(_, m)| *m).collect();
+        if send_mesh(MESH_ID, &tris, &mats) {
             s.sent_at = Some(feet);
-            let tris: Vec<[Vec3; 3]> = near.iter().map(|(t, _)| *t).collect();
+            s.covered = covered;
+            let drawn: Vec<&Owner> = s.owners.values().filter(|o| o.sent.is_some()).collect();
+            let keeps_game = s.owners.values().filter(|o| o.gap(feet) <= RADIUS && matches!(o.hitbox, Some(None))).count();
             let mut kinds: HashMap<u8, usize> = HashMap::new();
-            for (_, m) in &near {
+            for m in &mats {
                 *kinds.entry(*m).or_default() += 1;
             }
             tracing::info!(
-                "collision: {} triangles around {feet:.2?} sent ({made} newly read; materials {kinds:?}); the floor under the feet is at y {:?}",
-                near.len(),
+                "collision: around {feet:.2?}: {} references drawn ({} triangles, {sent_now} sent now), {keeps_game} near keep the game's shape; the game's shapes {} triangles ({made} newly read; materials {kinds:?}); the floor under the feet is at y {:?}",
+                drawn.len(),
+                drawn.iter().map(|o| o.triangles).sum::<usize>(),
+                tris.len(),
                 floor_under(&tris, feet)
             );
         }
+    }
+
+    /// One collision mesh and its materials to the runtime (no triangles: taken out).
+    fn send_mesh(id: u32, tris: &[[Vec3; 3]], mats: &[u8]) -> bool {
+        let head = rustvr_protocol::ColMesh { id, count: tris.len() as u32 };
+        let mut payload = bytemuck::bytes_of(&head).to_vec();
+        for t in tris {
+            let v: [f32; 9] = [t[0].x, t[0].y, t[0].z, t[1].x, t[1].y, t[1].z, t[2].x, t[2].y, t[2].z];
+            payload.extend_from_slice(bytemuck::cast_slice(&v));
+        }
+        crate::link::with_adapter(|a| {
+            if !a.push_collision(rustvr_protocol::COL_MESH, &payload) {
+                return false;
+            }
+            if !tris.is_empty() {
+                let mut materials = bytemuck::bytes_of(&head).to_vec();
+                materials.extend_from_slice(mats);
+                // (Its triangles are in; without their materials they're stone.)
+                let _ = a.push_collision(rustvr_protocol::COL_MESH_MATERIALS, &materials);
+            }
+            true
+        })
+        .unwrap_or(false)
     }
 }
 

@@ -658,7 +658,6 @@ mod game {
     // ---- the models, read from the game's archives on a thread of their own ------------------------
     #[derive(Default)]
     struct Models {
-        archives: Option<Arc<oblivion_assets::bsa::Archives>>,
         opening: bool,
         /// Model path -> its two animations (out and back), or None if it has none to work.
         done: HashMap<String, Option<Arc<(Animation, Option<Animation>)>>>,
@@ -697,28 +696,13 @@ mod game {
     }
 
     fn read_models() {
-        let archives = with_models(|m| m.archives.clone());
-        let archives = match archives {
-            Some(a) => a,
-            None => {
-                let game = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())).unwrap_or_default();
-                match oblivion_assets::bsa::Archives::open(&game) {
-                    Ok(a) => {
-                        let a = Arc::new(a);
-                        with_models(|m| m.archives = Some(a.clone()));
-                        tracing::info!("world: the game's archives opened ({} of them)", a.bsas.len());
-                        a
-                    }
-                    Err(e) => {
-                        tracing::warn!("world: the game's archives: {e:#}");
-                        with_models(|m| {
-                            m.busy = false;
-                            m.opening = false;
-                        });
-                        return;
-                    }
-                }
-            }
+        // (The game's archives are opened once, for everything that reads its models.)
+        let Some(archives) = crate::collision::archives() else {
+            with_models(|m| {
+                m.busy = false;
+                m.opening = false;
+            });
+            return;
         };
         loop {
             let Some((path, out, back)) = with_models(|m| m.wanted.pop()) else { break };

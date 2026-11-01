@@ -99,6 +99,81 @@ fn bounds(model: &Model) -> (Vec3, Vec3) {
     if lo.x > hi.x { (Vec3::ZERO, Vec3::ONE) } else { (lo, hi) }
 }
 
+/// Two sets of triangles drawn alike from three sides, one row over the other at the same size and
+/// place (a model's hitbox above, the game's collision below, to hold them up to each other).
+pub fn render_pair(top: &[[Vec3; 3]], bottom: &[[Vec3; 3]]) -> Vec<u8> {
+    let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+    for p in top.iter().chain(bottom).flatten() {
+        lo = lo.min(*p);
+        hi = hi.max(*p);
+    }
+    if lo.x > hi.x {
+        (lo, hi) = (Vec3::ZERO, Vec3::ONE);
+    }
+    let centre = (lo + hi) * 0.5;
+    let scale = SIZE as f32 / ((hi - lo).max_element().max(1e-3) * 1.1);
+    let width = SIZE * VIEWS.len();
+    let mut rgb = vec![30u8; width * SIZE * 2 * 3];
+    let light = Vec3::new(0.4, 0.6, 0.8).normalize();
+    for (row, (tris, tint)) in [(top, [140.0, 220.0, 140.0]), (bottom, [230.0, 120.0, 100.0])].into_iter().enumerate() {
+        for (k, view) in VIEWS.iter().enumerate() {
+            // (Game models are Z up: the views turned so up is up.)
+            let (right, up, look) = match k {
+                0 => (Vec3::X, Vec3::Z, Vec3::Y),
+                1 => (Vec3::Y, Vec3::Z, Vec3::NEG_X),
+                _ => (view.right, Vec3::Y, Vec3::NEG_Z),
+            };
+            let mut depth = vec![f32::MAX; SIZE * SIZE];
+            let to_screen = |p: Vec3| {
+                let d = p - centre;
+                (Vec2::new(d.dot(right) * scale + SIZE as f32 * 0.5, SIZE as f32 * 0.5 - d.dot(up) * scale), d.dot(look))
+            };
+            for t in tris {
+                let s = t.map(to_screen);
+                let area = (s[1].0 - s[0].0).perp_dot(s[2].0 - s[0].0);
+                if area.abs() < 1e-6 {
+                    continue;
+                }
+                let n = (t[1] - t[0]).cross(t[2] - t[0]).normalize_or_zero();
+                let lit = 0.3 + 0.7 * n.dot(light).abs();
+                let colour = tint.map(|c: f32| (c * lit) as u8);
+                let (min, max) = (s[0].0.min(s[1].0).min(s[2].0), s[0].0.max(s[1].0).max(s[2].0));
+                let (x0, x1) = (min.x.floor().max(0.0) as usize, (max.x.ceil().max(0.0) as usize).min(SIZE - 1));
+                let (y0, y1) = (min.y.floor().max(0.0) as usize, (max.y.ceil().max(0.0) as usize).min(SIZE - 1));
+                for y in y0..=y1 {
+                    for x in x0..=x1 {
+                        let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
+                        let w0 = (s[2].0 - s[1].0).perp_dot(p - s[1].0) / area;
+                        let w1 = (s[0].0 - s[2].0).perp_dot(p - s[2].0) / area;
+                        let w2 = 1.0 - w0 - w1;
+                        if w0 < 0.0 || w1 < 0.0 || w2 < 0.0 {
+                            continue;
+                        }
+                        let z = w0 * s[0].1 + w1 * s[1].1 + w2 * s[2].1;
+                        let at = y * SIZE + x;
+                        if z < depth[at] {
+                            depth[at] = z;
+                            let o = ((row * SIZE + y) * width + k * SIZE + x) * 3;
+                            rgb[o..o + 3].copy_from_slice(&colour);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    rgb
+}
+
+pub fn save_pair(top: &[[Vec3; 3]], bottom: &[[Vec3; 3]], path: &std::path::Path) -> Result<()> {
+    let rgb = render_pair(top, bottom);
+    let file = std::io::BufWriter::new(std::fs::File::create(path)?);
+    let mut enc = png::Encoder::new(file, (SIZE * VIEWS.len()) as u32, (SIZE * 2) as u32);
+    enc.set_color(png::ColorType::Rgb);
+    enc.set_depth(png::BitDepth::Eight);
+    enc.write_header()?.write_image_data(&rgb)?;
+    Ok(())
+}
+
 pub fn save(model: &Model, path: &std::path::Path) -> Result<()> {
     let rgb = render(model);
     let file = std::io::BufWriter::new(std::fs::File::create(path)?);
