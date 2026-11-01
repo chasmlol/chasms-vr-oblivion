@@ -55,6 +55,7 @@ fn startup() {
     #[cfg(target_arch = "x86")]
     crate::hud_info::install();
     crate::combat::install();
+    crate::arrows::install();
     crate::console::install();
     crate::slot_menu::install();
     crate::voice::install();

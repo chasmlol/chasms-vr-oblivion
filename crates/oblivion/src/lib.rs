@@ -32,6 +32,7 @@
 
 pub mod alchemy;
 pub mod archery;
+pub mod arrows;
 pub mod body;
 pub mod books;
 pub mod camera;

@@ -676,6 +676,8 @@ mod win {
         triangles: usize,
         /// Seen in the latest look round.
         seen: bool,
+        /// Its hitbox's box (its model's frame), once read.
+        bounds: Option<(Vec3, Vec3)>,
     }
 
     impl Owner {
@@ -854,7 +856,7 @@ mod win {
                 s.claimed.insert(e, r);
             }
             s.plain.remove(&r);
-            s.owners.insert(r, Owner { root, model, bodies, lo, hi, hitbox: None, id: 0, sent: None, triangles: 0, seen: true });
+            s.owners.insert(r, Owner { root, model, bodies, lo, hi, hitbox: None, id: 0, sent: None, triangles: 0, seen: true, bounds: None });
         }
         let gone: Vec<usize> = s.owners.iter().filter(|(_, o)| !o.seen).map(|(r, _)| *r).collect();
         for r in gone {
@@ -1222,6 +1224,7 @@ mod win {
             let Some(o) = s.owners.get_mut(&r) else { continue };
             if o.hitbox.is_none() {
                 o.hitbox = hitbox(&o.model, now);
+                o.bounds = o.drawn().and_then(|h| h.bounds());
                 pending |= o.hitbox.is_none();
             }
             let Some(h) = o.drawn().cloned() else { continue };
@@ -1347,6 +1350,51 @@ mod win {
                 floor_under(&tris, feet)
             );
         }
+    }
+
+    /// Whether `entity` (an `hkRigidBody`) is one of the fixed bodies a drawn shape stands in for
+    /// now: the hands, and the game's arrows, meet its reference's drawn shape instead.
+    pub fn stands_in(entity: usize) -> bool {
+        let Ok(st) = STATE.try_lock() else { return false };
+        st.as_ref().is_some_and(|s| s.covered.binary_search(&entity).is_ok())
+    }
+
+    /// The first drawn shape standing in for the game's (of the references near the player) that the
+    /// segment `a`-`b` meets (the game's world, game units): the point, the surface's normal against
+    /// the segment, and the reference's fixed body nearest the point (an `hkRigidBody`, for the
+    /// game's impact on it).
+    pub fn drawn_hit(a: Vec3, b: Vec3) -> Option<(Vec3, Vec3, usize)> {
+        let st = STATE.try_lock().ok()?;
+        let s = st.as_ref()?;
+        let mut best: Option<(f32, Vec3, Vec3, &Owner)> = None;
+        for o in s.owners.values() {
+            let (Some(at), Some(h), Some((lo, hi))) = (o.sent, o.drawn(), o.bounds) else { continue };
+            let rows: [f32; 9] = at[..9].try_into().unwrap();
+            let r = crate::items::ni_matrix(rows);
+            let (t, scale) = (Vec3::new(at[9], at[10], at[11]), at[12]);
+            let to_model = |p: Vec3| r.transpose() * (p - t) / scale;
+            let (ma, mb) = (to_model(a), to_model(b));
+            if ma.min(mb).cmpgt(hi).any() || ma.max(mb).cmplt(lo).any() {
+                continue;
+            }
+            let len = ma.distance(mb);
+            let Some(dir) = (mb - ma).try_normalize() else { continue };
+            for tri in &h.triangles {
+                let v = tri.map(|i| h.vertices[i as usize]);
+                let Some(d) = ray_triangle(ma, dir, &v).filter(|d| *d <= len) else { continue };
+                let frac = d / len;
+                if best.as_ref().is_none_or(|b| frac < b.0) {
+                    let n = (r * (v[1] - v[0]).cross(v[2] - v[0])).normalize_or_zero();
+                    let n = if n.dot(b - a) > 0.0 { -n } else { n };
+                    best = Some((frac, a + (b - a) * frac, n, o));
+                }
+            }
+        }
+        let (_, point, normal, o) = best?;
+        // (Its body nearest the point: a reference may have several.)
+        let at = camera::basis().point_from_game(point);
+        let body = o.bodies.iter().filter_map(|e| s.bodies.get(e).map(|b| (b.gap(at), *e))).min_by(|x, y| x.0.total_cmp(&y.0))?.1;
+        Some((point, normal, body))
     }
 
     /// One collision mesh and its materials to the runtime (no triangles: taken out).

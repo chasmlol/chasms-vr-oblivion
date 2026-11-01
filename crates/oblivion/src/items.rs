@@ -553,6 +553,9 @@ mod game {
         trace: Vec<(u32, f64, f64)>,
         /// What the hands hold now (as the runtime last said).
         held: Vec<Held>,
+        /// Where the hands (and what they hold) push the things lying about, as the runtime last
+        /// said.
+        pushes: Box<GamePushes>,
     }
 
     /// A thing in a hand: its object, the game's reference, its kind and the hand.
@@ -599,6 +602,7 @@ mod game {
             poses: bytemuck::zeroed_box(),
             hulls: bytemuck::zeroed_box(),
             infos: bytemuck::zeroed_box(),
+            pushes: bytemuck::zeroed_box(),
             logged: 0.0,
             trace: Vec::new(),
             held: Vec::new(),
@@ -665,6 +669,16 @@ mod game {
                 let ok = takeable_ref(item.refr).is_some() && take(item.refr);
                 tracing::info!("items: {} ({id:#010x}) put in a slot: {}", item.info.name(), if ok { "taken" } else { "not taken" });
                 item.taken_at = Some(now);
+            }
+            // Knocked or shoved by a hand (or what it holds): the game's Havok gives the thing's body
+            // what its motion at that point lacks, as it does a swinging prop's (crate::props).
+            if crate::link::with_adapter(|a| a.read_game_pushes(&mut s.pushes)).unwrap_or(false) {
+                let n = (s.pushes.count as usize).min(MAX_GAME_PUSHES);
+                for p in s.pushes.pushes[..n].iter().filter(|p| p.part == 0) {
+                    let Some(it) = s.items.get(&p.id).filter(|i| !i.owned && i.body != 0 && i.taken_at.is_none()) else { continue };
+                    let (point, dir, speed) = (Vec3::new(p.point[0], p.point[1], p.point[2]), Vec3::new(p.normal[0], p.normal[1], p.normal[2]), p.normal[3]);
+                    crate::props::give(it.body, point, dir, speed);
+                }
             }
             if now < s.next_scan {
                 return;

@@ -53,6 +53,8 @@ it without being felt.
   cut-out card (a grate, a railing) that the game's collision doesn't cover. What draws only soft
   things is passable; what draws nothing (a collision stand-in for something drawn elsewhere) keeps
   the game's shape. Models the game gave no collision stay passable, as in the game.
+- **Knocked about.** A hand, or what it holds, swept into a thing lying about pushes it: the game's
+  Havok gives its body what its motion there lacks, as it does a swinging prop's.
 - **What the hands take and hold, too.** The things lying about (plates, cups, baskets, books,
   everything the player can take), the swinging parts the game simulates (a chain's links, a
   bucket on a rope) and the weapon, shield and torch in the hands are given the runtime as their
@@ -66,8 +68,12 @@ it without being felt.
   (thin enough as they are) and the mortars and pestles (their pieces are the runtime's).
 - **The game itself is unchanged.** Walking, the NPCs and things falling keep the game's collision;
   only the runtime's physics (the hands, the arms, what they hold, drop and throw) gets the drawn
-  shapes. Arrows and spells in flight are the game's own projectiles, flying in the game's
-  physics against its collision.
+  shapes.
+- **Arrows too.** The game's arrows in flight (anyone's) pass through the game's shapes a drawn
+  one stands in for, and the drawn shapes in their way are the game's own impact there: through a
+  chair's rungs or a fence's bars, into the drawn leg or board (stuck where it's drawn, broken on
+  stone as the game breaks them), with the game's damage and sounds (`arrows.rs`). Spells in flight
+  are still the game's alone.
 - **Worked out where they're needed.** The adapter finds the references in the loaded cells whose
   3D holds the world's fixed bodies, nearest first, reads each model from the game's archives on a
   thread of its own (a few milliseconds a model), and sends each reference's drawn shape to the

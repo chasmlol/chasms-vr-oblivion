@@ -13,39 +13,59 @@ that keeps the logs.
 Your hands, your arms and whatever you hold now meet each thing's **drawn shape** instead of the
 game's simplified collision.
 
-- **The world** (first round, played 2026-11-01: it works): a chair is its seat, back, legs and
-  rungs, not a box round it; a shelf is its boards; a wall stops your hand where the wall is drawn.
-- **Things you pick up and move** (new): plates, cups, mugs, bowls, baskets, buckets, books,
-  bottles, everything lying about that you can take. Each one's collision is its drawn shape, in a
-  handful of solid pieces: a basket is its wall and its handle with the inside open, a bowl or a
-  bucket stays hollow, a tankard's handle has a gap your fingers go through. They used to be one
-  solid blob round the game's shape.
-- **What's in your hands** (new): your weapon (a sword is its blade, guard, grip and pommel, not a
-  box), your shield and your torch (its flame isn't solid).
-- **Swinging things** (new): chain links, buckets on ropes and the like, each part as drawn.
-- **Still as before:** the bow (its string's side is your drawing hand's), arrows (thin sticks
-  already), the mortar and pestle (their own pieces), and the ground and trees in the world.
-- **The game itself is unchanged.** Your walking, the NPCs, things falling and resting where you
-  let them go, and arrows and spells in flight still use the game's own collision.
+- **The world** (played 2026-11-01: it works): a chair is its seat, back, legs and rungs, not a box
+  round it; a shelf is its boards; a wall stops your hand where the wall is drawn.
+- **Things you pick up and move** (played: they work in the hand): plates, cups, mugs, bowls,
+  baskets, buckets, books, bottles, everything lying about that you can take. Each one's collision
+  is its drawn shape, in a handful of solid pieces: a basket is its wall and its handle with the
+  inside open, a bowl or a bucket stays hollow, a tankard's handle has a gap your fingers go
+  through.
+- **Knocking things about** (new): a hand, or what it holds (a sword, a torch, a bottle), swept
+  into something lying about knocks it: the game's own physics gives it the push. Before, only
+  swinging chains and the like moved; things lying about only moved once picked up.
+- **Fingers stop on things** (new): with your hand at something you could take, your fingers curl
+  with the grip but stop on its surface instead of going through it; when you take hold, they
+  close onto it from there, not from a fist.
+- **Arrows through gaps** (new): arrows in flight (yours and anyone's) go through the gaps the
+  game's shapes used to fill (between a chair's legs, through a fence, past a table's corner) and
+  hit what's drawn: stuck in the drawn leg or board, broken on stone, with the game's own damage
+  and sounds.
+- **What's in your hands:** your weapon (a sword is its blade, guard, grip and pommel, not a box),
+  your shield and your torch (its flame isn't solid).
+- **Swinging things:** chain links, buckets on ropes and the like, each part as drawn.
+- **Still as before:** the bow (its string's side is your drawing hand's), the arrow on the string,
+  the mortar and pestle (their own pieces), spells in flight, and the ground and trees.
+- **The game itself is unchanged.** Your walking, the NPCs, and things falling and resting where
+  you let them go still use the game's own collision.
 
 Each thing's shape is worked out from its model as it comes near (about a tenth of a second a
 model, in the background, once for each model); until then it keeps its old shape.
 
 ## What to try, in order
 
-1. **Shelves, chairs, tables, walls** (as before): reach into a bookshelf, between a chair's
+1. **Knock things over.** Swat a cup or a plate off a table with an open hand, then with your
+   sword or a bottle in your hand: it should fly the way you hit it, harder the faster you swing.
+   A slow push should slide it. Things you can't pick up (a barrel, a crate) stay put as before.
+2. **Fingers on a thing.** Hold your hand over a cup, a bottle or a book and slowly squeeze the
+   grip: the fingers should curl until they touch it and stop there, not sink in. Take it: they
+   close onto it without flicking through first.
+3. **Arrows through gaps.** Shoot an arrow between a chair's legs, under a table, through a
+   fence or a window grate: it should fly through. Shoot a chair leg or a table top: it should
+   stick where it's drawn. Shoot a stone wall: it breaks as before.
+4. **Shelves, chairs, tables, walls** (as before): reach into a bookshelf, between a chair's
    legs, under a table; run a hand along a wall and the counter.
-2. **A basket or a bowl.** Pick one up and put your other hand inside it: it should go in, not
+5. **A basket or a bowl.** Pick one up and put your other hand inside it: it should go in, not
    stop at the top. Put a book or an apple in it and carry it.
-3. **A mug or tankard.** Hook a finger through its handle; set it down and push it by its rim.
-4. **Plates and cups on a table.** Slide your hand under a plate's edge, tip a cup by its lip.
-5. **Your weapon.** Draw it and lay the blade on a table edge, slide it between a chair's rungs,
+6. **A mug or tankard.** Hook a finger through its handle; set it down and push it by its rim.
+7. **Plates and cups on a table.** Slide your hand under a plate's edge, tip a cup by its lip.
+8. **Your weapon.** Draw it and lay the blade on a table edge, slide it between a chair's rungs,
    rest it against a shelf: the blade, not a box round the sword, meets things.
-6. **A torch** (if you have one): the handle and head are solid, the flame isn't.
+9. **A torch** (if you have one): the handle and head are solid, the flame isn't.
 
 Say what feels wrong: a thing your hand stops short of, a hand going into something it shouldn't,
-a thing that jitters or flies off when you set it down or pick it up, or a stutter as you walk
-into a new area.
+a thing that jitters or flies off when you set it down or pick it up, a stutter as you walk into
+a new area, an arrow that stops in mid-air, passes through something solid, or sticks a hand's
+width off what it hit.
 
 ## What was checked, and what wasn't
 
@@ -60,10 +80,17 @@ Checked, not in the headset (the game was never started):
   sword split into their pieces, looked at one by one; that bowls and buckets stay hollow was
   measured (open down the middle nearly as far as the drawn one);
 - the runtime's side on its own: a bucket's mesh sent to it came back as its pieces in a tenth of a
-  second and became the object's collision, its middle empty.
+  second and became the object's collision, its middle empty; a hand over a bottle, not gripping,
+  gives the drawn fingers the bottle to stop on, and the grip closes in from there; a rifle swept
+  through one of the game's hanging props asks the game to push it (the hands' and the runtime's
+  tests all pass);
+- the arrows: read from how the game's own arrow works (its flight is a Havok character proxy
+  whose listener decides every impact), and built on that; nothing of it was seen working.
 
 Not checked: anything in the game itself. Where each shape lands, how things feel in the hand and
-on the table, and whether working out the shapes is felt as you move are all for this playtest.
+on the table, whether knocks are as strong as they should be, whether arrows fly through and stick
+right, and whether working out the shapes is felt as you move are all for this playtest. The
+arrows log each drawn-shape hit (`arrows:` lines).
 The log says, for the first dozen world objects, where each drawn shape landed next to the game's
 own shape, and names each thing given its drawn shape (the adapter's `rustvr-oblivion.log`, lines
 starting `collision:`).

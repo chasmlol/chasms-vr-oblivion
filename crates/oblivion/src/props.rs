@@ -501,7 +501,7 @@ mod game {
 
     /// The push a hand gives a body: what its point `point` (the runtime's world) lacks of going
     /// `speed` m/s along `dir`, as an impulse there. False if it needed none.
-    fn give(hk: usize, point: Vec3, dir: Vec3, speed: f32) -> bool {
+    pub(crate) fn give(hk: usize, point: Vec3, dir: Vec3, speed: f32) -> bool {
         if !dir.is_finite() || dir.length_squared() < 0.5 || !speed.is_finite() || speed <= 0.0 || !point.is_finite() {
             return false;
         }
