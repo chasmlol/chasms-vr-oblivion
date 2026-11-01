@@ -51,11 +51,13 @@ The design and its reasons are in `docs/research/spells.md`.
   at first, then pulses that speed up and strengthen sharply, then a spike when it's charged and a
   faint tick while you hold it. **Let go to cast**, and you feel a full burst. Let go before it's
   charged and nothing is cast; no magicka is spent.
-* **Aiming where the controller points.** A target spell leaves your palm along the controller's
-  own pointing ray, the same ray the menu laser uses. **Hold the controller out at what you're
-  casting at and let go.** The aim is smoothed a touch, a little more for harder spells, to take
-  out the jolt of the trigger. It's also helped gently onto a creature (10° up or down, 15°
-  across).
+* **Aiming along your arm.** A target spell leaves your palm along your arm, from your shoulder
+  through your hand. **Hold your hand out at what you're casting at and let go**; how your wrist is
+  bent doesn't matter. (The controller's own pointing ray, the menu laser's, went high: a hand held
+  out to cast has its wrist cocked up.) With your hand pulled in at your shoulder there's no arm to
+  go by, and it goes where the controller points. The aim is smoothed a touch, a little more for
+  harder spells, to take out the jolt of the trigger. It's also helped gently onto a creature (10°
+  up or down, 15° across).
 
 ## What to try
 
@@ -112,8 +114,9 @@ The design and its reasons are in `docs/research/spells.md`.
     * Chameleon and Shadow Shape (invisibility) don't make your own body see-through yet.
 
 Things worth telling me about:
-* Does it go where the controller points? If you'd rather cast out of your palm, `palm_tilt` in
-  the RustVR settings (`[magic]`) turns the aim towards it (about 60 for palm casting).
+* Does it go where your hand is held out? If you'd rather cast out of your palm, `palm_tilt` in
+  the RustVR settings (`[magic]`) turns the aim towards it (about 60 for palm casting). Each cast
+  writes to the runtime's log how far up it went, against the controller's ray and the head.
 * Is the aim help too strong or too weak?
 * Is the wheel in a good place and size?
 * Can you feel the charge and the ready spike clearly?
@@ -137,9 +140,10 @@ the magicka is spent and comes back.
 ## Checked, and not
 
 * **Checked:**
-  * The aim, on the emulated headset with its pointing ray 40° above its grip (as a Touch
-    controller's) and the aim help off: the controller pointed at a dummy, and the bolt went
-    exactly along the ray.
+  * The aim along the arm: the hand held out with its wrist cocked well up (the controller pointing
+    46° up, 57° above the arm) casts along the arm, and with the hand in at the shoulder, where the
+    controller points (the runtime's tests). The headless `spell` scenario's arm held out at the
+    dummy: the bolt struck it.
   * A bound weapon on the range, on the emulated headset: Bound sword taken from the wheel's second
     page and cast, and the range's sword is made in that hand. Squeezed and let go in front, it went
     back to the left hip.
