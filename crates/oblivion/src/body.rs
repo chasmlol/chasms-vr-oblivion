@@ -8,7 +8,7 @@
 //! Imperial one, and the race's, the eyes' and the hair's own textures on the head's parts
 //! (texture swaps).
 //!
-//! The face (`rustvr_protocol::FaceDesc`, docs/research/mirror.md): where it is in FaceGen's face
+//! The face (`rustvr_protocol::FaceDesc`, docs/design/mirror.md): where it is in FaceGen's face
 //! space (the race's coordinates plus the NPC's, as the game adds them, 0x552990), the age map the
 //! game lays over the head's skin (FaceGen's age from those coordinates picks it, as 0x551A00
 //! does) and the hair's colour. The race menu changes all of it in place, so while it's open it's

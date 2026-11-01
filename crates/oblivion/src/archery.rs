@@ -1,4 +1,4 @@
-//! Oblivion's bows and arrows in the hands (`docs/research/archery.md`): the equipped bow as the
+//! Oblivion's bows and arrows in the hands (`docs/design/archery.md`): the equipped bow as the
 //! runtime's bow ([`OBJ_BOW`]), the equipped arrows as the arrows its quiver hands out
 //! ([`OBJ_ARROW`]), and each arrow the hands loose ([`CE_LOOSE`]) fired by the game as its own.
 //!

@@ -1,6 +1,6 @@
 //! The mirror spell: "Mirror", a lesser power every player has from the start of the game, that
 //! summons the runtime's mirror in front of them, or sends away the one they look at
-//! (`rustvr_protocol::EV_MIRROR_CAST`; docs/research/mirror.md). Oblivion has no mirror of its own,
+//! (`rustvr_protocol::EV_MIRROR_CAST`; docs/design/mirror.md). Oblivion has no mirror of its own,
 //! as decoration or as an item, so the mirror comes the way the game brings things into the world
 //! by magic: conjured.
 //!

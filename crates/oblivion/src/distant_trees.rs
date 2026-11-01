@@ -3,7 +3,7 @@
 //! turned square to the horizontal part of `EyeDir`: the camera's look direction, the same for
 //! every tree. A flat screen's camera turns little and seldom; a head never stops, and every turn
 //! of it turned every far tree, which reads as the whole far forest shimmering
-//! (`docs/research/visuals.md`). The game's own near billboards face the eye's position instead.
+//! (`docs/design/visuals.md`). The game's own near billboards face the eye's position instead.
 //!
 //! So when the game makes that shader ([`crate::d3d9`], `CreateVertexShader`) it's given this one:
 //! the game's own worked the same way (its registers, its lighting, fog and fade), but each card

@@ -9,7 +9,7 @@
 //! (Not under `MagicProjectileRoot`: the game updates that with the frame's time where its
 //! controllers want a clock (0x40D800), and particles under it are never made.)
 //!
-//! The functions (docs/research/torches.md):
+//! The functions (docs/design/torches.md):
 //! * 0x69FBF0 (cdecl, a model's path): a fresh copy of the model's root from the game's cache. Its
 //!   collision object (+0xA8), if it has one, sets the node's world transform from its Havok body
 //!   whenever the node updates (`NiNode::UpdateWorldData` 0x70C120 calls it last): a copy that the

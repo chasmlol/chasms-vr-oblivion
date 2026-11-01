@@ -4,7 +4,7 @@
 //! `InputAssembly::UploadDeferredInputBufferData`, github.com/microsoft/D3D9On12). A draw whose
 //! indices reach past its hints, which the drivers never minded, reads stale upload memory past
 //! them: triangles stretched to wherever that points, like the streaks across the trees
-//! (`docs/research/visuals.md`). Its loop over the other streams also steps twice a pass, so a
+//! (`docs/design/visuals.md`). Its loop over the other streams also steps twice a pass, so a
 //! system memory buffer on stream 2, 4 or 6 is never copied.
 //!
 //! So the buffers the game makes in system memory are known, and so is which is bound to which

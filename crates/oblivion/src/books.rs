@@ -1,4 +1,4 @@
-//! Books and notes read in the hands (`docs/research/books.md`): a book lying about, taken in a
+//! Books and notes read in the hands (`docs/design/books.md`): a book lying about, taken in a
 //! hand ([`crate::items`]), is read as soon as it's there, and Oblivion reads it exactly as
 //! activating it would (the reference's own `Activate` by the player): its book menu with the
 //! book's text laid out in pages by the game, its "Take" (with its stealing), a skill book's skill

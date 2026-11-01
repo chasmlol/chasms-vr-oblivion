@@ -1,5 +1,5 @@
 //! Picking pockets by hand (`rustvr_protocol::pockets`; the research and the design are in
-//! `docs/research/pickpocket.md`). While the player sneaks, the people near them wear pockets on
+//! `docs/design/pickpocket.md`). While the player sneaks, the people near them wear pockets on
 //! their own skeletons, holding their own things; a hand that pulls one out is the game's own
 //! pickpocketing of it, and one that lets a thing go in a pocket is the game's own planting.
 //!

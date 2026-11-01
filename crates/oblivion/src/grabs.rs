@@ -1,6 +1,6 @@
 //! Oblivion's side of grabbing people and creatures (the framework's `rustvr_protocol::grab`):
 //! a hand on any part of an actor moves it with the game's own Havok ragdoll, the skeleton's bodies
-//! (`docs/research/npcs.md`).
+//! (`docs/design/npcs.md`).
 //!
 //! * **What grabbing needs** ([`publish`], with the creatures every frame): each part's rotation
 //!   (its bone's), velocity and mass (its Havok body's), the body's mass, whether it's all Havok's

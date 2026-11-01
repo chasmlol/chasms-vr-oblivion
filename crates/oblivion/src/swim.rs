@@ -1,6 +1,6 @@
 //! Oblivion's water, for the runtime's swimming by the arms (`rustvr_protocol::WaterState`), and the
 //! strokes given back to the game's own swimming ([`crate::movement`]). Research and design:
-//! `docs/research/swimming.md`.
+//! `docs/design/swimming.md`.
 //!
 //! The game decides it all, as it always does: an actor 70% under its cell's water swims (the
 //! process's movement flag 0x800), 87.5% under it holds its breath (the actor's update, 0x603CA0,

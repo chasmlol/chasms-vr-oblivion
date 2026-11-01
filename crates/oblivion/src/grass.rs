@@ -7,7 +7,7 @@
 //! and turns all the time: the grass came and went at the edges of the view, and patches grew as
 //! the head turned to them.
 //!
-//! Two of the game's own branches are made unconditional (`docs/research/visuals.md`):
+//! Two of the game's own branches are made unconditional (`docs/design/visuals.md`):
 //! * the build keeps every patch as it keeps a near one (0x4EB632, `jnz` to the near path, made a
 //!   `jmp`), so the grass stands all round, to the game's own grass distance (its cells and
 //!   quadrants past `fGrassEndDistance` are dropped before this, as the game drops them);

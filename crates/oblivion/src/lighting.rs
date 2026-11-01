@@ -1,6 +1,6 @@
 //! The game's light on the player, for what the runtime draws (the body, what it holds), as
-//! Oblivion's own shaders would light them (`rustvr_protocol::GameLighting` in its Gamebryo model,
-//! docs/research/oblivion-lighting.md).
+//! Oblivion's own shaders would light them (`rustvr_protocol::GameLighting` in its Gamebryo
+//! model).
 //!
 //! The lights are the scene's: the world's `ShadowSceneNode` (made in 0x406950 and hung under the
 //! "World" node, 0xB333CC) keeps the lights that are on (+0xE4, a list of `ShadowSceneLight`: its

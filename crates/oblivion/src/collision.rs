@@ -1,7 +1,7 @@
 //! Oblivion's real collision, for the runtime's physics: what the hands hold, drop and throw lands
 //! on and stops at the world Oblivion's own physics has, in view or not.
 //!
-//! Oblivion simulates with Havok, a 2005 version (`docs/research/oblivion-havok.md`). Everything
+//! Oblivion simulates with Havok, a 2005 version. Everything
 //! that never moves (the land, buildings, rocks, trees, furniture) is a fixed rigid body in the
 //! current Havok world's fixed island: the exterior's world, or the interior cell's own. The
 //! adapter reads each body's shape where Havok's own reflection (its `hkClass` tables, in the game)

@@ -8,7 +8,7 @@
 //! Outside the world (the main menu, loading screens) the render isn't called: the whole picture
 //! goes to the runtime as a menu panel.
 //!
-//! **Loading doesn't leave the world** (`docs/research/worldmenu.md`). While the game loads another
+//! **Loading doesn't leave the world** (`docs/design/worldmenu.md`). While the game loads another
 //! place it can't draw one: the runtime is given the last picture of the world again ([`held`]: the
 //! bridge's last copies of the eyes and their depth, with the poses they were drawn from,
 //! `SLOT_HELD`), and holds the place round the player while the game's loading bar floats in it
@@ -146,7 +146,7 @@ mod win {
 
     /// The game's background thread (0xB3F940: it loads and changes the scene graph, cells
     /// and actors' 3D) shares the scene with the render through a semaphore: the world render takes
-    /// it at its start (`mov eax, [B3F940]` at 0x40C8F7, then its wait) and gives it back at its end
+    /// it at its start (at 0x40C8F7, then its wait) and gives it back at its end
     /// (`mov esi, [B3F940]` at 0x40D059, then its release). Those two places read these instead
     /// (patched at install), so the eyes can be rendered under one hold of it ([`hold_loader`]);
     /// by default each render takes and gives it, as the game's one render does.
