@@ -50,8 +50,9 @@ The design and its reasons are in `docs/design/spells.md`.
   appears in your palm and grows, its casting light fades in and its casting sound plays. After
   you let go the art stays in the palm for 30 s, then goes; a hand that's only holding a spell
   shows nothing. **The art is drawn apart from the game's picture** and laid over your hand where
-  it's nearer: turn your palm up and you see it in the middle of your palm, palm down and your hand
-  hides it; a thumb in front of it hides it softly, and both eyes agree where.
+  it's nearer: it sits cupped in the middle of your palm, a little out of it as in Skyrim VR; turn
+  your palm up and you see it, palm down and your hand hides it; a thumb in front of it hides it
+  with a slightly soft edge, and both eyes agree where.
   (Not with the game's HDR on: then it stays in the game's picture, and your hand covers it.) In the hand you feel nothing
   at first, then pulses that speed up and strengthen sharply, then a spike when it's charged and a
   faint tick while you hold it. **Let go to cast**, and you feel a full burst. Let go before it's
