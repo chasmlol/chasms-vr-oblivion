@@ -8,24 +8,39 @@ window, ripostes, staggers. How it works, the research behind it and every numbe
 ## Playing it
 
 `duel.bat` at this worktree's root (not committed) puts away whatever range or game is up and starts
-the range from this build (`<builds>\duel`) in the duel ring, the headset on:
+the range from this build (`<builds>\duel`) in the duel area, its duelist left out for now (the
+two-handed sword first), the headset on:
 
 ```
-<builds>\duel\release\rustvr-play.exe --wait -- --arena duel
+<builds>\duel\release\rustvr-play.exe --wait -- --arena duel --no-duelist
 ```
 
-You start in the ring, facing the duelist across it (Oblivion's male body in iron armour, from your
-own `local_assets`). A table at your left hand has a sword and a longsword. Take one: the duelist
-comes in and fights as soon as you're in the ring. Outside the ring the range plays the physics
-sandbox again; in it, the runtime plays the duel (the HUD's melee line says `duel`, and `DUEL:
-staggered` while you're staggered). The menu's Controls tab has **Melee**: *The game's* (the
-default: the duel in the ring), *Physics sandbox*, *Duel*.
+A table at your left hand has a sword and a longsword. Started there, the range plays the duel's
+rules across the whole room (the HUD's melee line says `duel`). The menu's Controls tab has
+**Melee** (*The game's*, *Physics sandbox*, *Duel*), **Sword angle in the hand** (take it again to
+apply) and **Strength on a weapon** (live: less is heavier).
 
-## What to try, in order
+## The two-handed sword (now)
 
-1. **The weight.** Swing the sword about: it should lag a fast swing and swing on past a stop more
-   than in the sandbox, and sag a little. Walk with the stick, sword in hand, then without: slower
-   with it.
+The hold is plain physics, with no code for a swing: the sword's own mass and inertia on the arms'
+spring and damper, wrists firm against a small turn but only so strong against a big one, its
+weight borne by the arms.
+
+1. **Take the longsword in both hands** and hold it still at any angle, up or out: it shouldn't
+   droop, and the blade should lean forward in your fists as an upright hilt does.
+2. **Slow overhead chop, stop your hands dead** at your chest: the sword carries on down (about
+   25 degrees) and pulls your hands about 13 cm on down after it, then comes back to them over
+   about 0.8 s, with no snap.
+3. **Fast chop**: the blade trails well behind your hands (it can't be whipped round), then swings
+   through and carries on past.
+4. **Lay it on your shoulder**, blade back: it rests there instead of passing through you (your
+   head and torso too).
+5. **Strength on a weapon**: lower it for a heavier sword (more trail, more carry), raise it for a
+   lighter one. Tell me where it feels right.
+
+## The duel's combat (later: start without `--no-duelist`)
+
+1. **The walk.** Walk with the stick, sword in hand, then without: slower with it.
 2. **Read its swings.** It winds up slowly (0.8 s) from its right, its left, over its head or from
    low, stepping in, then swings. Don't parry: let one land (you lose 5 to 15 of 100 health; you
    get up again at 0).
@@ -47,7 +62,15 @@ default: the duel in the ring), *Physics sandbox*, *Duel*.
 
 ## What was checked, and what wasn't
 
-Checked headless on the emulated headset (`framework/tools/xrsim/duel_*.toml`, twice each, the same
+The sword, checked headless (`framework/tools/xrsim/duel_chop.toml`, `duel_shoulder.toml`, with
+`RUSTVR_DEBUG_MELEE=1`): the slow chop trails 18 degrees and carries on 23 past the stop, the hands
+pulled 13 cm on down, back with them 0.8 s later without swinging back; the fast chop trails 89 and
+carries on 32; the blade laid back through the shoulder rests on it (held 12 cm up off its hold);
+held still, it stays where the hands put it. Not checked: how heavy it feels in the hand, and the
+hands drawn away from your real hands while it trails or carries on (up to 13 to 36 cm).
+
+The combat, checked headless on the emulated headset before the hold became plain physics (to be
+checked again; `framework/tools/xrsim/duel_parry.toml`, `duel_guard.toml`, twice each, the same
 each time): a parry inside the window staggers the duelist and the counter lands; a push 0.6 s
 early is beaten aside and the player struck; parried by the duelist, the player's next swing does
 nothing and its riposte strikes; a dragged swing makes it parry early and then lands. The duelist
