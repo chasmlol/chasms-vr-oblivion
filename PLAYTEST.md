@@ -23,20 +23,24 @@ apply) and **Strength on a weapon** (live: less is heavier).
 ## The two-handed sword (now)
 
 The hold is plain physics, with no code for a swing: the sword's own mass and inertia on the arms'
-spring and damper, wrists firm against a small turn but only so strong against a big one, its
-weight borne by the arms.
+spring and damper, no harder than the hands are strong and no faster than the arms go (a top turn
+rate, slower for a heavier blade), its weight borne by the arms. Whatever your hands do, it goes
+their way at its own pace.
 
 1. **Take the longsword in both hands** and hold it still at any angle, up or out: it shouldn't
-   droop, and the blade should lean forward in your fists as an upright hilt does.
-2. **Slow overhead chop, stop your hands dead** at your chest: the sword carries on down (about
-   25 degrees) and pulls your hands about 13 cm on down after it, then comes back to them over
-   about 0.8 s, with no snap.
-3. **Fast chop**: the blade trails well behind your hands (it can't be whipped round), then swings
-   through and carries on past.
-4. **Lay it on your shoulder**, blade back: it rests there instead of passing through you (your
+   droop.
+2. **Put your hands sideways.** Bring your lower hand up beside the other (or roll your wrists):
+   the handle lies along the line between your hands, so the blade turns sideways with them.
+3. **Fast slash, as fast as you can, and stop.** The sword can't go that fast: it turns at most
+   about 310 degrees a second (a half turn in 0.6 s), so it comes after your hands along the
+   same way, carries on a little past where they stopped (about 10 degrees) and settles there
+   about half a second later. The drawn hands stay on its grip, so they follow your real hands.
+4. **Slow chop, stop your hands dead**: it follows closely (8 degrees behind), carries on about 11
+   degrees and settles.
+5. **Lay it on your shoulder**, blade back: it rests there instead of passing through you (your
    head and torso too).
-5. **Strength on a weapon**: lower it for a heavier sword (more trail, more carry), raise it for a
-   lighter one. Tell me where it feels right.
+6. **Strength on a weapon**: lower it for a heavier sword (slower to turn, more carry), raise it
+   for a lighter one. Tell me where it feels right.
 
 ## The duel's combat (later: start without `--no-duelist`)
 
@@ -62,12 +66,14 @@ weight borne by the arms.
 
 ## What was checked, and what wasn't
 
-The sword, checked headless (`framework/tools/xrsim/duel_chop.toml`, `duel_shoulder.toml`, with
-`RUSTVR_DEBUG_MELEE=1`): the slow chop trails 18 degrees and carries on 23 past the stop, the hands
-pulled 13 cm on down, back with them 0.8 s later without swinging back; the fast chop trails 89 and
-carries on 32; the blade laid back through the shoulder rests on it (held 12 cm up off its hold);
-held still, it stays where the hands put it. Not checked: how heavy it feels in the hand, and the
-hands drawn away from your real hands while it trails or carries on (up to 13 to 36 cm).
+The sword, checked headless (`framework/tools/xrsim/duel_chop.toml`, `duel_sideways.toml`,
+`duel_shoulder.toml`, with `RUSTVR_DEBUG_MELEE=1`): chopped from overhead in 0.25 s it falls 70
+degrees behind the hands, carries on 10 past their stop and is with them 0.5 s after it; chopped in
+0.6 s it trails 8 and carries on 11; the hands put sideways over a second, its handle turns with
+them (14 degrees behind, then on their line); the blade laid back through the shoulder rests on it
+(held 9 cm up off its hold); held still, it stays where the hands put it. Not checked: how heavy it
+feels in the hand, and the drawn hands away from your real hands while it comes after them (up to
+about 20 cm in a fast slash).
 
 The combat, checked headless on the emulated headset before the hold became plain physics (to be
 checked again; `framework/tools/xrsim/duel_parry.toml`, `duel_guard.toml`, twice each, the same
