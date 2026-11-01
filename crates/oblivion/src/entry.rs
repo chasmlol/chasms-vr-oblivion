@@ -57,6 +57,7 @@ fn startup() {
     crate::combat::install();
     crate::console::install();
     crate::slot_menu::install();
+    crate::keyboard::install();
     crate::voice::install();
     crate::look::install();
     tracing::info!("startup: hooks installed");

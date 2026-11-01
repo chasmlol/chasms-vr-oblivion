@@ -19,6 +19,7 @@
 //! | the loading screen (the place the player was in held round them, `crate::render`) | ahead of the player | its bar alone, with its word |
 //! | the race menu (a new character) | beside the mirror (the runtime's: `GS_MENU_IN_WORLD`, [`crate::render`]) | none here: the runtime shows the part of the picture it's in |
 //! | anything else | ahead of the player | the menu, cut from the screen |
+//! | a field being typed into (a name: `crate::keyboard`) | where the eyes look | the keys, the field over them (in the text box, the keys are on its parchment) |
 //! | a book or a note being read | over the book in the hand, turned to the eyes (or held in the off hand: one read from the inventory or a shelf) | a book's two pages, a note's scroll |
 //! | the map drawn from the belt | held in the hand like paper | its page (the local or world map in its frame), its tabs |
 //!
@@ -595,6 +596,30 @@ mod win {
         tracing::info!("hud: a pop-up made room for: the menu under it {down:.0} down the screen, the pop-up over it");
     }
 
+    /// Moves a menu's top tile (and so all of it) across the screen by `dx`, as [`move_menu`] moves
+    /// one down it.
+    fn move_menu_across(tile: usize, dx: f32) {
+        let x = tiles::value(tile, tiles::X).unwrap_or(0.0);
+        type Update = unsafe extern "thiscall" fn(usize, u32, f32);
+        crate::hooks::guard_void("menu room", || unsafe { std::mem::transmute::<usize, Update>(UPDATE_FLOAT)(tile, tiles::X as u32, x + dx) });
+    }
+
+    /// A menu over the race menu (its question, the box the name is typed in) comes in the middle
+    /// of the screen, across the race menu's side of it, which the runtime shows beside the mirror:
+    /// part of the one over it would show there again, cut off at the edge. So it's moved across
+    /// the screen beside the race menu, into the side the flat game shows the face in, and floats
+    /// on its own. `top` and `p`: its top tile and the box its pieces take now.
+    fn clear_of_race_menu(top: usize, p: [f32; 4], screen: (f32, f32), trees: &mut Trees) {
+        let Some(r) = piece_box(trees.get(crate::menus::MENU_RACE_SEX), &Piece::of(&[From::All], false)) else { return };
+        let over = r[0] < p[2] && p[0] < r[2] && r[1] < p[3] && p[1] < r[3];
+        let dx = r[2] + 3.0 * MARGIN - p[0];
+        if !over || p[2] + dx > screen.0 {
+            return;
+        }
+        move_menu_across(top, dx);
+        tracing::info!("hud: the menu over the race menu moved {dx:.0} across the screen, clear of it");
+    }
+
     /// The menu moved for a pop-up back where it was (the pop-up gone).
     fn put_back() {
         let mut moved = MOVED.lock().unwrap();
@@ -797,6 +822,8 @@ mod win {
                     let popup = add_group(&mut l, HudGroup { anchor: ANCHOR_POPUP, id: top, ..Default::default() }, top, WHOLE, screen, &mut trees);
                     if let (Some((kind, u)), Some(p)) = (under, popup) {
                         make_room((tiles::menu_tile(kind), u), (tiles::menu_tile(top), p), screen);
+                    } else if let (None, Some(p), true) = (under, popup, tiles::menu_tile(crate::menus::MENU_RACE_SEX) != 0) {
+                        clear_of_race_menu(tiles::menu_tile(top), p, screen, &mut trees);
                     }
                 }
             }
@@ -825,9 +852,15 @@ mod win {
                 } else {
                     player(kind)
                 };
-                add_group(&mut l, group, kind, WHOLE, screen, &mut trees);
+                let placed = add_group(&mut l, group, kind, WHOLE, screen, &mut trees);
+                // (Over the race menu, the box its name is typed in: clear of the race menu.)
+                if let (Some(p), true) = (placed, kind != MENU_PAUSE && tiles::menu_tile(crate::menus::MENU_RACE_SEX) != 0) {
+                    clear_of_race_menu(tiles::menu_tile(kind), p, screen, &mut trees);
+                }
             }
         }
+        // A menu's field being typed into: the VR keyboard, where the eyes look (`crate::keyboard`).
+        crate::keyboard::pieces(&mut l, screen);
         // (A pop-up stays solid: what's behind it in the world is the menu it's over. So does what's
         // held in the hands: a book's pages, a map.)
         let held_map = crate::map::held_open();

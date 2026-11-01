@@ -15,7 +15,8 @@
 //! what's under it (a list's rows, the compass's strip).
 //!
 //! A menu is read once a frame into a [`Tree`] (a container's hundreds of rows aren't: a piece is
-//! never one row, and reading them all would cost the game its frame).
+//! never one row, and reading them all would cost the game its frame). The VR keyboard's keys over
+//! a menu's field aren't part of the menu as it's read: they float apart ([`crate::keyboard`]).
 
 /// A box `[x0, y0, x1, y1]` grown to take in another.
 pub fn grow(b: Option<[f32; 4]>, r: [f32; 4]) -> Option<[f32; 4]> {
@@ -256,6 +257,10 @@ mod win {
                 if depth > 24 || out.len() > 2048 {
                     return;
                 }
+                let name = name(tile);
+                if depth > 0 && name == crate::keyboard::APART {
+                    return;
+                }
                 let v = values(tile);
                 let (x, y) = (origin.0 + v.x, origin.1 + v.y);
                 let shown = shown && v.visible.is_none_or(|v| v == TRUE);
@@ -273,7 +278,7 @@ mod win {
                 let own = [left, y, left + v.w, y + v.h];
                 let r = [own[0].max(clip[0]), own[1].max(clip[1]), own[2].min(clip[2]), own[3].min(clip[3])];
                 let r = if r[2] > r[0] && r[3] > r[1] { r } else { [own[0], own[1], own[0], own[1]] };
-                out.push(Placed { tile, name: name(tile), depth, rect: r, shown, alpha: v.alpha, kind: k });
+                out.push(Placed { tile, name, depth, rect: r, shown, alpha: v.alpha, kind: k });
                 let inner = if v.locus { (x, y) } else { origin };
                 let clip = if v.clips { [clip[0].max(own[0]), clip[1].max(own[1]), clip[2].min(own[2]), clip[3].min(own[3])] } else { clip };
                 let kids = children(tile);

@@ -60,6 +60,7 @@ pub mod iat;
 pub mod input;
 pub mod inventory;
 pub mod items;
+pub mod keyboard;
 pub mod launcher;
 pub mod leaves;
 pub mod lighting;

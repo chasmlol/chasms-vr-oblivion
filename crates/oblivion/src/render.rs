@@ -470,6 +470,7 @@ mod win {
             crate::books::frame();
             crate::inventory::frame(link::now());
             crate::slot_menu::frame();
+            crate::keyboard::frame();
             crate::pockets::frame(link::now());
             crate::alchemy::frame(link::now());
         });

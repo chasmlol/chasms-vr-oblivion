@@ -20,8 +20,9 @@
 //!   (`race_template_button`, the one its Race, Face and Hair buttons are made from), on its main
 //!   page (Undo, Reset Face: the race's own face, its age and complexion kept) and on each of the
 //!   face's shape pages (Undo, Reset: that page's features back to the race's own). Their clicks are
-//!   taken from the menu's `HandleClick` (0x5CC200, hooked: the game's own ids go on to it). An undo
-//!   goes back to the face before the last pull or reset; the menu closing forgets them.
+//!   taken from the menu's `HandleClick` (0x5CC200, hooked: the game's own ids go on to it; the VR
+//!   keyboard's keys over the name are [`crate::keyboard`]'s). An undo goes back to the face before
+//!   the last pull or reset; the menu closing forgets them.
 //!
 //! The race menu (`RaceSexMenu`, its `Menu*`): its pages' tiles from +0x40 (main) and +0x58 (the
 //! shape pages: general, brow, cheeks, chin, eyes, forehead, jaw, mouth, nose); its tile's `user0`
@@ -347,6 +348,10 @@ mod imp {
 
     static REAL_CLICK: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     unsafe extern "thiscall" fn click(menu: usize, id: i32, tile: usize) {
+        // (The VR keyboard's keys over the name: `crate::keyboard`.)
+        if crate::keyboard::click(id) {
+            return;
+        }
         if (UNDO..RESET_PAGE + SHAPE_PAGES.len() as i32).contains(&id) {
             crate::hooks::guard_void("race menu click", || {
                 tracing::info!("facesculpt: the race menu's button {id} clicked");

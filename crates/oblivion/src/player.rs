@@ -136,6 +136,11 @@ pub fn before_update() {
     {
         b.hold("Activate", link::now() + 0.12);
     }
+    // (While a field takes keys, the game's keyboard is the VR keyboard's alone: the buttons' keys
+    // (Jump's E, Menu Mode's Tab) would be typed into it. The menu button's Escape still goes.)
+    if crate::keyboard::typing() {
+        v.keys.retain(|&k| k == input::DIK_ESCAPE);
+    }
     #[cfg(windows)]
     input::set(v, vr || settings::get().background);
     crate::combat::apply_pending();

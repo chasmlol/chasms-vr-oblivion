@@ -10,6 +10,12 @@
 //! `00KKMMJJ`: keyboard key, mouse button, joystick button; 0xFF none), so a player's rebinding
 //! still works.
 //!
+//! Typing ([`type_key`], the VR keyboard's keys: [`crate::keyboard`]) is keys pressed and let go
+//! in the keyboard's buffered data, in order, as a real keyboard's are: the game's interface reads
+//! that data one event at a time (a key down a frame) and turns each key into a character itself.
+//! What the actions hold joins the same queue, so no event is lost when the game asks for one at a
+//! time.
+//!
 //! Walking is analog, as Oblivion's own joystick walking is (the player's update, 0x671620): the
 //! stick is the first joystick's X and Y axes (-100..100, forward negative) in the game's input
 //! state (`OSInputGlobals` +0x30, `DIJOYSTATE`), written right after the game polls its devices
@@ -60,6 +66,7 @@ pub fn default_controls() -> HashMap<String, Binding> {
 }
 
 pub const DIK_ESCAPE: u8 = 0x01;
+pub const DIK_LSHIFT: u8 = 0x2A;
 
 /// What the game's keyboard, mouse and joystick read this frame.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -237,6 +244,7 @@ impl Bridge {
 #[cfg(windows)]
 mod win {
     use crate::hooks::{guard, install};
+    use std::collections::VecDeque;
     use std::ffi::c_void;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::*};
@@ -269,6 +277,8 @@ mod win {
         sequence: u32,
         /// The wheel's turn the game hasn't read yet.
         wheel: i32,
+        /// The keyboard's events not yet read by the game, in order (key, down).
+        queue: VecDeque<(u32, bool)>,
     }
     static STATE: Mutex<State> = Mutex::new(State {
         v: super::Virtual { keys: Vec::new(), buttons: 0, stick: [0; 2], mouse: [0; 2], wheel: 0, back: false },
@@ -276,7 +286,31 @@ mod win {
         told_buttons: 0,
         sequence: 0x4000_0000,
         wheel: 0,
+        queue: VecDeque::new(),
     });
+
+    /// The most keyboard events kept for the game to read (a game not reading its keyboard has
+    /// nothing piling up).
+    const QUEUE_MOST: usize = 64;
+
+    /// A key typed: pressed and let go on the game's keyboard (DirectInput code `key`), with the
+    /// left Shift held round it when `shift`.
+    pub fn type_key(key: u8, shift: bool) {
+        let mut s = STATE.lock().unwrap();
+        if s.queue.len() + 4 > QUEUE_MOST {
+            tracing::warn!("input: the game isn't reading its keyboard: key {key:#04x} not typed");
+            return;
+        }
+        let shift_key = super::DIK_LSHIFT as u32;
+        if shift {
+            s.queue.push_back((shift_key, true));
+        }
+        s.queue.push_back((key as u32, true));
+        s.queue.push_back((key as u32, false));
+        if shift {
+            s.queue.push_back((shift_key, false));
+        }
+    }
 
     /// `OSGlobals*` (+0x20 its `OSInputGlobals*`), and the game's poll of its devices (thiscall on
     /// the input globals); the first joystick's state in them.
@@ -468,9 +502,18 @@ mod win {
             // The changes since the game was last told: (offset, down).
             let mut changes: Vec<(u32, bool)> = Vec::new();
             if dev as usize == KEYBOARD.load(Acquire) {
-                changes.extend(s.v.keys.iter().filter(|k| !s.told_keys.contains(k)).map(|&k| (k as u32, true)));
-                changes.extend(s.told_keys.iter().filter(|k| !s.v.keys.contains(k)).map(|&k| (k as u32, false)));
+                // (The held keys' changes behind what was typed; as many as the game asks for, the
+                // rest kept for its next read.)
+                let downs = s.v.keys.iter().filter(|k| !s.told_keys.contains(k)).map(|&k| (k as u32, true));
+                let ups = s.told_keys.iter().filter(|k| !s.v.keys.contains(k)).map(|&k| (k as u32, false));
+                let held: Vec<(u32, bool)> = downs.chain(ups).collect();
+                s.queue.extend(held);
                 s.told_keys = s.v.keys.clone();
+                while s.queue.len() > QUEUE_MOST {
+                    s.queue.pop_front();
+                }
+                let take = (room.saturating_sub(n) as usize).min(s.queue.len());
+                changes.extend(s.queue.drain(..take));
             } else {
                 let diff = s.v.buttons ^ s.told_buttons;
                 for b in 0..8 {
@@ -503,7 +546,7 @@ mod win {
 }
 
 #[cfg(windows)]
-pub use win::{on_direct_input, set};
+pub use win::{on_direct_input, set, type_key};
 
 #[cfg(test)]
 mod tests {
