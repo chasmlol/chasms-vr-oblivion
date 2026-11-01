@@ -29,7 +29,7 @@ The launcher runs one console line every half second, so the extra spells arrive
 
 `range.bat` is the same on the framework's test range, with no game (see the end).
 
-The design and its reasons are in `docs/research/spells.md`.
+The design and its reasons are in `docs/design/spells.md`.
 
 ## How it works now
 
@@ -46,8 +46,10 @@ The design and its reasons are in `docs/research/spells.md`.
   * There are twelve spells to a page. Point at the arrows at the foot and pull a trigger to turn
     the page.
 * **Charge and release**, as in Skyrim VR with ISPVR's feel. **Hold the trigger**: the spell
-  charges over the game's own casting time (self 0.37 s, touch 0.27 s, target 0.4 s). Its art grows
-  in the palm, its casting light fades in and its casting sound plays. In the hand you feel nothing
+  charges over the game's own casting time (self 0.37 s, touch 0.27 s, target 0.4 s). Its art
+  appears in your palm and grows, its casting light fades in and its casting sound plays. After
+  you let go the art stays in the palm for 30 s, then goes; a hand that's only holding a spell
+  shows nothing. In the hand you feel nothing
   at first, then pulses that speed up and strengthen sharply, then a spike when it's charged and a
   faint tick while you hold it. **Let go to cast**, and you feel a full burst. Let go before it's
   charged and nothing is cast; no magicka is spent.
@@ -112,6 +114,8 @@ The design and its reasons are in `docs/research/spells.md`.
       while letting go throws it. It moves things, not people, like the game's own. When the spell
       runs out, what you hold falls and the gravity gloves are back.
     * Chameleon and Shadow Shape (invisibility) don't make your own body see-through yet.
+    * Your hand still covers the spell's art where the art is in front of it (palm up): the game
+      draws the art into its picture, and your hand is drawn over that picture.
 
 Things worth telling me about:
 * Does it go where your hand is held out? If you'd rather cast out of your palm, `palm_tilt` in
@@ -161,5 +165,4 @@ the magicka is spent and comes back.
   * the failure message and sound;
   * the spell icons and font on the wheel.
 
-  All of these follow the engine facts in `docs/research/spells-engine-notes.md`, read from the
-  game's code. This playtest is their first run.
+  This playtest is their first run.

@@ -192,8 +192,9 @@ the game, but their hands still move in VR.
   pick hooked), the summoning-in-water rule; the wheel's pick through the game's own selection and
   the magic menu's sound; a refused pull answered with the game's message and the school's failure
   sound; the staff's own cast.
-* **`crates/oblivion/src/magic.rs`**: the art, small in the palm while held (smaller with the
-  magicka), growing with its casting light and sound as it charges.
+* **`crates/oblivion/src/magic.rs`**: the art, in the palm once the trigger has charged it and for
+  30 s after (smaller with the magicka), growing with its casting light and sound as it charges. A
+  hand only holding a spell shows nothing: turned about, its art flickered round the hand's edges.
 * **Bound weapons and shields** (`spells.rs`, `weapons.rs`): made in the hand that cast them
   (`ObjectDesc::into_hand`, which the rig honours as the thing arrives).
 * **Telekinesis** (`spells.rs`): the game's melee rules say the hands' telekinesis is on while its
