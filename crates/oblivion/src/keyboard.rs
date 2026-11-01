@@ -51,6 +51,11 @@ pub fn typing() -> bool {
 /// (theirs are under 300, their lists' from 1000).
 pub const KEY_ID: i32 = 700;
 
+/// The id is one of the keys'.
+pub fn is_key(id: i32) -> bool {
+    (KEY_ID..KEY_ID + 256).contains(&id)
+}
+
 /// A key's size on the game's screen (the menus' units; a wider key is more columns) and the room
 /// between keys.
 const KEY_W: f32 = 48.0;
@@ -270,7 +275,7 @@ mod game {
     /// A key's id clicked in a menu (its click handler, before the menu's own): taken, the menu
     /// never sees it (a click would end its field's typing). False for the menu's own ids.
     pub fn click(id: i32) -> bool {
-        if !(KEY_ID..KEY_ID + 256).contains(&id) {
+        if !is_key(id) {
             return false;
         }
         hooks::guard_void("keyboard click", || CLICKS.lock().unwrap().push(id));

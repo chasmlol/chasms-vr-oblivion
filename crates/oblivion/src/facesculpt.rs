@@ -86,6 +86,10 @@ mod imp {
     const TEMPLATE: usize = 0x0058_5410;
     const REFRESH_PAGE: usize = 0x005C_6AF0;
     const HANDLE_CLICK: usize = 0x005C_C200;
+    /// The race menu's drag on a slider (thiscall `(menu, id, tile)`: the mouse held down on one of
+    /// its tiles). The id picks the slider from its own tiles by id, unchecked: an id of the
+    /// adapter's own (the VR keyboard's keys, the face's buttons here) would read far past them.
+    const HANDLE_DRAG: usize = 0x005C_3BE0;
     const UPDATE_FLOAT: usize = 0x0058_CEB0;
     const UPDATE_STRING: usize = 0x0058_CED0;
     /// Tile values: id, list index, its number of children, user0 (the page on show, on the menu's
@@ -343,7 +347,22 @@ mod imp {
             if crate::hooks::install_into(HANDLE_CLICK as *const (), click as *const (), "RaceSexMenu::HandleClick", &REAL_CLICK) {
                 tracing::info!("facesculpt: the race menu's clicks are seen first (Undo and Reset)");
             }
+            crate::hooks::install_into(HANDLE_DRAG as *const (), drag as *const (), "RaceSexMenu drag", &REAL_DRAG);
         });
+    }
+
+    /// The adapter's own ids in the race menu: the VR keyboard's keys, the face's buttons.
+    fn ours(id: i32) -> bool {
+        crate::keyboard::is_key(id) || (UNDO..RESET_PAGE + SHAPE_PAGES.len() as i32).contains(&id)
+    }
+
+    static REAL_DRAG: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    unsafe extern "thiscall" fn drag(menu: usize, id: i32, tile: usize) {
+        if ours(id) {
+            return;
+        }
+        let real: unsafe extern "thiscall" fn(usize, i32, usize) = unsafe { std::mem::transmute(REAL_DRAG.load(std::sync::atomic::Ordering::Acquire)) };
+        unsafe { real(menu, id, tile) }
     }
 
     static REAL_CLICK: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
