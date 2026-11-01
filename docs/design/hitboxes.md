@@ -58,9 +58,10 @@ it without being felt.
   bucket on a rope) and the weapon, shield and torch in the hands are given the runtime as their
   drawn shapes, by the same rules (`COL_OBJECT_MESH` in the framework's protocol, each in its
   object's own space). The runtime makes each one's collision its convex parts (an approximate
-  convex decomposition on a coarse voxel grid, a few tens of milliseconds a model on a thread of
-  its own, once for each model): a basket's wall and handle, a bowl's wall round its hollow, a
-  sword's blade, guard and grip. Until then, and for what draws nothing solid, a thing keeps its
+  convex decomposition on a coarse voxel grid, finer for a long thin thing, and a part more for
+  anything it would leave out; about a tenth of a second a model on a thread of its own, once for
+  each model): a basket's wall and handle, a bowl's wall round its hollow, a sword's blade, guard
+  and grip. Until then, and for what draws nothing solid, a thing keeps its
   own shape. The bow keeps its own (its string's side is the drawing hand's), and so do arrows
   (thin enough as they are) and the mortars and pestles (their pieces are the runtime's).
 - **The game itself is unchanged.** Walking, the NPCs and things falling keep the game's collision;

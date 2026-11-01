@@ -581,8 +581,9 @@ fn dump(nif: &Nif) {
 }
 
 /// The convex parts the runtime makes a thing's collision of, from its drawn shape (as its
-/// `rig::drawn` does: at most 16 parts of 48 points, on a grid of 40, 2% from convex; a few
-/// triangles are one hull), each as its hull's triangles.
+/// `rig::drawn` does: at most 16 parts of 48 points, and a few more for what they'd leave out, on a
+/// grid of 40 across a round thing, 2% from convex; a few triangles are one hull), each as its
+/// hull's triangles.
 #[cfg(feature = "parts")]
 fn convex_parts(tris: &[[glam::Vec3; 3]]) -> Vec<Vec<[glam::Vec3; 3]>> {
     use glam::Vec3;
@@ -590,7 +591,7 @@ fn convex_parts(tris: &[[glam::Vec3; 3]]) -> Vec<Vec<[glam::Vec3; 3]>> {
         return Vec::new();
     }
     let whole = || vec![tris.iter().flatten().copied().collect::<Vec<Vec3>>()];
-    let parts = if tris.len() < 12 { whole() } else { rustvr_guns::hulls::convex_parts_with(tris, 16, 48, 40, 0.02) };
+    let parts = if tris.len() < 12 { whole() } else { rustvr_guns::hulls::convex_parts_covering(tris, 16, 48, 40, 0.02) };
     let parts = if parts.is_empty() { whole() } else { parts };
     parts
         .iter()

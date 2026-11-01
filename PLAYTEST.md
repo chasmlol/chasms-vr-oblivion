@@ -28,8 +28,8 @@ game's simplified collision.
 - **The game itself is unchanged.** Your walking, the NPCs, things falling and resting where you
   let them go, and arrows and spells in flight still use the game's own collision.
 
-Each thing's shape is worked out from its model as it comes near (a few hundredths of a second a
-model, once for each model); until then it keeps its old shape.
+Each thing's shape is worked out from its model as it comes near (about a tenth of a second a
+model, in the background, once for each model); until then it keeps its old shape.
 
 ## What to try, in order
 
@@ -54,7 +54,7 @@ Checked, not in the headset (the game was never started):
 - the reader goes through all of the game's models; the check tool (`oblivion-extract hitboxes`)
   worked out every model's hitbox and compared it with the game's own collision, and split all
   2,313 models of things you can take into the pieces the hands meet (5 to 16 pieces for most,
-  50 ms on average, at most a third of a second); the report is in
+  a tenth of a second on average, under a second for the slowest); the report is in
   `local_assets\oblivion\hitboxes\report.txt`;
 - pictures of chairs, tables, shelves and walls, and of baskets, bowls, buckets, a tankard and a
   sword split into their pieces, looked at one by one; that bowls and buckets stay hollow was
