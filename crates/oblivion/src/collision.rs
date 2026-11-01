@@ -1041,50 +1041,64 @@ mod win {
 
     /// Object `id`, offered to the runtime, is drawn as `model` (a path under `meshes\`; `model|node`
     /// for one part of it, in that node's frame): its collision is made its drawn shape, sent once
-    /// it's worked out. Its owner calls this whenever it looks at what it offers.
+    /// it's worked out ([`update`] sends it). Its owner calls this whenever it looks at what it
+    /// offers. (It only notes it: an owner may call it with the link's adapter in hand.)
     pub fn object_shape(id: u32, model: &str, frame: Frame, now: f64) {
-        let conns = crate::link::with_adapter(|a| a.connections()).unwrap_or(0);
         let mut shapes = SHAPES.lock().unwrap();
         let s = shapes.get_or_insert_with(Shapes::default);
-        if conns != s.connections {
-            // (A restarted runtime has none of them.)
-            s.connections = conns;
-            s.by_id.clear();
-        }
-        let e = s.by_id.entry(id).or_insert_with(|| Shape { model: String::new(), frame, sent: false, seen: now });
+        let e = s.by_id.entry(id).or_insert_with(|| Shape { model: model.to_owned(), frame, sent: false, seen: now });
         if !e.model.eq_ignore_ascii_case(model) || e.frame != frame {
             *e = Shape { model: model.to_owned(), frame, sent: false, seen: now };
         }
         e.seen = now;
-        if e.sent {
-            return;
-        }
-        let Some(h) = hitbox(model, now) else { return };
-        // (Nothing solid drawn, or no model to read: its own shape.)
-        let tris: Vec<[Vec3; 3]> = match &h {
-            Some(h) if !h.is_empty() => {
-                let b = camera::basis();
-                let at = |v: Vec3| match frame {
-                    Frame::Node(scale) => b.point_from_game(v * scale),
-                    Frame::Model => oblivion_assets::export::point(h.root.apply(v)),
-                };
-                h.triangles.iter().map(|t| t.map(|i| at(h.vertices[i as usize]))).collect()
-            }
-            _ => Vec::new(),
-        };
-        e.sent = send_object_mesh(id, &tris);
-        if e.sent && !tris.is_empty() {
-            tracing::info!("collision: object {id:#010x} ({model}) given its drawn shape, {} triangles", tris.len());
-        }
     }
 
-    /// The drawn shapes of objects no longer offered taken back (their own shapes again).
-    fn shapes_gone(now: f64) {
-        let mut shapes = SHAPES.lock().unwrap();
-        let Some(s) = shapes.as_mut() else { return };
-        let gone: Vec<u32> = s.by_id.iter().filter(|(_, e)| now - e.seen > SHAPE_KEEP).map(|(id, _)| *id).collect();
+    /// The objects' drawn shapes worked out since sent to the runtime, and those of objects no longer
+    /// offered taken back (their own shapes again). Each frame, not with the link's adapter in hand.
+    fn send_shapes(now: f64) {
+        let conns = crate::link::with_adapter(|a| a.connections()).unwrap_or(0);
+        // (What to send, taken under the lock and sent outside it.)
+        let (todo, gone): (Vec<(u32, String, Frame)>, Vec<u32>) = {
+            let mut shapes = SHAPES.lock().unwrap();
+            let Some(s) = shapes.as_mut() else { return };
+            if conns != s.connections {
+                // (A restarted runtime has none of them.)
+                s.connections = conns;
+                s.by_id.values_mut().for_each(|e| e.sent = false);
+            }
+            let todo = s.by_id.iter().filter(|(_, e)| !e.sent && now - e.seen <= SHAPE_KEEP).map(|(id, e)| (*id, e.model.clone(), e.frame)).collect();
+            let gone = s.by_id.iter().filter(|(_, e)| now - e.seen > SHAPE_KEEP).map(|(id, _)| *id).collect();
+            (todo, gone)
+        };
+        for (id, model, frame) in todo {
+            let Some(h) = hitbox(&model, now) else { continue };
+            // (Nothing solid drawn, or no model to read: its own shape.)
+            let tris: Vec<[Vec3; 3]> = match &h {
+                Some(h) if !h.is_empty() => {
+                    let b = camera::basis();
+                    let at = |v: Vec3| match frame {
+                        Frame::Node(scale) => b.point_from_game(v * scale),
+                        Frame::Model => oblivion_assets::export::point(h.root.apply(v)),
+                    };
+                    h.triangles.iter().map(|t| t.map(|i| at(h.vertices[i as usize]))).collect()
+                }
+                _ => Vec::new(),
+            };
+            if !send_object_mesh(id, &tris) {
+                break;
+            }
+            if let Some(e) = SHAPES.lock().unwrap().as_mut().and_then(|s| s.by_id.get_mut(&id)).filter(|e| e.model == model && e.frame == frame) {
+                e.sent = true;
+            }
+            if !tris.is_empty() {
+                tracing::info!("collision: object {id:#010x} ({model}) given its drawn shape, {} triangles", tris.len());
+            }
+        }
         for id in gone {
-            if send_object_mesh(id, &[]) {
+            if !send_object_mesh(id, &[]) {
+                break;
+            }
+            if let Some(s) = SHAPES.lock().unwrap().as_mut() {
                 s.by_id.remove(&id);
             }
         }
@@ -1103,7 +1117,7 @@ mod win {
 
     /// Once per game frame in the world: keeps the runtime's collision around the player current.
     pub fn update(now: f64) {
-        shapes_gone(now);
+        send_shapes(now);
         let player = engine::player();
         let Some(feet) = (player != 0).then(|| mem::at::<[f32; 3]>(player + refr::POS)).flatten() else { return };
         let feet = camera::basis().point_from_game(Vec3::from(feet));
