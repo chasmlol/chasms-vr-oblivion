@@ -225,12 +225,13 @@ mod game {
     const FALSE: f32 = 1.0;
     /// The HUD (`kMenuType_HUDMain`), whose tiles the list goes in; the container menu
     /// (`kMenuType_Container`): its container (+0x44), the type it put on the menu stack (+0x14),
-    /// its click (vtable slot 3) and its Exit.
+    /// its click (vtable slot 3: the id and the clicked tile) and its Exit (id and tile).
     const MENU_HUD: u32 = 0x3EC;
     const MENU_OF: usize = 0x44;
     const MENU_STACKED: usize = 0x14;
     const VT_HANDLE_CLICK: usize = 3 * 4;
     const EXIT: u32 = 33;
+    const EXIT_BUTTON: &str = "cont_button_exit";
     /// How long a script is given to open what it was activated for (seconds).
     const SCRIPT_WAIT: f64 = 1.5;
     /// Seconds between looks at what's in it.
@@ -546,10 +547,14 @@ mod game {
                 if mem::is_readable((menu + MENU_STACKED) as *const u8, 4) {
                     unsafe { ((menu + MENU_STACKED) as *mut u32).write(0) };
                 }
+                // (Its Exit's own tile with it: the click fades it.)
                 let f = mem::deref(mem::deref(menu) + VT_HANDLE_CLICK);
-                if (0x0040_1000..0x00A0_0000).contains(&f) {
+                let exit = tiles::Tree::read(tiles::menu_tile(super::MENU_CONTAINER)).find(EXIT_BUTTON).map_or(0, |p| p.tile);
+                if (0x0040_1000..0x00A0_0000).contains(&f) && exit != 0 {
                     type Click = unsafe extern "thiscall" fn(usize, u32, usize);
-                    unsafe { std::mem::transmute::<usize, Click>(f)(menu, EXIT, 0) };
+                    unsafe { std::mem::transmute::<usize, Click>(f)(menu, EXIT, exit) };
+                } else {
+                    tracing::warn!("quickloot: the container menu {waiting:#x}'s script opened has no Exit to shut it with");
                 }
                 tracing::info!("quickloot: its script opened {waiting:#x}: its menu shut, what's in it listed at the hand");
                 self.scripted = waiting;
