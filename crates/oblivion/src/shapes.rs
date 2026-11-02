@@ -372,6 +372,64 @@ mod game {
         parts
     }
 
+    /// What's drawn on an actor (its 3D `root`) where it is now (the game's world), point by point,
+    /// by the bone that moves each most (a rigid model on the head bone: the head), for the bones
+    /// `keep` takes: a severed head with its hair and helmet, an arm's upper arm, forearm and hand.
+    pub fn posed_by_bone(root: usize, keep: &dyn Fn(usize) -> bool) -> HashMap<usize, Vec<Vec3>> {
+        let mut out: HashMap<usize, Vec<Vec3>> = HashMap::new();
+        for (geom, head) in models(root) {
+            let data = mem::deref(geom + GEOM_DATA);
+            let n = mem::at::<u16>(data + DATA_VERTEX_COUNT).unwrap_or(0) as usize;
+            let Some(points) = slice::<[f32; 3]>(mem::deref(data + DATA_VERTICES), n) else { continue };
+            if head != 0 {
+                let Some(xf) = Xf::world(geom).filter(|_| keep(head)) else { continue };
+                out.entry(head).or_default().extend(points.iter().map(|p| xf.apply(Vec3::from(*p))));
+                continue;
+            }
+            let skin = mem::deref(geom + GEOM_SKIN);
+            let skin_data = mem::deref(skin + SKIN_DATA);
+            let count = mem::at::<u32>(skin_data + SKIN_BONE_COUNT).unwrap_or(0).min(256) as usize;
+            let bone_data = mem::deref(skin_data + SKIN_BONE_DATA);
+            let Some(nodes) = slice::<u32>(mem::deref(skin + SKIN_BONES), count) else { continue };
+            let mut best = vec![(0.0f32, 0usize); n];
+            for i in 0..count {
+                let bone = bone_data + i * BONE_DATA_SIZE;
+                let k = mem::at::<u16>(bone + BONE_WEIGHT_COUNT).unwrap_or(0) as usize;
+                let Some(weights) = slice::<Weight>(mem::deref(bone + BONE_WEIGHTS), k) else { continue };
+                for w in weights {
+                    if let Some(b) = best.get_mut(w.vertex as usize)
+                        && w.weight > b.0
+                    {
+                        *b = (w.weight, i);
+                    }
+                }
+            }
+            let bones_now: Vec<Option<(Xf, Xf)>> = (0..count).map(|i| Some((Xf::read(bone_data + i * BONE_DATA_SIZE)?, Xf::world(nodes[i] as usize)?))).collect();
+            let placed: Vec<(Vec3, f32, usize)> = points
+                .iter()
+                .zip(&best)
+                .filter(|(_, b)| b.0 > 0.0)
+                .filter_map(|(p, &(_, i))| {
+                    let (to_bone, world) = bones_now[i]?;
+                    let at = world.apply(to_bone.apply(Vec3::from(*p)));
+                    Some((at, at.distance(world.t) / camera::UNITS_PER_METER, i))
+                })
+                .collect();
+            // (Misread: its vertices far from their bones. Left out.)
+            let reach = placed.iter().map(|x| x.1).sum::<f32>() / placed.len().max(1) as f32;
+            if placed.is_empty() || reach > BONE_REACH {
+                continue;
+            }
+            for (at, _, i) in placed {
+                let node = nodes[i] as usize;
+                if keep(node) {
+                    out.entry(node).or_default().push(at);
+                }
+            }
+        }
+        out
+    }
+
     /// Forgets the actors no longer near (`near`: the ones that are, by id).
     pub fn forget_others<V>(near: &HashMap<u32, V>) {
         if let Some(all) = FITTED.lock().unwrap().as_mut() {
@@ -387,3 +445,8 @@ pub fn fitted(_id: u32, _root: usize, _bones: &std::collections::HashMap<String,
 
 #[cfg(not(all(windows, target_arch = "x86")))]
 pub fn forget_others<V>(_near: &std::collections::HashMap<u32, V>) {}
+
+#[cfg(not(all(windows, target_arch = "x86")))]
+pub fn posed_by_bone(_root: usize, _keep: &dyn Fn(usize) -> bool) -> std::collections::HashMap<usize, Vec<glam::Vec3>> {
+    Default::default()
+}

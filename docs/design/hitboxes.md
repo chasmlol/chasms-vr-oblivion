@@ -82,6 +82,14 @@ it without being felt.
   is its own contact callback there: its effect, its explosion. They meet the drawn shapes out to
   48 m (`ARROW_REACH`): those references' hitboxes are read after the near ones', for the
   projectiles alone; further, an archer's arrow meets the game's shapes.
+- **Portcullises and big gates.** An activator's moving part too big for a hand (a fort ruin's
+  portcullis, the Arena's gate, the ones a lever raises) was left to the game: nothing to the
+  hands at all, its Havok slab to the arrows. It's a barrier now (`world.rs`): its drawn shape,
+  where the game has it as the lever raises it, too heavy to give, never worked by a hand.
+- **Severed pieces.** A cut-off head or limb was a box round its bones. It's what's drawn of it at
+  the cut now, bone by bone (each bone's skinned vertices where they were, `shapes::posed_by_bone`):
+  a head with its hair and helmet, an arm's upper arm, forearm and hand, each a hull (at most eight
+  a piece, 48 for all the pieces: the hulls' table is everyone's).
 - **What the game gave no collision.** A statue, a trophy, an armour display, a candle on a wall:
   drawn solid, with no collision of its own (the game lets the player walk through it, or puts a
   wall round its plinth). The hands meet its drawn shape like any other's. A reference with bodies

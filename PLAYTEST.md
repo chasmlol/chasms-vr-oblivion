@@ -37,6 +37,11 @@ game's simplified collision.
   bursts on the drawn surface it meets (a chair's leg, a gate's bar), not on the box round it.
 - **Arrows from further off** (new): drawn shapes now meet arrows and spells out to about 48 m from
   you, not just within 12 m, so an archer across a courtyard shoots through the gaps too.
+- **Portcullises** (new): the ones a lever raises (fort ruins, the Arena, Kvatch) are their drawn
+  bars to your hands and to arrows, where the game has them as they rise. Before your hand went
+  through them and arrows hit a flat slab.
+- **Cut-off heads and limbs** (new): their collision is what's drawn of them (the head with its
+  hair and helmet, the arm's upper arm, forearm and hand), not a box.
 - **Statues and decorations** (new): things the game gave no collision at all (statues, mounted
   trophies, armour displays, candles on walls) are solid to your hands, as drawn. Before, your hand
   went straight through them.
@@ -80,6 +85,10 @@ model, in the background, once for each model); until then it keeps its old shap
     fly through and burst behind; cast at a leg or a bar: it bursts there.
 12. **A statue or a trophy**: touch a statue, a mounted head or an armour display: your hand stops on
     it, as drawn.
+13. **A portcullis** (in a fort ruin): put your hand between its bars, shoot an arrow through them;
+    pull the lever and watch it rise, still solid where it's drawn.
+14. **A cut-off head or arm**: cut one off, pick it up, set it on a table and roll it: it should rest
+    and roll on its drawn shape, not tip like a box.
 
 Say what feels wrong: a thing your hand stops short of, a hand going into something it shouldn't,
 a thing that jitters or flies off when you set it down or pick it up, a stutter as you walk into

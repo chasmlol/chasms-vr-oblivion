@@ -116,6 +116,13 @@ pub const LIMBS: &[Limb] = &[
 /// The head of a skeleton without a neck's base (`Bip01 Neck1`: a creature's): cut at the head.
 pub const HEAD_ALONE: Limb = Limb { bone: "Bip01 Head", parent: "Bip01 Neck", axis: ("Bip01 Neck", "Bip01 Head"), limb: LIMB_HEAD, radius: 0.06, reach: 0.2, mass: 4.5 };
 
+/// A severed piece's collision: a hull for each of its bones with at least this many drawn points
+/// on it, at most this many hulls a piece (the biggest), and at most this many for all the pieces
+/// (the hulls' table is shared with everything the hands take).
+pub const PIECE_HULL_POINTS: usize = 8;
+pub const PIECE_HULLS: usize = 8;
+pub const MAX_PIECE_HULLS: usize = 48;
+
 /// Which joint a hit on a body part (a capsule from bone `from` to bone `to`, `t` along it from the
 /// one to the other, past 1 beyond `to`; the bones `len` metres apart) cuts through: the nearer
 /// end's, as a blade takes a limb off at the joint it crosses. None for the torso.
@@ -428,6 +435,8 @@ mod game {
         /// The cut bone's world transform at the cut.
         cut: Xf,
         desc: ObjectDesc,
+        /// Its convex parts in its frame (metres): what's drawn of it, bone by bone.
+        hulls: Vec<Vec<Vec3>>,
         born: f64,
         next_spray: f64,
         /// How a hand had it last frame (`OS_HELD_*`, `OS_PULLED`).
@@ -639,6 +648,19 @@ mod game {
         let Some((centre, half)) = crate::items::bounds(&pts) else { return };
         // (A head is round, wider than its neck.)
         let half = half + Vec3::splat(if limb.limb == LIMB_HEAD { 0.09 } else { limb.radius * 0.9 });
+        // Its collision: what's drawn of it where it was at the cut, bone by bone (a head with its
+        // hair and helmet, an arm's upper arm, forearm and hand), each bone's points' hull; the box
+        // round its bones where nothing drawn is read.
+        let in_piece: std::collections::HashSet<usize> = nodes.iter().enumerate().filter(|(i, _)| inside[*i]).map(|(_, n)| n.ptr).collect();
+        let size = |h: &Vec<Vec3>| crate::items::bounds(h).map_or(0.0, |(_, e)| e.x * e.y * e.z);
+        let mut hulls: Vec<Vec<Vec3>> = crate::shapes::posed_by_bone(root, &|bone| in_piece.contains(&bone))
+            .into_values()
+            .filter(|points| points.len() >= PIECE_HULL_POINTS)
+            .map(|points| crate::items::hull_points(&points.iter().map(|p| inv * (basis.point_from_game(*p) - pos)).collect::<Vec<_>>(), MAX_HULL_POINTS))
+            .filter(|h| h.len() >= 4)
+            .collect();
+        hulls.sort_by(|a, b| size(b).total_cmp(&size(a)));
+        hulls.truncate(PIECE_HULLS);
         let mass = piece_mass(&nodes, &inside).unwrap_or(limb.mass);
         let s = with_state(|s| {
             let object = s.next_object;
@@ -647,12 +669,12 @@ mod game {
             (object, blood)
         });
         let (object, blood) = s;
-        let mut desc = crate::items::object_desc(object, 1, (pos, rot), centre, half, mass, false);
+        let mut desc = crate::items::object_desc(object, 1, (pos, rot), centre, half, mass, !hulls.is_empty());
         desc.flags = OBJF_GRABBABLE | OBJF_PULLABLE;
         // The clone: the actor's 3D as it is, with no controllers or collision (nothing of it is
         // animated or simulated by the game: it's drawn where the runtime has the piece).
         let clone = clone_bare(&nodes);
-        let mut sv = Sever { limb, actor, root, cut_node: nodes[top].ptr, axis_nodes: (axis_from, axis_to), object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), decals: Vec::new(), cut, desc, born: crate::link::now(), next_spray: 0.0, held: 0 };
+        let mut sv = Sever { limb, actor, root, cut_node: nodes[top].ptr, axis_nodes: (axis_from, axis_to), object, clone: 0, attached_to: 0, clone_nodes: Vec::new(), decals: Vec::new(), cut, desc, hulls, born: crate::link::now(), next_spray: 0.0, held: 0 };
         if clone != 0 {
             let copy = tree(clone);
             if copy.len() == nodes.len() && copy.iter().zip(&nodes).all(|(c, n)| c.name == n.name) {
@@ -1066,6 +1088,25 @@ mod game {
                 bodies.count += 1;
             }
             let pieces: Vec<ObjectDesc> = s.severs.values().flat_map(|l| l.iter().map(|v| v.desc)).collect();
+            // (The hulls' table is everyone's: the pieces take at most their share of it.)
+            let hulls: Vec<GameHull> = s
+                .severs
+                .values()
+                .flatten()
+                .filter(|_| s.objects_dirty)
+                .flat_map(|v| {
+                    v.hulls.iter().map(|h| {
+                        let mut g: GameHull = bytemuck::Zeroable::zeroed();
+                        g.id = v.object;
+                        g.count = h.len().min(MAX_HULL_POINTS) as u32;
+                        for (k, q) in h.iter().take(MAX_HULL_POINTS).enumerate() {
+                            g.points[k] = [q.x, q.y, q.z, 0.0];
+                        }
+                        g
+                    })
+                })
+                .take(MAX_PIECE_HULLS)
+                .collect();
             let events = std::mem::take(&mut s.pending);
             s.frames += 1;
             if s.frames % 300 == 1 {
@@ -1079,6 +1120,7 @@ mod game {
                     a.write_bloods(&t);
                 }
                 if objects {
+                    crate::objects::publish_hulls(crate::objects::Owner::Gore, &hulls, a);
                     crate::objects::publish(crate::objects::Owner::Gore, &pieces, &[], a);
                 }
                 a.write_gore_bodies(&bodies);

@@ -282,8 +282,27 @@ pub fn ray_triangle(from: Vec3, dir: Vec3, t: &[Vec3; 3]) -> Option<f32> {
     Some(e2.dot(q) / det).filter(|d| *d >= 0.0)
 }
 
+/// Where a thing's drawn shape goes in its object's space (the runtime's axes, metres).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Frame {
+    /// A thing in the world: its object space is its node's own frame, at its scale (a thing
+    /// lying about, a swinging part).
+    Node(f32),
+    /// A thing the runtime draws: its object space is its model's, as the runtime has it (the
+    /// file's, in metres: the weapon, the shield, the torch).
+    Model,
+    /// A part that turns or slides (a door's leaf, a lever): its object space is its joint's
+    /// frame, this from its node's own (game units): a matrix by its columns, then the
+    /// translation.
+    Placed([f32; 12]),
+}
+
 #[cfg(all(windows, target_arch = "x86"))]
 pub use win::*;
+
+/// Object `id`'s drawn shape (off Windows there's no game: nothing).
+#[cfg(not(all(windows, target_arch = "x86")))]
+pub fn object_shape(_id: u32, _model: &str, _frame: Frame, _now: f64) {}
 
 #[cfg(all(windows, target_arch = "x86"))]
 mod win {
@@ -1031,20 +1050,6 @@ mod win {
     }
 
     // ---- the drawn shapes of the things the hands handle -----------------------------------------
-    /// Where a thing's drawn shape goes in its object's space (the runtime's axes, metres).
-    #[derive(Clone, Copy, Debug, PartialEq)]
-    pub enum Frame {
-        /// A thing in the world: its object space is its node's own frame, at its scale (a thing
-        /// lying about, a swinging part).
-        Node(f32),
-        /// A thing the runtime draws: its object space is its model's, as the runtime has it (the
-        /// file's, in metres: the weapon, the shield, the torch).
-        Model,
-        /// A part that turns or slides (a door's leaf, a lever): its object space is its joint's
-        /// frame, this from its node's own (game units): a matrix by its columns, then the
-        /// translation.
-        Placed([f32; 12]),
-    }
 
     struct Shape {
         model: String,

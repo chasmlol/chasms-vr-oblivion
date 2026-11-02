@@ -76,6 +76,8 @@ pub const SETTLE: f32 = 2.0;
 /// Its pins: the friction of iron on iron, greased or not, and their radius (metres).
 pub const PIN_FRICTION: f32 = 0.3;
 pub const PIN_RADIUS: f32 = 0.01;
+/// What a barrier (a portcullis) weighs to a hand (kg): it doesn't give.
+pub const BARRIER_MASS: f32 = 5000.0;
 
 /// How a part moves, in its node's parent's space (game units).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -742,6 +744,9 @@ mod game {
         /// A door too heavy for a hand (it slides): a tug is the game's Activate.
         HeavyDoor,
         Activator,
+        /// An activator's part too big for a hand (a portcullis a lever raises, a gate a script
+        /// opens): solid to the hands where the game has it, never worked by them.
+        Barrier,
     }
 
     /// One part of a thing that moves, as the runtime has it.
@@ -752,6 +757,8 @@ mod game {
         /// The node its Havok body is on, and the body (0: the game only draws it).
         body_node: usize,
         hk: usize,
+        /// Too big for a hand ([`Kind::Barrier`]'s parts).
+        barrier: bool,
         /// The hinge or slide in the runtime's world: its centre, its frame (+Z the axis, at the
         /// start of its travel), slide or turn, and the game units in one of its runtime units.
         centre: Vec3,
@@ -825,7 +832,8 @@ mod game {
         let kind = mem::at::<u8>(base + FORM_TYPE)?;
         match kind {
             DOOR if extra(refr, EXTRA_TELEPORT) == 0 && mem::at::<u8>(base + DOOR_FLAGS).is_some_and(|f| f & DOOR_OBLIVION_GATE == 0) => {}
-            ACTIVATOR if deref(base + ACTI_SCRIPT) != 0 => {}
+            // (One with no script of its own is moved by the game's other scripts: a barrier.)
+            ACTIVATOR => {}
             _ => return None,
         }
         let path = crate::combat::read_str(deref(base + MODEL_PATH));
@@ -991,9 +999,9 @@ mod game {
             if kind == Kind::Door && slide {
                 kind = Kind::HeavyDoor;
             }
-            if kind == Kind::Activator && (size > 1.6 || (slide && far > 0.9)) {
+            let barrier = kind == Kind::Activator && (size > 1.6 || (slide && far > 0.9));
+            if barrier {
                 why.push(format!("'{}' is too big for a hand ({size:.1} m, {far:.2})", tr.node));
-                continue;
             }
             let key = (form_id, k);
             let id = *s.ids.entry(key).or_insert_with(|| {
@@ -1011,10 +1019,26 @@ mod game {
                 .filter(|&(ti, n)| ti == j.track || (n != root && (under(n, node) || (k == 0 && !joint_nodes.iter().any(|&o| under(n, o))))))
                 .collect();
             let hk = body.map_or(0, |b| b.1);
-            parts.push(Part { id, joint: k, node, body_node, hk, centre, base, slide, units, far, tracks, desc: bytemuck::Zeroable::zeroed(), hull: points, shape, at: now, vel: 0.0, held: false, hands: 0, logged: now });
+            parts.push(Part { id, joint: k, node, body_node, hk, barrier, centre, base, slide, units, far, tracks, desc: bytemuck::Zeroable::zeroed(), hull: points, shape, at: now, vel: 0.0, held: false, hands: 0, logged: now });
             let p = parts.last_mut().unwrap();
             p.desc = part_desc(id, 1, centre, base, &p.hull, mass, 0.0, (0.0, far), (0.0, 0.0), 0);
             p.desc.friction = PIN_FRICTION * mass * 9.81 * PIN_RADIUS;
+        }
+        // An activator with no script of its own, or whose parts are all too big for a hand, is a
+        // barrier: solid where the game has it (a portcullis, a gate). One with a part a hand
+        // works leaves the big ones to the game, as before.
+        if kind == Kind::Activator {
+            let scripted = deref(deref(refr + REFR_BASE) + ACTI_SCRIPT) != 0;
+            if !parts.is_empty() && (!scripted || parts.iter().all(|p| p.barrier)) {
+                kind = Kind::Barrier;
+                for p in &mut parts {
+                    p.barrier = true;
+                    p.desc.mass = BARRIER_MASS;
+                    p.desc.friction = PIN_FRICTION * BARRIER_MASS * 9.81 * PIN_RADIUS;
+                }
+            } else {
+                parts.retain(|p| !p.barrier);
+            }
         }
         if parts.is_empty() {
             let mut names: Vec<&String> = live.keys().collect();
@@ -1175,6 +1199,8 @@ mod game {
                 }
                 t.locked = locked(t.refr);
             }
+            // (Never fired: a hand doesn't work it.)
+            Kind::Barrier => {}
             // (Its own animation moves it: the runtime follows.)
             Kind::HeavyDoor => {
                 tracing::info!("world: heavy door {:08X} activated ({ok}): open state {before:?} -> {}", t.form_id, open_state(t.refr));
@@ -1331,7 +1357,7 @@ mod game {
                     tracing::info!("world: {:08X}: the game {} it{}", t.form_id, if game_moving { "moves" } else { "has stopped moving" }, if held { " (a hand has it)" } else if t.kind == Kind::Activator && now - t.tried < SCRIPT_ANSWER { " (its script's answer to the hand)" } else { "" });
                 }
                 let answer = t.kind == Kind::Activator && now - t.tried < SCRIPT_ANSWER;
-                if game_moving && (held || answer) && t.kind != Kind::HeavyDoor {
+                if game_moving && (held || answer) && !matches!(t.kind, Kind::HeavyDoor | Kind::Barrier) {
                     seqs.iter().for_each(|&q| stop(q));
                     t.owned = true;
                     if t.kind == Kind::Door {
@@ -1342,7 +1368,7 @@ mod game {
                 } else if game_moving {
                     t.owned = false;
                     t.synced = false;
-                    if t.kind != Kind::Activator {
+                    if matches!(t.kind, Kind::Door | Kind::HeavyDoor) {
                         let open = matches!(open_state(t.refr), 1 | 2);
                         if open != t.open {
                             t.open = open;
@@ -1372,7 +1398,7 @@ mod game {
                     t.synced = all_there && !game_moving;
                     // A hand on it (or pressing it away from where the game has it, once it's
                     // caught up): the runtime's from now on.
-                    if t.synced && t.parts.iter().any(|p| p.held || p.vel.abs() > 0.02) {
+                    if t.synced && t.kind != Kind::Barrier && t.parts.iter().any(|p| p.held || p.vel.abs() > 0.02) {
                         t.owned = true;
                     }
                 }
