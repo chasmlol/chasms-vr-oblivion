@@ -105,7 +105,7 @@ The facts, with addresses, are in [spells-engine-notes.md](spells-engine-notes.m
 | PLANCK | A **failure felt**: a long dull pulse, with the game's own message and failure sound. | Players asked for it; Oblivion has its own words and sounds for it. |
 | Skyrim VR, made right | **The aim is the way the hand casts**, arm and wrist both: the controller's own pointing ray turned 59 degrees down and 1 across (as Skyrim VR's `fMagicRotationPitch` turns its own), then 74 towards the palm, the bolt starting 39 cm out: mostly out of the palm. **The Spells tab** in RustVR's menu sets all four, against a line from the palm to where a spell would go. | The user's first playtest: palm casting off the grip came out well off where the controller pointed. The second: the controller's own pointing ray (OpenXR's aim pose, the laser's) went high, since a hand held out to cast has its wrist cocked up. The third: along the arm (shoulder through palm) the wrist didn't steer, and it should. The fourth: the user set the aim themselves in the Spells tab, casting at the zombies, and those are the defaults. |
 | Magic Improvements | **Palm casting** (`palm_tilt`, 74 by default: the user's own); **aim smoothed by the spell's level**, but short (40 to 120 ms, against its 10 to 40 frames); the held art **smaller as magicka runs down**. | Some lists ship palm casting, and others find it hard to aim at range; its long smoothing trails behind a quick point. The short one only takes out the trigger's jolt. Magicka you can see in the hand. |
-| Spell Auto-Aim VR | A **gentle cone** (10 degrees up or down, 15 across, 28 m), foes first for a harmful spell. | Called not cheaty at these values; it helps at range with palm casting. |
+| Spell Auto-Aim VR | A **gentle cone** (10 degrees up or down, 15 across, 28 m), foes first for a harmful spell, **off by default** (`aim_assist`, the Spells tab). | Called not cheaty at these values; it helps at range with palm casting. The user found it locked on, and wants none unless it's asked for. |
 | VRIK | A hand that takes a weapon **keeps its spell** and has it back when it lets go. | Getting back what you held. |
 | Curated lists | **No light from a spell only held**: the casting light comes with the charge. | Up close a palm's light dazzles; the lists drop hand-effect lights. |
 | ISPVR | **No animation in between**: the hand is the cast animation. | Responsiveness. |
@@ -164,7 +164,7 @@ the game, but their hands still move in VR.
   trigger's charge over the spell's casting time, with ISPVR's haptics; let go when charged, a cast
   ([`CE_CAST`]): from the palm the way the hand casts, mostly out of the palm by default (smoothed a
   little by level,
-  onto a creature in the cone),
+  onto a creature in the cone if `aim_assist` is on; it's off by default),
   a touch spell into the first creature the charged hand touches ([`CEF_TOUCHED`]) or along the aim,
   a self spell anywhere; a quick tap with nothing charged is the game's Activate; a spell the game
   won't cast now doesn't charge ([`CE_CAST_REFUSED`]); after a cast, the game's wait. Staffs

@@ -60,8 +60,8 @@ The design and its reasons are in `docs/design/spells.md`.
 * **Aiming with your hand.** A target spell leaves your palm the way you set it in the Spells tab
   last time, now everyone's default: **mostly out of your palm**, the bolt starting 39 cm out;
   your arm and your wrist both steer it. The aim is smoothed a touch, a little more for
-  harder spells, to take out the jolt of the trigger. It's also helped gently onto a creature (10°
-  up or down, 15° across).
+  harder spells, to take out the jolt of the trigger. **No lock-on**: the help onto a creature (10°
+  up or down, 15° across) is off unless you turn it on in the Spells tab.
 * **The Spells tab** stays in RustVR's menu (the menu button for the pause menu; RustVR's own
   menu floats beside it). **Show a line where a held spell would go** draws an orange line from
   each palm holding a spell to where it would go, a dot where it meets something (the help onto a
@@ -72,7 +72,7 @@ The design and its reasons are in `docs/design/spells.md`.
     across you.
   * **Towards the palm** (74°): how much it leaves out of the palm.
   * **Starts this far ahead of the palm** (0.39 m): the bolt starts further out along its way.
-  * **Help a spell onto a creature near the aim**: the lock-on (above), on by default.
+  * **Help a spell onto a creature near the aim**: the lock-on, off by default.
 
   Changes save at once. **Back to the defaults** puts them all back to these. Each cast writes the
   settings it went by to the runtime's log.
@@ -134,7 +134,7 @@ The design and its reasons are in `docs/design/spells.md`.
 Things worth telling me about:
 * Does it still go where you mean it to? The Spells tab (above) sets it; tell me if the defaults
   should change again.
-* Is the aim help too strong or too weak?
+* With no lock-on, can you hit what you cast at?
 * Is the wheel in a good place and size?
 * Can you feel the charge and the ready spike clearly?
 * Do the spell's art and light in the palm look right? Palm up, is it over your palm; palm down,
@@ -167,8 +167,7 @@ the magicka is spent and comes back.
     page and cast, and the range's sword is made in that hand. Squeezed and let go in front, it went
     back to the left hip.
   * The framework part, on the range in the headless `spell` scenario: one charged bolt cast from
-    a controller pointed at the dummy, the aim help puts it on the dummy, it strikes, and
-    a tap isn't a cast.
+    a palm held out at the dummy with no aim help, it strikes, and a tap isn't a cast.
   * The wheel, on the emulated headset: it opens, both hands pick from it, and casts go from either
     hand.
   * The unit tests for the charge curve, the palm aim, the cone and the wheel's slices.
