@@ -268,6 +268,8 @@ mod win {
             });
             if taken {
                 DEPTH_TAKEN.store(true, Ordering::Release);
+                static SAID: std::sync::Once = std::sync::Once::new();
+                SAID.call_once(|| tracing::info!("render: the eyes' depth is taken before the game's sorted draw (render {eye}): the solid world's"));
             }
         }
         unsafe { real(this) }
