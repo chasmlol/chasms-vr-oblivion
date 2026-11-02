@@ -563,13 +563,21 @@ fn moving_nodes(nif: &Nif) -> std::collections::HashSet<String> {
 /// The model's hitbox, and what became of each drawn shape.
 pub fn of(nif: &Nif) -> (Hitbox, Vec<ShapeNote>) {
     let own = collision(nif);
-    drawn(nif, &own, false, None)
+    drawn(nif, &own, false, None, &[])
+}
+
+/// The model's hitbox without what's under the nodes named in `swung` (lower case): the parts the
+/// game's physics swings on what holds still (a chain's links under its ring on the wall), which
+/// are shapes of their own where the game has them (`of_part`).
+pub fn of_without(nif: &Nif, swung: &[&str]) -> (Hitbox, Vec<ShapeNote>) {
+    let own = collision(nif);
+    drawn(nif, &own, false, None, swung)
 }
 
 /// The model's hitbox against its collision `own` (see [`collision`]); `measure`: each shape's
 /// share on that collision worked out (for the checks: only a cut-out's is needed for the hitbox).
 pub fn of_with(nif: &Nif, own: &Collision, measure: bool) -> (Hitbox, Vec<ShapeNote>) {
-    drawn(nif, own, measure, None)
+    drawn(nif, own, measure, None, &[])
 }
 
 /// The hitbox of one part of a model, in that part's own frame: what's drawn under the node named
@@ -579,15 +587,18 @@ pub fn of_with(nif: &Nif, own: &Collision, measure: bool) -> (Hitbox, Vec<ShapeN
 pub fn of_part(nif: &Nif, node: &str) -> Option<(Hitbox, Vec<ShapeNote>)> {
     let i = nif.find(node)?;
     let own = collision(nif);
-    Some(drawn(nif, &own, false, Some(i)))
+    Some(drawn(nif, &own, false, Some(i), &[]))
 }
 
-fn drawn(nif: &Nif, own: &Collision, measure: bool, part: Option<i32>) -> (Hitbox, Vec<ShapeNote>) {
+fn drawn(nif: &Nif, own: &Collision, measure: bool, part: Option<i32>, swung: &[&str]) -> (Hitbox, Vec<ShapeNote>) {
     let parents = nif.parents();
     let mut notes = Vec::new();
     // Each solid shape's triangles (by its note), joined once the strays are out.
     let mut pieces: Vec<(usize, Vec<[Vec3; 3]>)> = Vec::new();
-    let moving = if part.is_some() { Default::default() } else { moving_nodes(nif) };
+    let moving: std::collections::HashSet<String> = match part {
+        Some(_) => Default::default(),
+        None => moving_nodes(nif).into_iter().chain(swung.iter().map(|n| n.to_ascii_lowercase())).collect(),
+    };
     // (A part's triangles in its own frame.)
     let to_part = part.map(|i| in_root(nif, i, &parents).inverse());
     let mut stack: Vec<(i32, Look, Option<Fate>)> = match part {

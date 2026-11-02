@@ -702,9 +702,20 @@ mod win {
         bounds: Option<(Vec3, Vec3)>,
         /// The 3D's world transform while it's within the arrows' reach and its hitbox is read.
         placed: Option<[f32; 13]>,
+        /// The nodes under it (lower case) whose bodies the game's physics swings: left out of its
+        /// hitbox (they're shapes of their own where the game has them, `crate::props`).
+        swung: Vec<String>,
     }
 
     impl Owner {
+        /// Its hitbox's key ([`hitbox`]): its model, without the parts the game swings.
+        fn key(&self) -> String {
+            match self.swung.is_empty() {
+                true => self.model.clone(),
+                false => format!("{}|!{}", self.model, self.swung.join(",")),
+            }
+        }
+
         fn gap(&self, at: Vec3) -> f32 {
             (self.lo - at).max(at - self.hi).max(Vec3::ZERO).length()
         }
@@ -775,15 +786,21 @@ mod win {
     const CELL_OBJECTS: usize = 0x48;
     const NODE_COLLISION: usize = 0xA8;
     const COLLISION_BODY: usize = 0x10;
+    /// A node's name (`NiObjectNET`); an `hkEntity`'s `fixed` and `isFixedOrKeyframed`.
+    const NODE_NAME: usize = 0x8;
+    const ENTITY_FIXED: usize = 0x91;
+    const ENTITY_FIXED_OR_KEYFRAMED: usize = 0x92;
     /// Form types whose references are the characters (`NPC_`, `CREA`): never the world's.
     const NPC: u8 = 0x23;
     const CREATURE: u8 = 0x24;
 
-    /// The fixed bodies (of `bodies`) under a reference's 3D, and whether it has any collision at
-    /// all.
-    fn bodies_under(root: usize, bodies: &HashMap<usize, Body>) -> (Vec<usize>, bool) {
+    /// The fixed bodies (of `bodies`) under a reference's 3D, whether it has any collision at all,
+    /// and the nodes (their names, lower case) whose bodies the game's physics swings: neither fixed
+    /// nor keyframed (a chain's links hanging from its ring).
+    fn bodies_under(root: usize, bodies: &HashMap<usize, Body>) -> (Vec<usize>, bool, Vec<String>) {
         let mut out = Vec::new();
         let mut any = false;
+        let mut swung = Vec::new();
         let mut stack = vec![(root, 0u32)];
         let mut n = 0;
         while let Some((node, depth)) = stack.pop() {
@@ -799,10 +816,18 @@ mod win {
                 if hk != 0 && bodies.contains_key(&hk) && !out.contains(&hk) {
                     out.push(hk);
                 }
+                let simulated = hk != 0 && !bodies.contains_key(&hk) && mem::at::<u8>(hk + ENTITY_FIXED) == Some(0) && mem::at::<u8>(hk + ENTITY_FIXED_OR_KEYFRAMED) == Some(0);
+                let name = crate::combat::read_str(mem::deref(node + NODE_NAME)).to_ascii_lowercase();
+                if simulated && !name.is_empty() && !name.contains([',', '|']) {
+                    // (Its own children with it: what hangs from a link is cut off with it.)
+                    swung.push(name);
+                    continue;
+                }
             }
             stack.extend(crate::world::child_nodes(node).into_iter().map(|c| (c, depth + 1)));
         }
-        (out, any)
+        swung.sort();
+        (out, any, swung)
     }
 
     /// The 3D's world transform: rotation (rows), translation, scale.
@@ -871,7 +896,7 @@ mod win {
         }
         todo.sort_by(|a, b| a.0.total_cmp(&b.0));
         for &(_, r, root, base) in todo.iter().take(WALKS_PER_SCAN) {
-            let (bodies, any) = bodies_under(root, &s.bodies);
+            let (bodies, any, swung) = bodies_under(root, &s.bodies);
             let model = crate::items::model_of(base).unwrap_or_default();
             // (One the game gave no collision at all, a statue or a trophy, is its drawn shape to the
             // hands all the same; one with bodies the game moves is someone else's: the things
@@ -894,7 +919,7 @@ mod win {
                 s.claimed.insert(e, r);
             }
             s.plain.remove(&r);
-            s.owners.insert(r, Owner { root, model, bodies, lo, hi, hitbox: None, id: 0, sent: None, triangles: 0, seen: true, bounds: None, placed: None });
+            s.owners.insert(r, Owner { root, model, bodies, lo, hi, hitbox: None, id: 0, sent: None, triangles: 0, seen: true, bounds: None, placed: None, swung });
         }
         let gone: Vec<usize> = s.owners.iter().filter(|(_, o)| !o.seen).map(|(r, _)| *r).collect();
         for r in gone {
@@ -954,8 +979,9 @@ mod win {
         f(HITBOXES.lock().unwrap().get_or_insert_with(Hitboxes::default))
     }
 
-    /// A model's hitbox (`model|node`: one part of it, [`oblivion_assets::hitbox::of_part`]), if
-    /// it's read; None while it's being read.
+    /// A model's hitbox (`model|node`: one part of it, [`oblivion_assets::hitbox::of_part`];
+    /// `model|!node,node`: without those parts, [`oblivion_assets::hitbox::of_without`]), if it's
+    /// read; None while it's being read.
     fn hitbox(model: &str, now: f64) -> Option<Option<Arc<Hitbox>>> {
         let key = model.to_ascii_lowercase().replace('/', "\\");
         // (A tree is grown from its SpeedTree file, not drawn from a model: it keeps the game's.)
@@ -1000,6 +1026,7 @@ mod win {
                 let (file, part) = path.split_once('|').map_or((path.as_str(), None), |(f, n)| (f, Some(n)));
                 let nif = archives.read(&format!("meshes\\{file}")).and_then(|d| Nif::parse(&d))?;
                 let (h, notes) = match part {
+                    Some(swung) if swung.starts_with('!') => oblivion_assets::hitbox::of_without(&nif, &swung[1..].split(',').collect::<Vec<_>>()),
                     Some(node) => oblivion_assets::hitbox::of_part(&nif, node).ok_or_else(|| anyhow::anyhow!("it has no node {node}"))?,
                     None => oblivion_assets::hitbox::of(&nif),
                 };
@@ -1253,7 +1280,7 @@ mod win {
         for &(gap, r) in &near {
             let Some(o) = s.owners.get_mut(&r) else { continue };
             if o.hitbox.is_none() {
-                o.hitbox = hitbox(&o.model, now);
+                o.hitbox = hitbox(&o.key(), now);
                 o.bounds = o.drawn().and_then(|h| h.bounds());
                 pending |= o.hitbox.is_none();
             }
@@ -1341,7 +1368,7 @@ mod win {
                 continue;
             }
             if o.hitbox.is_none() && !pending {
-                o.hitbox = hitbox(&o.model, now);
+                o.hitbox = hitbox(&o.key(), now);
                 o.bounds = o.drawn().and_then(|h| h.bounds());
             }
             o.placed = o.drawn().and(o.sent.or_else(|| placement(o.root)));

@@ -94,6 +94,12 @@ it without being felt.
   drawn solid, with no collision of its own (the game lets the player walk through it, or puts a
   wall round its plinth). The hands meet its drawn shape like any other's. A reference with bodies
   the game moves (the things lying about, the doors, the swinging props) is left to those.
+- **What swings on what holds still.** A prison's chains hang from rings fixed to the wall: the
+  rings' bodies make the whole model the wall's drawn shape, and its links were in it too, solid
+  where they hang at rest however the game swung them. The parts whose bodies the game's physics
+  moves (neither fixed nor keyframed: a chain's links and cuffs) are left out of it now, with
+  whatever hangs from them; each is its own shape where the game has it, near the hands
+  (`props.rs`), and the game's own to the arrows.
 - **Worked out where they're needed.** The adapter finds the references in the loaded cells whose
   3D holds the world's fixed bodies, nearest first, reads each model from the game's archives on a
   thread of its own (a few milliseconds a model), and sends each reference's drawn shape to the

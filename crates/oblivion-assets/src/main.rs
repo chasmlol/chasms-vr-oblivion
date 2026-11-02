@@ -136,12 +136,14 @@ fn main() -> Result<()> {
         Some("hitboxes") => hitboxes(&archives, &args[1..])?,
         Some("hitbox") if args.len() == 3 => {
             // One model's hitbox (above) and the game's own collision (below), from three sides; or
-            // (`model|node`) one moving part's, in its node's frame (a door's leaf, a swinging link).
+            // (`model|node`) one moving part's, in its node's frame (a door's leaf, a swinging link);
+            // or (`model|!node,node`) the model's without the parts the game swings.
             let (model, node) = args[1].split_once('|').map_or((args[1].as_str(), None), |(m, n)| (m, Some(n)));
             let path = oblivion_assets::bsa::normalise(model);
             let nif = Nif::parse(&archives.read(&path)?)?;
             let own = oblivion_assets::hitbox::collision(&nif);
             let (hitbox, notes) = match node {
+                Some(swung) if swung.starts_with('!') => oblivion_assets::hitbox::of_without(&nif, &swung[1..].split(',').collect::<Vec<_>>()),
                 Some(n) => oblivion_assets::hitbox::of_part(&nif, n).with_context(|| format!("{model} has no node '{n}'"))?,
                 None => oblivion_assets::hitbox::of_with(&nif, &own, true),
             };
