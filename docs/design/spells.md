@@ -176,8 +176,11 @@ the game, but their hands still move in VR.
 * **The protocol** (v14 kept): a spell's mastery level, its charge and recovery times and its icon;
   the table's recovery, the player's own picks in the game's interface, the wheel's font and art;
   `CE_SELECT`, `CE_CAST_REFUSED`, `CEF_TOUCHED`.
-* **Settings** (`[magic]`): `palm_tilt` (0: where the hand points), `aim_assist`,
-  `aim_smoothing`, `charge_haptics`.
+* **Settings** (`[magic]`, the menu's Spells tab): `aim_down` (25: degrees below the controller's
+  ray), `aim_out` (0: degrees out to the hand's side), `palm_tilt` (0: where the hand points),
+  `launch_ahead` (0: metres ahead of the palm a target spell starts), `show_aim` (a line from each
+  palm holding a spell to where it would go, for setting those), `aim_assist`, `aim_smoothing`,
+  `charge_haptics`.
 * **The range** (`crates/range/src/magic.rs`): six spells (a fire bolt, a heal, a frost bolt of a
   higher level, a shocking touch, a power, one too costly), magicka spent and coming back, bolts
   that fly and strike the dummies, bursts for a touch and a heal.
