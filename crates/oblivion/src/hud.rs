@@ -936,13 +936,14 @@ mod win {
                 l.push(HudElement { role: HUD_POINTED, uv, hand, ..Default::default() });
             }
         }
-        // What's in what the hand points at, to take there (`crate::quickloot`): at that thing.
+        // What's in what the hand points at, to take there (`crate::quickloot`): at that thing, its
+        // text a little smaller than the game's menus' (a glance at it, not a page to read).
         if crate::quickloot::shown()
             && let Some((centre, _)) = bound(crate::quickloot::listed())
             && let Some(b) = piece_box(trees.get(MENU_HUD), &Piece::of(&[From::Drawn(crate::quickloot::LOOT)], false))
             && let Some(uv) = tiles::uv_of(b, screen, MARGIN)
         {
-            l.push(HudElement { role: HUD_LOOT, uv, at: centre.to_array(), ..Default::default() });
+            l.push(HudElement { role: HUD_LOOT, uv, at: centre.to_array(), scale: 0.6, ..Default::default() });
         }
         // A foe's health over the foe (what the crosshair is on), or at gaze with nobody there.
         if let Some(b) = piece_box(trees.get(RETICLE), &Piece::of(&[From::Drawn("hudreticle_enemy_health")], false)).filter(|b| !under(*b))

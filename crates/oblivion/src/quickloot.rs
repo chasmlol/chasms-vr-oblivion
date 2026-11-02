@@ -19,12 +19,15 @@
 //!   player's things (marked stolen while stealing), its own item sound; what was stolen added up,
 //!   and when the hand moves on, its own check for whoever saw the theft (the player's vtable
 //!   +0x238 with the value and the owner), as closing its menu does.
-//! * **The list is the game's UI**: the thing's name, its container menu's rows (an item's icon, its
-//!   count, its name, its value and weight under the game's own small icons, in its brown ink) on
-//!   its parchment, the picked row in its focus box, and under them its own button icons and words
-//!   for Take All and Take (`strings()`). Read by the game's own reader into its HUD (at the top
-//!   right of its screen, clear of its own pieces: the notices are at the top left), drawn by the
-//!   game, and the runtime floats that piece of the HUD at the thing ([`rustvr_protocol::HUD_LOOT`]).
+//! * **The list is the game's UI, as its HUD has it**: over the game's black, see-through, the
+//!   thing's name under a gilt rule (the magic menu's), the rows (an item's inventory icon, its name
+//!   and count as the game's lists write them, its value and weight under its small icons, in the
+//!   HUD's shadowed font and colour), the picked one lit by the HUD's own parchment between two
+//!   rules, and under them the button art and words for Take All and Take (`strings()`); as tall as
+//!   its rows. Read by the game's own reader into its HUD (at the top right of its screen, clear of
+//!   its own pieces: the notices are at the top left), drawn by the game, and the runtime floats
+//!   that piece of the HUD at the thing ([`rustvr_protocol::HUD_LOOT`]), a little smaller than the
+//!   menus' text.
 
 /// The list's top tile's name (in the HUD).
 pub const LOOT: &str = "rustvr_loot";
@@ -32,84 +35,112 @@ pub const LOOT: &str = "rustvr_loot";
 /// The container menu (`kMenuType_Container`).
 pub const MENU_CONTAINER: u32 = 0x3F0;
 
-/// Rows shown at once, and the list's sizes (the menus' units): its width, a row's height, the
-/// room for the small icons over the rows and for the buttons under them, and its edge.
+/// Rows shown at once, and the list's sizes (the menus' units): its width, a row's height, its
+/// edge; the thing's name over the rows, the rule under it and the small icons over the columns;
+/// the buttons under the rows (the Xbox's button art, 64 square).
 const ROWS: usize = 6;
-const WIDTH: f32 = 600.0;
-const ROW: f32 = 72.0;
-const HEADER: f32 = 44.0;
-const FOOTER: f32 = 76.0;
-const PAD: f32 = 16.0;
+const WIDTH: f32 = 500.0;
+const ROW: f32 = 44.0;
+const PAD: f32 = 14.0;
+const TITLE: f32 = 44.0;
+const RULE: f32 = 8.0;
+const HEADER: f32 = 36.0;
+const FOOTER: f32 = 72.0;
 /// Where it is on the game's screen: in from its right edge, down from its top.
 const AT: (f32, f32) = (16.0, 40.0);
 /// Its rows' ids, and the focus box's.
 const ROW_ID: i32 = 980;
 const FOCUS_ID: i32 = 979;
-/// The columns: the value's and the weight's (left edge, width).
-const VALUE_COL: (f32, f32) = (400.0, 90.0);
-const WEIGHT_COL: (f32, f32) = (496.0, 70.0);
+/// The middles of the value's and the weight's columns; where a row's name starts (past its icon).
+const VALUE_X: f32 = 376.0;
+const WEIGHT_X: f32 = 452.0;
+const NAME_X: f32 = 50.0;
+const ICON: f32 = 36.0;
 
-/// The game's brown ink.
-const INK: &str = "<red> 117 </red> <green> 59 </green> <blue> 33 </blue> <alpha> 255 </alpha>";
-
-fn height() -> f32 {
-    PAD + HEADER + ROWS as f32 * ROW + FOOTER + PAD
-}
+/// The HUD's own text: its shadowed font, in its colour (its card's of what the crosshair's on).
+const FONT: u32 = 2;
+const INK: &str = "<red> 254 </red> <green> 244 </green> <blue> 183 </blue> <alpha> 255 </alpha>";
+/// How dark the game's black is under it (of 255: the world shows through), how bright the HUD's
+/// parchment is under the picked row.
+const SHADE: u32 = 150;
+const LIT: u32 = 60;
+/// The game's thin gilt rule (`shared_border_horizontal_1`, 636 long as drawn), as big across the
+/// list (and across a row), and as tall then.
+const RULE_ZOOM: u32 = 76;
+const RULE_ROW_ZOOM: u32 = 70;
 
 /// The rows' top, on the list.
 fn rows_top() -> f32 {
-    PAD + HEADER
+    TITLE + RULE + HEADER
 }
 
-/// The list's file: hidden until there's something to show; the thing's name its `user0`, its place
-/// across the screen set once it's made (the screen's width is the HUD's).
+/// The list's file: hidden until there's something to show; the thing's name its `user0`, how many
+/// rows show its `user1` (the list as tall as them), its place across the screen set once it's made
+/// (the screen's width is the HUD's). The game's black, see-through, under the thing's name and its
+/// gilt rule, the small icons over the value and weight columns, the rows, a rule, and the buttons.
 pub fn xml() -> String {
-    let (w, h) = (WIDTH, height());
+    let w = WIDTH;
     let inner = w - 2.0 * PAD;
+    let top = rows_top();
+    // (Down past the rows shown.)
+    let below = |add: f32| format!("<copy src=\"parent()\" trait=\"user1\"/> <mul> {ROW} </mul> <add> {} </add>", top + add);
+    let rule = |name: &str, zoom: u32, x: f32, y: &str, width: f32| {
+        format!(
+            "<image name=\"{name}\"> <filename> Menus\\Shared\\shared_border_horizontal_1.dds </filename> <zoom> {zoom} </zoom> <depth> 2 </depth> <width> {width} </width> <height> {} </height> <x> {x} </x> <y> {y} </y> </image>\n",
+            (8 * zoom).div_ceil(100)
+        )
+    };
     let mut x = format!(
-        "<rect name=\"{LOOT}\">\n<locus> &true; </locus> <depth> 30 </depth> <visible> &false; </visible> <user0> </user0>\n<x> {} </x> <y> {} </y> <width> {w} </width> <height> {h} </height>\n\
-         <image name=\"rvloot_background\"> <filename> Menus\\Shared\\shared_main_background_1.dds </filename> <zoom> -1 </zoom> <depth> 1 </depth> <x> 0 </x> <y> 0 </y> <width> {w} </width> <height> {h} </height> </image>\n\
-         <text name=\"rvloot_name\"> <depth> 2 </depth> <justify> &left; </justify> <font> 1 </font> {INK} <wrapwidth> {} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user0\"/> </string> <x> {} </x> <y> {} </y> </text>\n",
+        "<rect name=\"{LOOT}\">\n<locus> &true; </locus> <depth> 30 </depth> <visible> &false; </visible> <user0> </user0> <user1> {ROWS} </user1>\n\
+         <x> {} </x> <y> {} </y> <width> {w} </width> <height> <copy src=\"me()\" trait=\"user1\"/> <mul> {ROW} </mul> <add> {} </add> </height>\n\
+         <image name=\"rvloot_background\"> <filename> Menus\\Faders\\black.dds </filename> <zoom> -1 </zoom> <alpha> {SHADE} </alpha> <depth> 1 </depth> <x> 0 </x> <y> 0 </y> <width> {w} </width> <height> <copy src=\"parent()\" trait=\"height\"/> </height> </image>\n\
+         <text name=\"rvloot_name\"> <depth> 2 </depth> <justify> &center; </justify> <font> {FONT} </font> {INK} <wrapwidth> {inner} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user0\"/> </string> <x> {} </x>\n\
+         <y> {TITLE} <sub src=\"me()\" trait=\"height\"/> <div> 2 </div> </y> </text>\n",
         AT.0,
         AT.1,
-        VALUE_COL.0 - 24.0,
-        PAD + 12.0,
-        PAD + 4.0
+        top + RULE + FOOTER,
+        w * 0.5
     );
-    // The small icons over the value and weight columns (the container menu's, from its sheet).
-    for (name, crop, (cx, cw)) in [("rvloot_value_icon", 224, VALUE_COL), ("rvloot_weight_icon", 32, WEIGHT_COL)] {
+    x.push_str(&rule("rvloot_rule_top", RULE_ZOOM, 0.0, &TITLE.to_string(), w));
+    // The small icons over the value and weight columns (the game's, as its card has them).
+    for (name, crop, cx) in [("rvloot_value_icon", 224, VALUE_X), ("rvloot_weight_icon", 32, WEIGHT_X)] {
         x.push_str(&format!(
             "<image name=\"{name}\"> <filename> Menus\\Shared\\all_small_icons.dds </filename> <cropx> {crop} </cropx> <depth> 2 </depth> <width> 32 </width> <height> 32 </height> <x> {} </x> <y> {} </y> </image>\n",
-            PAD + cx + cw * 0.5 - 16.0,
-            PAD + 4.0
+            cx - 16.0,
+            TITLE + RULE + (HEADER - 32.0) * 0.5
         ));
     }
-    // The picked row's focus box.
+    // The picked row: the HUD's parchment, faint, between two gilt rules.
     x.push_str(&format!(
-        "<rect name=\"rvloot_focus\"> <include src=\"focus_box.xml\"/> <id> {FOCUS_ID} </id> <depth> 2 </depth> <x> {PAD} </x> <y> {} </y> <width> {inner} </width> <height> {ROW} </height> </rect>\n",
-        rows_top()
+        "<rect name=\"rvloot_focus\"> <id> {FOCUS_ID} </id> <locus> &true; </locus> <depth> 2 </depth> <x> {PAD} </x> <y> {top} </y> <width> {inner} </width> <height> {ROW} </height>\n\
+         <image name=\"rvloot_focus_light\"> <filename> Menus\\HUD\\hud_back.dds </filename> <cropx> 60 </cropx> <cropy> 12 </cropy> <alpha> {LIT} </alpha> <depth> 1 </depth> <width> {inner} </width> <height> {ROW} </height> <x> 0 </x> <y> 0 </y> </image>\n",
     ));
+    x.push_str(&rule("rvloot_focus_top", RULE_ROW_ZOOM, 0.0, "-2", inner));
+    x.push_str(&rule("rvloot_focus_bottom", RULE_ROW_ZOOM, 0.0, &(ROW - 3.0).to_string(), inner));
+    x.push_str("</rect>\n");
     for i in 0..ROWS {
         x.push_str(&row(i, inner));
     }
+    x.push_str(&rule("rvloot_rule_bottom", RULE_ZOOM, 0.0, &below(1.0), w));
     // The buttons: A, Take All; the trigger, Take (the Xbox's button art, the game's words).
-    let y = rows_top() + ROWS as f32 * ROW + 6.0;
+    x.push_str(&format!(
+        "<rect name=\"rvloot_buttons\"> <locus> &true; </locus> <depth> 3 </depth> <x> 0 </x> <y> {} </y> <width> {w} </width> <height> 64 </height>\n",
+        below(RULE + 2.0)
+    ));
     for (n, crop, word, bx) in [(0, 128, "_takeall", PAD), (1, 256, "_take", w * 0.5)] {
         x.push_str(&format!(
-            "<image name=\"rvloot_button_{n}\"> <filename> Menus\\Shared\\all_xbox_buttons.dds </filename> <cropx> {crop} </cropx> <depth> 3 </depth> <width> 64 </width> <height> 64 </height> <x> {bx} </x> <y> {y} </y> </image>\n\
-             <text name=\"rvloot_button_{n}_text\"> <depth> 3 </depth> <font> 1 </font> {INK} <string> <copy src=\"strings()\" trait=\"{word}\"/> </string> <x> {} </x>\n\
-             <y> {} <sub src=\"me()\" trait=\"height\"/> <div> 2 </div> <add> {} </add> </y> </text>\n",
-            bx + 70.0,
-            64.0,
-            y
+            "<image name=\"rvloot_button_{n}\"> <filename> Menus\\Shared\\all_xbox_buttons.dds </filename> <cropx> {crop} </cropx> <depth> 1 </depth> <width> 64 </width> <height> 64 </height> <x> {bx} </x> <y> 0 </y> </image>\n\
+             <text name=\"rvloot_button_{n}_text\"> <depth> 1 </depth> <font> {FONT} </font> {INK} <string> <copy src=\"strings()\" trait=\"{word}\"/> </string> <x> {} </x>\n\
+             <y> 64 <sub src=\"me()\" trait=\"height\"/> <div> 2 </div> </y> </text>\n",
+            bx + 70.0
         ));
     }
-    x.push_str("</rect>\n");
+    x.push_str("</rect>\n</rect>\n");
     x
 }
 
-/// Row `i`: the container menu's row (`cont_item_template`): its icon (`user0`), count (`user7`),
-/// name (`user1`), value (`user2`) and weight (`user3`); shown while `user8`.
+/// Row `i`: an item's icon (`user0`), its name and count (`user1`), value (`user2`) and weight
+/// (`user3`); shown while `user8`.
 fn row(i: usize, w: f32) -> String {
     let id = ROW_ID + i as i32;
     let y = rows_top() + i as f32 * ROW;
@@ -117,18 +148,16 @@ fn row(i: usize, w: f32) -> String {
     format!(
         "<rect name=\"rvloot_row{i}\"> <id> {id} </id> <locus> &true; </locus> <depth> 3 </depth> <visible> <copy src=\"me()\" trait=\"user8\"/> </visible>\n\
          <x> {PAD} </x> <y> {y} </y> <width> {w} </width> <height> {ROW} </height>\n\
-         <user0> </user0> <user1> </user1> <user2> </user2> <user3> </user3> <user7> </user7> <user8> &false; </user8>\n\
-         <image name=\"rvloot_row{i}_icon\"> <depth> 1 </depth> <filename> <copy src=\"parent()\" trait=\"user0\"/> </filename> <width> 64 </width> <height> 64 </height> <x> 4 </x> <y> 4 </y> </image>\n\
-         <text name=\"rvloot_row{i}_count\"> <depth> 2 </depth> <justify> &right; </justify> <font> 3 </font> {INK} <wrapwidth> 55 </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user7\"/> </string> <x> 68 </x>\n\
-         <y> <copy src=\"parent()\" trait=\"height\"/> <sub src=\"me()\" trait=\"height\"/> <sub> 4 </sub> </y> </text>\n\
-         <text name=\"rvloot_row{i}_name\"> <depth> 1 </depth> <justify> &left; </justify> {INK} <wrapwidth> 300 </wrapwidth> <wraplines> 2 </wraplines> <string> <copy src=\"parent()\" trait=\"user1\"/> </string> <x> 80 </x> {mid} </text>\n\
-         <text name=\"rvloot_row{i}_value\"> <depth> 1 </depth> <justify> &center; </justify> {INK} <wrapwidth> {} </wrapwidth> <string> <copy src=\"parent()\" trait=\"user2\"/> </string> <x> {} </x> {mid} </text>\n\
-         <text name=\"rvloot_row{i}_weight\"> <depth> 1 </depth> <justify> &center; </justify> {INK} <wrapwidth> {} </wrapwidth> <string> <copy src=\"parent()\" trait=\"user3\"/> </string> <x> {} </x> {mid} </text>\n\
+         <user0> </user0> <user1> </user1> <user2> </user2> <user3> </user3> <user8> &false; </user8>\n\
+         <image name=\"rvloot_row{i}_icon\"> <depth> 1 </depth> <filename> <copy src=\"parent()\" trait=\"user0\"/> </filename> <zoom> -1 </zoom> <width> {ICON} </width> <height> {ICON} </height> <x> 4 </x> <y> {} </y> </image>\n\
+         <text name=\"rvloot_row{i}_name\"> <depth> 1 </depth> <justify> &left; </justify> <font> {FONT} </font> {INK} <wrapwidth> {} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user1\"/> </string> <x> {NAME_X} </x> {mid} </text>\n\
+         <text name=\"rvloot_row{i}_value\"> <depth> 1 </depth> <justify> &center; </justify> <font> {FONT} </font> {INK} <wrapwidth> 70 </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user2\"/> </string> <x> {} </x> {mid} </text>\n\
+         <text name=\"rvloot_row{i}_weight\"> <depth> 1 </depth> <justify> &center; </justify> <font> {FONT} </font> {INK} <wrapwidth> 70 </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user3\"/> </string> <x> {} </x> {mid} </text>\n\
          </rect>\n",
-        VALUE_COL.1,
-        VALUE_COL.0 + VALUE_COL.1 * 0.5,
-        WEIGHT_COL.1,
-        WEIGHT_COL.0 + WEIGHT_COL.1 * 0.5
+        (ROW - ICON) * 0.5,
+        VALUE_X - 40.0 - NAME_X - PAD,
+        VALUE_X - PAD,
+        WEIGHT_X - PAD
     )
 }
 
@@ -222,13 +251,12 @@ mod game {
     const READ_XML: usize = 0x0059_0420;
     const UPDATE_FLOAT: usize = 0x0058_CEB0;
     const UPDATE_STRING: usize = 0x0058_CED0;
-    /// Tile values: id, user0..3, user7, user8.
+    /// Tile values: id, user0..3, user8.
     const ID: u16 = 0xFA8;
     const USER0: u32 = 0xFAE;
     const USER1: u32 = 0xFAF;
     const USER2: u32 = 0xFB0;
     const USER3: u32 = 0xFB1;
-    const USER7: u32 = 0xFB5;
     const USER8: u32 = 0xFB6;
     const FALSE: f32 = 1.0;
     /// The HUD (`kMenuType_HUDMain`), whose tiles the list goes in; the container menu
@@ -687,14 +715,21 @@ mod game {
                 update_text(self.tile, USER0, &l.name);
                 self.named = l.name.clone();
             }
+            // (As tall as the rows shown.)
+            let shown = things.len().saturating_sub(top).min(ROWS);
+            if self.given.get(&(ROWS, USER1)).is_none_or(|n| *n != shown.to_string()) {
+                update_float(self.tile, USER1, shown as f32);
+                self.given.insert((ROWS, USER1), shown.to_string());
+            }
             for row in 0..ROWS {
                 match things.get(top + row) {
                     Some(t) => {
+                        // (A stack's count after its name, as the game's lists have it; a space for
+                        // nothing, where nothing given reads as a 0.)
                         self.give(row, USER0, &t.icon);
-                        self.give(row, USER1, &t.name);
-                        self.give(row, USER2, &t.value.map_or(String::new(), |v| v.to_string()));
-                        self.give(row, USER3, &t.weight.map_or(String::new(), items::weight_text));
-                        self.give(row, USER7, &if t.count > 1 { t.count.to_string() } else { String::new() });
+                        self.give(row, USER1, &if t.count > 1 { format!("{} ({})", t.name, t.count) } else { t.name.clone() });
+                        self.give(row, USER2, &t.value.map_or(" ".to_string(), |v| v.to_string()));
+                        self.give(row, USER3, &t.weight.map_or(" ".to_string(), items::weight_text));
                         self.visible(row, true);
                     }
                     None => self.visible(row, false),
