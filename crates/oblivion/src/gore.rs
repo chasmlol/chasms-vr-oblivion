@@ -8,6 +8,8 @@
 //!   ([`look`]): people's red decal atlas, the dungeons' splatter and stains, the arena's runs, the
 //!   spray's droplet and mist, the Kvatch head pike's neck for a stump; a lich's black; a
 //!   will-o'-the-wisp's glow; a skeleton's bone dust.
+//! * **Only with gore on** (the runtime's `RT_GORE`, its setting, off by default): off, nothing is
+//!   cut and no stump sprays.
 //! * **The cut** ([`after_hit`], on the game's thread right after its hit): with the game's
 //!   numbers (its damage for the weapon and its kind, the hit's strength, the creature's health
 //!   before and after) the framework's rule decides ([`rustvr_protocol::severs`]). It cuts at the
@@ -555,8 +557,13 @@ mod game {
         crate::hooks::guard_void("gore", || hit(actor, ev, before));
     }
 
+    /// The player has gore on (the runtime says).
+    fn on() -> bool {
+        crate::link::last().is_some_and(|s| s.frame.flags & RT_GORE != 0)
+    }
+
     fn hit(actor: usize, ev: &CombatEvent, before: f32) {
-        if ev.object == 0 {
+        if ev.object == 0 || !on() {
             return;
         }
         let after = health(actor);
@@ -1028,7 +1035,7 @@ mod game {
                             b.count += 1;
                         }
                         // The game's own blood effect from the stump, with the pulses.
-                        if now - v.born < SPRAYS_FOR && now >= v.next_spray {
+                        if now - v.born < SPRAYS_FOR && now >= v.next_spray && on() {
                             v.next_spray = now + SPRAY_EVERY;
                             spray(actor, cut.t, axis);
                         }
