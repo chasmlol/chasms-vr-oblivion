@@ -158,7 +158,8 @@ impl Bridge {
     /// This frame's keys, buttons and stick from the runtime's actions:
     ///
     /// * the move stick: the game's joystick (walking, at the speed it's pushed to);
-    /// * Jump, Use (Activate), the long Use (Rest), the menu button (Escape): taps of the game's own;
+    /// * Jump, Use (Activate), the menu button (Escape): taps of the game's own (Rest is the big
+    ///   four's button, `crate::rest`; an empty hand's held trigger is its fist);
     /// * Crouch: a tap of Crouch/Sneak (a toggle in the game, kept in step by the runtime);
     /// * Sprint, held: Run, unless Always Run is on (then Run would walk);
     /// * the off hand's B (the runtime's Flashlight): Menu Mode (the inventory, magic, map and
@@ -189,7 +190,7 @@ impl Bridge {
             hold(self.binding("Run"), &mut v);
         }
         // Pressed: a moment's tap. (Not Activate while a hand's looting what it points at: the
-        // trigger takes from its list, `crate::quickloot`, and held it doesn't rest.)
+        // trigger takes from its list, `crate::quickloot`.)
         let looting = crate::quickloot::shown();
         for (a, name) in [
             (Action::Jump, "Jump"),
@@ -197,9 +198,8 @@ impl Bridge {
             (Action::Crouch, "Crouch/Sneak"),
             (Action::Flashlight, "Menu Mode"),
             (Action::Inventory, "Menu Mode"),
-            (Action::UseHold, "Rest"),
         ] {
-            if looting && matches!(a, Action::Use | Action::UseHold) {
+            if looting && a == Action::Use {
                 continue;
             }
             if pressed(&counts, a) || (a == Action::Jump && jump) {

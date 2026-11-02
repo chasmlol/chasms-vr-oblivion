@@ -245,8 +245,9 @@ mod win {
     ];
 
     /// The HUD's frame in the big four (`hud_main_menu.xml`): the bars, the weapon, the spell and
-    /// the compass, each the way to its menu (character, inventory, magic, the map).
-    const SWITCHER: Piece = Piece { menu: MENU_HUD, from: &[From::Drawn("hudmain_background")], point: true, over: false };
+    /// the compass, each the way to its menu (character, inventory, magic, the map), and the Rest
+    /// beside it (`crate::rest`).
+    const SWITCHER: Piece = Piece { menu: MENU_HUD, from: &[From::Drawn("hudmain_background"), From::Drawn(crate::rest::REST)], point: true, over: false };
 
     /// The inventory (`main\inventory_menu.xml`): its list as the container's (heads, scroll bar,
     /// the weight, armour and gold under it), its tabs, and the switcher.

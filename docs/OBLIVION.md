@@ -118,10 +118,11 @@ the game lock) is in [DEVELOPING.md](DEVELOPING.md).
 | Right stick click, or its down flick, or crouching a little | Crouch/Sneak (kept in step with the game's sneaking; how far: the Comfort tab's "Stealth crouch amount", [design/stealth.md](design/stealth.md)) |
 | A (either hand) | Jump (out of the water too, at a ledge) |
 | Empty hands in the water, grip squeezed | Swim: the hands hold the water and the player is pulled past them, several times their pace, then glides; down to rise, up to dive (the stick swims too, where the head looks) |
-| Trigger, empty hand | Activate: what a free hand put up in front (30 cm or more) points at within the game's reach, its card over the hand; with no hand put up, what the head looks at. Held: Rest/Wait. The off hand, with a spell ready: a finger on it readies the spell (its art in the palm), pulling it charges it, letting go (or touching, for a touch spell) casts |
+| Trigger, empty hand | Activate: what a free hand put up in front (30 cm or more) points at within the game's reach, its card over the hand; with no hand put up, what the head looks at. Held, that hand is a fist: it punches and shoves (without it a hand only touches people, gently, and does them no harm). The off hand, with a spell ready: a finger on it readies the spell (its art in the palm), pulling it charges it, letting go (or touching, for a touch spell) casts |
 | Trigger, holding an enchanted staff | Charge its enchantment at the tip; let go to cast it along the staff |
 | Grip at the torch's holster | Draw the torch (when one is equipped); let go in a holster to hang it up, anywhere else to drop it |
 | Off hand's B | Menu Mode (inventory, magic, map, journal); held: the Quick Menu (hotkeys). Not while that hand holds something |
+| Rest, beside the HUD's frame in Menu Mode | Menu Mode closes and the game's own Rest/Wait opens (`crates/oblivion/src/rest.rs`: the game's short button in the HUD's tiles) |
 | B on a menu | Menu Mode, which closes it (on the pause menu and its options, load and save: Escape) |
 | The menu button | Escape (in the world, the pause menu, with RustVR's settings beside it) |
 | Laser + trigger on a menu | The game's cursor and click |

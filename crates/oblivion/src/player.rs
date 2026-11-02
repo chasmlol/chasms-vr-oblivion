@@ -136,6 +136,12 @@ pub fn before_update() {
     {
         b.hold("Activate", link::now() + 0.12);
     }
+    // The big four's Rest clicked: Menu Mode closes them, then the game's own Rest.
+    if let Some(control) = crate::rest::tap(link::now())
+        && let Some(b) = bridge().as_mut()
+    {
+        b.hold(control, link::now() + 0.12);
+    }
     // (While a field takes keys, the game's keyboard is the VR keyboard's alone: the buttons' keys
     // (Jump's E, Menu Mode's Tab) would be typed into it. The menu button's Escape still goes.)
     if crate::keyboard::typing() {

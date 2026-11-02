@@ -57,6 +57,7 @@ fn startup() {
     crate::pointing::install();
     crate::saves::install();
     crate::quickloot::install();
+    crate::rest::install();
     crate::combat::install();
     crate::console::install();
     crate::slot_menu::install();

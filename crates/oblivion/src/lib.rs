@@ -85,6 +85,7 @@ pub mod quickloot;
 pub mod proxy;
 pub mod render;
 pub mod resolution;
+pub mod rest;
 pub mod reticle;
 pub mod riding;
 pub mod saves;
