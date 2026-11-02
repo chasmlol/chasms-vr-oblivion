@@ -66,8 +66,21 @@ if ($Range) {
     exit 0
 }
 # Steam's DRM starts the game only for a signed-in Steam: signed out, the game stops at an
-# "Application load error" box on the desktop, out of the headset's sight.
-if (-not (Get-ItemProperty "HKCU:\Software\Valve\Steam\ActiveProcess" -ErrorAction SilentlyContinue).ActiveUser) {
+# "Application load error" box on the desktop, out of the headset's sight. A Steam that isn't
+# running is started (it signs in by itself when it remembers the account) and given a while to,
+# then a few seconds more (a game started with Steam just signing in dies in the adapter).
+function Steam-User { (Get-ItemProperty "HKCU:\Software\Valve\Steam\ActiveProcess" -ErrorAction SilentlyContinue).ActiveUser }
+if (-not (Steam-User)) {
+    $steam = (Get-ItemProperty "HKCU:\Software\Valve\Steam" -ErrorAction SilentlyContinue).SteamExe
+    if ($steam -and -not (Get-Process steam -ErrorAction SilentlyContinue)) {
+        "starting Steam (the game needs it signed in)..."
+        Start-Process -FilePath $steam -ArgumentList "-silent"
+    }
+    $until = (Get-Date).AddSeconds(120)
+    while (-not (Steam-User) -and (Get-Date) -lt $until) { Start-Sleep 2 }
+    if (Steam-User) { "Steam is signed in"; Start-Sleep 10 }
+}
+if (-not (Steam-User)) {
     "Steam isn't signed in: sign in to Steam, then run this again"
     exit 1
 }
@@ -76,7 +89,7 @@ $folder = if ($OwnSaves) { "rustvr-$Feature" } else { "" }
 if ($NewGame) {
     "$Feature : a new game$(if ($folder) { ", its saves in Saves\$folder" })"
     & "$wt\tools\oblivion.ps1" -NoBuild -NewGame -SaveFolder $folder -At $At -Give $Give -Commands $Commands -Settings $Settings
-    exit 0
+    exit $LASTEXITCODE
 }
 if (-not $Save -and $OwnSaves) { $Save = "latest" }
 if (-not $Save) {
@@ -86,3 +99,4 @@ if (-not $Save) {
 }
 "$Feature : $Save$(if ($At) { " at $At" })"
 & "$wt\tools\oblivion.ps1" -NoBuild -Save $Save -SaveFolder $folder -At $At -Give $Give -Commands $Commands -Settings $Settings
+exit $LASTEXITCODE
