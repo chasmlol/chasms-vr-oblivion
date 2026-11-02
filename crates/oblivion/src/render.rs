@@ -242,6 +242,46 @@ mod win {
         unsafe { real(this) }
     }
 
+    /// The game's draw of what it sorts back to front (0x7ACF40, thiscall on its one
+    /// `BSShaderAccumulator`, 0xB430FC): what it blends (glass, smoke, water, fog cards, the grime
+    /// on a gate), drawn once the solid passes are done (the accumulator's own draw, 0x7AE070,
+    /// calls it). The body and the hands are hidden behind the game's world by its depth: taken
+    /// just before this in an eye's render of the world, the depth is the solid world's alone, and
+    /// a see-through sheet before a gate's bars doesn't hide a hand reaching through them. (The
+    /// accumulator draws the actors' shadow maps first, each into its own depth buffer, then the
+    /// world, then the first person's view: the first of these into the depth buffer the eye's
+    /// render began with is the world's.)
+    const SORTED_DRAW: usize = 0x007A_CF40;
+    static REAL_SORTED: AtomicUsize = AtomicUsize::new(0);
+    /// The render whose depth is taken before its sorted draw (its depth buffer, and which: 0 and 1
+    /// the eyes, 2 the mirror), and whether it's been taken.
+    static DEPTH_FOR: Mutex<Option<(usize, usize)>> = Mutex::new(None);
+    static DEPTH_TAKEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    unsafe extern "thiscall" fn sorted_draw(this: *mut c_void) -> i32 {
+        let real: unsafe extern "thiscall" fn(*mut c_void) -> i32 = unsafe { std::mem::transmute(REAL_SORTED.load(Ordering::Acquire)) };
+        let wanted = *DEPTH_FOR.lock().unwrap();
+        if let Some((ds, eye)) = wanted.filter(|_| !DEPTH_TAKEN.load(Ordering::Acquire)) {
+            let taken = hooks::guard("the depth before the sorted draw", false, || {
+                let Some(dev) = d3d9::device(engine::device() as *mut c_void) else { return false };
+                d3d9::depth_surface(&dev) == Some(ds) && link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), eye)).unwrap_or(false)
+            });
+            if taken {
+                DEPTH_TAKEN.store(true, Ordering::Release);
+            }
+        }
+        unsafe { real(this) }
+    }
+
+    /// The depth of render `eye` (0 and 1 the eyes, 2 the mirror) is to be taken before its sorted
+    /// draw (`None`: the render is over).
+    fn depth_before_sorted(dev: &windows::Win32::Graphics::Direct3D9::IDirect3DDevice9, eye: Option<usize>) {
+        *DEPTH_FOR.lock().unwrap() = eye.and_then(|e| Some((d3d9::depth_surface(dev)?, e)));
+        if eye.is_some() {
+            DEPTH_TAKEN.store(false, Ordering::Release);
+        }
+    }
+
     /// The world's shadow scene node (`*0xB42F54`) and its actors' shadow lights
     /// (`ShadowSceneLight`, an `NiTPointerList` at +0xF8: each entry's next at +0, its light at +8).
     const SHADOW_SCENE: usize = 0x00B4_2F54;
@@ -445,6 +485,7 @@ mod win {
         patch_world_picture();
         patch_centres();
         hooks::install_into(ACTOR_SHADOWS as *const (), actor_shadows as *const (), "actor shadows", &REAL_SHADOWS);
+        hooks::install_into(SORTED_DRAW as *const (), sorted_draw as *const (), "the sorted draw", &REAL_SORTED);
         hooks::install_into(LOADER_WAIT as *const (), loader_wait as *const (), "the background thread's lock's wait", &REAL_LOADER_WAIT);
         hooks::install_into(engine::FRAME as *const (), frame_hook as *const (), "Main::Frame", &REAL_FRAME);
         hooks::install_into(engine::RENDER as *const (), render_hook as *const (), "Main::Render", &REAL_RENDER);
@@ -588,13 +629,15 @@ mod win {
                 set_lock(!hold_loader(), true);
                 SECOND_EYE.store(true, Ordering::Release);
                 // (Timed apart from the eyes: a third render of the world at the eyes' size.)
+                depth_before_sorted(&dev, Some(2));
                 let (r, colour, depth) = time(Part::Mirror, || {
                     let r = unsafe { real(this, arg) };
+                    depth_before_sorted(&dev, None);
                     if log_shadows {
                         tracing::info!("render: the mirror: {}", shadow_lights_state());
                     }
                     let colour = hooks::guard("capture mirror", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), d3d9::MIRROR)).unwrap_or(false));
-                    let depth = hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
+                    let depth = DEPTH_TAKEN.load(Ordering::Acquire) || hooks::guard("capture mirror depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), 2)).unwrap_or(false));
                     (r, colour, depth)
                 });
                 result = r;
@@ -629,7 +672,9 @@ mod win {
                 set_lock(true, true);
             }
             SECOND_EYE.store(eye == 1, Ordering::Release);
+            depth_before_sorted(&dev, Some(eye));
             result = time(Part::Eye, || unsafe { real(this, arg) });
+            depth_before_sorted(&dev, None);
             if log_shadows {
                 tracing::info!("render: eye {eye}: {}", shadow_lights_state());
             }
@@ -642,7 +687,8 @@ mod win {
                 );
             }
             captured[eye] = time(Part::Capture, || hooks::guard("capture", false, || link::with_adapter(|a| d3d9::capture(&dev, a.gpu(), eye)).unwrap_or(false)));
-            depth[eye] = time(Part::Depth, || hooks::guard("capture depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), eye)).unwrap_or(false)));
+            // (Taken before the world's sorted draw; else, as it ends.)
+            depth[eye] = DEPTH_TAKEN.load(Ordering::Acquire) || time(Part::Depth, || hooks::guard("capture depth", false, || link::with_adapter(|a| d3d9::capture_depth(&dev, a.gpu(), eye)).unwrap_or(false)));
         }
         set_lock(true, true);
         SECOND_EYE.store(false, Ordering::Release);

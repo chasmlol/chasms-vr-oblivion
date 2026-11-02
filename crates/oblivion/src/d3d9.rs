@@ -745,6 +745,11 @@ mod win {
         let _ = unsafe { dev.SetVertexShaderConstantF(crate::fog::REGISTER, terms.as_ptr(), 1) };
     }
 
+    /// The depth buffer the game draws into now (its surface, as a number to tell it by).
+    pub fn depth_surface(dev: &IDirect3DDevice9) -> Option<usize> {
+        unsafe { dev.GetDepthStencilSurface() }.ok().map(|s| s.as_raw() as usize)
+    }
+
     /// The game's device, borrowed.
     pub fn device(raw: *mut c_void) -> Option<IDirect3DDevice9> {
         unsafe { IDirect3DDevice9::from_raw_borrowed(&raw) }.cloned()

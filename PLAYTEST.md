@@ -37,6 +37,10 @@ game's simplified collision.
   bursts on the drawn surface it meets (a chair's leg, a gate's bar), not on the box round it.
 - **Arrows from further off** (new): drawn shapes now meet arrows and spells out to about 48 m from
   you, not just within 12 m, so an archer across a courtyard shoots through the gaps too.
+- **Your hands behind see-through things** (new): your hands used to vanish behind anything the
+  game draws see-through (the grime sheet before a cell gate's bars, fog cards in doorways, smoke,
+  water) as if it were solid. Now only solid things hide them: a hand through a gate's bars stays
+  in sight.
 - **Portcullises** (new): the ones a lever raises (fort ruins, the Arena, Kvatch) are their drawn
   bars to your hands and to arrows, where the game has them as they rise. Before your hand went
   through them and arrows hit a flat slab.
@@ -79,8 +83,9 @@ model, in the background, once for each model); until then it keeps its old shap
    rest it against a shelf: the blade, not a box round the sword, meets things.
 9. **A torch** (if you have one): the handle and head are solid, the flame isn't.
 10. **A cell gate** (`playtest-prison.bat`: the prison cell the game starts in, a bow, 500 arrows
-    and a dagger): put your hand between the gate's bars, swing it by a bar, and shoot arrows
-    through the gaps between the bars and into a bar.
+    and a dagger): put your hand between the gate's bars (it should stay in sight, through them
+    and out the other side), swing it by a bar, and shoot arrows through the gaps and into a bar.
+    Put a hand into water, smoke or a fog card in a doorway: it should still show.
 11. **A spell through a gap**: cast a fire bolt through a chair's legs or a gate's bars: it should
     fly through and burst behind; cast at a leg or a bar: it bursts there.
 12. **A statue or a trophy**: touch a statue, a mounted head or an armour display: your hand stops on
