@@ -94,6 +94,9 @@ model, in the background, once for each model); until then it keeps its old shap
     pull the lever and watch it rise, still solid where it's drawn.
 14. **A cut-off head or arm**: cut one off, pick it up, set it on a table and roll it: it should rest
     and roll on its drawn shape, not tip like a box.
+15. **The hanging chains** (`playtest-prison.bat`, across from the cell): push a chain so it swings,
+    then reach where it hung: nothing there now. Follow it with your hand: it's solid where it is,
+    not where it was. The rings on the wall and the chains draped between them stay solid.
 
 Say what feels wrong: a thing your hand stops short of, a hand going into something it shouldn't,
 a thing that jitters or flies off when you set it down or pick it up, a stutter as you walk into
