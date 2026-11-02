@@ -349,6 +349,7 @@ mod game {
     unsafe extern "thiscall" fn push_menu(ui: usize, kind: u32) -> i32 {
         let real: unsafe extern "thiscall" fn(usize, u32) -> i32 = unsafe { std::mem::transmute(REAL_PUSH.load(Ordering::Acquire)) };
         if kind == crate::quickloot::MENU_CONTAINER && crate::quickloot::opening() {
+            crate::quickloot::hide_opened();
             return 0;
         }
         if kind == MENU_BOOK && mem::deref(ui + MENU_STACK) == 0 && crate::link::last().is_some_and(|s| s.view.is_some()) {

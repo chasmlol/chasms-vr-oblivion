@@ -9,8 +9,9 @@
 //!   `OnActivate` block, which the game runs instead of opening it: Captain Renault's body moves
 //!   the main quest on as it's searched) is activated by the player as ever, its script run: if the
 //!   script opens it, the container menu it opens stays off the menu stack (the game plays on,
-//!   [`opening`]) and is shut with its own Exit, and what's in it is listed; if the script doesn't,
-//!   nothing is. Once a look: again only when the hand comes back to it.
+//!   [`opening`]), hidden from the moment it's made till it's gone (it would draw into the HUD,
+//!   under the list), and is shut with its own Exit, and what's in it is listed; if the script
+//!   doesn't, nothing is. Once a look: again only when the hand comes back to it.
 //! * **What's listed** is the container menu's own list: its entries of the thing's things
 //!   (`GetInventoryItem`, 0x4D88F0) and its own filter (0x4854F0, as it lists a container's or a
 //!   body's things, worn ones too), each by the game's name, value, weight and inventory icon.
@@ -39,10 +40,10 @@ pub const MENU_CONTAINER: u32 = 0x3F0;
 /// edge; the thing's name over the rows, the rule under it and the small icons over the columns;
 /// the buttons under the rows (the Xbox's button art, 64 square).
 const ROWS: usize = 6;
-const WIDTH: f32 = 500.0;
-const ROW: f32 = 44.0;
+const WIDTH: f32 = 560.0;
+const ROW: f32 = 62.0;
 const PAD: f32 = 14.0;
-const TITLE: f32 = 44.0;
+const TITLE: f32 = 48.0;
 const RULE: f32 = 8.0;
 const HEADER: f32 = 36.0;
 const FOOTER: f32 = 72.0;
@@ -51,14 +52,19 @@ const AT: (f32, f32) = (16.0, 40.0);
 /// Its rows' ids, and the focus box's.
 const ROW_ID: i32 = 980;
 const FOCUS_ID: i32 = 979;
-/// The middles of the value's and the weight's columns; where a row's name starts (past its icon).
-const VALUE_X: f32 = 376.0;
-const WEIGHT_X: f32 = 452.0;
-const NAME_X: f32 = 50.0;
-const ICON: f32 = 36.0;
+/// The middles of the value's and the weight's columns (and how wide they are); where a row's name
+/// starts (past its icon) and how wide it goes, on two lines as the game's lists have it.
+const VALUE_X: f32 = 440.0;
+const WEIGHT_X: f32 = 510.0;
+const COLUMN: f32 = 66.0;
+const NAME_X: f32 = 56.0;
+const NAME_W: f32 = 330.0;
+const ICON: f32 = 44.0;
 
-/// The HUD's own text: its shadowed font, in its colour (its card's of what the crosshair's on).
-const FONT: u32 = 2;
+/// The game's text: its lists' font (`Kingthings_Regular`, its lines 28 high), the HUD's shadowed
+/// one for the thing's name (as its card has it, 35 high), in the HUD's colour.
+const FONT: u32 = 1;
+const TITLE_FONT: u32 = 2;
 const INK: &str = "<red> 254 </red> <green> 244 </green> <blue> 183 </blue> <alpha> 255 </alpha>";
 /// How dark the game's black is under it (of 255: the world shows through), how bright the HUD's
 /// parchment is under the picked row.
@@ -66,8 +72,8 @@ const SHADE: u32 = 150;
 const LIT: u32 = 60;
 /// The game's thin gilt rule (`shared_border_horizontal_1`, 636 long as drawn), as big across the
 /// list (and across a row), and as tall then.
-const RULE_ZOOM: u32 = 76;
-const RULE_ROW_ZOOM: u32 = 70;
+const RULE_ZOOM: u32 = 86;
+const RULE_ROW_ZOOM: u32 = 80;
 
 /// The rows' top, on the list.
 fn rows_top() -> f32 {
@@ -94,7 +100,7 @@ pub fn xml() -> String {
         "<rect name=\"{LOOT}\">\n<locus> &true; </locus> <depth> 30 </depth> <visible> &false; </visible> <user0> </user0> <user1> {ROWS} </user1>\n\
          <x> {} </x> <y> {} </y> <width> {w} </width> <height> <copy src=\"me()\" trait=\"user1\"/> <mul> {ROW} </mul> <add> {} </add> </height>\n\
          <image name=\"rvloot_background\"> <filename> Menus\\Faders\\black.dds </filename> <zoom> -1 </zoom> <alpha> {SHADE} </alpha> <depth> 1 </depth> <x> 0 </x> <y> 0 </y> <width> {w} </width> <height> <copy src=\"parent()\" trait=\"height\"/> </height> </image>\n\
-         <text name=\"rvloot_name\"> <depth> 2 </depth> <justify> &center; </justify> <font> {FONT} </font> {INK} <wrapwidth> {inner} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user0\"/> </string> <x> {} </x>\n\
+         <text name=\"rvloot_name\"> <depth> 2 </depth> <justify> &center; </justify> <font> {TITLE_FONT} </font> {INK} <wrapwidth> {inner} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user0\"/> </string> <x> {} </x>\n\
          <y> {TITLE} <sub src=\"me()\" trait=\"height\"/> <div> 2 </div> </y> </text>\n",
         AT.0,
         AT.1,
@@ -113,7 +119,7 @@ pub fn xml() -> String {
     // The picked row: the HUD's parchment, faint, between two gilt rules.
     x.push_str(&format!(
         "<rect name=\"rvloot_focus\"> <id> {FOCUS_ID} </id> <locus> &true; </locus> <depth> 2 </depth> <x> {PAD} </x> <y> {top} </y> <width> {inner} </width> <height> {ROW} </height>\n\
-         <image name=\"rvloot_focus_light\"> <filename> Menus\\HUD\\hud_back.dds </filename> <cropx> 60 </cropx> <cropy> 12 </cropy> <alpha> {LIT} </alpha> <depth> 1 </depth> <width> {inner} </width> <height> {ROW} </height> <x> 0 </x> <y> 0 </y> </image>\n",
+         <image name=\"rvloot_focus_light\"> <filename> Menus\\HUD\\hud_back.dds </filename> <cropx> 60 </cropx> <cropy> 4 </cropy> <alpha> {LIT} </alpha> <depth> 1 </depth> <width> {inner} </width> <height> {ROW} </height> <x> 0 </x> <y> 0 </y> </image>\n",
     ));
     x.push_str(&rule("rvloot_focus_top", RULE_ROW_ZOOM, 0.0, "-2", inner));
     x.push_str(&rule("rvloot_focus_bottom", RULE_ROW_ZOOM, 0.0, &(ROW - 3.0).to_string(), inner));
@@ -150,12 +156,11 @@ fn row(i: usize, w: f32) -> String {
          <x> {PAD} </x> <y> {y} </y> <width> {w} </width> <height> {ROW} </height>\n\
          <user0> </user0> <user1> </user1> <user2> </user2> <user3> </user3> <user8> &false; </user8>\n\
          <image name=\"rvloot_row{i}_icon\"> <depth> 1 </depth> <filename> <copy src=\"parent()\" trait=\"user0\"/> </filename> <zoom> -1 </zoom> <width> {ICON} </width> <height> {ICON} </height> <x> 4 </x> <y> {} </y> </image>\n\
-         <text name=\"rvloot_row{i}_name\"> <depth> 1 </depth> <justify> &left; </justify> <font> {FONT} </font> {INK} <wrapwidth> {} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user1\"/> </string> <x> {NAME_X} </x> {mid} </text>\n\
-         <text name=\"rvloot_row{i}_value\"> <depth> 1 </depth> <justify> &center; </justify> <font> {FONT} </font> {INK} <wrapwidth> 70 </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user2\"/> </string> <x> {} </x> {mid} </text>\n\
-         <text name=\"rvloot_row{i}_weight\"> <depth> 1 </depth> <justify> &center; </justify> <font> {FONT} </font> {INK} <wrapwidth> 70 </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user3\"/> </string> <x> {} </x> {mid} </text>\n\
+         <text name=\"rvloot_row{i}_name\"> <depth> 1 </depth> <justify> &left; </justify> <font> {FONT} </font> {INK} <wrapwidth> {NAME_W} </wrapwidth> <wraplines> 2 </wraplines> <string> <copy src=\"parent()\" trait=\"user1\"/> </string> <x> {NAME_X} </x> {mid} </text>\n\
+         <text name=\"rvloot_row{i}_value\"> <depth> 1 </depth> <justify> &center; </justify> <font> {FONT} </font> {INK} <wrapwidth> {COLUMN} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user2\"/> </string> <x> {} </x> {mid} </text>\n\
+         <text name=\"rvloot_row{i}_weight\"> <depth> 1 </depth> <justify> &center; </justify> <font> {FONT} </font> {INK} <wrapwidth> {COLUMN} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user3\"/> </string> <x> {} </x> {mid} </text>\n\
          </rect>\n",
         (ROW - ICON) * 0.5,
-        VALUE_X - 40.0 - NAME_X - PAD,
         VALUE_X - PAD,
         WEIGHT_X - PAD
     )
@@ -187,6 +192,9 @@ pub fn shown() -> bool {
 pub fn opening() -> bool {
     false
 }
+
+#[cfg(not(all(windows, target_arch = "x86")))]
+pub fn hide_opened() {}
 
 #[cfg(all(windows, target_arch = "x86"))]
 mod game {
@@ -268,8 +276,10 @@ mod game {
     const VT_HANDLE_CLICK: usize = 3 * 4;
     const EXIT: u32 = 33;
     const EXIT_BUTTON: &str = "cont_button_exit";
-    /// How long a script is given to open what it was activated for (seconds).
+    /// How long a script is given to open what it was activated for, and how long the container
+    /// menu it opened is kept hidden as it shuts (its fade), at most (seconds).
     const SCRIPT_WAIT: f64 = 1.5;
+    const SHUTTING: f64 = 2.0;
     /// Seconds between looks at what's in it.
     const REFRESH: f64 = 0.25;
     /// How long the list stays on its thing with the aim off it (slipped past a body's arm), and
@@ -286,6 +296,15 @@ mod game {
     /// menu stack, so the game plays on.
     pub fn opening() -> bool {
         OPENING.load(Ordering::Relaxed) != 0
+    }
+
+    /// The container menu a script opened for a look, as it's made: hidden (it's never seen, its
+    /// things are listed at the hand).
+    pub fn hide_opened() {
+        let tile = tiles::menu_tile(super::MENU_CONTAINER);
+        if tile != 0 {
+            update_float(tile, tiles::VISIBLE as u32, FALSE);
+        }
     }
     /// The list is up (its things beside a hand): the trigger is its.
     static SHOWN: AtomicBool = AtomicBool::new(false);
@@ -356,6 +375,9 @@ mod game {
         scripted: usize,
         refused: usize,
         activated_at: f64,
+        /// The container menu shut for a look, as it goes (kept hidden), and when it was shut.
+        shut: usize,
+        shut_at: f64,
         failed: bool,
     }
 
@@ -611,6 +633,19 @@ mod game {
         /// A thing whose script has its own activation, pointed at (`scripted`): activated once for
         /// this look; the container menu its script opens, shut; or given up on.
         fn scripts(&mut self, target: usize, scripted: bool, now: f64) {
+            // (The one shut, hidden as it fades, till it's gone: while it's still that one, off the
+            // stack.)
+            if self.shut != 0 {
+                let menu = tiles::menu(super::MENU_CONTAINER);
+                if menu == self.shut && mem::at::<u32>(menu + MENU_STACKED) == Some(0) && now - self.shut_at < SHUTTING {
+                    hide_opened();
+                } else {
+                    if menu == self.shut {
+                        tracing::warn!("quickloot: the container menu shut for a look is still up {:.1} s on", now - self.shut_at);
+                    }
+                    self.shut = 0;
+                }
+            }
             if OPENING.load(Ordering::Relaxed) == 0 && scripted && target != self.scripted && target != self.refused {
                 let name = items::form_facts(mem::deref(target + REFR_BASE)).name;
                 tracing::info!("quickloot: {name} ({target:#x}) has a script of its own activation: activated as the player would, its script run");
@@ -624,10 +659,12 @@ mod game {
             }
             let menu = tiles::menu(super::MENU_CONTAINER);
             if menu != 0 && mem::deref(menu + MENU_OF) == waiting {
-                // (Off the stack: its close mustn't take another menu off it.)
+                // (Off the stack: its close mustn't take another menu off it. Never seen.)
                 if mem::is_readable((menu + MENU_STACKED) as *const u8, 4) {
                     unsafe { ((menu + MENU_STACKED) as *mut u32).write(0) };
                 }
+                hide_opened();
+                (self.shut, self.shut_at) = (menu, now);
                 // (Its Exit's own tile with it: the click fades it.)
                 let f = mem::deref(mem::deref(menu) + VT_HANDLE_CLICK);
                 let exit = tiles::Tree::read(tiles::menu_tile(super::MENU_CONTAINER)).find(EXIT_BUTTON).map_or(0, |p| p.tile);
