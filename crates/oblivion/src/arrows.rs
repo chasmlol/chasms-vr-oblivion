@@ -1,7 +1,13 @@
-//! The game's arrows in flight meet what's drawn (`docs/design/hitboxes.md`): through the gaps the
-//! game's simplified collision fills (between a chair's legs, through a fence's bars, past a
-//! crude box's corner), and into the drawn surface where it is, with the game's own impact (its
-//! damage, its sticking, its breaking on stone, its sounds).
+//! The game's arrows and spells in flight meet what's drawn (`docs/design/hitboxes.md`): through the
+//! gaps the game's simplified collision fills (between a chair's legs, through a fence's bars, past
+//! a crude box's corner), and into the drawn surface where it is, with the game's own impact (its
+//! damage, its sticking, its breaking on stone, its sounds; a spell's effect, its explosion).
+//!
+//! A spell's bolt or ball flies the same way, its listener (`bhkCharacterListenerSpell`, 0xA75218)
+//! sharing the arrow's constraints callback; its own `contactPointAddedCallback` (0x68F450,
+//! thiscall: the listener, the contact point) finds the projectile (the listener's +0x1E0) and the
+//! reference met and hands the hit to the projectile. A drawn shape met on a spell's way is that
+//! callback, given the contact there.
 //!
 //! An arrow (`ArrowProjectile`) flies as a Havok character proxy whose listener
 //! (`bhkCharacterListenerArrow`) the proxy tells of each new contact (`contactPointAddedCallback`,
@@ -58,9 +64,10 @@ mod win {
     const CONTACT: usize = 0x0060_DBB0;
     const CONSTRAINTS: usize = 0x0060_DBF0;
     const IMPACT: usize = 0x0060_D950;
-    /// The listener's vtable as the proxy calls it (the magic projectiles' share the constraints
-    /// callback).
+    const SPELL_CONTACT: usize = 0x0068_F450;
+    /// The listeners' vtables as the proxy calls them (the spells' shares the constraints callback).
     const ARROW_LISTENER: usize = 0x00A6_FA38;
+    const SPELL_LISTENER: usize = 0x00A7_5218;
     const LISTENER_ARROW: usize = 0x1E0;
     const ARROW_STATE: usize = 0x60;
     const FORM_FLAGS: usize = 0x8;
@@ -80,12 +87,25 @@ mod win {
 
     static REAL_CONTACT: AtomicUsize = AtomicUsize::new(0);
     static REAL_CONSTRAINTS: AtomicUsize = AtomicUsize::new(0);
+    static REAL_SPELL_CONTACT: AtomicUsize = AtomicUsize::new(0);
 
     /// The (arrow, body) the game's impact was asked for and didn't take: not asked again.
     static TRIED: Mutex<Option<HashSet<(usize, usize)>>> = Mutex::new(None);
 
     #[repr(C, align(16))]
     struct V4([f32; 4]);
+
+    /// A contact as Havok hands one to a listener (`hkRootCdPoint`): the point and the normal (its
+    /// `w` the distance), each collidable and its shape key.
+    #[repr(C, align(16))]
+    struct CdPoint {
+        point: [f32; 4],
+        normal: [f32; 4],
+        a: u32,
+        key_a: u32,
+        b: u32,
+        key_b: u32,
+    }
 
     /// The fixed body a contact is with, if it's one a drawn shape stands in for.
     fn stood_in(point: usize) -> bool {
@@ -102,6 +122,14 @@ mod win {
         unsafe { real(this, point) }
     }
 
+    unsafe extern "thiscall" fn spell_contact(this: usize, point: usize) -> u32 {
+        let real: unsafe extern "thiscall" fn(usize, usize) -> u32 = unsafe { std::mem::transmute(REAL_SPELL_CONTACT.load(Ordering::Acquire)) };
+        if crate::hooks::guard("spell contact", false, || stood_in(point)) {
+            return 0;
+        }
+        unsafe { real(this, point) }
+    }
+
     unsafe extern "thiscall" fn constraints(this: usize, manifold: usize, input: usize) -> u32 {
         let real: unsafe extern "thiscall" fn(usize, usize, usize) -> u32 = unsafe { std::mem::transmute(REAL_CONSTRAINTS.load(Ordering::Acquire)) };
         let r = unsafe { real(this, manifold, input) };
@@ -109,13 +137,17 @@ mod win {
         r
     }
 
-    /// An arrow's step: where it goes in it, held up to the drawn shapes.
+    /// An arrow's or a spell's step: where it goes in it, held up to the drawn shapes.
     fn step(listener: usize, input: usize) {
-        if mem::deref(listener) != ARROW_LISTENER {
-            return;
-        }
+        let spell = match mem::deref(listener) {
+            ARROW_LISTENER => false,
+            SPELL_LISTENER => true,
+            _ => return,
+        };
         let arrow = mem::deref(listener + LISTENER_ARROW);
-        let flying = arrow != 0 && mem::at::<u32>(arrow + ARROW_STATE) == Some(0) && mem::at::<u32>(arrow + FORM_FLAGS).is_some_and(|f| f & DELETED == 0);
+        let alive = arrow != 0 && mem::at::<u32>(arrow + FORM_FLAGS).is_some_and(|f| f & DELETED == 0);
+        // (A spell's own callback asks the projectile whether it's still flying.)
+        let flying = alive && (spell || mem::at::<u32>(arrow + ARROW_STATE) == Some(0));
         let (Some(place), Some(velocity), Some(time)) = (mem::at::<[f32; 4]>(input + STEP_PLACE), mem::at::<[f32; 4]>(input + STEP_VELOCITY), mem::at::<f32>(input + STEP_TIME)) else { return };
         if !flying || !(time > 0.0 && time < 1.0) {
             return;
@@ -136,6 +168,22 @@ mod win {
             if !tried.insert((arrow, body)) {
                 return;
             }
+        }
+        if spell {
+            // The spell's own contact callback, given the contact where it's drawn.
+            let cd = CdPoint {
+                point: [hit.x / scale, hit.y / scale, hit.z / scale, 0.0],
+                normal: [normal.x, normal.y, normal.z, 0.0],
+                a: (body + ENTITY_COLLIDABLE) as u32,
+                key_a: u32::MAX,
+                b: (body + ENTITY_COLLIDABLE) as u32,
+                key_b: u32::MAX,
+            };
+            let real: unsafe extern "thiscall" fn(usize, usize) -> u32 = unsafe { std::mem::transmute(REAL_SPELL_CONTACT.load(Ordering::Acquire)) };
+            unsafe { real(listener, &cd as *const CdPoint as usize) };
+            let id = mem::at::<u32>(arrow + FORM_ID).unwrap_or(0);
+            tracing::info!("arrows: spell {id:08X} met a drawn shape at {hit:.0?} (body {body:#x}): the game's hit");
+            return;
         }
         // The game's impact on that body, where it's drawn.
         let point = V4([hit.x / scale, hit.y / scale, hit.z / scale, 0.0]);
@@ -175,12 +223,13 @@ mod win {
         }
     }
 
-    /// The game's arrows through the gaps its collision fills, onto the drawn shapes.
+    /// The game's arrows and spells through the gaps its collision fills, onto the drawn shapes.
     pub fn install() {
         let a = crate::hooks::install_into(CONTACT as *const (), contact as *const (), "the arrow's contact", &REAL_CONTACT);
         let b = crate::hooks::install_into(CONSTRAINTS as *const (), constraints as *const (), "the arrow's step", &REAL_CONSTRAINTS);
-        if a && b {
-            tracing::info!("arrows: the game's arrows meet the drawn shapes");
+        let c = crate::hooks::install_into(SPELL_CONTACT as *const (), spell_contact as *const (), "the spell's contact", &REAL_SPELL_CONTACT);
+        if a && b && c {
+            tracing::info!("arrows: the game's arrows and spells meet the drawn shapes");
         }
     }
 }

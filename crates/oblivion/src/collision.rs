@@ -36,6 +36,9 @@ pub const HAVOK_SCALE: f32 = 7.0;
 /// it's sent again.
 pub const RADIUS: f32 = 12.0;
 pub const RESEND: f32 = 3.0;
+/// Metres around the player the game's arrows and spells in flight meet the drawn shapes (their
+/// references' hitboxes read after the near ones'): further, the game's shapes.
+pub const ARROW_REACH: f32 = 48.0;
 /// At most this many triangles in the mesh of the game's shapes sent (nearest first).
 pub const MAX_TRIANGLES: usize = 40_000;
 /// At most this many drawn triangles in the runtime at once (the nearest references' first), and
@@ -678,6 +681,8 @@ mod win {
         seen: bool,
         /// Its hitbox's box (its model's frame), once read.
         bounds: Option<(Vec3, Vec3)>,
+        /// The 3D's world transform while it's within the arrows' reach and its hitbox is read.
+        placed: Option<[f32; 13]>,
     }
 
     impl Owner {
@@ -705,8 +710,10 @@ mod win {
         plain: HashMap<usize, (usize, u32)>,
         bodies_added: u32,
         next_id: u32,
-        /// The bodies left out of the game's mesh as last sent (their drawn shapes stand in).
+        /// The bodies left out of the game's mesh as last sent (their drawn shapes stand in), and
+        /// those the arrows and spells meet the drawn shapes of instead (out to `ARROW_REACH`).
         covered: Vec<usize>,
+        for_arrows: Vec<usize>,
         /// The drawn meshes to take out of the runtime.
         to_remove: Vec<u32>,
         logged_owners: u32,
@@ -753,9 +760,11 @@ mod win {
     const NPC: u8 = 0x23;
     const CREATURE: u8 = 0x24;
 
-    /// The fixed bodies (of `bodies`) under a reference's 3D.
-    fn bodies_under(root: usize, bodies: &HashMap<usize, Body>) -> Vec<usize> {
+    /// The fixed bodies (of `bodies`) under a reference's 3D, and whether it has any collision at
+    /// all.
+    fn bodies_under(root: usize, bodies: &HashMap<usize, Body>) -> (Vec<usize>, bool) {
         let mut out = Vec::new();
+        let mut any = false;
         let mut stack = vec![(root, 0u32)];
         let mut n = 0;
         while let Some((node, depth)) = stack.pop() {
@@ -764,6 +773,7 @@ mod win {
                 break;
             }
             let co = mem::deref(node + NODE_COLLISION);
+            any |= co != 0;
             if co != 0 {
                 let rb = mem::deref(co + COLLISION_BODY);
                 let hk = if rb != 0 { mem::deref(rb + HK_OBJ) } else { 0 };
@@ -773,7 +783,7 @@ mod win {
             }
             stack.extend(crate::world::child_nodes(node).into_iter().map(|c| (c, depth + 1)));
         }
-        out
+        (out, any)
     }
 
     /// The 3D's world transform: rotation (rows), translation, scale.
@@ -842,21 +852,30 @@ mod win {
         }
         todo.sort_by(|a, b| a.0.total_cmp(&b.0));
         for &(_, r, root, base) in todo.iter().take(WALKS_PER_SCAN) {
-            let bodies = bodies_under(root, &s.bodies);
+            let (bodies, any) = bodies_under(root, &s.bodies);
             let model = crate::items::model_of(base).unwrap_or_default();
-            if bodies.is_empty() || model.is_empty() {
+            // (One the game gave no collision at all, a statue or a trophy, is its drawn shape to the
+            // hands all the same; one with bodies the game moves is someone else's: the things
+            // lying about, the doors, the swinging props.)
+            let drawn_only = !any && crate::items::takeable_ref(r).is_none();
+            if (bodies.is_empty() && !drawn_only) || model.is_empty() {
                 s.plain.insert(r, (root, s.bodies_added));
                 continue;
             }
             if let Some(old) = s.owners.remove(&r) {
                 forget(s, old);
             }
-            let (lo, hi) = bodies.iter().filter_map(|e| s.bodies.get(e)).fold((Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)), |(lo, hi), b| (lo.min(b.lo), hi.max(b.hi)));
+            let (lo, hi) = if bodies.is_empty() {
+                let at = mem::at::<[f32; 3]>(r + refr::POS).map_or(Vec3::splat(f32::MAX), |p| b.point_from_game(Vec3::from(p)));
+                (at, at)
+            } else {
+                bodies.iter().filter_map(|e| s.bodies.get(e)).fold((Vec3::splat(f32::MAX), Vec3::splat(f32::MIN)), |(lo, hi), b| (lo.min(b.lo), hi.max(b.hi)))
+            };
             for &e in &bodies {
                 s.claimed.insert(e, r);
             }
             s.plain.remove(&r);
-            s.owners.insert(r, Owner { root, model, bodies, lo, hi, hitbox: None, id: 0, sent: None, triangles: 0, seen: true, bounds: None });
+            s.owners.insert(r, Owner { root, model, bodies, lo, hi, hitbox: None, id: 0, sent: None, triangles: 0, seen: true, bounds: None, placed: None });
         }
         let gone: Vec<usize> = s.owners.iter().filter(|(_, o)| !o.seen).map(|(r, _)| *r).collect();
         for r in gone {
@@ -1142,6 +1161,7 @@ mod win {
             bodies_added: 0,
             next_id: DRAWN_ID_BASE,
             covered: Vec::new(),
+            for_arrows: Vec::new(),
             to_remove: Vec::new(),
             logged_owners: 0,
         });
@@ -1308,6 +1328,22 @@ mod win {
             }
             s.to_remove.pop();
         }
+        // The game's arrows and spells meet the drawn shapes further out: those references'
+        // hitboxes read too (once the near ones are), and where they stand.
+        for o in s.owners.values_mut() {
+            if o.bodies.is_empty() || o.gap(feet) > ARROW_REACH {
+                o.placed = None;
+                continue;
+            }
+            if o.hitbox.is_none() && !pending {
+                o.hitbox = hitbox(&o.model, now);
+                o.bounds = o.drawn().and_then(|h| h.bounds());
+            }
+            o.placed = o.drawn().and(o.sent.or_else(|| placement(o.root)));
+        }
+        let mut for_arrows: Vec<usize> = s.owners.values().filter(|o| o.placed.is_some()).flat_map(|o| o.bodies.iter().copied()).collect();
+        for_arrows.sort_unstable();
+        s.for_arrows = for_arrows;
         // The game's own shapes: the bodies near that no drawn shape stands in for, sent again once
         // the drawn ones are all in (not every frame they come in).
         let mut covered: Vec<usize> = s.owners.values().filter(|o| o.sent.is_some()).flat_map(|o| o.bodies.iter().copied()).collect();
@@ -1389,9 +1425,10 @@ mod win {
     }
 
     /// Whether `entity` (an `hkRigidBody`) is one of the fixed bodies a drawn shape stands in for
-    /// now, or a moving part's: the hands, and the game's arrows, meet the drawn shape instead.
+    /// to the game's arrows and spells now (out to [`ARROW_REACH`]), or a moving part's: they meet
+    /// the drawn shape instead.
     pub fn stands_in(entity: usize) -> bool {
-        let covered = STATE.try_lock().ok().is_some_and(|st| st.as_ref().is_some_and(|s| s.covered.binary_search(&entity).is_ok()));
+        let covered = STATE.try_lock().ok().is_some_and(|st| st.as_ref().is_some_and(|s| s.for_arrows.binary_search(&entity).is_ok()));
         covered || with_moving(|parts| parts.iter().any(|(b, _)| *b == entity)).unwrap_or(false)
     }
 
@@ -1433,7 +1470,7 @@ mod win {
         let s = st.as_ref()?;
         let mut best: Option<(f32, Vec3, Vec3, &Owner)> = None;
         for o in s.owners.values() {
-            let (Some(at), Some(h), Some(bounds)) = (o.sent, o.drawn(), o.bounds) else { continue };
+            let (Some(at), Some(h), Some(bounds)) = (o.placed, o.drawn(), o.bounds) else { continue };
             if let Some((frac, point, normal)) = ray_into(h, bounds, &at, a, b).filter(|hit| best.is_none_or(|b| hit.0 < b.0)) {
                 best = Some((frac, point, normal, o));
             }

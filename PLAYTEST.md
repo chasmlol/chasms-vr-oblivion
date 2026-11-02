@@ -33,13 +33,20 @@ game's simplified collision.
 - **What's in your hands:** your weapon (a sword is its blade, guard, grip and pommel, not a box),
   your shield and your torch (its flame isn't solid).
 - **Swinging things:** chain links, buckets on ropes and the like, each part as drawn.
+- **Spells in flight** (new): a fireball or a bolt flies through the same gaps arrows do, and
+  bursts on the drawn surface it meets (a chair's leg, a gate's bar), not on the box round it.
+- **Arrows from further off** (new): drawn shapes now meet arrows and spells out to about 48 m from
+  you, not just within 12 m, so an archer across a courtyard shoots through the gaps too.
+- **Statues and decorations** (new): things the game gave no collision at all (statues, mounted
+  trophies, armour displays, candles on walls) are solid to your hands, as drawn. Before, your hand
+  went straight through them.
 - **Doors and gates** (new): a door's or a gate's moving part is its drawn shape too, open or shut:
   a cell gate is its bars, your hand goes between them, and arrows fly through the gaps. Before it
   was one flat slab.
 - **Furniture and anything made of separate bars, legs or boards** (new): each separate piece that's
   a plain solid (a bar, a leg, a slat) is its exact shape now, so the gaps between them stay open.
 - **Still as before:** the bow (its string's side is your drawing hand's), the arrow on the string,
-  the mortar and pestle (their own pieces), spells in flight, and the ground and trees.
+  the mortar and pestle (their own pieces), and the ground and trees.
 - **The game itself is unchanged.** Your walking, the NPCs, and things falling and resting where
   you let them go still use the game's own collision.
 
@@ -69,6 +76,10 @@ model, in the background, once for each model); until then it keeps its old shap
 10. **A cell gate** (`playtest-prison.bat`: the prison cell the game starts in, a bow, 500 arrows
     and a dagger): put your hand between the gate's bars, swing it by a bar, and shoot arrows
     through the gaps between the bars and into a bar.
+11. **A spell through a gap**: cast a fire bolt through a chair's legs or a gate's bars: it should
+    fly through and burst behind; cast at a leg or a bar: it bursts there.
+12. **A statue or a trophy**: touch a statue, a mounted head or an armour display: your hand stops on
+    it, as drawn.
 
 Say what feels wrong: a thing your hand stops short of, a hand going into something it shouldn't,
 a thing that jitters or flies off when you set it down or pick it up, a stutter as you walk into

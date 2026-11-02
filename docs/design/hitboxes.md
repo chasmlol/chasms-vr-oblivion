@@ -73,12 +73,19 @@ it without being felt.
 - **The game itself is unchanged.** Walking, the NPCs and things falling keep the game's collision;
   only the runtime's physics (the hands, the arms, what they hold, drop and throw) gets the drawn
   shapes.
-- **Arrows too.** The game's arrows in flight (anyone's) pass through the game's shapes a drawn
-  one stands in for, and the drawn shapes in their way are the game's own impact there: through a
-  chair's rungs or a fence's bars, into the drawn leg or board (stuck where it's drawn, broken on
-  stone as the game breaks them), with the game's damage and sounds (`arrows.rs`). A door's moving
-  part (a gate's leaf) is met where its node is now, open or shut. Spells in flight
-  are still the game's alone.
+- **Arrows and spells too.** The game's arrows in flight (anyone's) pass through the game's shapes
+  a drawn one stands in for, and the drawn shapes in their way are the game's own impact there:
+  through a chair's rungs or a fence's bars, into the drawn leg or board (stuck where it's drawn,
+  broken on stone as the game breaks them), with the game's damage and sounds (`arrows.rs`). A
+  door's moving part (a gate's leaf) is met where its node is now, open or shut. A spell's bolt or
+  ball flies the same way (its listener shares the arrow's step) and a drawn shape met on its way
+  is its own contact callback there: its effect, its explosion. They meet the drawn shapes out to
+  48 m (`ARROW_REACH`): those references' hitboxes are read after the near ones', for the
+  projectiles alone; further, an archer's arrow meets the game's shapes.
+- **What the game gave no collision.** A statue, a trophy, an armour display, a candle on a wall:
+  drawn solid, with no collision of its own (the game lets the player walk through it, or puts a
+  wall round its plinth). The hands meet its drawn shape like any other's. A reference with bodies
+  the game moves (the things lying about, the doors, the swinging props) is left to those.
 - **Worked out where they're needed.** The adapter finds the references in the loaded cells whose
   3D holds the world's fixed bodies, nearest first, reads each model from the game's archives on a
   thread of its own (a few milliseconds a model), and sends each reference's drawn shape to the
