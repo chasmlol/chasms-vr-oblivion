@@ -101,7 +101,7 @@ pub fn xml() -> String {
          <x> {} </x> <y> {} </y> <width> {w} </width> <height> <copy src=\"me()\" trait=\"user1\"/> <mul> {ROW} </mul> <add> {} </add> </height>\n\
          <image name=\"rvloot_background\"> <filename> Menus\\Faders\\black.dds </filename> <zoom> -1 </zoom> <alpha> {SHADE} </alpha> <depth> 1 </depth> <x> 0 </x> <y> 0 </y> <width> {w} </width> <height> <copy src=\"parent()\" trait=\"height\"/> </height> </image>\n\
          <text name=\"rvloot_name\"> <depth> 2 </depth> <justify> &center; </justify> <font> {TITLE_FONT} </font> {INK} <wrapwidth> {inner} </wrapwidth> <wraplines> 1 </wraplines> <string> <copy src=\"parent()\" trait=\"user0\"/> </string> <x> {} </x>\n\
-         <y> {TITLE} <sub src=\"me()\" trait=\"height\"/> <div> 2 </div> </y> </text>\n",
+         <y> <copy> {TITLE} </copy> <sub src=\"me()\" trait=\"height\"/> <div> 2 </div> </y> </text>\n",
         AT.0,
         AT.1,
         top + RULE + FOOTER,
@@ -137,7 +137,7 @@ pub fn xml() -> String {
         x.push_str(&format!(
             "<image name=\"rvloot_button_{n}\"> <filename> Menus\\Shared\\all_xbox_buttons.dds </filename> <cropx> {crop} </cropx> <depth> 1 </depth> <width> 64 </width> <height> 64 </height> <x> {bx} </x> <y> 0 </y> </image>\n\
              <text name=\"rvloot_button_{n}_text\"> <depth> 1 </depth> <font> {FONT} </font> {INK} <string> <copy src=\"strings()\" trait=\"{word}\"/> </string> <x> {} </x>\n\
-             <y> 64 <sub src=\"me()\" trait=\"height\"/> <div> 2 </div> </y> </text>\n",
+             <y> <copy> 64 </copy> <sub src=\"me()\" trait=\"height\"/> <div> 2 </div> </y> </text>\n",
             bx + 70.0
         ));
     }
@@ -277,7 +277,7 @@ mod game {
     const EXIT: u32 = 33;
     const EXIT_BUTTON: &str = "cont_button_exit";
     /// How long a script is given to open what it was activated for, and how long the container
-    /// menu it opened is kept hidden as it shuts (its fade), at most (seconds).
+    /// menu it opened may take to go before that's said (seconds).
     const SCRIPT_WAIT: f64 = 1.5;
     const SHUTTING: f64 = 2.0;
     /// Seconds between looks at what's in it.
@@ -375,9 +375,11 @@ mod game {
         scripted: usize,
         refused: usize,
         activated_at: f64,
-        /// The container menu shut for a look, as it goes (kept hidden), and when it was shut.
+        /// The container menu shut for a look, as it goes (kept hidden), when it was shut, and
+        /// whether it's been said it's still there.
         shut: usize,
         shut_at: f64,
+        shut_said: bool,
         failed: bool,
     }
 
@@ -633,16 +635,18 @@ mod game {
         /// A thing whose script has its own activation, pointed at (`scripted`): activated once for
         /// this look; the container menu its script opens, shut; or given up on.
         fn scripts(&mut self, target: usize, scripted: bool, now: f64) {
-            // (The one shut, hidden as it fades, till it's gone: while it's still that one, off the
-            // stack.)
+            // (The one shut, hidden till it's gone: while it's still that one, off the stack. Out
+            // of Menu Mode the game doesn't fade a menu out, so it stays till the next one, or till
+            // Menu Mode: kept hidden all that while, it never shows.)
             if self.shut != 0 {
                 let menu = tiles::menu(super::MENU_CONTAINER);
-                if menu == self.shut && mem::at::<u32>(menu + MENU_STACKED) == Some(0) && now - self.shut_at < SHUTTING {
+                if menu == self.shut && mem::at::<u32>(menu + MENU_STACKED) == Some(0) {
                     hide_opened();
-                } else {
-                    if menu == self.shut {
-                        tracing::warn!("quickloot: the container menu shut for a look is still up {:.1} s on", now - self.shut_at);
+                    if !self.shut_said && now - self.shut_at > SHUTTING {
+                        tracing::info!("quickloot: the container menu shut for a look is still there {SHUTTING} s on: kept hidden till it's gone");
+                        self.shut_said = true;
                     }
+                } else {
                     self.shut = 0;
                 }
             }
@@ -664,7 +668,7 @@ mod game {
                     unsafe { ((menu + MENU_STACKED) as *mut u32).write(0) };
                 }
                 hide_opened();
-                (self.shut, self.shut_at) = (menu, now);
+                (self.shut, self.shut_at, self.shut_said) = (menu, now, false);
                 // (Its Exit's own tile with it: the click fades it.)
                 let f = mem::deref(mem::deref(menu) + VT_HANDLE_CLICK);
                 let exit = tiles::Tree::read(tiles::menu_tile(super::MENU_CONTAINER)).find(EXIT_BUTTON).map_or(0, |p| p.tile);
@@ -869,6 +873,20 @@ mod game {
         SHOWN.store(any && s.tile != 0, Ordering::Relaxed);
         s.lay_out();
         s.show(any);
+        // (Once a run, a moment after it's first up: where the game has put each of its pieces,
+        // and what its words say, to check its layout by.)
+        static TOLD: std::sync::Mutex<(Option<f64>, bool)> = std::sync::Mutex::new((None, false));
+        let mut told = TOLD.lock().unwrap();
+        if !told.1 && s.shown && s.alive() {
+            let since = *told.0.get_or_insert(now);
+            if now - since > 0.5 {
+                told.1 = true;
+                for p in tiles::Tree::read(s.tile).0.iter().filter(|p| p.shown) {
+                    let words = if p.kind == tiles::KIND_TEXT { tiles::text(p.tile).map_or(String::new(), |t| format!(" {t:?}")) } else { String::new() };
+                    tracing::info!("quickloot: laid out: {}{} [{:.0}, {:.0}, {:.0}, {:.0}]{words}", "  ".repeat(p.depth as usize), p.name, p.rect[0], p.rect[1], p.rect[2], p.rect[3]);
+                }
+            }
+        }
     }
 }
 
