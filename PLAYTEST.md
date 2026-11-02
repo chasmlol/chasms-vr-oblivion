@@ -57,29 +57,25 @@ The design and its reasons are in `docs/design/spells.md`.
   at first, then pulses that speed up and strengthen sharply, then a spike when it's charged and a
   faint tick while you hold it. **Let go to cast**, and you feel a full burst. Let go before it's
   charged and nothing is cast; no magicka is spent.
-* **Aiming with your hand.** A target spell leaves your palm where your hand points: **your arm and
-  your wrist both steer it**. Bend your wrist down and it goes lower, up and it goes higher. It's
-  the controller's own pointing ray (the menu laser's) turned 25° down, because a hand held out to
-  cast rests with its wrist cocked up about that much (your casts at the zombies last time); raw,
-  it went high. The aim is smoothed a touch, a little more for
+* **Aiming with your hand.** A target spell leaves your palm the way you set it in the Spells tab
+  last time, now everyone's default: **mostly out of your palm**, the bolt starting 39 cm out;
+  your arm and your wrist both steer it. The aim is smoothed a touch, a little more for
   harder spells, to take out the jolt of the trigger. It's also helped gently onto a creature (10°
   up or down, 15° across).
-* **Setting the aim yourself: the Spells tab.** Press the menu button for the pause menu; RustVR's
-  own menu floats beside it. Open its **Spells** tab and tick **Show a line where a held spell
-  would go**: an orange line runs from each palm holding a spell to where it would go, with a dot
-  where it meets something (the help onto a creature isn't in the line). Hold your hand out at
-  something with your wrist as it feels natural, and move the sliders until the line goes where
-  you point:
-  * **Down from where the controller points** (25°): more sends it lower, less higher.
-  * **Out to the hand's side** (0°): plus turns each hand's spell out to its own side, minus
+* **The Spells tab** stays in RustVR's menu (the menu button for the pause menu; RustVR's own
+  menu floats beside it). **Show a line where a held spell would go** draws an orange line from
+  each palm holding a spell to where it would go, a dot where it meets something (the help onto a
+  creature isn't in it); it's off by default, but your own settings keep it on until you untick
+  it. The sliders, with the defaults you set:
+  * **Down from where the controller points** (59°): more sends it lower, less higher.
+  * **Out to the hand's side** (-1°): plus turns each hand's spell out to its own side, minus
     across you.
-  * **Towards the palm** (0°): palm casting; about 60 is the way some Skyrim VR lists cast.
-  * **Starts this far ahead of the palm** (0 m): the bolt starts further out along its way.
+  * **Towards the palm** (74°): how much it leaves out of the palm.
+  * **Starts this far ahead of the palm** (0.39 m): the bolt starts further out along its way.
+  * **Help a spell onto a creature near the aim**: the lock-on (above), on by default.
 
-  The line should move as you drag (if it doesn't show with the menu open, close the menu and it's
-  there). Changes save at once; cast to try them. **Back to the defaults** puts them all back. When
-  it feels right, tell me: I'll read what you set and make it everyone's default (each cast also
-  writes the settings it went by to the runtime's log).
+  Changes save at once. **Back to the defaults** puts them all back to these. Each cast writes the
+  settings it went by to the runtime's log.
 
 ## What to try
 
@@ -136,9 +132,8 @@ The design and its reasons are in `docs/design/spells.md`.
     * Chameleon and Shadow Shape (invisibility) don't make your own body see-through yet.
 
 Things worth telling me about:
-* Does it go where your hand points, with your wrist at its natural angle? If not, set it in the
-  Spells tab (above) and tell me when it's right. Each cast writes to the runtime's log how far up
-  it went, against the controller's ray and the head, and the settings it went by.
+* Does it still go where you mean it to? The Spells tab (above) sets it; tell me if the defaults
+  should change again.
 * Is the aim help too strong or too weak?
 * Is the wheel in a good place and size?
 * Can you feel the charge and the ready spike clearly?
@@ -163,12 +158,11 @@ the magicka is spent and comes back.
 ## Checked, and not
 
 * **Checked:**
-  * The aim: a hand held out level with its wrist at its rest (the controller 25° up) casts level,
-    and its wrist bent 20° down from there casts 20° down (the runtime's tests). The headless
-    `spell` scenario's hand held out at the dummy, the controller cocked 25° up: the bolt went 12°
-    down and struck it, with the Spells tab's line on from the palm to the dummy; the outward turn
-    goes to each hand's own side (the runtime's tests). Not seen: the Spells tab itself in the
-    headset, and whether the line shows with the pause menu open.
+  * The aim: the settings turn the controller's ray as they say (down, out to each hand's own
+    side, towards the palm), and with the defaults a left palm held out to the front, fingers up,
+    casts out of it (the runtime's tests). The headless `spell` scenario's palm held out at the
+    dummy, fingers up, with the defaults: the bolt struck it, the Spells tab's line on from the palm
+    to the dummy. You set the defaults yourself in the headset, in the Spells tab.
   * A bound weapon on the range, on the emulated headset: Bound sword taken from the wheel's second
     page and cast, and the range's sword is made in that hand. Squeezed and let go in front, it went
     back to the left hip.

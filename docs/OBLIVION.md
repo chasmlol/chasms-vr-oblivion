@@ -92,7 +92,7 @@ Then `python tools/install_oblivion.py` builds and installs the adapter beside `
 | A (either hand) | Jump (out of the water too, at a ledge) |
 | Empty hands in the water, grip squeezed | Swim: the hands hold the water and the player is pulled past them, several times their pace, then glides; down to rise, up to dive (the stick swims too, where the head looks) |
 | Trigger, empty hand with no spell | Activate (what the head looks at); held: Rest/Wait |
-| Trigger, empty hand holding a spell | Held: charge it (felt growing, a spike when ready); let go charged: cast it (target spells from the palm where the hand points, arm and wrist; touch spells along it, or at once into a creature the charged hand touches; self spells anywhere); a quick tap: Activate |
+| Trigger, empty hand holding a spell | Held: charge it (felt growing, a spike when ready); let go charged: cast it (target spells out of the palm, the arm and wrist steering; set in RustVR's Spells tab; touch spells along it, or at once into a creature the charged hand touches; self spells anywhere); a quick tap: Activate |
 | The main hand's B held | The spell wheel: point a hand at a spell and pull its trigger (into that hand), or let go of B with the main hand on one (into the main hand); the middle empties the hand; the arrows turn the page |
 | Trigger, holding an enchanted staff | Charge its enchantment at the tip; let go to cast it along the staff |
 | Grip at the torch's holster | Draw the torch (when one is equipped); let go in a holster to hang it up, anywhere else to drop it |

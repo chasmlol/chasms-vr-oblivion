@@ -103,8 +103,8 @@ The facts, with addresses, are in [spells-engine-notes.md](spells-engine-notes.m
 | Skyrim VR's menu rule | On the wheel, **the trigger of the hand that should have it**. | The same rule players already know; one wheel serves both hands. |
 | ISPVR | **The charge's haptics, exactly**: 100 ms to 20 ms, the sixth power, a faint tick held ready, a full burst on release. | It answers the most repeated complaint (no felt ready). |
 | PLANCK | A **failure felt**: a long dull pulse, with the game's own message and failure sound. | Players asked for it; Oblivion has its own words and sounds for it. |
-| Skyrim VR, made right | **The aim is where the hand points**, arm and wrist both: the controller's own pointing ray, turned 25 degrees down for the cock a casting hand's wrist rests at (as Skyrim VR's `fMagicRotationPitch` turns its own). | The user's first playtest: palm casting off the grip came out well off where the controller pointed. The second: the controller's own pointing ray (OpenXR's aim pose, the laser's) went high, since a hand held out to cast has its wrist cocked up. The third: along the arm (shoulder through palm) the wrist didn't steer, and it should. The player's casts at a creature had the ray 17 to 41 degrees above where they went, most about 25. |
-| Magic Improvements | **Palm casting** as a setting (`palm_tilt`, about 60 for it); **aim smoothed by the spell's level**, but short (40 to 120 ms, against its 10 to 40 frames); the held art **smaller as magicka runs down**. | Some lists ship palm casting, and others find it hard to aim at range; its long smoothing trails behind a quick point. The short one only takes out the trigger's jolt. Magicka you can see in the hand. |
+| Skyrim VR, made right | **The aim is the way the hand casts**, arm and wrist both: the controller's own pointing ray turned 59 degrees down and 1 across (as Skyrim VR's `fMagicRotationPitch` turns its own), then 74 towards the palm, the bolt starting 39 cm out: mostly out of the palm. **The Spells tab** in RustVR's menu sets all four, against a line from the palm to where a spell would go. | The user's first playtest: palm casting off the grip came out well off where the controller pointed. The second: the controller's own pointing ray (OpenXR's aim pose, the laser's) went high, since a hand held out to cast has its wrist cocked up. The third: along the arm (shoulder through palm) the wrist didn't steer, and it should. The fourth: the user set the aim themselves in the Spells tab, casting at the zombies, and those are the defaults. |
+| Magic Improvements | **Palm casting** (`palm_tilt`, 74 by default: the user's own); **aim smoothed by the spell's level**, but short (40 to 120 ms, against its 10 to 40 frames); the held art **smaller as magicka runs down**. | Some lists ship palm casting, and others find it hard to aim at range; its long smoothing trails behind a quick point. The short one only takes out the trigger's jolt. Magicka you can see in the hand. |
 | Spell Auto-Aim VR | A **gentle cone** (10 degrees up or down, 15 across, 28 m), foes first for a harmful spell. | Called not cheaty at these values; it helps at range with palm casting. |
 | VRIK | A hand that takes a weapon **keeps its spell** and has it back when it lets go. | Getting back what you held. |
 | Curated lists | **No light from a spell only held**: the casting light comes with the charge. | Up close a palm's light dazzles; the lists drop hand-effect lights. |
@@ -162,8 +162,8 @@ the game, but their hands still move in VR.
 * **`crates/runtime/src/magic.rs`**: each hand's spell (either hand; at first the off hand has the
   game's selected spell and the main hand none, so its trigger stays the game's Activate); the
   trigger's charge over the spell's casting time, with ISPVR's haptics; let go when charged, a cast
-  ([`CE_CAST`]): from the palm where the hand points, the controller's ray turned down by the
-  wrist's rest (smoothed a little by level,
+  ([`CE_CAST`]): from the palm the way the hand casts, mostly out of the palm by default (smoothed a
+  little by level,
   onto a creature in the cone),
   a touch spell into the first creature the charged hand touches ([`CEF_TOUCHED`]) or along the aim,
   a self spell anywhere; a quick tap with nothing charged is the game's Activate; a spell the game
@@ -176,9 +176,9 @@ the game, but their hands still move in VR.
 * **The protocol** (v14 kept): a spell's mastery level, its charge and recovery times and its icon;
   the table's recovery, the player's own picks in the game's interface, the wheel's font and art;
   `CE_SELECT`, `CE_CAST_REFUSED`, `CEF_TOUCHED`.
-* **Settings** (`[magic]`, the menu's Spells tab): `aim_down` (25: degrees below the controller's
-  ray), `aim_out` (0: degrees out to the hand's side), `palm_tilt` (0: where the hand points),
-  `launch_ahead` (0: metres ahead of the palm a target spell starts), `show_aim` (a line from each
+* **Settings** (`[magic]`, the menu's Spells tab): `aim_down` (59: degrees below the controller's
+  ray), `aim_out` (-1: degrees out to the hand's side), `palm_tilt` (74: degrees towards the palm),
+  `launch_ahead` (0.39: metres ahead of the palm a target spell starts), `show_aim` (a line from each
   palm holding a spell to where it would go, for setting those), `aim_assist`, `aim_smoothing`,
   `charge_haptics`.
 * **The range** (`crates/range/src/magic.rs`): six spells (a fire bolt, a heal, a frost bolt of a
